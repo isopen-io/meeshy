@@ -138,14 +138,6 @@ describe('UI Imports Module', () => {
     });
   });
 
-  describe('HoverCard Components', () => {
-    it('should export HoverCard components', () => {
-      expect(UIImports.HoverCard).toBeDefined();
-      expect(UIImports.HoverCardContent).toBeDefined();
-      expect(UIImports.HoverCardTrigger).toBeDefined();
-    });
-  });
-
   describe('Input Component', () => {
     it('should export Input', () => {
       expect(UIImports.Input).toBeDefined();

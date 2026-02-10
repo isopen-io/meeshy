@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, LanguageOrb, MessageBubble, theme, useToast, PageHeader } from '@/components/v2';
+import { Button, Card, LanguageOrb, MessageBubble, theme, useToast, PageHeader, Switch, Dialog, DialogHeader, DialogBody, DialogFooter, Input, Label, Skeleton } from '@/components/v2';
 import { useSettingsV2 } from '@/hooks/v2';
 
 // ============================================================================
@@ -69,10 +69,10 @@ const PREVIEW_MESSAGES: PreviewMessage[] = [
 
 function SettingsSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-40 rounded-2xl bg-[var(--gp-parchment)]" />
-      <div className="h-32 rounded-2xl bg-[var(--gp-parchment)]" />
-      <div className="h-48 rounded-2xl bg-[var(--gp-parchment)]" />
+    <div className="space-y-6">
+      <Skeleton variant="rectangular" className="h-40" />
+      <Skeleton variant="rectangular" className="h-32" />
+      <Skeleton variant="rectangular" className="h-48" />
     </div>
   );
 }
@@ -408,112 +408,48 @@ export default function V2SettingsPage() {
                 <p className="font-medium text-[var(--gp-text-primary)]">Messages</p>
                 <p className="text-sm text-[var(--gp-text-secondary)]">Nouveaux messages</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.messages}
-                  onChange={(e) => handleNotificationChange('messages', e.target.checked)}
-                  disabled={isUpdatingNotifications}
-                  className="sr-only peer"
-                />
-                <div
-                  className="w-11 h-6 rounded-full peer transition-colors duration-200"
-                  style={{
-                    background: notificationSettings.messages ? 'var(--gp-terracotta)' : 'var(--gp-parchment)',
-                  }}
-                >
-                  <div
-                    className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-                    style={{
-                      transform: notificationSettings.messages ? 'translateX(20px)' : 'translateX(0)',
-                    }}
-                  />
-                </div>
-              </label>
+              <Switch
+                checked={notificationSettings.messages}
+                onCheckedChange={(v) => handleNotificationChange('messages', v)}
+                disabled={isUpdatingNotifications}
+                aria-label="Notifications messages"
+              />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
                 <p className="font-medium text-[var(--gp-text-primary)]">Mentions</p>
                 <p className="text-sm text-[var(--gp-text-secondary)]">Quand quelqu&apos;un vous mentionne</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.mentions}
-                  onChange={(e) => handleNotificationChange('mentions', e.target.checked)}
-                  disabled={isUpdatingNotifications}
-                  className="sr-only peer"
-                />
-                <div
-                  className="w-11 h-6 rounded-full peer transition-colors duration-200"
-                  style={{
-                    background: notificationSettings.mentions ? 'var(--gp-terracotta)' : 'var(--gp-parchment)',
-                  }}
-                >
-                  <div
-                    className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-                    style={{
-                      transform: notificationSettings.mentions ? 'translateX(20px)' : 'translateX(0)',
-                    }}
-                  />
-                </div>
-              </label>
+              <Switch
+                checked={notificationSettings.mentions}
+                onCheckedChange={(v) => handleNotificationChange('mentions', v)}
+                disabled={isUpdatingNotifications}
+                aria-label="Notifications mentions"
+              />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
                 <p className="font-medium text-[var(--gp-text-primary)]">Communautes</p>
                 <p className="text-sm text-[var(--gp-text-secondary)]">Activite des communautes</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.communities}
-                  onChange={(e) => handleNotificationChange('communities', e.target.checked)}
-                  disabled={isUpdatingNotifications}
-                  className="sr-only peer"
-                />
-                <div
-                  className="w-11 h-6 rounded-full peer transition-colors duration-200"
-                  style={{
-                    background: notificationSettings.communities ? 'var(--gp-terracotta)' : 'var(--gp-parchment)',
-                  }}
-                >
-                  <div
-                    className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-                    style={{
-                      transform: notificationSettings.communities ? 'translateX(20px)' : 'translateX(0)',
-                    }}
-                  />
-                </div>
-              </label>
+              <Switch
+                checked={notificationSettings.communities}
+                onCheckedChange={(v) => handleNotificationChange('communities', v)}
+                disabled={isUpdatingNotifications}
+                aria-label="Notifications communautes"
+              />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
                 <p className="font-medium text-[var(--gp-text-primary)]">Appels</p>
                 <p className="text-sm text-[var(--gp-text-secondary)]">Appels entrants</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.calls}
-                  onChange={(e) => handleNotificationChange('calls', e.target.checked)}
-                  disabled={isUpdatingNotifications}
-                  className="sr-only peer"
-                />
-                <div
-                  className="w-11 h-6 rounded-full peer transition-colors duration-200"
-                  style={{
-                    background: notificationSettings.calls ? 'var(--gp-terracotta)' : 'var(--gp-parchment)',
-                  }}
-                >
-                  <div
-                    className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-                    style={{
-                      transform: notificationSettings.calls ? 'translateX(20px)' : 'translateX(0)',
-                    }}
-                  />
-                </div>
-              </label>
+              <Switch
+                checked={notificationSettings.calls}
+                onCheckedChange={(v) => handleNotificationChange('calls', v)}
+                disabled={isUpdatingNotifications}
+                aria-label="Notifications appels"
+              />
             </div>
           </Card>
         </section>
@@ -593,146 +529,125 @@ export default function V2SettingsPage() {
       </main>
 
       {/* Language Modal */}
-      {showLanguageModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <Card variant="elevated" hover={false} className="w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-[var(--gp-border)] flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[var(--gp-text-primary)]">
-                {languageType === 'translation' ? 'Langue de traduction' : "Langue de l'interface"}
-              </h2>
-              <button onClick={() => setShowLanguageModal(false)}>
-                <svg className="w-6 h-6 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {availableLanguages.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => handleLanguageSelect(lang.code)}
-                  className="w-full p-4 flex items-center gap-3 border-b border-[var(--gp-border)] transition-colors hover:bg-[var(--gp-hover)]"
-                >
-                  <LanguageOrb code={lang.code} size="md" pulse={false} className="w-10 h-10" />
-                  <span className="font-medium text-[var(--gp-text-primary)]">{lang.name}</span>
-                  {lang.flag && <span className="ml-auto text-xl">{lang.flag}</span>}
-                </button>
-              ))}
-            </div>
-          </Card>
+      <Dialog open={showLanguageModal} onClose={() => setShowLanguageModal(false)} className="max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--gp-text-primary)]">
+            {languageType === 'translation' ? 'Langue de traduction' : "Langue de l'interface"}
+          </h2>
+          <button onClick={() => setShowLanguageModal(false)}>
+            <svg className="w-6 h-6 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </DialogHeader>
+        <div className="overflow-y-auto flex-1">
+          {availableLanguages.map((lang) => (
+            <button
+              key={lang.code}
+              onClick={() => handleLanguageSelect(lang.code)}
+              className="w-full p-4 flex items-center gap-3 border-b border-[var(--gp-border)] transition-colors hover:bg-[var(--gp-hover)]"
+            >
+              <LanguageOrb code={lang.code} size="md" pulse={false} className="w-10 h-10" />
+              <span className="font-medium text-[var(--gp-text-primary)]">{lang.name}</span>
+              {lang.flag && <span className="ml-auto text-xl">{lang.flag}</span>}
+            </button>
+          ))}
         </div>
-      )}
+      </Dialog>
 
       {/* Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <Card variant="elevated" hover={false} className="w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-4 text-[var(--gp-text-primary)]">
-              Changer le mot de passe
-            </h2>
+      <Dialog open={showPasswordModal} onClose={() => setShowPasswordModal(false)}>
+        <DialogBody>
+          <h2 className="text-lg font-semibold mb-4 text-[var(--gp-text-primary)]">
+            Changer le mot de passe
+          </h2>
 
-            {passwordError && (
-              <div className="p-3 rounded-xl mb-4" style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}>
-                <p className="text-sm" style={{ color: 'var(--gp-error)' }}>{passwordError}</p>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-[var(--gp-text-secondary)]">
-                  Mot de passe actuel
-                </label>
-                <input
-                  type="password"
-                  value={passwordForm.current}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, current: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--gp-border)] bg-[var(--gp-surface)] text-[var(--gp-text-primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-[var(--gp-text-secondary)]">
-                  Nouveau mot de passe
-                </label>
-                <input
-                  type="password"
-                  value={passwordForm.new}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, new: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--gp-border)] bg-[var(--gp-surface)] text-[var(--gp-text-primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-[var(--gp-text-secondary)]">
-                  Confirmer le mot de passe
-                </label>
-                <input
-                  type="password"
-                  value={passwordForm.confirm}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, confirm: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--gp-border)] bg-[var(--gp-surface)] text-[var(--gp-text-primary)]"
-                />
-              </div>
+          {passwordError && (
+            <div className="p-3 rounded-xl mb-4" style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}>
+              <p className="text-sm" style={{ color: 'var(--gp-error)' }}>{passwordError}</p>
             </div>
+          )}
 
-            <div className="flex gap-3 mt-6">
-              <Button variant="outline" className="flex-1" onClick={() => setShowPasswordModal(false)}>
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={handlePasswordSubmit}
-                isLoading={isUpdating}
-              >
-                Enregistrer
-              </Button>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-1">Mot de passe actuel</Label>
+              <Input
+                type="password"
+                value={passwordForm.current}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, current: e.target.value }))}
+              />
             </div>
-          </Card>
-        </div>
-      )}
+            <div>
+              <Label className="mb-1">Nouveau mot de passe</Label>
+              <Input
+                type="password"
+                value={passwordForm.new}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, new: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="mb-1">Confirmer le mot de passe</Label>
+              <Input
+                type="password"
+                value={passwordForm.confirm}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, confirm: e.target.value }))}
+              />
+            </div>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" className="flex-1" onClick={() => setShowPasswordModal(false)}>
+            Annuler
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
+            onClick={handlePasswordSubmit}
+            isLoading={isUpdating}
+          >
+            Enregistrer
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <Card variant="elevated" hover={false} className="w-full max-w-md p-6">
-            <div className="text-center">
-              <div
-                className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
-                style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}
-              >
-                <svg className="w-8 h-8" style={{ color: 'var(--gp-error)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h2 className="text-lg font-semibold mb-2 text-[var(--gp-text-primary)]">
-                Supprimer votre compte ?
-              </h2>
-              <p className="text-sm mb-6 text-[var(--gp-text-secondary)]">
-                Cette action est irreversible. Toutes vos donnees seront supprimees definitivement.
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeletingAccount}
-              >
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                style={{ background: 'var(--gp-error)' }}
-                onClick={handleDeleteAccount}
-                isLoading={isDeletingAccount}
-              >
-                Supprimer
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
+        <DialogBody className="text-center">
+          <div
+            className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+            style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}
+          >
+            <svg className="w-8 h-8" style={{ color: 'var(--gp-error)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold mb-2 text-[var(--gp-text-primary)]">
+            Supprimer votre compte ?
+          </h2>
+          <p className="text-sm mb-6 text-[var(--gp-text-secondary)]">
+            Cette action est irreversible. Toutes vos donnees seront supprimees definitivement.
+          </p>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setShowDeleteConfirm(false)}
+            disabled={isDeletingAccount}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
+            style={{ background: 'var(--gp-error)' }}
+            onClick={handleDeleteAccount}
+            isLoading={isDeletingAccount}
+          >
+            Supprimer
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

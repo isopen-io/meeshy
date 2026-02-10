@@ -1,16 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { Button, Card, Input, LanguageOrb, PageHeader } from '@/components/v2';
+import { Button, Card, Input, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useContactsV2 } from '@/hooks/v2';
 
 function ContactSkeleton() {
   return (
-    <div className="p-4 flex items-center gap-4 animate-pulse">
-      <div className="w-12 h-12 rounded-full bg-[var(--gp-parchment)]" />
+    <div className="p-4 flex items-center gap-4">
+      <Skeleton variant="circular" className="w-12 h-12" />
       <div className="flex-1">
-        <div className="h-4 rounded w-32 mb-2 bg-[var(--gp-parchment)]" />
-        <div className="h-3 rounded w-24 bg-[var(--gp-parchment)]" />
+        <Skeleton className="h-4 w-32 mb-2" />
+        <Skeleton className="h-3 w-24" />
       </div>
     </div>
   );
@@ -115,26 +115,20 @@ export default function V2ContactsPage() {
             <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
               {onlineContacts.map((contact) => (
                 <div key={contact.id} className="p-4 flex items-center gap-4">
-                  <div className="relative">
-                    {contact.avatar ? (
-                      <img
-                        src={contact.avatar}
-                        alt={contact.name}
-                        className="w-12 h-12 rounded-full object-cover"
+                  <Avatar
+                    src={contact.avatar}
+                    name={contact.name}
+                    size="lg"
+                    isOnline
+                    languageOrb={
+                      <LanguageOrb
+                        code={contact.languageCode}
+                        size="sm"
+                        pulse={false}
+                        className="w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
                       />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold bg-[var(--gp-parchment)] text-[var(--gp-terracotta)]">
-                        {contact.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <LanguageOrb
-                      code={contact.languageCode}
-                      size="sm"
-                      pulse={false}
-                      className="absolute -bottom-1 -right-1 w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
-                    />
-                    <div className="absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--gp-surface)] bg-[var(--gp-jade-green)]" />
-                  </div>
+                    }
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate text-[var(--gp-text-primary)]">{contact.name}</p>
                     <p className="text-sm truncate text-[var(--gp-text-muted)]">{contact.username}</p>
@@ -161,25 +155,19 @@ export default function V2ContactsPage() {
             <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
               {offlineContacts.map((contact) => (
                 <div key={contact.id} className="p-4 flex items-center gap-4 opacity-70">
-                  <div className="relative">
-                    {contact.avatar ? (
-                      <img
-                        src={contact.avatar}
-                        alt={contact.name}
-                        className="w-12 h-12 rounded-full object-cover"
+                  <Avatar
+                    src={contact.avatar}
+                    name={contact.name}
+                    size="lg"
+                    languageOrb={
+                      <LanguageOrb
+                        code={contact.languageCode}
+                        size="sm"
+                        pulse={false}
+                        className="w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
                       />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold bg-[var(--gp-parchment)] text-[var(--gp-terracotta)]">
-                        {contact.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <LanguageOrb
-                      code={contact.languageCode}
-                      size="sm"
-                      pulse={false}
-                      className="absolute -bottom-1 -right-1 w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
-                    />
-                  </div>
+                    }
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate text-[var(--gp-text-primary)]">{contact.name}</p>
                     <p className="text-sm truncate text-[var(--gp-text-muted)]">{contact.username}</p>

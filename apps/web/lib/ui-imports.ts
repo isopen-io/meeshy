@@ -137,12 +137,6 @@ export {
 // } from '@/components/ui/context-menu';
 
 export {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
-
-export {
   Input,
 } from '@/components/ui/input';
 

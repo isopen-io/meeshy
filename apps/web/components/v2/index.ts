@@ -107,6 +107,27 @@ export {
   ErrorEmptyState,
 } from './EmptyStates';
 
+export { Dialog, DialogHeader, DialogBody, DialogFooter } from './Dialog';
+export type { DialogProps } from './Dialog';
+
+export { Switch } from './Switch';
+export type { SwitchProps } from './Switch';
+
+export { Avatar } from './Avatar';
+export type { AvatarProps } from './Avatar';
+
+export { Skeleton } from './Skeleton';
+export type { SkeletonProps } from './Skeleton';
+
+export { Label } from './Label';
+export type { LabelProps } from './Label';
+
+export { Separator } from './Separator';
+export type { SeparatorProps } from './Separator';
+
+export { Textarea } from './Textarea';
+export type { TextareaProps } from './Textarea';
+
 // Auth
 export { AuthGuardV2 } from './auth/AuthGuardV2';
 

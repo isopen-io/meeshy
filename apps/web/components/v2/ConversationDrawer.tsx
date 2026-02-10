@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
+import { Label } from './Label';
+import { Separator } from './Separator';
 
 export interface ConversationDrawerProps {
   isOpen: boolean;
@@ -146,11 +148,9 @@ export function ConversationDrawer({
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {/* Nom personnalisé */}
           <div>
-            <label
-              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
-            >
+            <Label className="mb-2">
               Nom affiché (pour vous)
-            </label>
+            </Label>
             <Input
               value={localName}
               onChange={(e) => setLocalName(e.target.value)}
@@ -166,11 +166,9 @@ export function ConversationDrawer({
 
           {/* Notifications */}
           <div>
-            <label
-              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
-            >
+            <Label className="mb-2">
               Notifications
-            </label>
+            </Label>
             <div className="flex gap-2">
               {(['all', 'mentions', 'none'] as const).map((level) => (
                 <button
@@ -196,11 +194,9 @@ export function ConversationDrawer({
 
           {/* Thème */}
           <div>
-            <label
-              className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300"
-            >
+            <Label className="mb-2">
               Thème
-            </label>
+            </Label>
             <div className="flex gap-3">
               {availableColors.map((color) => (
                 <button
@@ -227,7 +223,7 @@ export function ConversationDrawer({
           </div>
 
           {/* Séparateur */}
-          <div className="border-t border-[var(--gp-border)] transition-colors duration-300" />
+          <Separator />
 
           {/* Actions rapides */}
           <div className="space-y-1">
@@ -264,7 +260,7 @@ export function ConversationDrawer({
           </div>
 
           {/* Séparateur */}
-          <div className="border-t border-[var(--gp-border)] transition-colors duration-300" />
+          <Separator />
 
           {/* Catégorie */}
           <TagInput

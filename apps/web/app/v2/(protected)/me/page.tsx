@@ -3,33 +3,28 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader, Dialog, DialogBody, DialogFooter, Avatar, Skeleton, Textarea, Label } from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 
 function ProfileSkeleton() {
   return (
     <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
-      {/* Header Banner */}
-      <div className="h-40 relative animate-pulse bg-[var(--gp-parchment)]" />
-
-      {/* Profile Info skeleton */}
+      <Skeleton variant="rectangular" className="h-40 rounded-none" />
       <div className="max-w-2xl mx-auto px-6">
         <div className="relative -mt-16 mb-6">
-          <div className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] animate-pulse bg-[var(--gp-parchment)]" />
+          <Skeleton variant="circular" className="w-32 h-32 border-4 border-[var(--gp-surface)]" />
         </div>
-
         <div className="mb-6 space-y-3">
-          <div className="h-8 w-48 rounded animate-pulse bg-[var(--gp-parchment)]" />
-          <div className="h-4 w-32 rounded animate-pulse bg-[var(--gp-parchment)]" />
-          <div className="h-4 w-full rounded animate-pulse bg-[var(--gp-parchment)]" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-full" />
         </div>
-
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[1, 2, 3].map((i) => (
-            <Card key={i} variant="default" hover={false} className="p-4 animate-pulse">
-              <div className="h-8 w-16 mx-auto mb-2 rounded bg-[var(--gp-parchment)]" />
-              <div className="h-3 w-20 mx-auto rounded bg-[var(--gp-parchment)]" />
+            <Card key={i} variant="default" hover={false} className="p-4">
+              <Skeleton className="h-8 w-16 mx-auto mb-2" />
+              <Skeleton className="h-3 w-20 mx-auto" />
             </Card>
           ))}
         </div>
@@ -66,21 +61,9 @@ function EditProfileModal({
     await onSave({ displayName: name, bio });
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div
-        className="relative w-full max-w-md mx-4 p-6 rounded-2xl shadow-xl"
-        style={{ background: 'var(--gp-surface)' }}
-      >
+    <Dialog open={isOpen} onClose={onClose}>
+      <DialogBody>
         <h2
           className="text-xl font-bold mb-6 text-[var(--gp-text-primary)]"
           style={{ fontFamily: theme.fonts.display }}
@@ -90,9 +73,7 @@ function EditProfileModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-              Nom
-            </label>
+            <Label className="mb-2">Nom</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -101,39 +82,35 @@ function EditProfileModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-              Bio
-            </label>
-            <textarea
+            <Label className="mb-2">Bio</Label>
+            <Textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               placeholder="Parlez-nous de vous..."
               rows={3}
-              className="w-full rounded-xl border bg-[var(--gp-surface)] px-4 py-3 text-base text-[var(--gp-text-primary)] transition-colors duration-300 placeholder:text-[var(--gp-text-muted)] focus:outline-none focus:ring-2 focus:ring-offset-0 border-[var(--gp-border)] focus:border-[var(--gp-deep-teal)] focus:ring-[var(--gp-deep-teal)]/20 resize-none"
             />
           </div>
         </div>
-
-        <div className="flex gap-3 mt-6">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={onClose}
-            disabled={isSaving}
-          >
-            Annuler
-          </Button>
-          <Button
-            variant="primary"
-            className="flex-1"
-            onClick={handleSave}
-            disabled={isSaving || !name.trim()}
-          >
-            {isSaving ? 'Enregistrement...' : 'Enregistrer'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </DialogBody>
+      <DialogFooter>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={onClose}
+          disabled={isSaving}
+        >
+          Annuler
+        </Button>
+        <Button
+          variant="primary"
+          className="flex-1"
+          onClick={handleSave}
+          disabled={isSaving || !name.trim()}
+        >
+          {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }
 
@@ -149,52 +126,39 @@ function LogoutConfirmModal({
   onConfirm: () => void;
   isLoggingOut: boolean;
 }) {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div
-        className="relative w-full max-w-sm mx-4 p-6 rounded-2xl shadow-xl"
-        style={{ background: 'var(--gp-surface)' }}
-      >
+    <Dialog open={isOpen} onClose={onClose} className="max-w-sm">
+      <DialogBody>
         <h2
           className="text-xl font-bold mb-2 text-[var(--gp-text-primary)]"
           style={{ fontFamily: theme.fonts.display }}
         >
           Se deconnecter ?
         </h2>
-        <p className="mb-6 text-[var(--gp-text-secondary)]">
+        <p className="text-[var(--gp-text-secondary)]">
           Etes-vous sur de vouloir vous deconnecter de votre compte ?
         </p>
-
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={onClose}
-            disabled={isLoggingOut}
-          >
-            Annuler
-          </Button>
-          <Button
-            variant="primary"
-            className="flex-1"
-            style={{ background: theme.colors.asianRuby }}
-            onClick={onConfirm}
-            disabled={isLoggingOut}
-          >
-            {isLoggingOut ? 'Deconnexion...' : 'Se deconnecter'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </DialogBody>
+      <DialogFooter>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={onClose}
+          disabled={isLoggingOut}
+        >
+          Annuler
+        </Button>
+        <Button
+          variant="primary"
+          className="flex-1"
+          style={{ background: theme.colors.asianRuby }}
+          onClick={onConfirm}
+          disabled={isLoggingOut}
+        >
+          {isLoggingOut ? 'Deconnexion...' : 'Se deconnecter'}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }
 
@@ -302,20 +266,13 @@ export default function V2ProfilePage() {
       {/* Profile Info */}
       <div className="max-w-2xl mx-auto px-6">
         <div className="relative -mt-16 mb-6">
-          {profile.avatar ? (
-            <img
-              src={profile.avatar}
-              alt={profile.name}
-              className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] object-cover"
-            />
-          ) : (
-            <div className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] flex items-center justify-center text-5xl font-bold bg-[var(--gp-parchment)] text-[var(--gp-terracotta)]">
-              {profile.name.charAt(0).toUpperCase()}
-            </div>
-          )}
-          {profile.isOnline && (
-            <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full border-4 border-[var(--gp-surface)] bg-[var(--gp-jade-green)]" />
-          )}
+          <Avatar
+            src={profile.avatar}
+            name={profile.name}
+            size="xl"
+            isOnline={profile.isOnline}
+            className="border-4 border-[var(--gp-surface)]"
+          />
         </div>
 
         <div className="mb-6">

@@ -2,28 +2,28 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Button, Card, Badge, LanguageOrb, theme, PageHeader } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, theme, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
 
 function ProfileSkeleton() {
   return (
     <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
       <PageHeader title="Profil" />
-      <div className="h-40 animate-pulse bg-[var(--gp-parchment)]" />
+      <Skeleton variant="rectangular" className="h-40 rounded-none" />
       <div className="max-w-2xl mx-auto px-6">
         <div className="relative -mt-16 mb-6">
-          <div className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] animate-pulse bg-[var(--gp-parchment)]" />
+          <Skeleton variant="circular" className="w-32 h-32 border-4 border-[var(--gp-surface)]" />
         </div>
         <div className="mb-6 space-y-3">
-          <div className="h-8 w-48 rounded animate-pulse bg-[var(--gp-parchment)]" />
-          <div className="h-4 w-32 rounded animate-pulse bg-[var(--gp-parchment)]" />
-          <div className="h-4 w-full rounded animate-pulse bg-[var(--gp-parchment)]" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-full" />
         </div>
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[1, 2, 3].map((i) => (
-            <Card key={i} variant="default" hover={false} className="p-4 animate-pulse">
-              <div className="h-8 w-16 mx-auto mb-2 rounded bg-[var(--gp-parchment)]" />
-              <div className="h-3 w-20 mx-auto rounded bg-[var(--gp-parchment)]" />
+            <Card key={i} variant="default" hover={false} className="p-4">
+              <Skeleton className="h-8 w-16 mx-auto mb-2" />
+              <Skeleton className="h-3 w-20 mx-auto" />
             </Card>
           ))}
         </div>
@@ -102,20 +102,13 @@ export default function UserProfilePage() {
       {/* Profile Info */}
       <div className="max-w-2xl mx-auto px-6">
         <div className="relative -mt-16 mb-6">
-          {profile.avatar ? (
-            <img
-              src={profile.avatar}
-              alt={profile.name}
-              className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] object-cover"
-            />
-          ) : (
-            <div className="w-32 h-32 rounded-full border-4 border-[var(--gp-surface)] flex items-center justify-center text-5xl font-bold bg-[var(--gp-parchment)] text-[var(--gp-terracotta)]">
-              {profile.name.charAt(0).toUpperCase()}
-            </div>
-          )}
-          {profile.isOnline && (
-            <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full border-4 border-[var(--gp-surface)] bg-[var(--gp-jade-green)]" />
-          )}
+          <Avatar
+            src={profile.avatar}
+            name={profile.name}
+            size="xl"
+            isOnline={profile.isOnline}
+            className="border-4 border-[var(--gp-surface)]"
+          />
         </div>
 
         <div className="mb-6">

@@ -1,16 +1,16 @@
 'use client';
 
-import { Button, Card, Badge, LanguageOrb, PageHeader } from '@/components/v2';
+import { Button, Card, Badge, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useNotificationsV2 } from '@/hooks/v2';
 
 function NotificationSkeleton() {
   return (
-    <div className="p-4 border-b border-[var(--gp-border)] animate-pulse">
+    <div className="p-4 border-b border-[var(--gp-border)]">
       <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-full bg-[var(--gp-parchment)]" />
+        <Skeleton variant="circular" className="w-12 h-12" />
         <div className="flex-1">
-          <div className="h-4 rounded w-3/4 mb-2 bg-[var(--gp-parchment)]" />
-          <div className="h-3 rounded w-1/4 bg-[var(--gp-parchment)]" />
+          <Skeleton className="h-4 w-3/4 mb-2" />
+          <Skeleton className="h-3 w-1/4" />
         </div>
       </div>
     </div>
@@ -151,25 +151,19 @@ export default function V2NotificationsPage() {
             onClick={() => handleNotificationClick(notif.id, notif.actionUrl)}
             className={`w-full p-4 border-b border-[var(--gp-border)] flex items-start gap-4 text-left transition-colors hover:bg-[var(--gp-hover)] ${notif.isUnread ? 'bg-[var(--gp-terracotta)]/5' : ''}`}
           >
-            <div className="relative">
-              {notif.user.avatar ? (
-                <img
-                  src={notif.user.avatar}
-                  alt={notif.user.name}
-                  className="w-12 h-12 rounded-full object-cover"
+            <Avatar
+              src={notif.user.avatar}
+              name={notif.user.name}
+              size="lg"
+              languageOrb={
+                <LanguageOrb
+                  code={notif.user.languageCode}
+                  size="sm"
+                  pulse={false}
+                  className="w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
                 />
-              ) : (
-                <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-semibold bg-[var(--gp-parchment)] text-[var(--gp-terracotta)]">
-                  {notif.user.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <LanguageOrb
-                code={notif.user.languageCode}
-                size="sm"
-                pulse={false}
-                className="absolute -bottom-1 -right-1 w-5 h-5 text-xs border-2 border-[var(--gp-surface)]"
-              />
-            </div>
+              }
+            />
             <div className="flex-1 min-w-0">
               <p className="text-[var(--gp-text-primary)]">
                 <span className="font-semibold">{notif.user.name}</span>{' '}

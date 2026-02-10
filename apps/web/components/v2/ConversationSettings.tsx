@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Badge } from './Badge';
+import { Switch } from './Switch';
+import { Avatar } from './Avatar';
+import { Label } from './Label';
+import { Textarea } from './Textarea';
+import { Separator } from './Separator';
 
 export interface Participant {
   id: string;
@@ -191,9 +196,7 @@ export function ConversationSettings({
           {/* Titre et Description */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300">
-                Titre officiel
-              </label>
+              <Label className="mb-2">Titre officiel</Label>
               <Input
                 value={localTitle}
                 onChange={(e) => setLocalTitle(e.target.value)}
@@ -202,24 +205,20 @@ export function ConversationSettings({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-[var(--gp-text-muted)] transition-colors duration-300">
-                Description
-              </label>
-              <textarea
+              <Label className="mb-2">Description</Label>
+              <Textarea
                 value={localDescription}
                 onChange={(e) => setLocalDescription(e.target.value)}
                 onBlur={() => localDescription !== description && onDescriptionChange(localDescription)}
                 placeholder="Description de la conversation..."
-                className="w-full px-3 py-2 text-sm rounded-lg border outline-none resize-none h-20 bg-[var(--gp-surface)] border-[var(--gp-border)] text-[var(--gp-text-primary)] transition-colors duration-300"
+                className="h-20 text-sm rounded-lg px-3 py-2"
               />
             </div>
           </div>
 
           {/* Type de conversation */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
-              Type de conversation
-            </label>
+            <Label className="mb-3">Type de conversation</Label>
             <div className="space-y-2">
               {typeOptions.map((option) => (
                 <button
@@ -260,9 +259,7 @@ export function ConversationSettings({
 
           {/* Options */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
-              Options
-            </label>
+            <Label className="mb-3">Options</Label>
             <div className="space-y-3">
               <button
                 onClick={() => onCommunityChange(communityId ? undefined : 'select')}
@@ -279,9 +276,8 @@ export function ConversationSettings({
                 </svg>
               </button>
 
-              <button
-                onClick={() => onAllowAnonymousChange(!allowAnonymous)}
-                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] hover:bg-[var(--gp-hover)] transition-colors duration-300"
+              <div
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-[var(--gp-border)] transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--gp-text-muted)]">👻</span>
@@ -289,23 +285,20 @@ export function ConversationSettings({
                     Autoriser les anonymes
                   </span>
                 </div>
-                <div
-                  className={`w-10 h-6 rounded-full p-1 transition-colors duration-300 ${allowAnonymous ? 'bg-[var(--gp-deep-teal)]' : 'bg-[var(--gp-border)]'}`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white transition-transform duration-300 ${allowAnonymous ? 'translate-x-4' : ''}`}
-                  />
-                </div>
-              </button>
+                <Switch
+                  checked={allowAnonymous}
+                  onCheckedChange={onAllowAnonymousChange}
+                  size="sm"
+                  aria-label="Autoriser les anonymes"
+                />
+              </div>
             </div>
           </div>
 
           {/* Participants */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium text-[var(--gp-text-muted)] transition-colors duration-300">
-                Participants ({participants.length})
-              </label>
+              <Label>Participants ({participants.length})</Label>
               <Button variant="ghost" size="sm" onClick={onInvite}>
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -321,29 +314,12 @@ export function ConversationSettings({
                     key={participant.id}
                     className="flex items-center gap-3 p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300"
                   >
-                    <div className="relative">
-                      {participant.avatar ? (
-                        <img
-                          src={participant.avatar}
-                          alt={participant.name}
-                          width={40}
-                          height={40}
-                          loading="lazy"
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium bg-[var(--gp-deep-teal)]"
-                        >
-                          {participant.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      {participant.isOnline && (
-                        <div
-                          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[var(--gp-surface-elevated)] bg-[var(--gp-deep-teal)]"
-                        />
-                      )}
-                    </div>
+                    <Avatar
+                      src={participant.avatar}
+                      name={participant.name}
+                      size="md"
+                      isOnline={participant.isOnline}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-[var(--gp-text-primary)] transition-colors duration-300">
                         {participant.name}
@@ -368,9 +344,7 @@ export function ConversationSettings({
 
           {/* Statistiques */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
-              Statistiques
-            </label>
+            <Label className="mb-3">Statistiques</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300">
                 <p className="text-lg font-bold text-[var(--gp-text-primary)]">
@@ -391,9 +365,7 @@ export function ConversationSettings({
 
           {/* Contenus */}
           <div>
-            <label className="block text-sm font-medium mb-3 text-[var(--gp-text-muted)] transition-colors duration-300">
-              Contenus
-            </label>
+            <Label className="mb-3">Contenus</Label>
             <div className="space-y-2">
               <button
                 onClick={onMediaClick}
