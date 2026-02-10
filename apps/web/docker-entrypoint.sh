@@ -40,6 +40,9 @@ replace_placeholder "__RUNTIME_FRONTEND_URL__" "NEXT_PUBLIC_FRONTEND_URL" ""
 replace_placeholder "__RUNTIME_TRANSLATION_URL__" "NEXT_PUBLIC_TRANSLATION_URL" ""
 replace_placeholder "__RUNTIME_STATIC_URL__" "NEXT_PUBLIC_STATIC_URL" ""
 
+# Feature flags
+replace_placeholder "__RUNTIME_ENABLE_PUSH_NOTIFICATIONS__" "NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS" ""
+
 # Firebase configuration (for push notifications)
 replace_placeholder "__RUNTIME_FIREBASE_API_KEY__" "NEXT_PUBLIC_FIREBASE_API_KEY" ""
 replace_placeholder "__RUNTIME_FIREBASE_AUTH_DOMAIN__" "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" ""
