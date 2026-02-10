@@ -277,7 +277,14 @@ COPY --chown=translator:translator services/translator/ ./
 # Bundle pyannote diarization models (~31MB) in a separate location
 # They'll be copied to /workspace/models/pyannote/ at startup if not already present
 # (the /workspace/models/ directory is mounted as a Docker volume and would shadow these)
-COPY services/translator/models/pyannote/ /opt/pyannote-models/
+# Uses RUN instead of COPY to be robust if models/pyannote/ is absent from the repo
+RUN mkdir -p /opt/pyannote-models && \
+    if [ -d "./models/pyannote" ] && [ "$(ls -A ./models/pyannote 2>/dev/null)" ]; then \
+        cp -r ./models/pyannote/. /opt/pyannote-models/ && \
+        echo "Pyannote models bundled in /opt/pyannote-models/"; \
+    else \
+        echo "No pyannote models in repo, will download at runtime"; \
+    fi
 
 # Verify critical components installation
 RUN echo "=== Verifying critical components ===" && \
