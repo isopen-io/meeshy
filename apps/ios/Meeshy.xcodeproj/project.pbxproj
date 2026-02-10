@@ -13,6 +13,7 @@
 		470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */; };
 		475968E0CE4126EF67ABACC2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF92F095894B8DD05EB0BFD /* Theme.swift */; };
 		4C9760B519E90994F76DC90A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13A020468B6C8367F8121928 /* Assets.xcassets */; };
+		4DC22D80309C97D00C3EE9A9 /* TextAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */; };
 		58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F52D4DD36D01276DA42A395 /* Models.swift */; };
 		63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
@@ -40,6 +41,7 @@
 		9DF7035D7F9CE206D8422552 /* ChatBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubble.swift; sourceTree = "<group>"; };
 		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
 		C83758F8E8BD422CF1E9551E /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
+		F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAnalyzer.swift; sourceTree = "<group>"; };
 		FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableFloatingButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -51,6 +53,7 @@
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
 				FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
+				F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -213,6 +216,7 @@
 				58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */,
 				63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */,
 				CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */,
+				4DC22D80309C97D00C3EE9A9 /* TextAnalyzer.swift in Sources */,
 				475968E0CE4126EF67ABACC2 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

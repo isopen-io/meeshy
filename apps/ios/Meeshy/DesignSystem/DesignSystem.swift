@@ -131,13 +131,163 @@ struct PressableButton: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .scaleEffect(isPressed ? 0.93 : 1.0)
+            .brightness(isPressed ? -0.05 : 0)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in isPressed = true }
                     .onEnded { _ in isPressed = false }
             )
+    }
+}
+
+// MARK: - Shimmer Effect
+struct ShimmerEffect: ViewModifier {
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0),
+                            Color.white.opacity(0.15),
+                            Color.white.opacity(0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.6)
+                    .offset(x: -geo.size.width * 0.3 + phase * (geo.size.width * 1.6))
+                    .mask(content)
+                }
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}
+
+// MARK: - Pulse Effect (gentle scale breathing)
+struct PulseEffect: ViewModifier {
+    let intensity: CGFloat
+    @State private var isPulsing = false
+
+    init(intensity: CGFloat = 0.04) {
+        self.intensity = intensity
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPulsing ? 1 + intensity : 1)
+            .animation(
+                .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear { isPulsing = true }
+    }
+}
+
+// MARK: - Breathing Glow Effect
+struct BreathingGlow: ViewModifier {
+    let color: Color
+    let intensity: Double
+    @State private var isGlowing = false
+
+    init(color: Color, intensity: Double = 0.5) {
+        self.color = color
+        self.intensity = intensity
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(
+                color: color.opacity(isGlowing ? intensity : intensity * 0.3),
+                radius: isGlowing ? 12 : 6,
+                y: isGlowing ? 6 : 3
+            )
+            .animation(
+                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                value: isGlowing
+            )
+            .onAppear { isGlowing = true }
+    }
+}
+
+// MARK: - Staggered Appear Animation
+struct StaggeredAppear: ViewModifier {
+    let index: Int
+    let baseDelay: Double
+    @State private var isVisible = false
+
+    init(index: Int, baseDelay: Double = 0.05) {
+        self.index = index
+        self.baseDelay = baseDelay
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : 20)
+            .scaleEffect(isVisible ? 1 : 0.95)
+            .animation(
+                .spring(response: 0.45, dampingFraction: 0.8)
+                    .delay(Double(index) * baseDelay),
+                value: isVisible
+            )
+            .onAppear {
+                isVisible = true
+            }
+    }
+}
+
+// MARK: - Bounce On Appear
+struct BounceOnAppear: ViewModifier {
+    @State private var isVisible = false
+    let delay: Double
+
+    init(delay: Double = 0) {
+        self.delay = delay
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isVisible ? 1 : 0.5)
+            .opacity(isVisible ? 1 : 0)
+            .animation(
+                .spring(response: 0.4, dampingFraction: 0.6).delay(delay),
+                value: isVisible
+            )
+            .onAppear { isVisible = true }
+    }
+}
+
+// MARK: - Floating Animation (for ambient elements)
+struct FloatingAnimation: ViewModifier {
+    let offsetRange: CGFloat
+    let duration: Double
+    @State private var isFloating = false
+
+    init(offsetRange: CGFloat = 15, duration: Double = 4.0) {
+        self.offsetRange = offsetRange
+        self.duration = duration
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .offset(
+                x: isFloating ? offsetRange : -offsetRange,
+                y: isFloating ? -offsetRange * 0.7 : offsetRange * 0.7
+            )
+            .animation(
+                .easeInOut(duration: duration).repeatForever(autoreverses: true),
+                value: isFloating
+            )
+            .onAppear { isFloating = true }
     }
 }
 
@@ -155,7 +305,31 @@ extension View {
     func pressable() -> some View {
         modifier(PressableButton())
     }
-    
+
+    func shimmer() -> some View {
+        modifier(ShimmerEffect())
+    }
+
+    func pulse(intensity: CGFloat = 0.04) -> some View {
+        modifier(PulseEffect(intensity: intensity))
+    }
+
+    func breathingGlow(color: Color, intensity: Double = 0.5) -> some View {
+        modifier(BreathingGlow(color: color, intensity: intensity))
+    }
+
+    func staggeredAppear(index: Int, baseDelay: Double = 0.05) -> some View {
+        modifier(StaggeredAppear(index: index, baseDelay: baseDelay))
+    }
+
+    func bounceOnAppear(delay: Double = 0) -> some View {
+        modifier(BounceOnAppear(delay: delay))
+    }
+
+    func floating(range: CGFloat = 15, duration: Double = 4.0) -> some View {
+        modifier(FloatingAnimation(offsetRange: range, duration: duration))
+    }
+
     public func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
     }

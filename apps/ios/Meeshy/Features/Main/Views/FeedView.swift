@@ -377,6 +377,7 @@ struct FeedView: View {
     @State private var searchText = ""
     @State private var showComposer = false
     @FocusState private var isComposerFocused: Bool
+    @State private var composerBounce: Bool = false
     @State private var composerText = ""
     @State private var expandedComments: Set<String> = []
 
@@ -890,6 +891,12 @@ struct FeedView: View {
                         .frame(minHeight: 150)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
+                }
+                .scaleEffect(composerBounce ? 1.01 : 1.0)
+                .onChange(of: isComposerFocused) { newValue in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                        composerBounce = newValue
+                    }
                 }
 
                 Spacer()
@@ -1444,26 +1451,45 @@ struct FeedPostCard: View {
     }
 
     // MARK: - Actions Bar
+    @State private var likeAnimating = false
+
     private var actionsBar: some View {
         HStack(spacing: 0) {
-            // Like
+            // Like with heart burst animation
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                     isLiked.toggle()
+                    likeAnimating = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    likeAnimating = false
                 }
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 18))
-                        .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textSecondary)
-                        .scaleEffect(isLiked ? 1.1 : 1.0)
+                    ZStack {
+                        // Burst ring behind heart
+                        if isLiked {
+                            Circle()
+                                .stroke(Color(hex: "FF6B6B").opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
+                                .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
+                                .animation(.easeOut(duration: 0.4), value: likeAnimating)
+                        }
+
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 18))
+                            .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textSecondary)
+                            .scaleEffect(likeAnimating ? 1.3 : (isLiked ? 1.1 : 1.0))
+                            .rotationEffect(.degrees(likeAnimating ? -15 : 0))
+                    }
 
                     Text("\(post.likes + (isLiked ? 1 : 0))")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textSecondary)
+                        .contentTransition(.numericText())
                 }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isLiked)
 
             Spacer()
 
@@ -1673,6 +1699,7 @@ struct CommentsSheetView: View {
     @State private var commentText = ""
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
+    @State private var commentBounce: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -1879,6 +1906,12 @@ struct CommentsSheetView: View {
                                 )
                         )
                 )
+                .scaleEffect(commentBounce ? 1.02 : 1.0)
+                .onChange(of: isComposerFocused) { newValue in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                        commentBounce = newValue
+                    }
+                }
 
                 // Send button
                 if !commentText.isEmpty {

@@ -6,6 +6,11 @@ struct MessageComposer: View {
     let onSend: () -> Void
 
     @State private var textHeight: CGFloat = 40
+    @State private var attachRotation: Double = 0
+    @State private var sendBounce: Bool = false
+    @State private var glowPhase: CGFloat = 0
+    @State private var focusBounce: Bool = false
+    @StateObject private var textAnalyzer = TextAnalyzer()
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
@@ -15,22 +20,37 @@ struct MessageComposer: View {
             // Text field
             textInputField
 
-            // Send / Voice button
+            // Smart Context / Send / Voice button
             actionButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(composerBackground)
+        .onChange(of: text) { newText in
+            textAnalyzer.analyze(text: newText)
+        }
+        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
+            LanguagePickerSheet(analyzer: textAnalyzer)
+        }
+        .onChange(of: isFocused) { newValue in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                focusBounce = newValue
+            }
+        }
     }
 
     private var attachButton: some View {
         Button(action: {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                attachRotation += 90
+            }
         }) {
             Image(systemName: "plus")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(.white.opacity(0.7))
+                .rotationEffect(.degrees(attachRotation))
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
@@ -66,31 +86,33 @@ struct MessageComposer: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(
-                            isFocused ?
+                            focusBounce ?
                             LinearGradient(colors: [Color(hex: "08D9D6").opacity(0.5), Color(hex: "FF2E63").opacity(0.5)], startPoint: .leading, endPoint: .trailing) :
                                 LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
-                            lineWidth: 1
+                            lineWidth: focusBounce ? 1.5 : 1
                         )
                 )
+                .shadow(color: focusBounce ? Color(hex: "08D9D6").opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
         )
+        .scaleEffect(focusBounce ? 1.02 : 1.0)
     }
 
     @ViewBuilder
     private var actionButton: some View {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-        Button(action: {
-            if hasText {
-                onSend()
-            } else {
-                // Voice message action
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-            }
-        }) {
-            ZStack {
-                if hasText {
-                    // Send button with gradient
+        if hasText {
+            // Send button with sentiment/language badges
+            Button {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                    sendBounce = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    sendBounce = false
+                    onSend()
+                }
+            } label: {
+                ZStack {
                     Circle()
                         .fill(
                             LinearGradient(
@@ -100,15 +122,44 @@ struct MessageComposer: View {
                             )
                         )
                         .frame(width: 44, height: 44)
-                        .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
 
                     Image(systemName: "paperplane.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
-                        .rotationEffect(.degrees(45))
-                        .offset(x: -1, y: 1)
-                } else {
-                    // Voice button
+                        .rotationEffect(.degrees(sendBounce ? 55 : 45))
+                        .offset(x: sendBounce ? 2 : -1, y: sendBounce ? -2 : 1)
+
+                    // Sentiment badge (top-right)
+                    Text(textAnalyzer.sentiment.emoji)
+                        .font(.system(size: 12))
+                        .offset(x: 16, y: -16)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+
+                    // Language flag badge (bottom-right, after 20+ chars)
+                    if text.count > 20, let lang = textAnalyzer.displayLanguage {
+                        Text(lang.flag)
+                            .font(.system(size: 10))
+                            .offset(x: 16, y: 16)
+                            .transition(.scale.combined(with: .opacity))
+                            .onTapGesture {
+                                textAnalyzer.showLanguagePicker = true
+                            }
+                    }
+                }
+                .scaleEffect(sendBounce ? 1.2 : 1)
+            }
+            .frame(width: 44, height: 44)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
+            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+        } else {
+            // Voice button
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+            } label: {
+                ZStack {
                     Circle()
                         .fill(Color.white.opacity(0.1))
                         .frame(width: 44, height: 44)
@@ -122,7 +173,8 @@ struct MessageComposer: View {
                         .foregroundColor(.white.opacity(0.7))
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasText)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
         }
     }
 

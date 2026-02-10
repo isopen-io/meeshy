@@ -58,6 +58,7 @@ struct ConversationListView: View {
     @State private var searchText = ""
     @State private var selectedCategory: ConversationCategory = .all
     @FocusState private var isSearching: Bool
+    @State private var searchBounce: Bool = false
     @State private var animateGradient = false
 
     // Scroll tracking
@@ -162,18 +163,22 @@ struct ConversationListView: View {
             onDrop: { handleDrop(to: group.section.id, providers: $0) }
         ))
 
-        // Section Content
+        // Section Content with animated expand/collapse
         if expandedSections.contains(group.section.id) {
             sectionConversations(group.conversations)
                 .padding(.horizontal, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
+                    removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+                ))
         }
     }
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        ForEach(conversations) { conversation in
+        ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
             conversationRow(for: conversation)
+                .staggeredAppear(index: index, baseDelay: 0.04)
         }
     }
 
@@ -557,8 +562,9 @@ struct ConversationListView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(SampleData.communities) { community in
+                    ForEach(Array(SampleData.communities.enumerated()), id: \.element.id) { index, community in
                         ThemedCommunityCard(community: community)
+                            .staggeredAppear(index: index, baseDelay: 0.06)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -597,6 +603,8 @@ struct ConversationListView: View {
                     AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
                     AnyShapeStyle(theme.textMuted)
                 )
+                .scaleEffect(isSearching ? 1.15 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSearching)
 
             TextField("Rechercher...", text: $searchText)
                 .focused($isSearching)
@@ -605,11 +613,13 @@ struct ConversationListView: View {
 
             if !searchText.isEmpty {
                 Button {
-                    withAnimation { searchText = "" }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(Color(hex: "FF6B6B"))
+                        .scaleEffect(1.0)
                 }
+                .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.horizontal, 16)
@@ -626,8 +636,15 @@ struct ConversationListView: View {
                             lineWidth: isSearching ? 2 : 1
                         )
                 )
-                .shadow(color: isSearching ? Color(hex: "4ECDC4").opacity(0.2) : .clear, radius: 10, y: 5)
+                .shadow(color: isSearching ? Color(hex: "4ECDC4").opacity(0.25) : .clear, radius: 12, y: 5)
         )
+        .scaleEffect(searchBounce ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
+        .onChange(of: isSearching) { newValue in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                searchBounce = newValue
+            }
+        }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
     }
@@ -642,21 +659,39 @@ struct SectionHeaderView: View {
     let onToggle: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var isTapped = false
 
     var body: some View {
-        Button(action: onToggle) {
+        Button(action: {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                isTapped = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                isTapped = false
+            }
+            onToggle()
+        }) {
             HStack(spacing: 10) {
-                // Section icon
+                // Section icon with glow
                 ZStack {
+                    // Glow ring behind icon
+                    Circle()
+                        .fill(Color(hex: section.color).opacity(isExpanded ? 0.15 : 0))
+                        .frame(width: 40, height: 40)
+                        .blur(radius: 4)
+                        .animation(.easeInOut(duration: 0.4), value: isExpanded)
+
                     Circle()
                         .fill(Color(hex: section.color).opacity(isDropTarget ? 0.5 : (theme.mode.isDark ? 0.25 : 0.18)))
                         .frame(width: 32, height: 32)
-                        .scaleEffect(isDropTarget ? 1.15 : 1.0)
+                        .scaleEffect(isDropTarget ? 1.15 : (isTapped ? 1.2 : 1.0))
 
                     Image(systemName: section.icon)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: section.color))
+                        .scaleEffect(isTapped ? 1.15 : 1.0)
                 }
+                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTapped)
 
                 // Section name
                 Text(section.name)
@@ -673,6 +708,8 @@ struct SectionHeaderView: View {
                         Capsule()
                             .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (theme.mode.isDark ? 0.2 : 0.15)))
                     )
+                    .scaleEffect(isTapped ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTapped)
 
                 Spacer()
 
@@ -684,17 +721,19 @@ struct SectionHeaderView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
 
-                // Expand/collapse chevron
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                // Expand/collapse chevron with rotation animation
+                Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.65), value: isExpanded)
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isDropTarget ? Color(hex: section.color).opacity(theme.mode.isDark ? 0.15 : 0.1) : Color.clear)
+                    .fill(isDropTarget ? Color(hex: section.color).opacity(theme.mode.isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
@@ -706,6 +745,7 @@ struct SectionHeaderView: View {
             )
             .contentShape(Rectangle())
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDropTarget)
+            .animation(.easeInOut(duration: 0.3), value: isExpanded)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -1013,6 +1053,20 @@ struct ThemedConversationRow: View {
     // MARK: - Avatar
     private var avatarView: some View {
         ZStack {
+            // Animated ring for online/active conversations
+            if conversation.type == .direct || conversation.unreadCount > 0 {
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [Color(hex: accentColor), Color(hex: conversation.colorPalette.secondary), Color(hex: accentColor)],
+                            center: .center
+                        ),
+                        lineWidth: 2.5
+                    )
+                    .frame(width: 56, height: 56)
+                    .pulse(intensity: 0.03)
+            }
+
             // Gradient circle background
             Circle()
                 .fill(
@@ -1033,13 +1087,14 @@ struct ThemedConversationRow: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
 
-            // Online indicator for direct chats
+            // Online indicator for direct chats with pulse
             if conversation.type == .direct {
                 Circle()
                     .fill(Color(hex: "2ECC71"))
                     .frame(width: 14, height: 14)
                     .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
                     .offset(x: 18, y: 18)
+                    .pulse(intensity: 0.15)
             }
         }
     }
@@ -1092,6 +1147,7 @@ struct ThemedConversationRow: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
+        .pulse(intensity: 0.08)
     }
 
     private func timeAgo(_ date: Date) -> String {

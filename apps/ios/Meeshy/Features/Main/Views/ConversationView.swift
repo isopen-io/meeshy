@@ -22,7 +22,10 @@ struct ConversationView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var isLoadingLocation = false
     @FocusState private var isTyping: Bool
+    @State private var typingBounce: Bool = false
     @GestureState private var dragOffset: CGFloat = 0
+    @StateObject private var textAnalyzer = TextAnalyzer()
+    @State private var showLanguagePicker = false
 
     private var accentColor: String {
         conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
@@ -166,6 +169,8 @@ struct ConversationView: View {
         }
         .gesture(swipeBackGesture)
         .offset(x: dragOffset)
+        .scaleEffect(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.05) : 1.0)
+        .opacity(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.3) : 1.0)
         .onAppear { messages = sampleMessages }
         .alert("Action sélectionnée", isPresented: Binding(
             get: { actionAlert != nil },
@@ -182,18 +187,20 @@ struct ConversationView: View {
         ZStack {
             theme.backgroundGradient
 
-            // Accent colored orbs
+            // Accent colored orbs with floating animation
             Circle()
                 .fill(Color(hex: accentColor).opacity(theme.mode.isDark ? 0.12 : 0.08))
                 .frame(width: 400, height: 400)
                 .blur(radius: 100)
                 .offset(x: 100, y: -150)
+                .floating(range: 25, duration: 6.0)
 
             Circle()
                 .fill(Color(hex: secondaryColor).opacity(theme.mode.isDark ? 0.10 : 0.06))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -100, y: 300)
+                .floating(range: 20, duration: 5.0)
         }
         .ignoresSafeArea()
     }
@@ -336,22 +343,37 @@ struct ConversationView: View {
                         // Recording interface
                         voiceRecordingView
                     } else if !showAttachOptions {
-                        // Mic button - starts recording immediately (hidden when attach options shown)
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                startRecording()
-                            }
-                        } label: {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                        // Smart Context Zone / Mic button
+                        let hasText = !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        let textLen = messageText.count
+
+                        if hasText {
+                            SmartContextZone(
+                                analyzer: textAnalyzer,
+                                accentColor: accentColor,
+                                isCompact: false,
+                                showFlag: textLen > 20
+                            )
+                            .transition(.scale.combined(with: .opacity))
+                        } else {
+                            // Mic button - starts recording immediately
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    startRecording()
+                                }
+                            } label: {
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                                .frame(width: 44, height: 44)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .transition(.scale.combined(with: .opacity))
                         }
 
                         // Text input
@@ -399,6 +421,7 @@ struct ConversationView: View {
                                 )
                         )
                 )
+                .scaleEffect(typingBounce ? 1.02 : 1.0)
 
                 // Send button - show when recording, has pending attachments, or has text
                 if isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -429,6 +452,24 @@ struct ConversationView: View {
         }
         .onChange(of: selectedPhotoItems) { items in
             handlePhotoSelection(items)
+        }
+        .onChange(of: messageText) { newText in
+            textAnalyzer.analyze(text: newText)
+        }
+        .onChange(of: isTyping) { focused in
+            // Bounce animation on focus
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                typingBounce = focused
+            }
+            // Close attach menu when composer gets focus
+            if focused && showAttachOptions {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachOptions = false
+                }
+            }
+        }
+        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
+            LanguagePickerSheet(analyzer: textAnalyzer)
         }
     }
 
@@ -521,29 +562,38 @@ struct ConversationView: View {
     // MARK: - Voice Recording View
     private var voiceRecordingView: some View {
         HStack(spacing: 12) {
-            // Recording indicator
-            Circle()
-                .fill(Color(hex: "FF6B6B"))
-                .frame(width: 12, height: 12)
-                .opacity(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
+            // Recording indicator with animated pulse
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "FF6B6B").opacity(0.3))
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.5 : 1.0)
+                    .opacity(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 0 : 0.5)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
 
-            // Waveform animation
+                Circle()
+                    .fill(Color(hex: "FF6B6B"))
+                    .frame(width: 12, height: 12)
+                    .opacity(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
+            }
+
+            // Animated waveform bars
             HStack(spacing: 3) {
                 ForEach(0..<15, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.8))
-                        .frame(width: 3, height: CGFloat.random(in: 8...24))
+                    AnimatedWaveformBar(index: i, isRecording: isRecording)
                 }
             }
 
             Spacer()
 
-            // Timer
+            // Timer with subtle scale
             Text(formatRecordingTime(recordingTime))
                 .font(.system(size: 15, weight: .semibold, design: .monospaced))
                 .foregroundColor(theme.textPrimary)
                 .padding(.trailing, 8)
+                .contentTransition(.numericText())
+                .animation(.spring(response: 0.3), value: recordingTime)
         }
         .padding(.leading, 16)
         .padding(.vertical, 12)
@@ -1004,7 +1054,7 @@ struct ThemedMessageBubble: View {
                 )
 
         case .audio:
-            // Audio message
+            // Audio message with stylized waveform
             HStack(spacing: 12) {
                 Circle()
                     .fill(Color.white.opacity(0.3))
@@ -1015,12 +1065,19 @@ struct ThemedMessageBubble: View {
                             .foregroundColor(.white)
                     )
 
-                // Waveform placeholder
+                // Stylized waveform with deterministic heights
                 HStack(spacing: 2) {
                     ForEach(0..<20, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.7))
-                            .frame(width: 3, height: CGFloat.random(in: 8...25))
+                        let height = waveformHeight(for: i)
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.9), Color.white.opacity(0.5)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 3, height: height)
                     }
                 }
 
@@ -1115,6 +1172,16 @@ struct ThemedMessageBubble: View {
         }
     }
 
+    // MARK: - Waveform Height Generator (deterministic per bar index)
+    private func waveformHeight(for index: Int) -> CGFloat {
+        // Creates a natural-looking waveform pattern using sine waves
+        let base: CGFloat = 10
+        let amplitude: CGFloat = 14
+        let phase1 = sin(Double(index) * 0.8) * 0.7
+        let phase2 = sin(Double(index) * 1.6 + 1.0) * 0.3
+        return base + amplitude * CGFloat(abs(phase1 + phase2))
+    }
+
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
         RoundedRectangle(cornerRadius: 18)
@@ -1147,6 +1214,53 @@ struct ThemedMessageBubble: View {
                         lineWidth: message.isMe ? 0 : 1
                     )
             )
+    }
+}
+
+// MARK: - Animated Waveform Bar
+struct AnimatedWaveformBar: View {
+    let index: Int
+    let isRecording: Bool
+    @State private var barHeight: CGFloat = 8
+
+    private let minHeight: CGFloat = 6
+    private let maxHeight: CGFloat = 26
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.9), Color.white.opacity(0.5)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 3, height: barHeight)
+            .onAppear {
+                guard isRecording else { return }
+                startAnimating()
+            }
+            .onChange(of: isRecording) { recording in
+                if recording {
+                    startAnimating()
+                } else {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        barHeight = minHeight
+                    }
+                }
+            }
+    }
+
+    private func startAnimating() {
+        let randomDuration = Double.random(in: 0.3...0.6)
+        let randomDelay = Double(index) * 0.04
+        withAnimation(
+            .easeInOut(duration: randomDuration)
+                .repeatForever(autoreverses: true)
+                .delay(randomDelay)
+        ) {
+            barHeight = CGFloat.random(in: (minHeight + 4)...maxHeight)
+        }
     }
 }
 

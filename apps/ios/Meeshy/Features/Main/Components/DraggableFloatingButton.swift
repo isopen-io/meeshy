@@ -512,19 +512,32 @@ struct LegacyFloatingButton<Content: View>: View {
 // MARK: - Notification Badge
 struct NotificationBadge: View {
     let count: Int
+    @State private var isPulsing = false
 
     var body: some View {
         if count > 0 {
-            Text("\(min(count, 99))")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 18, height: 18)
-                .background(
-                    Circle()
-                        .fill(Color(hex: "FF2E63"))
-                        .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 3)
-                )
-                .offset(x: 16, y: -16)
+            ZStack {
+                // Pulse ring behind badge
+                Circle()
+                    .fill(Color(hex: "FF2E63").opacity(isPulsing ? 0 : 0.4))
+                    .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
+
+                Text("\(min(count, 99))")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle()
+                            .fill(Color(hex: "FF2E63"))
+                            .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 3)
+                    )
+            }
+            .offset(x: 16, y: -16)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            }
         }
     }
 }

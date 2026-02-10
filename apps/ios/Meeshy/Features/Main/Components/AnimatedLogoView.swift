@@ -34,44 +34,54 @@ struct AnimatedLogoView: View {
     @State private var showDash1 = false
     @State private var showDash2 = false
     @State private var showDash3 = false
-    
+    @State private var breathe = false
+
     var color: Color = .white
     var lineWidth: CGFloat = 8
-    
+    var continuous: Bool = false
+
     var body: some View {
         ZStack {
             // Dash 1 (Top)
             MeeshyDashesShape(dashIndex: 0)
                 .trim(from: 0, to: showDash1 ? 1 : 0)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color.opacity(breathe ? 1.0 : 0.7), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .animation(.easeOut(duration: 0.4), value: showDash1)
-            
+
             // Dash 2 (Middle)
             MeeshyDashesShape(dashIndex: 1)
                 .trim(from: 0, to: showDash2 ? 1 : 0)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color.opacity(breathe ? 0.85 : 1.0), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .animation(.easeOut(duration: 0.4).delay(0.2), value: showDash2)
-            
+
             // Dash 3 (Bottom)
             MeeshyDashesShape(dashIndex: 2)
                 .trim(from: 0, to: showDash3 ? 1 : 0)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color.opacity(breathe ? 1.0 : 0.75), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .animation(.easeOut(duration: 0.4).delay(0.4), value: showDash3)
         }
         .aspectRatio(1, contentMode: .fit)
+        .scaleEffect(breathe ? 1.05 : 1.0)
         .onAppear {
             showDash1 = true
             showDash2 = true
             showDash3 = true
+
+            if continuous {
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    breathe = true
+                }
+            }
         }
+        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: breathe)
     }
-    
+
     // Function to reset animation if needed
     func reset() {
         showDash1 = false
         showDash2 = false
         showDash3 = false
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             showDash1 = true
             showDash2 = true

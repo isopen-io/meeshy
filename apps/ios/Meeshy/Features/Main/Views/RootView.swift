@@ -38,7 +38,15 @@ struct RootView: View {
                         showConversation = false
                     }
                 }
-                .transition(.move(edge: .trailing))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .trailing)
+                            .combined(with: .opacity),
+                        removal: .move(edge: .trailing)
+                            .combined(with: .scale(scale: 0.95))
+                            .combined(with: .opacity)
+                    )
+                )
             } else {
                 ConversationListView(
                     isScrollingDown: $isScrollingDown,
@@ -50,12 +58,28 @@ struct RootView: View {
                         }
                     }
                 )
+                .transition(
+                    .asymmetric(
+                        insertion: .scale(scale: 0.97)
+                            .combined(with: .opacity),
+                        removal: .scale(scale: 0.95)
+                            .combined(with: .opacity)
+                    )
+                )
             }
 
             // 3. Feed overlay
             if showFeed {
                 ThemedFeedOverlay()
-                    .transition(.move(edge: .bottom))
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom)
+                                .combined(with: .opacity),
+                            removal: .move(edge: .bottom)
+                                .combined(with: .scale(scale: 0.95))
+                                .combined(with: .opacity)
+                        )
+                    )
                     .zIndex(50)
             }
 
@@ -90,13 +114,19 @@ struct RootView: View {
         ZStack {
             theme.backgroundGradient
 
-            // Animated ambient orbs
+            // Animated ambient orbs - now with floating motion
             ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
                 Circle()
                     .fill(Color(hex: orb.color).opacity(orb.opacity))
                     .frame(width: orb.size, height: orb.size)
                     .blur(radius: orb.size * 0.25)
                     .offset(x: orb.offset.x, y: orb.offset.y)
+                    .floating(
+                        range: CGFloat(15 + index * 8),
+                        duration: Double(4.0 + Double(index) * 1.2)
+                    )
+                    .scaleEffect(1.0)
+                    .pulse(intensity: 0.06)
             }
         }
         .ignoresSafeArea()
@@ -131,8 +161,8 @@ struct RootView: View {
                         )
 
                     if showFeed {
-                        // Animated logo when feed is open
-                        AnimatedLogoView(color: .white, lineWidth: 3)
+                        // Animated logo when feed is open (with breathing effect)
+                        AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
                             .frame(width: 26, height: 26)
                     } else {
                         Image(systemName: "square.stack.fill")
@@ -281,7 +311,8 @@ extension View {
         self
             .scaleEffect(showMenu ? 1 : 0.3)
             .opacity(showMenu ? 1 : 0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7).delay(delay), value: showMenu)
+            .rotationEffect(.degrees(showMenu ? 0 : -30))
+            .animation(.spring(response: 0.4, dampingFraction: 0.65).delay(delay), value: showMenu)
     }
 }
 
@@ -370,13 +401,14 @@ struct ThemedActionButton: View {
     let action: () -> Void
 
     @State private var isPressed = false
+    @State private var isGlowing = false
 
     var body: some View {
         Button(action: {
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
+            withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) { isPressed = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) { isPressed = false }
             }
             action()
         }) {
@@ -390,11 +422,17 @@ struct ThemedActionButton: View {
                         )
                     )
                     .frame(width: 46, height: 46)
-                    .shadow(color: Color(hex: color).opacity(0.55), radius: 10, y: 4)
+                    .shadow(
+                        color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
+                        radius: isGlowing ? 14 : 10,
+                        y: 4
+                    )
 
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
+                    .scaleEffect(isPressed ? 1.2 : 1.0)
+                    .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
                     Text("\(min(badge, 99))")
@@ -403,9 +441,15 @@ struct ThemedActionButton: View {
                         .frame(width: 16, height: 16)
                         .background(Circle().fill(Color.white))
                         .offset(x: 15, y: -15)
+                        .pulse(intensity: 0.08)
                 }
             }
-            .scaleEffect(isPressed ? 0.85 : 1)
+            .scaleEffect(isPressed ? 0.82 : 1)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                isGlowing = true
+            }
         }
     }
 }
@@ -427,12 +471,14 @@ struct ThemedFeedOverlay: View {
                     .frame(width: 300, height: 300)
                     .blur(radius: 80)
                     .offset(x: -80, y: -100)
+                    .floating(range: 20, duration: 5.0)
 
                 Circle()
                     .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.1 : 0.06))
                     .frame(width: 250, height: 250)
                     .blur(radius: 70)
                     .offset(x: 100, y: 200)
+                    .floating(range: 18, duration: 6.0)
             }
             .ignoresSafeArea()
 
@@ -443,9 +489,10 @@ struct ThemedFeedOverlay: View {
                     // Composer (padding is included in the component)
                     ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
 
-                    // Feed posts with media support
-                    ForEach(FeedSampleData.posts) { post in
+                    // Feed posts with media support - staggered entrance
+                    ForEach(Array(FeedSampleData.posts.enumerated()), id: \.element.id) { index, post in
                         FeedPostCard(post: post)
+                            .staggeredAppear(index: index, baseDelay: 0.06)
                     }
                 }
                 .padding(.bottom, 100)
@@ -738,18 +785,31 @@ struct FeedActionButton: View {
     var isActive: Bool = false
     var action: (() -> Void)? = nil
 
+    @State private var bounce = false
+
     var body: some View {
-        Button(action: { action?() }) {
+        Button(action: {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                bounce = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                bounce = false
+            }
+            action?()
+        }) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
+                    .scaleEffect(bounce ? 1.3 : 1)
+                    .rotationEffect(.degrees(bounce ? -15 : 0))
                 Text("\(count)")
                     .font(.system(size: 13, weight: .medium))
             }
             .foregroundColor(Color(hex: color).opacity(isActive ? 1 : 0.7))
             .scaleEffect(isActive ? 1.1 : 1)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
+        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isActive)
+        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: bounce)
     }
 }
 
