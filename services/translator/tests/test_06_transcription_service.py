@@ -186,7 +186,9 @@ async def test_transcription_whisper_fallback(mock_audio_file):
     mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
 
     # Mock get_stt_model to return our mock (nouveau pattern après refactoring)
-    with patch('services.transcription_service.get_stt_model', return_value=mock_model):
+    # Disable diarization to avoid parallel launch in tests
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model), \
+         patch.dict(os.environ, {'ENABLE_DIARIZATION': 'false'}):
         service.is_initialized = True
 
         result = await service.transcribe(
@@ -327,7 +329,9 @@ async def test_transcription_empty_mobile_text(mock_audio_file):
     mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
 
     # Mock get_stt_model to return our mock (nouveau pattern après refactoring)
-    with patch('services.transcription_service.get_stt_model', return_value=mock_model):
+    # Disable diarization to avoid parallel launch in tests
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model), \
+         patch.dict(os.environ, {'ENABLE_DIARIZATION': 'false'}):
         service.is_initialized = True
 
         # Empty text should trigger Whisper fallback
@@ -378,6 +382,114 @@ async def test_transcription_language_detection():
             logger.info(f"Language {expected_lang}: OK")
 
     logger.info("Language detection consistency verified")
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(IS_CI, reason="Requires mock model")
+async def test_transcription_parallel_whisper_diarization(mock_audio_file):
+    """Test parallel execution of Whisper + Diarization via asyncio.gather"""
+    logger.info("Test 06.12: Parallel Whisper + Diarization")
+
+    if not SERVICE_AVAILABLE:
+        pytest.skip("TranscriptionService not available")
+
+    service = get_transcription_service()
+
+    # Mock Whisper model
+    mock_segment = MagicMock()
+    mock_segment.text = "Parallel test"
+    mock_segment.start = 0.0
+    mock_segment.end = 2.0
+    mock_segment.avg_logprob = 0.9
+    mock_segment.words = None
+
+    mock_info = MagicMock()
+    mock_info.language = "en"
+    mock_info.language_probability = 0.95
+    mock_info.duration = 2.0
+
+    mock_model = MagicMock()
+    mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
+
+    # Mock diarization result
+    mock_diarization = MagicMock()
+    mock_diarization.speaker_count = 1
+    mock_diarization.primary_speaker_id = "s0"
+    mock_diarization.sender_identified = False
+    mock_diarization.sender_speaker_id = None
+    mock_diarization.total_duration_ms = 2000
+    mock_diarization.method = "mock"
+
+    mock_speaker = MagicMock()
+    mock_speaker.speaker_id = "s0"
+    mock_speaker.is_primary = True
+    mock_speaker.speaking_time_ms = 2000
+    mock_speaker.speaking_ratio = 1.0
+    mock_speaker.voice_similarity_score = None
+    mock_speaker.voice_characteristics = None
+    mock_speaker_seg = MagicMock()
+    mock_speaker_seg.start_ms = 0
+    mock_speaker_seg.end_ms = 2000
+    mock_speaker.segments = [mock_speaker_seg]
+    mock_diarization.speakers = [mock_speaker]
+
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model), \
+         patch.dict(os.environ, {'ENABLE_DIARIZATION': 'true'}), \
+         patch.object(service, '_run_diarization', new_callable=AsyncMock, return_value=mock_diarization):
+        service.is_initialized = True
+
+        result = await service.transcribe(
+            audio_path=str(mock_audio_file),
+            mobile_transcription=None,
+            return_timestamps=True
+        )
+
+    assert result.text == "Parallel test"
+    assert result.source == "whisper"
+    assert result.speaker_count == 1
+    assert result.primary_speaker_id == "s0"
+    logger.info("Parallel Whisper + Diarization works correctly")
+
+
+@pytest.mark.asyncio
+async def test_transcription_gap_filler_disabled(mock_audio_file):
+    """Test that gap filler can be disabled via env var"""
+    logger.info("Test 06.13: Gap filler disabled via env var")
+
+    if not SERVICE_AVAILABLE:
+        pytest.skip("TranscriptionService not available")
+
+    service = get_transcription_service()
+
+    mock_segment = MagicMock()
+    mock_segment.text = "Gap test"
+    mock_segment.start = 0.0
+    mock_segment.end = 1.0
+    mock_segment.avg_logprob = 0.9
+    mock_segment.words = None
+
+    mock_info = MagicMock()
+    mock_info.language = "en"
+    mock_info.language_probability = 0.95
+    mock_info.duration = 5.0
+
+    mock_model = MagicMock()
+    mock_model.transcribe = MagicMock(return_value=([mock_segment], mock_info))
+
+    # Disable both diarization and gap filler
+    with patch('services.transcription_service.get_stt_model', return_value=mock_model), \
+         patch.dict(os.environ, {'ENABLE_DIARIZATION': 'false', 'ENABLE_GAP_FILLER': 'false'}):
+        service.is_initialized = True
+
+        result = await service.transcribe(
+            audio_path=str(mock_audio_file),
+            mobile_transcription=None,
+            return_timestamps=True
+        )
+
+    assert result.text == "Gap test"
+    assert result.source == "whisper"
+    logger.info("Gap filler disabled correctly via env var")
 
 
 # ═══════════════════════════════════════════════════════════════

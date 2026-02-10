@@ -160,9 +160,6 @@ export class UploadProcessor {
    */
   private async amplifyAudio(buffer: Buffer, mimeType: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}.tmp`);
-      const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}.tmp`);
-
       // Déterminer le format de sortie basé sur le mimeType
       let outputFormat = 'mp4';
       if (mimeType.includes('webm')) outputFormat = 'webm';
@@ -170,6 +167,15 @@ export class UploadProcessor {
       else if (mimeType.includes('mp3')) outputFormat = 'mp3';
       else if (mimeType.includes('ogg')) outputFormat = 'ogg';
       else if (mimeType.includes('m4a')) outputFormat = 'm4a';
+
+      // Extension correcte pour les fichiers temp
+      const ext = outputFormat === 'mp4' ? 'mp4' : outputFormat;
+      const tempInputPath = path.join(os.tmpdir(), `audio_input_${uuidv4()}.${ext}`);
+      const tempOutputPath = path.join(os.tmpdir(), `audio_output_${uuidv4()}.${ext}`);
+
+      // Mapping format ffmpeg (m4a -> ipod pour le conteneur M4A)
+      let ffmpegFormat = outputFormat;
+      if (outputFormat === 'm4a') ffmpegFormat = 'ipod';
 
       // Écrire le buffer temporairement
       fs.writeFile(tempInputPath, buffer)
@@ -180,6 +186,7 @@ export class UploadProcessor {
             '-af', 'volume=9dB',  // Amplification de +9dB
             '-c:a', 'aac',        // Codec audio AAC (universel)
             '-b:a', '128k',       // Bitrate 128kbps
+            '-f', ffmpegFormat,   // Format de sortie explicite
             '-y',                 // Overwrite output
             tempOutputPath
           ]);

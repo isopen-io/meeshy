@@ -21,7 +21,7 @@ class Settings:
         self.enable_voice_api = os.getenv("ENABLE_VOICE_API", "true").lower() == "true"
 
         # Whisper configuration
-        self.whisper_model = os.getenv("WHISPER_MODEL", "base")
+        self.whisper_model = os.getenv("WHISPER_MODEL", "distil-large-v3")
         self.whisper_device = os.getenv("WHISPER_DEVICE", "auto")
         self.whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 

@@ -10,6 +10,7 @@ Fonctionnalités:
 """
 
 import os
+import asyncio
 import logging
 import numpy as np
 from typing import Optional, List, Dict, Any, Tuple
@@ -248,12 +249,16 @@ class DiarizationService:
         logger.info("[DIARIZATION] 🎯 Détection avec pyannote.audio")
 
         try:
-            # ✅ Exécuter la diarisation avec paramètres min/max speakers
+            # ✅ Exécuter la diarisation dans un executor (appel bloquant)
             # Réduit la sur-segmentation (faux positifs)
-            diarization = pipeline(
-                audio_path,
-                min_speakers=1,        # ✅ Accepter 1 seul speaker
-                max_speakers=2         # ✅ Limiter à 2 (au lieu de détection libre)
+            loop = asyncio.get_event_loop()
+            diarization = await loop.run_in_executor(
+                None,
+                lambda: pipeline(
+                    audio_path,
+                    min_speakers=1,        # ✅ Accepter 1 seul speaker
+                    max_speakers=2         # ✅ Limiter à 2 (au lieu de détection libre)
+                )
             )
 
             # Parser les résultats

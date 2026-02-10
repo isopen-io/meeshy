@@ -407,28 +407,34 @@ class TranscriptionService:
         logger.info(f"[TRANSCRIPTION] 🎤 Transcription Whisper de: {audio_path}")
 
         try:
-            # Transcrire dans un thread pour ne pas bloquer
-            loop = asyncio.get_event_loop()
-            segments_raw, info = await loop.run_in_executor(
-                None,
-                lambda: model.transcribe(
-                    audio_path,
-                    beam_size=1,  # Optimisé: 5→1 pour vitesse (greedy search)
-                    best_of=1,     # Optimisé: génère une seule hypothèse
-                    word_timestamps=return_timestamps,
-                    condition_on_previous_text=False,  # ✅ Réduit les hallucinations en chaîne (texte russe/chinois parasite)
-                    vad_filter=True,  # ✅ Réactivé pour détecter les pauses
-                    vad_parameters={
-                        'threshold': 0.3,      # Plus sensible (défaut: 0.5) - détecte voix douces
-                        'min_speech_duration_ms': 100,  # Segments courts acceptés (défaut: 250)
-                        'min_silence_duration_ms': 1000,  # Pause 1s pour séparer speakers (défaut: 2000)
-                        'speech_pad_ms': 200   # Padding autour de la parole (défaut: 400)
-                    }
+            # ═══════════════════════════════════════════════════════════════
+            # PARALLÉLISATION: Whisper + Diarization en simultané
+            # Whisper produit le texte, pyannote produit les plages speakers.
+            # Ils sont totalement indépendants -> asyncio.gather
+            # ═══════════════════════════════════════════════════════════════
+            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'true').lower() != 'false'
+            diarization_result = None
+
+            if enable_diarization and return_timestamps:
+                logger.info("[TRANSCRIPTION] 🚀 Lancement parallèle: Whisper + Diarization")
+                whisper_result, diarization_result = await asyncio.gather(
+                    self._run_whisper(audio_path, model, return_timestamps),
+                    self._run_diarization(audio_path),
+                    return_exceptions=True
                 )
-            )
+
+                # Gérer les erreurs de chaque tâche
+                if isinstance(whisper_result, Exception):
+                    raise whisper_result
+                if isinstance(diarization_result, Exception):
+                    logger.warning(f"[TRANSCRIPTION] Diarization échouée en parallèle: {diarization_result}")
+                    diarization_result = None
+
+                segments_list, info = whisper_result
+            else:
+                segments_list, info = await self._run_whisper(audio_path, model, return_timestamps)
 
             # Convertir les segments
-            segments_list = list(segments_raw)
             full_text = " ".join([s.text.strip() for s in segments_list])
 
             # Parser les segments
@@ -436,24 +442,19 @@ class TranscriptionService:
             detected_language = info.language  # Langue détectée par Whisper
             if return_timestamps:
                 # ✅ Utiliser les timestamps NATIFS au niveau des mots fournis par Whisper
-                # Référence: CORRECTION_UTILISER_WHISPER_WORDS_NATIF.md
                 for s in segments_list:
-                    # Vérifier si le segment contient des words (timestamps par mot)
                     if hasattr(s, 'words') and s.words:
-                        # ✅ Utiliser les mots individuels avec timestamps exacts
                         for word in s.words:
                             segments.append(TranscriptionSegment(
                                 text=word.word.strip(),
                                 start_ms=int(word.start * 1000),
                                 end_ms=int(word.end * 1000),
                                 confidence=getattr(word, 'probability', 0.0),
-                                # speaker_id sera ajouté par la diarisation ultérieure
                                 speaker_id=None,
                                 voice_similarity_score=None,
                                 language=detected_language
                             ))
                     else:
-                        # Fallback : segment complet si pas de words
                         segments.append(TranscriptionSegment(
                             text=s.text.strip(),
                             start_ms=int(s.start * 1000),
@@ -467,9 +468,6 @@ class TranscriptionService:
                 # ═══════════════════════════════════════════════════════════════
                 # FILTRAGE DES HALLUCINATIONS WHISPER
                 # ═══════════════════════════════════════════════════════════════
-                # Whisper hallucine parfois des phrases comme "Thanks for watching!"
-                # (entraîné sur beaucoup de vidéos YouTube avec ces fins)
-                original_count = len(segments)
                 filtered_segments = []
                 hallucinations_removed = []
 
@@ -490,7 +488,6 @@ class TranscriptionService:
                 # Recalculer full_text après filtrage
                 full_text = " ".join([seg.text for seg in segments])
 
-
             processing_time = int((time.time() - start_time) * 1000)
 
             logger.info(
@@ -505,15 +502,19 @@ class TranscriptionService:
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",
-                model="whisper_boost",  # Nom canonique du modèle Whisper
+                model="whisper_boost",
                 processing_time_ms=processing_time
             )
 
-            # Appliquer la diarisation si demandé (activé par défaut, désactiver avec ENABLE_DIARIZATION=false)
-            enable_diarization = os.getenv('ENABLE_DIARIZATION', 'true').lower() != 'false'
+            # Appliquer la diarisation (utiliser le résultat pré-calculé en parallèle si disponible)
             if enable_diarization and return_timestamps:
-                logger.info("[TRANSCRIPTION] 🎯 Application de la diarisation")
-                result = await self._apply_diarization(audio_path, result)
+                if diarization_result is not None:
+                    logger.info("[TRANSCRIPTION] 🎯 Merge diarisation (pré-calculée en parallèle)")
+                    result = await self._merge_diarization(audio_path, result, diarization_result)
+                else:
+                    # Fallback: diarisation séquentielle si le parallèle a échoué
+                    logger.info("[TRANSCRIPTION] 🎯 Application de la diarisation (séquentielle fallback)")
+                    result = await self._apply_diarization(audio_path, result)
 
             return result
 
@@ -522,6 +523,46 @@ class TranscriptionService:
             import traceback
             traceback.print_exc()
             raise RuntimeError(f"Échec de la transcription: {e}")
+
+    async def _run_whisper(self, audio_path: str, model, return_timestamps: bool):
+        """
+        Exécute Whisper dans un thread et retourne (segments_list, info).
+        Méthode extraite pour permettre la parallélisation avec la diarization.
+        """
+        loop = asyncio.get_event_loop()
+        segments_raw, info = await loop.run_in_executor(
+            None,
+            lambda: model.transcribe(
+                audio_path,
+                beam_size=1,
+                best_of=1,
+                word_timestamps=return_timestamps,
+                condition_on_previous_text=False,
+                vad_filter=True,
+                vad_parameters={
+                    'threshold': 0.3,
+                    'min_speech_duration_ms': 100,
+                    'min_silence_duration_ms': 1000,
+                    'speech_pad_ms': 200
+                }
+            )
+        )
+        segments_list = list(segments_raw)
+        return segments_list, info
+
+    async def _run_diarization(self, audio_path: str, sender_voice_profile=None):
+        """
+        Exécute la diarization et retourne un DiarizationResult.
+        Méthode extraite pour permettre la parallélisation avec Whisper.
+        """
+        from .diarization_service import get_diarization_service
+
+        diarization_service = get_diarization_service()
+        diarization = await diarization_service.detect_speakers(audio_path)
+        diarization = await diarization_service.identify_sender(
+            diarization, sender_voice_profile
+        )
+        return diarization
 
     async def _get_audio_duration_ms(self, audio_path: str) -> int:
         """Récupère la durée d'un fichier audio en millisecondes"""
@@ -539,11 +580,27 @@ class TranscriptionService:
             logger.warning(f"[TRANSCRIPTION] Impossible de lire la durée audio: {e}")
             return 0
 
+    async def _merge_diarization(
+        self,
+        audio_path: str,
+        transcription: TranscriptionResult,
+        diarization,
+    ) -> TranscriptionResult:
+        """
+        Merge un DiarizationResult pré-calculé avec la transcription.
+        Utilisé quand Whisper et diarization ont été lancés en parallèle.
+        """
+        return await self._apply_diarization(
+            audio_path, transcription,
+            precomputed_diarization=diarization
+        )
+
     async def _apply_diarization(
         self,
         audio_path: str,
         transcription: TranscriptionResult,
-        sender_voice_profile: Optional[Dict[str, Any]] = None
+        sender_voice_profile: Optional[Dict[str, Any]] = None,
+        precomputed_diarization=None
     ) -> TranscriptionResult:
         """
         Applique la diarisation aux segments transcrits.
@@ -552,23 +609,27 @@ class TranscriptionService:
             audio_path: Chemin vers le fichier audio
             transcription: Résultat de transcription à enrichir
             sender_voice_profile: Profil vocal de l'expéditeur (optionnel)
+            precomputed_diarization: DiarizationResult déjà calculé (skip detect_speakers)
 
         Returns:
             TranscriptionResult avec segments enrichis de speaker_id et is_current_user
         """
         try:
-            from .diarization_service import get_diarization_service
+            if precomputed_diarization is not None:
+                diarization = precomputed_diarization
+            else:
+                from .diarization_service import get_diarization_service
 
-            diarization_service = get_diarization_service()
+                diarization_service = get_diarization_service()
 
-            # Détecter les locuteurs (audio déjà converti en WAV par le pipeline)
-            diarization = await diarization_service.detect_speakers(audio_path)
+                # Détecter les locuteurs (audio déjà converti en WAV par le pipeline)
+                diarization = await diarization_service.detect_speakers(audio_path)
 
-            # Identifier l'expéditeur
-            diarization = await diarization_service.identify_sender(
-                diarization,
-                sender_voice_profile
-            )
+                # Identifier l'expéditeur
+                diarization = await diarization_service.identify_sender(
+                    diarization,
+                    sender_voice_profile
+                )
 
             logger.info(
                 f"[TRANSCRIPTION] Détecté {diarization.speaker_count} locuteur(s), "
@@ -598,21 +659,44 @@ class TranscriptionService:
                     })
 
             # Combler les trous de transcription si détectés
-            if gaps and len(gaps) > 0:
+            enable_gap_filler = os.getenv('ENABLE_GAP_FILLER', 'true').lower() != 'false'
+            MIN_GAP_MS = int(os.getenv('GAP_FILLER_MIN_DURATION_MS', '1000'))
+            MAX_GAPS = int(os.getenv('GAP_FILLER_MAX_GAPS', '2'))
+
+            if enable_gap_filler and gaps and len(gaps) > 0:
                 try:
-                    from .transcribe_gap_filler import fill_transcription_gaps
+                    # Filtrer les gaps trop courts
+                    significant_gaps = [g for g in gaps if g['duration'] >= MIN_GAP_MS]
+                    # Limiter le nombre de gaps à traiter
+                    significant_gaps = significant_gaps[:MAX_GAPS]
+                    # Skip pour single speaker (gap filler cible le multi-speaker)
+                    if diarization.speaker_count == 1:
+                        significant_gaps = []
 
-                    new_segments = await fill_transcription_gaps(
-                        audio_path=audio_path,
-                        gaps=gaps,
-                        diarization_speakers=diarization.speakers,
-                        transcribe_func=self.transcribe
-                    )
+                    if significant_gaps:
+                        from .transcribe_gap_filler import fill_transcription_gaps
 
-                    if new_segments:
-                        transcription.segments.extend(new_segments)
-                        transcription.segments.sort(key=lambda s: s.start_ms)
-                        transcription.text = " ".join([seg.text for seg in transcription.segments])
+                        logger.info(
+                            f"[TRANSCRIPTION] 🔧 Gap filler: {len(significant_gaps)}/{len(gaps)} gaps significatifs"
+                        )
+
+                        new_segments = await fill_transcription_gaps(
+                            audio_path=audio_path,
+                            gaps=significant_gaps,
+                            diarization_speakers=diarization.speakers,
+                            transcribe_func=self.transcribe
+                        )
+
+                        if new_segments:
+                            transcription.segments.extend(new_segments)
+                            transcription.segments.sort(key=lambda s: s.start_ms)
+                            transcription.text = " ".join([seg.text for seg in transcription.segments])
+                    else:
+                        logger.debug(
+                            f"[TRANSCRIPTION] ⏭️ Gap filler skippé: "
+                            f"{len(gaps)} gaps trouvés, {len([g for g in gaps if g['duration'] >= MIN_GAP_MS])} >= {MIN_GAP_MS}ms, "
+                            f"speakers={diarization.speaker_count}"
+                        )
 
                 except Exception:
                     pass  # Continue avec transcription incomplète
