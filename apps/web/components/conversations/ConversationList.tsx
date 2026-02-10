@@ -259,6 +259,7 @@ export const ConversationList = memo(function ConversationList({
               size="icon"
               className="h-8 w-8"
               title={t('createNewConversation')}
+              aria-label={t('createNewConversation')}
             >
               <MessageSquare className="h-4 w-4 text-primary" />
             </Button>

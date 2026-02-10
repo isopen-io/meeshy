@@ -384,7 +384,7 @@ export function CreateTrackingLinkModal({
                         filteredConversations.map((conversation) => (
                           <div
                             key={conversation.id}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all hover:bg-accent ${
+                            className={`p-3 rounded-lg border cursor-pointer transition-colors hover:bg-accent ${
                               selectedConversationId === conversation.id
                                 ? 'border-primary bg-primary/5'
                                 : 'border-transparent'

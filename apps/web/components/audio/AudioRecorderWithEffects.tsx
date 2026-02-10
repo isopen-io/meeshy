@@ -699,7 +699,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
           ref={buttonEffectsRef}
           onClick={() => setShowEffectsPanel(!showEffectsPanel)}
           onTouchStart={() => setShowEffectsPanel(!showEffectsPanel)}
-          className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform] ${
             audioEffectsActive
               ? 'bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/50'
               : 'bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700'
@@ -724,7 +724,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
           {isRecording && (
             <div className="w-full max-w-[200px] h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-300 ease-linear"
+                className="h-full bg-gradient-to-r from-red-500 to-orange-500 transition-[width] duration-300 ease-linear"
                 style={{
                   width: `${Math.min((recordingTime / (effectiveDuration * 1000)) * 100, 100)}%`
                 }}
@@ -741,7 +741,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
               e.preventDefault();
               startRecording();
             }}
-            className="flex-shrink-0 w-10 h-10 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95"
+            className="flex-shrink-0 w-10 h-10 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-full flex items-center justify-center transition-[background-color,transform] shadow-lg active:scale-95"
             title={t('recorder.startRecording')}
           >
             <Radio className="w-5 h-5 text-white" />
@@ -753,7 +753,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
               e.preventDefault();
               stopRecording();
             }}
-            className="flex-shrink-0 w-10 h-10 bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95"
+            className="flex-shrink-0 w-10 h-10 bg-red-500 hover:bg-red-600 active:bg-red-700 rounded-full flex items-center justify-center transition-[background-color,transform] shadow-lg active:scale-95"
             title={t('recorder.stopRecording')}
           >
             <Square className="w-4 h-4 fill-white stroke-white" />
@@ -762,7 +762,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
       </div>
 
       {/* Badge durée max */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[8px] px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
         {t('recorder.maxDuration', { duration: Math.floor(effectiveDuration / 60) })}
       </div>
 

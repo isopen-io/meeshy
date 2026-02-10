@@ -277,7 +277,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                       'rounded-full',
                       'bg-white dark:bg-gray-800',
                       'border shadow-md',
-                      'transition-all duration-200',
+                      'transition-[border-color,box-shadow] duration-200',
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       'hover:shadow-lg hover:scale-110',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
@@ -403,7 +403,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                 'text-muted-foreground hover:text-foreground',
                 'hover:bg-secondary hover:border-primary/50',
                 'hover:shadow-sm active:shadow-none',
-                'transition-all duration-200',
+                'transition-[background-color,border-color,box-shadow] duration-200',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                 'p-0'
               )}

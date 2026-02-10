@@ -156,7 +156,7 @@ export function VoiceRecorder({
                     variant={isSelected ? "default" : "outline"}
                     size="sm"
                     onClick={() => handlePreviewLanguageToggle(lang.code)}
-                    className="transition-all"
+                    className="transition-colors"
                   >
                     {lang.nativeName}
                     {isSelected && <Check className="h-3 w-3 ml-1" />}

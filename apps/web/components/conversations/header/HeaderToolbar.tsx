@@ -84,7 +84,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
                   size="icon"
                   variant="ghost"
                   onClick={onStartCall}
-                  className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
+                  className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200"
                   aria-label={t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}
                 >
                   <Video className="h-5 w-5" aria-hidden="true" />
@@ -125,7 +125,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
             }}
             variant="ghost"
             size="sm"
-            className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
+            className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200"
           >
             <Link2 className="h-5 w-5" />
           </CreateLinkButton>

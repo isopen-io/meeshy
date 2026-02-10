@@ -98,7 +98,7 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
             <div
               key={level}
               className={cn(
-                "h-1 flex-1 rounded-full transition-all",
+                "h-1 flex-1 rounded-full transition-colors",
                 formData.password.length >= level * 2
                   ? level <= 1 ? "bg-red-500"
                   : level <= 2 ? "bg-orange-500"

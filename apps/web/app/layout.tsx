@@ -17,6 +17,7 @@ import { CallManager } from "@/components/video-call";
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";
+import { HtmlLangSync } from "@/components/common/HtmlLangSync";
 import "@/utils/console-override"; // 🔇 Désactive console.log en production
 
 export const metadata: Metadata = {
@@ -66,8 +67,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // Empêche le zoom sur mobile lors du focus des inputs
-  userScalable: false, // Désactive le zoom utilisateur
   viewportFit: 'cover',
 };
 
@@ -77,8 +76,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <body className={`${getAllFontVariables()} antialiased font-nunito`}>
+        {/* Skip link for keyboard navigation (WCAG 2.4.1) */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          Aller au contenu principal
+        </a>
+
         {/* Recovery automatique pour chunks obsoletes apres deploiement */}
         <Script src="/chunk-recovery.js" strategy="beforeInteractive" />
 
@@ -91,13 +98,18 @@ export default function RootLayout({
         {/* Firebase Initializer - Vérifie Firebase au démarrage */}
         <FirebaseInitializer />
 
+        {/* Sync <html lang> with user's interface language */}
+        <HtmlLangSync />
+
         <QueryProvider>
           <StoreInitializer>
             <ThemeProvider>
               <MessageViewProvider>
                 <ErrorBoundary>
                   <ClientOnly>
-                    {children}
+                    <main id="main-content">
+                      {children}
+                    </main>
                     <CallManager />
                     <TabNotificationManager />
                   </ClientOnly>

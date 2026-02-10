@@ -180,7 +180,7 @@ export const ConversationItem = memo(function ConversationItem({
     <div
       onClick={onClick}
       className={cn(
-        "group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all",
+        "group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors",
         "hover:bg-accent/50",
         isSelected && "bg-primary/10 hover:bg-primary/20"
       )}

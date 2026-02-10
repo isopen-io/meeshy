@@ -328,6 +328,7 @@ export function Header({
             size="icon"
             className="md:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label={isMobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
           >
             {isMobileMenuOpen ? (
               <X className="h-6 w-6" />

@@ -226,7 +226,7 @@ export const AudioEffectsOverview = memo<AudioEffectsOverviewProps>(({
                   cy={p.y}
                   r="3"
                   fill={curve.color}
-                  className="cursor-pointer transition-all"
+                  className="cursor-pointer transition-[r]"
                   onClick={() => onSeekToTime(p.timestamp)}
                   onMouseEnter={(e) => e.currentTarget.setAttribute('r', '5')}
                   onMouseLeave={(e) => e.currentTarget.setAttribute('r', '3')}
@@ -255,7 +255,7 @@ export const AudioEffectsOverview = memo<AudioEffectsOverviewProps>(({
                   [curveKey]: !isVisible,
                 }));
               }}
-              className={`px-2 py-0.5 md:py-1 text-xs rounded-full border transition-all ${
+              className={`px-2 py-0.5 md:py-1 text-xs rounded-full border transition-[background-color,border-color,opacity] ${
                 isVisible
                   ? 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                   : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 opacity-50'

@@ -65,7 +65,7 @@ const PendingRequestsTab = React.memo<PendingRequestsTabProps>(({
         if (!otherUser) return null;
 
         return (
-          <Card key={request.id} className="relative border-2 hover:border-orange-500/50 hover:shadow-xl transition-all duration-200 overflow-hidden group bg-white dark:bg-gray-950">
+          <Card key={request.id} className="relative border-2 hover:border-orange-500/50 hover:shadow-xl transition-[color,box-shadow] duration-200 overflow-hidden group bg-white dark:bg-gray-950">
             <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-yellow-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-0"></div>
 
             <CardContent className="relative z-10 p-4 sm:p-6">
@@ -113,7 +113,7 @@ const PendingRequestsTab = React.memo<PendingRequestsTabProps>(({
                         <Button
                           size="sm"
                           onClick={() => onHandleRequest(request.id, 'accept')}
-                          className="flex-1 sm:flex-none items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-all"
+                          className="flex-1 sm:flex-none items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 bg-green-600 hover:bg-green-700 shadow-md hover:shadow-lg transition-[color,box-shadow]"
                         >
                           <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           <span className="text-xs sm:text-sm">{t('actions.accept')}</span>
@@ -122,7 +122,7 @@ const PendingRequestsTab = React.memo<PendingRequestsTabProps>(({
                           size="sm"
                           variant="outline"
                           onClick={() => onHandleRequest(request.id, 'reject')}
-                          className="flex-1 sm:flex-none items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 border-2 shadow-md hover:shadow-lg transition-all"
+                          className="flex-1 sm:flex-none items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 border-2 shadow-md hover:shadow-lg transition-[color,box-shadow]"
                         >
                           <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           <span className="text-xs sm:text-sm">{t('actions.reject')}</span>

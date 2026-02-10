@@ -534,7 +534,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               "shadow-xl shadow-black/5 dark:shadow-black/20",
               "border border-white/30 dark:border-gray-700/40",
               "hover:bg-white/80 dark:hover:bg-gray-900/80",
-              "transition-all duration-300 ease-in-out",
+              "transition-[color,background-color,opacity] duration-300 ease-in-out",
               "animate-in slide-in-from-bottom-5"
             )}
             aria-label={scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'}

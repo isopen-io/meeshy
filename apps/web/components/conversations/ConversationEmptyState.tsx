@@ -45,14 +45,14 @@ export function ConversationEmptyState({
       <div className="flex gap-4 justify-center">
         <Button
           onClick={onCreateConversation}
-          className="rounded-2xl px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg dark:shadow-primary/20 transition-all"
+          className="rounded-2xl px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg dark:shadow-primary/20 transition-[color,background-color,box-shadow]"
         >
           <MessageSquare className="h-5 w-5 mr-2" />
           {t('createConversation')}
         </Button>
         <CreateLinkButton
           variant="outline"
-          className="rounded-2xl px-6 py-3 border-2 border-primary/20 dark:border-primary/30 hover:border-primary/40 dark:hover:border-primary/50 font-semibold shadow-md hover:shadow-lg dark:shadow-primary/10 transition-all text-primary hover:text-primary-foreground hover:bg-primary dark:hover:bg-primary/90"
+          className="rounded-2xl px-6 py-3 border-2 border-primary/20 dark:border-primary/30 hover:border-primary/40 dark:hover:border-primary/50 font-semibold shadow-md hover:shadow-lg dark:shadow-primary/10 transition-[color,background-color,border-color,box-shadow] text-primary hover:text-primary-foreground hover:bg-primary dark:hover:bg-primary/90"
           onLinkCreated={onLinkCreated}
         >
           <Link2 className="h-5 w-5 mr-2" />

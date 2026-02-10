@@ -55,7 +55,7 @@ const AffiliatesTab = React.memo<AffiliatesTabProps>(({
   return (
     <div className="grid gap-6">
       {affiliateRelations.map((relation) => (
-        <Card key={relation.id} className="relative border-2 hover:border-cyan-500/50 hover:shadow-xl transition-all duration-200 overflow-hidden group bg-white dark:bg-gray-950">
+        <Card key={relation.id} className="relative border-2 hover:border-cyan-500/50 hover:shadow-xl transition-[color,box-shadow] duration-200 overflow-hidden group bg-white dark:bg-gray-950">
           <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-0"></div>
 
           <CardContent className="relative z-10 p-6">

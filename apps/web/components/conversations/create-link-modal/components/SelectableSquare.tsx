@@ -14,7 +14,7 @@ export function SelectableSquare({
 }: SelectableSquareProps) {
   return (
     <div
-      className={`p-4 rounded-lg border-2 transition-all ${
+      className={`p-4 rounded-lg border-2 transition-[color,background-color,border-color,box-shadow] ${
         disabled
           ? 'opacity-50 cursor-not-allowed'
           : 'cursor-pointer hover:shadow-md'

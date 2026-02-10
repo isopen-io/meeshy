@@ -132,7 +132,7 @@ function CommunityCard({
       onClick={onClick}
       className={`
         flex-shrink-0 relative overflow-hidden rounded-xl
-        transition-all duration-300 ease-out
+        transition-transform duration-300 ease-out
         hover:scale-[1.02]
         active:scale-[0.98]
         ${isSelected ? 'ring-2 ring-offset-2' : ''}
@@ -290,7 +290,7 @@ export function CommunityCarousel({
   return (
     <div
       className={`
-        overflow-hidden transition-all duration-300 ease-out
+        overflow-hidden transition-[max-height,opacity] duration-300 ease-out
         ${isVisible ? 'max-h-36 opacity-100' : 'max-h-0 opacity-0'}
         ${className}
       `}

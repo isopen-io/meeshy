@@ -395,7 +395,7 @@ export function ConversationParticipantsDrawer({
         exit={{ opacity: 0, x: 20 }}
         transition={{ delay: index * 0.03 }}
         layout
-        className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-200 group ${
+        className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-[color,box-shadow,opacity] duration-200 group ${
           participant.role === 'CREATOR'
             ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
             : isOnline
@@ -544,7 +544,7 @@ export function ConversationParticipantsDrawer({
         <Button
           variant="ghost"
           size="sm"
-          className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 relative group transition-all duration-200"
+          className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 relative group transition-colors duration-200"
           title={t('conversationUI.participants')}
           onClick={() => setIsOpen(true)}
           aria-label={`${t('conversationUI.participants')} (${totalMemberCount})`}
@@ -554,7 +554,7 @@ export function ConversationParticipantsDrawer({
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className={`absolute -top-1 -right-1 h-5 w-5 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-full flex items-center justify-center font-medium shadow-lg ${totalMemberCount > 99 ? 'text-[9px]' : 'text-xs'}`}
+              className={`absolute -top-1 -right-1 h-5 w-5 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-full flex items-center justify-center font-medium shadow-lg ${totalMemberCount > 99 ? 'text-[11px]' : 'text-xs'}`}
             >
               {totalMemberCount > 99 ? '99+' : totalMemberCount}
             </motion.div>

@@ -213,7 +213,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
                 setVideoLightboxIndex(index);
                 setVideoLightboxOpen(true);
               }}
-              className="w-10 h-10 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center transition-all flex-shrink-0"
+              className="w-10 h-10 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center transition-colors flex-shrink-0"
               title="Ouvrir en plein écran"
               aria-label={`Ouvrir la vidéo ${attachment.originalName || attachment.fileName} en plein écran`}
             >

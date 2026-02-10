@@ -56,7 +56,7 @@ export const HeaderActions = memo(function HeaderActions({
         <Button
           size="icon"
           variant="ghost"
-          className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-all duration-200"
+          className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200"
           aria-label={t('conversationHeader.menuActions') || 'Menu des actions'}
         >
           <MoreVertical className="h-5 w-5" aria-hidden="true" />

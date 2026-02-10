@@ -328,7 +328,7 @@ export function ImageGallery({
                     setLightboxIndex(index);
                   }}
                   className={cn(
-                    'w-12 h-12 rounded-md overflow-hidden transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white',
+                    'w-12 h-12 rounded-md overflow-hidden transition-[transform,opacity,box-shadow] duration-300 focus:outline-none focus:ring-2 focus:ring-white',
                     index === lightboxIndex
                       ? 'ring-2 ring-white scale-110'
                       : 'opacity-60 hover:opacity-100'

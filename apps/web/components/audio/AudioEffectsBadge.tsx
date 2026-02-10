@@ -43,7 +43,7 @@ export function AudioEffectsBadge({ timeline, className }: AudioEffectsBadgeProp
             'bg-gradient-to-r from-purple-500/20 to-pink-500/20',
             'border border-purple-500/30',
             'hover:from-purple-500/30 hover:to-pink-500/30',
-            'transition-all duration-200',
+            'transition-colors duration-200',
             'group',
             className
           )}

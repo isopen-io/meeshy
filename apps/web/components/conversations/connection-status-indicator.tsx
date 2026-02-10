@@ -61,7 +61,7 @@ export function ConnectionStatusIndicator({
     <button
       onClick={handleReconnect}
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer hover:opacity-80",
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-[color,background-color,border-color,opacity] cursor-pointer hover:opacity-80",
         isReconnecting
           ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30"
           : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30",

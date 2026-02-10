@@ -271,7 +271,7 @@ export function AudioPlayer({
           'flex items-center justify-center',
           'bg-[var(--gp-terracotta)]',
           'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
-          'transition-all duration-200',
+          'transition-[transform,box-shadow] duration-200',
           'hover:scale-105 active:scale-95',
           isLoading && 'opacity-50 cursor-wait'
         )}

@@ -132,7 +132,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
 
         <button
           onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/50 transition-all duration-200"
+          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/50 transition-colors duration-200"
         >
           {isPlaying ? (
             <Pause className="w-6 h-6 text-white fill-current" />

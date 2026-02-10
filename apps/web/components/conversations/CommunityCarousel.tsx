@@ -249,7 +249,7 @@ function CommunityCard({ card, isSelected, onClick }: CommunityCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        "relative flex-shrink-0 w-28 h-20 md:w-32 md:h-24 rounded-xl overflow-hidden transition-all",
+        "relative flex-shrink-0 w-28 h-20 md:w-32 md:h-24 rounded-xl overflow-hidden transition-[transform,box-shadow,border-color]",
         "hover:scale-105 hover:shadow-lg",
         "border-2",
         isSelected

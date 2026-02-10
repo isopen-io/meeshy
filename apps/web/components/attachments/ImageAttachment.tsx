@@ -91,7 +91,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
             tabIndex={0}
             aria-label={`Ouvrir l'image ${attachment.originalName}`}
           >
-            <div className={`relative bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:shadow-lg dark:hover:shadow-blue-500/30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${imageCount <= 2 ? 'inline-flex items-center justify-center max-h-[320px]' : sizeClasses} ${aspectRatioClass}`}>
+            <div className={`relative bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-lg dark:hover:shadow-blue-500/30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${imageCount <= 2 ? 'inline-flex items-center justify-center max-h-[320px]' : sizeClasses} ${aspectRatioClass}`}>
               <img
                 src={imageUrl}
                 alt={attachment.originalName}
@@ -128,7 +128,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
                 </div>
               </div>
             </div>
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[9px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
               {formatFileSize(attachment.fileSize)}
             </div>
           </div>

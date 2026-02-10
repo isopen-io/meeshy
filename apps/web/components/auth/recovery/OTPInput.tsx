@@ -65,7 +65,7 @@ export function OTPInput({
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: index * 0.05 }}
           className={cn(
-            "w-11 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all",
+            "w-11 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-colors",
             "bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm",
             "focus:outline-none focus:ring-2 focus:ring-offset-2",
             value[index]

@@ -59,7 +59,7 @@ export function LinkTypeStep({
   return (
     <div className="space-y-6">
       <Card
-        className={`border-2 border-dashed transition-all cursor-pointer ${
+        className={`border-2 border-dashed transition-[color,background-color,border-color] cursor-pointer ${
           createNewConversation
             ? 'border-primary bg-primary/5'
             : 'border-primary/20 hover:border-primary/40 hover:bg-primary/5'
@@ -133,7 +133,7 @@ export function LinkTypeStep({
             filteredConversations.map((conversation) => (
               <Card
                 key={conversation.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
+                className={`cursor-pointer transition-[color,border-color,box-shadow] hover:shadow-md ${
                   selectedConversationId === conversation.id
                     ? 'ring-1 ring-primary border-primary'
                     : 'hover:border-primary/50'

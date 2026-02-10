@@ -126,7 +126,7 @@ export function Resizer({
       {/* Ligne visible */}
       <div
         className={`
-          h-full w-px transition-all duration-300
+          h-full w-px transition-[width,background-color] duration-300
           ${isDragging ? 'w-1' : 'group-hover:w-1'}
         `}
         style={{
@@ -142,7 +142,7 @@ export function Resizer({
           absolute top-1/2 -translate-y-1/2
           w-4 h-8 rounded-full
           flex items-center justify-center
-          transition-all duration-300 bg-[var(--gp-terracotta)]
+          transition-[opacity,transform] duration-300 bg-[var(--gp-terracotta)]
           ${isDragging ? 'opacity-100 scale-100' : 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100'}
         `}
       >

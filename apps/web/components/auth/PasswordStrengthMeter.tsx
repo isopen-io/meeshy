@@ -74,7 +74,7 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
       <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <div
           className={cn(
-            'h-full transition-all duration-300 ease-in-out rounded-full',
+            'h-full transition-[width] duration-300 ease-in-out rounded-full',
             strengthData.color
           )}
           style={{ width: `${strengthData.widthPercentage}%` }}
@@ -87,7 +87,7 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
           <div
             key={segment}
             className={cn(
-              'h-1 rounded-full transition-all duration-300',
+              'h-1 rounded-full transition-colors duration-300',
               segment <= strengthData.score
                 ? strengthData.color
                 : 'bg-gray-200 dark:bg-gray-700'

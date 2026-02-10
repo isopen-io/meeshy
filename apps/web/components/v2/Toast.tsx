@@ -134,7 +134,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
   return (
     <div
       className={cn(
-        'flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg transition-all duration-300',
+        'flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg transition-[opacity,transform] duration-300',
         isVisible && !isLeaving ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       )}
       style={{

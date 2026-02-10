@@ -106,6 +106,7 @@ export function ConversationSettings({
         <button
           onClick={onBack}
           className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
+          aria-label="Retour"
         >
           <svg
             className="w-5 h-5 text-[var(--gp-text-primary)]"
@@ -351,7 +352,10 @@ export function ConversationSettings({
                         {roleInfo.icon} {roleInfo.label}
                       </p>
                     </div>
-                    <button className="p-2 rounded hover:bg-[var(--gp-hover)] text-[var(--gp-text-muted)] transition-colors duration-300">
+                    <button
+                      className="p-2 rounded hover:bg-[var(--gp-hover)] text-[var(--gp-text-muted)] transition-colors duration-300"
+                      aria-label="Actions du participant"
+                    >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                       </svg>

@@ -11,6 +11,8 @@ import {
   Comic_Neue,
   Lexend,
   Roboto,
+  DM_Sans,
+  Playfair_Display,
 } from 'next/font/google';
 
 // Instances de polices avec next/font (self-hosted, preloaded)
@@ -66,6 +68,18 @@ const roboto = Roboto({
   display: 'swap',
 });
 
+const dmSans = DM_Sans({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+});
+
+const playfairDisplay = Playfair_Display({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-playfair-display',
+  display: 'swap',
+});
+
 // Geist-like font configuration (using CSS variables with fallback)
 // These are placeholder objects that just provide the variable property
 const geistSans = {
@@ -86,6 +100,8 @@ export type FontFamily =
   | 'comic-neue'
   | 'lexend'
   | 'roboto'
+  | 'dm-sans'
+  | 'playfair-display'
   | 'geist-sans'
   | 'geist-mono';
 
@@ -114,6 +130,8 @@ const fontInstances = {
   'comic-neue': comicNeue,
   'lexend': lexend,
   'roboto': roboto,
+  'dm-sans': dmSans,
+  'playfair-display': playfairDisplay,
   'geist-sans': geistSans,
   'geist-mono': geistMono,
 } as const;
@@ -268,4 +286,4 @@ export function getRecommendedFonts(ageGroup?: 'kids' | 'teens' | 'adults' | 'al
 }
 
 // Export des instances spécifiques pour usage direct
-export { inter, nunito, poppins, openSans, lato, comicNeue, lexend, roboto, geistSans, geistMono };
+export { inter, nunito, poppins, openSans, lato, comicNeue, lexend, roboto, dmSans, playfairDisplay, geistSans, geistMono };

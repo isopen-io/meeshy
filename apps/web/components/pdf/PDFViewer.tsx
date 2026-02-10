@@ -102,7 +102,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
         hasError
           ? 'border-red-300 dark:border-red-700'
           : 'border-red-200 dark:border-gray-700'
-      } shadow-md hover:shadow-lg transition-all duration-200 w-full max-w-[90vw] sm:max-w-2xl min-w-0 overflow-hidden ${className}`}
+      } shadow-md hover:shadow-lg transition-shadow duration-200 w-full max-w-[90vw] sm:max-w-2xl min-w-0 overflow-hidden ${className}`}
     >
       {/* PDF viewer - responsive height */}
       <div className="relative w-full bg-white dark:bg-gray-900 rounded-lg overflow-auto h-[210px] sm:h-[280px] md:h-[350px]">
@@ -256,7 +256,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
           <a
             href={attachmentFileUrl}
             download={attachment.originalName}
-            className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-all duration-200"
+            className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
             title="Télécharger"
             onClick={(e) => e.stopPropagation()}
           >

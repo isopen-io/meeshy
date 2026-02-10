@@ -50,7 +50,7 @@ export const EffectCard = React.memo<EffectCardProps>(({
   return (
     <Card
       className={cn(
-        'relative flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 p-2 sm:p-3 cursor-pointer transition-all duration-300',
+        'relative flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 p-2 sm:p-3 cursor-pointer transition-[transform,box-shadow] duration-300',
         `bg-gradient-to-br ${gradient}`,
         'hover:scale-105 hover:shadow-xl',
         isSelected && 'ring-2 ring-white scale-105',
@@ -70,7 +70,7 @@ export const EffectCard = React.memo<EffectCardProps>(({
       {/* Status badge */}
       {id !== 'reset' && (
         <div className={cn(
-          "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-bold",
+          "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[11px] font-bold",
           isActive
             ? "bg-green-500/90 text-white"
             : "bg-gray-700/80 text-gray-300"
@@ -84,11 +84,11 @@ export const EffectCard = React.memo<EffectCardProps>(({
         onClick={onClick}
         className="flex flex-col items-center justify-center h-full text-white"
       >
-        <div className="transition-all duration-300">
+        <div className="transition-[width,height] duration-300">
           <EffectIcon
             effect={id}
             className={cn(
-              "transition-all duration-300 text-white",
+              "transition-[width,height] duration-300 text-white",
               isActive ? "w-10 h-10 sm:w-12 sm:h-12" : "w-8 h-8 sm:w-10 sm:h-10"
             )}
           />
@@ -96,7 +96,7 @@ export const EffectCard = React.memo<EffectCardProps>(({
 
         <div className="hidden sm:block text-center mt-2">
           <p className={cn(
-            "text-xs font-semibold leading-tight transition-all",
+            "text-xs font-semibold leading-tight transition-colors",
             isActive && "text-white drop-shadow-lg"
           )}>
             {title}

@@ -519,7 +519,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                         <div className="mt-1 flex items-center space-x-2">
                           <div className="flex-1 bg-gray-200/40 dark:bg-gray-700/40 rounded-full h-0.5">
                             <div 
-                              className="bg-green-400 dark:bg-green-500 h-0.5 rounded-full transition-all duration-300"
+                              className="bg-green-400 dark:bg-green-500 h-0.5 rounded-full transition-[width] duration-300"
                               style={{ width: `${Math.round(version.confidence * 100)}%` }}
                             />
                           </div>

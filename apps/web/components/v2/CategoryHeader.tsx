@@ -56,7 +56,7 @@ export function CategoryHeader({
     <div
       className={`
         px-4 py-2 flex items-center justify-between cursor-pointer
-        transition-all duration-300
+        transition-[transform,background-color,border-color,box-shadow] duration-300
         ${isHighlighted ? 'scale-[1.02] rounded-lg' : ''}
         ${className}
       `}

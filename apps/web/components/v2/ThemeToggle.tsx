@@ -93,7 +93,7 @@ export function ThemeToggle({
         onClick={handleClick}
         className={cn(
           'relative rounded-full flex items-center justify-center',
-          'transition-all duration-300 ease-out',
+          'transition-colors duration-300 ease-out',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gp-terracotta)] focus-visible:ring-offset-2',
           'bg-[var(--gp-surface)] border border-[var(--gp-border)]',
           'hover:bg-[var(--gp-hover)] hover:border-[var(--gp-terracotta)]',
@@ -109,14 +109,14 @@ export function ThemeToggle({
           <SunIcon
             className={cn(
               iconSizes[size],
-              'absolute inset-0 transition-all duration-300',
+              'absolute inset-0 transition-[opacity,transform] duration-300',
               isDark ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'
             )}
           />
           <MoonIcon
             className={cn(
               iconSizes[size],
-              'transition-all duration-300',
+              'transition-[opacity,transform] duration-300',
               isDark ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-0'
             )}
           />

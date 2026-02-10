@@ -84,7 +84,7 @@ export function LanguageOrb({
         <span
           className={cn(
             'absolute -bottom-6 left-1/2 -translate-x-1/2',
-            'text-xs font-semibold text-[var(--gp-text-muted)] opacity-0 transition-all duration-300',
+            'text-xs font-semibold text-[var(--gp-text-muted)] opacity-0 transition-opacity duration-300',
             'group-hover:opacity-100 whitespace-nowrap'
           )}
         >

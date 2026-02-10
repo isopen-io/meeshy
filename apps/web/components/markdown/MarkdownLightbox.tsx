@@ -124,6 +124,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
               title={showRaw ? 'Vue formatée' : 'Vue brute'}
+              aria-label={showRaw ? 'Vue formatée' : 'Vue brute'}
               disabled={isLoading || hasError}
             >
               {showRaw ? (

@@ -43,7 +43,7 @@ export const MessageHeader = memo(function MessageHeader({
         <Avatar
           className={cn(
             "h-8 w-8 sm:h-9 sm:w-9",
-            avatarUrl && "cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+            avatarUrl && "cursor-pointer hover:ring-2 hover:ring-blue-500 transition-shadow"
           )}
           onClick={(e) => {
             e.stopPropagation();

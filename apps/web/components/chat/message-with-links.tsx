@@ -111,7 +111,7 @@ export function MessageWithLinks({
             rel="noopener noreferrer"
             onClick={(e) => handleLinkClick(e, part)}
             className={cn(
-              'inline-flex items-center gap-0.5 font-semibold underline decoration-2 transition-all',
+              'inline-flex items-center gap-0.5 font-semibold underline decoration-2 transition-[color,transform]',
               'cursor-pointer pointer-events-auto hover:scale-105',
               linkClassName
             )}

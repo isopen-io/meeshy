@@ -65,7 +65,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
           hasError
             ? 'bg-red-500 hover:bg-red-600'
             : 'bg-purple-600 hover:bg-purple-700'
-        } text-white shadow-lg hover:shadow-xl transition-all duration-200 p-0 flex items-center justify-center disabled:opacity-50`}
+        } text-white shadow-lg hover:shadow-xl transition-[color,box-shadow] duration-200 p-0 flex items-center justify-center disabled:opacity-50`}
       >
         {isLoading ? (
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -104,7 +104,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
 
         {duration > 0 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-[9px] font-semibold text-white dark:text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+            <span className="text-[11px] font-semibold text-white dark:text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
               {progress.toFixed(0)}%
             </span>
           </div>
@@ -149,7 +149,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
       <a
         href={downloadUrl}
         download={downloadName}
-        className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-all duration-200"
+        className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
         title="Télécharger"
         onClick={(e) => e.stopPropagation()}
       >

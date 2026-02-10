@@ -85,7 +85,7 @@ export const HeaderAvatar = memo(function HeaderAvatar({
                 onClick={onImageUploadClick}
                 aria-label={t('conversationHeader.changeImage') || 'Changer l\'image de la conversation'}
               >
-                <Avatar className="h-9 w-9 sm:h-10 sm:w-10 ring-2 ring-transparent group-hover:ring-primary/50 transition-all">
+                <Avatar className="h-9 w-9 sm:h-10 sm:w-10 ring-2 ring-transparent group-hover:ring-primary/50 transition-[box-shadow]">
                   <AvatarImage src={avatarUrl} alt={name} />
                   <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs sm:text-sm">
                     {avatar}

@@ -252,7 +252,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                   whileHover={{ scale: 1.2 }}
                   whileTap={{ scale: 0.95 }}
                   className={cn(
-                    "relative h-10 w-10 flex items-center justify-center rounded-lg text-xl transition-all duration-200",
+                    "relative h-10 w-10 flex items-center justify-center rounded-lg text-xl transition-colors duration-200",
                     "focus:outline-none focus:ring-2 focus:ring-offset-1",
                     isReacted
                       ? isOwnMessage
@@ -379,7 +379,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                   transition={{ duration: 0.15, ease: "easeOut" }}
                   disabled={isLoading}
                   className={cn(
-                    "relative h-11 w-11 flex items-center justify-center rounded-lg text-2xl transition-all duration-200",
+                    "relative h-11 w-11 flex items-center justify-center rounded-lg text-2xl transition-colors duration-200",
                     "focus:outline-none focus:ring-2 focus:ring-offset-1",
                     isReacted
                       ? isOwnMessage

@@ -117,7 +117,7 @@ function FilterTabs({
 
   return (
     <div
-      className={`overflow-hidden transition-all duration-300 ease-in-out ${
+      className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out ${
         isVisible ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
       }`}
     >
@@ -128,7 +128,7 @@ function FilterTabs({
             <button
               key={filter.id}
               onClick={() => onFilterChange(filter.id)}
-              className={`px-3 py-1.5 text-xs rounded-full whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 text-xs rounded-full whitespace-nowrap transition-colors duration-200 flex items-center gap-1.5 border ${
                 isActive
                   ? 'font-medium border-transparent'
                   : 'border-[var(--gp-border)] hover:border-[var(--gp-terracotta)] hover:bg-[var(--gp-hover)]'

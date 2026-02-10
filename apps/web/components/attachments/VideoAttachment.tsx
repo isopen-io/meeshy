@@ -58,7 +58,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
       {canDelete && (
         <button
           onClick={handleDeleteClick}
-          className="absolute top-2 right-2 w-[43px] h-[43px] rounded-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white flex items-center justify-center transition-all shadow-md z-10 opacity-0 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
+          className="absolute top-2 right-2 w-[43px] h-[43px] rounded-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white flex items-center justify-center transition-[background-color,opacity,box-shadow] shadow-md z-10 opacity-0 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
           title="Supprimer cette vidéo"
           aria-label={`Supprimer la vidéo ${attachment.originalName}`}
         >

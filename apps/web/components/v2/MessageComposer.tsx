@@ -342,7 +342,7 @@ export const MessageComposer = forwardRef<
 
   return (
     <div
-      className={`border-t transition-all duration-300 ${className}`}
+      className={`border-t transition-colors duration-300 ${className}`}
       style={{
         borderColor: 'var(--gp-parchment)',
         background: 'var(--gp-surface)',
@@ -378,6 +378,7 @@ export const MessageComposer = forwardRef<
               <button
                 onClick={() => removeAttachment(attachment.id)}
                 className="ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors"
+                aria-label="Supprimer la pièce jointe"
               >
                 <CloseIcon className="w-3.5 h-3.5" />
               </button>
@@ -391,7 +392,7 @@ export const MessageComposer = forwardRef<
         {/* Zone de texte */}
         <div
           className={`
-            relative rounded-2xl border transition-all duration-300
+            relative rounded-2xl border transition-[border-color,box-shadow] duration-300
             ${isFocused ? 'ring-2 ring-[var(--gp-terracotta)]/20' : ''}
           `}
           style={{
@@ -406,7 +407,7 @@ export const MessageComposer = forwardRef<
               <button
                 ref={languageButtonRef}
                 onClick={toggleLanguageMenu}
-                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-all duration-300"
+                className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium hover:opacity-80 transition-opacity duration-300"
                 style={{
                   background: 'color-mix(in srgb, var(--gp-deep-teal) 15%, transparent)',
                   color: 'var(--gp-deep-teal)',
@@ -551,12 +552,13 @@ export const MessageComposer = forwardRef<
             <button
               onClick={handleSend}
               disabled={disabled}
-              className="absolute right-2 bottom-2 p-2 rounded-full transition-all duration-300 hover:scale-105 active:scale-95"
+              className="absolute right-2 bottom-2 p-2 rounded-full transition-transform duration-300 hover:scale-105 active:scale-95"
               style={{
                 background: 'var(--gp-terracotta)',
                 color: 'white',
               }}
               title="Envoyer"
+              aria-label="Envoyer le message"
             >
               <SendIcon className="w-5 h-5" />
             </button>

@@ -316,7 +316,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
                 {tokenNameSuggestions.map((suggestion, index) => (
                   <div
                     key={index}
-                    className={`p-2 rounded-lg border cursor-pointer transition-all hover:bg-primary/5 hover:border-primary/50 dark:border-gray-700 ${
+                    className={`p-2 rounded-lg border cursor-pointer transition-colors hover:bg-primary/5 hover:border-primary/50 dark:border-gray-700 ${
                       newTokenName === suggestion ? 'bg-primary/10 border-primary ring-2 ring-primary/20 dark:bg-primary/20' : 'bg-white dark:bg-gray-800'
                     }`}
                     onClick={() => setNewTokenName(suggestion)}

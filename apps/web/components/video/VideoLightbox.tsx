@@ -517,7 +517,8 @@ export function VideoLightbox({
                   e.stopPropagation();
                   togglePlay();
                 }}
-                className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-all duration-200 group"
+                className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200 group"
+                aria-label="Lire la vidéo"
               >
                 <div className="w-20 h-20 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
                   <Play className="w-10 h-10 text-white ml-1 fill-current" />
@@ -588,7 +589,7 @@ export function VideoLightbox({
               {/* Pourcentage centré dans la barre (horizontalement ET verticalement) */}
               {duration > 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-[9px] font-semibold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                  <span className="text-[11px] font-semibold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
                     {progress.toFixed(0)}%
                   </span>
                 </div>
@@ -613,6 +614,7 @@ export function VideoLightbox({
                 onClick={togglePlay}
                 size="sm"
                 className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 text-white p-0 flex items-center justify-center"
+                aria-label={isPlaying ? 'Mettre en pause' : 'Lire la vidéo'}
               >
                 {isPlaying ? (
                   <Pause className="w-5 h-5 fill-current" />
@@ -636,6 +638,7 @@ export function VideoLightbox({
                   size="sm"
                   variant="ghost"
                   className="w-9 h-9 p-0 text-white hover:bg-white/10"
+                  aria-label={isMuted || volume === 0 ? 'Activer le son' : 'Couper le son'}
                 >
                   {isMuted || volume === 0 ? (
                     <VolumeX className="w-5 h-5" />
@@ -665,6 +668,7 @@ export function VideoLightbox({
                 variant="ghost"
                 className="w-9 h-9 p-0 text-white hover:bg-white/10"
                 title={isFullscreen ? "Quitter le plein écran (F)" : "Plein écran (F)"}
+                aria-label={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
               >
                 {isFullscreen ? (
                   <Minimize className="w-5 h-5" />

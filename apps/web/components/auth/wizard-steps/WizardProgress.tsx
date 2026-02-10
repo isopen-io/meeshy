@@ -30,7 +30,7 @@ export function WizardProgress({ steps, currentStep, onStepClick }: WizardProgre
               }}
               disabled={index > currentStep}
               className={cn(
-                "relative w-8 h-8 rounded-full flex items-center justify-center transition-all",
+                "relative w-8 h-8 rounded-full flex items-center justify-center transition-colors",
                 isActive && `bg-gradient-to-br ${step.color} text-white shadow-md`,
                 isCompleted && "bg-green-500 text-white cursor-pointer",
                 !isActive && !isCompleted && "bg-gray-100 dark:bg-gray-800 text-muted-foreground cursor-not-allowed"
@@ -42,7 +42,7 @@ export function WizardProgress({ steps, currentStep, onStepClick }: WizardProgre
             </motion.button>
             {index < steps.length - 1 && (
               <div className={cn(
-                "w-4 h-0.5 mx-0.5 rounded-full transition-all",
+                "w-4 h-0.5 mx-0.5 rounded-full transition-colors",
                 index < currentStep ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"
               )} />
             )}

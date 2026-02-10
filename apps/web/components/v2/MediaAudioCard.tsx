@@ -444,7 +444,7 @@ export function MediaAudioCard({
             <button
               onClick={() => translations.length > 1 && setShowLanguageMenu(!showLanguageMenu)}
               className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full transition-all',
+                'flex items-center gap-2 px-3 py-1.5 rounded-full transition-opacity',
                 'hover:opacity-90',
                 translations.length > 1 && 'cursor-pointer'
               )}
@@ -533,7 +533,7 @@ export function MediaAudioCard({
                 'flex items-center justify-center',
                 'bg-[var(--gp-terracotta)]',
                 'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
-                'transition-all duration-200',
+                'transition-[transform,box-shadow] duration-200',
                 'hover:scale-105 active:scale-95',
                 isLoading && 'opacity-50 cursor-wait'
               )}
@@ -621,7 +621,7 @@ export function MediaAudioCard({
                       key={speed}
                       onClick={() => setPlaybackSpeed(speed)}
                       className={cn(
-                        'px-2 py-0.5 rounded-md text-xs font-semibold transition-all duration-300',
+                        'px-2 py-0.5 rounded-md text-xs font-semibold transition-colors duration-300',
                         playbackSpeed === speed
                           ? 'bg-[var(--gp-terracotta)] text-white'
                           : 'bg-[var(--gp-terracotta-light)] text-[var(--gp-terracotta)] hover:opacity-80'
@@ -639,7 +639,7 @@ export function MediaAudioCard({
         {/* Transcription Preview */}
         {selectedTranslation.transcription && (
           <div
-            className="mx-4 mb-4 p-3 rounded-xl cursor-pointer transition-all duration-300 hover:opacity-90 bg-[var(--gp-surface-elevated)]/60 border border-[var(--gp-border)]"
+            className="mx-4 mb-4 p-3 rounded-xl cursor-pointer transition-opacity duration-300 hover:opacity-90 bg-[var(--gp-surface-elevated)]/60 border border-[var(--gp-border)]"
             onClick={onTranscriptionClick}
           >
             <div className="flex items-start gap-2">

@@ -175,7 +175,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
         hasError
           ? 'border-red-300/50 dark:border-red-700/50 shadow-red-100 dark:shadow-red-900/20'
           : 'border-slate-200/50 dark:border-slate-700/50 shadow-slate-100 dark:shadow-slate-900/20'
-      } shadow-lg hover:shadow-xl transition-all duration-300 ease-out w-full max-w-[90vw] sm:max-w-2xl backdrop-blur-sm ${className}`}
+      } shadow-lg hover:shadow-xl transition-shadow duration-300 ease-out w-full max-w-[90vw] sm:max-w-2xl backdrop-blur-sm ${className}`}
     >
       {/* Ligne principale: Play + Zone centrale */}
       <div className="flex items-start gap-4">
@@ -190,7 +190,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
               hasError
                 ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
                 : 'bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
-            } text-white shadow-lg hover:shadow-2xl transition-all duration-200 p-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed`}
+            } text-white shadow-lg hover:shadow-2xl transition-[background-color,box-shadow] duration-200 p-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isLoading ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -253,7 +253,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
             <a
               href={objectUrl || '#'}
               download={attachment.originalName}
-              className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all"
+              className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
               title="Télécharger l'audio"
               aria-label="Télécharger l'audio"
               onClick={(e) => {
@@ -362,7 +362,7 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
         onClick={togglePlay}
         disabled={!objectUrl}
         aria-label={isPlaying ? 'Pause' : 'Lecture'}
-        className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-all duration-200 disabled:opacity-50"
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors duration-200 disabled:opacity-50"
       >
         {isPlaying ? (
           <Pause className="w-4 h-4 fill-current" />

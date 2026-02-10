@@ -127,7 +127,7 @@ export function DraggableParticipantOverlay({
       {/* Fullscreen button (on hover) */}
       {isHovered && !isDisconnected && (
         <div
-          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-all"
+          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors"
           onClick={(e) => {
             e.stopPropagation();
             onDoubleClick?.();

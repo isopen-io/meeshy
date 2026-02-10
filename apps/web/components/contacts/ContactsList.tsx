@@ -79,7 +79,7 @@ const ContactsList = React.memo<ContactsListProps>(({
         const pendingRequest = getPendingRequestWithUser(contact.id);
 
         return (
-          <Card key={contact.id} className="relative border-2 hover:border-primary/50 hover:shadow-xl transition-all duration-200 overflow-hidden group bg-white dark:bg-gray-950 dark:border-gray-800">
+          <Card key={contact.id} className="relative border-2 hover:border-primary/50 hover:shadow-xl transition-[color,box-shadow] duration-200 overflow-hidden group bg-white dark:bg-gray-950 dark:border-gray-800">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 dark:from-blue-500/10 dark:to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-0"></div>
 
             <CardContent className="relative z-10 p-4 sm:p-6">
@@ -185,7 +185,7 @@ const ContactsList = React.memo<ContactsListProps>(({
                         size="sm"
                         variant="outline"
                         onClick={() => onCancelRequest(pendingRequest.id)}
-                        className="flex items-center gap-2 h-9 px-4 border-2 border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-950/30 shadow-md hover:shadow-lg transition-all"
+                        className="flex items-center gap-2 h-9 px-4 border-2 border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-950/30 shadow-md hover:shadow-lg transition-[color,box-shadow]"
                       >
                         <X className="h-4 w-4" />
                         <span className="text-sm">{t('actions.cancel')}</span>
@@ -194,7 +194,7 @@ const ContactsList = React.memo<ContactsListProps>(({
                       <Button
                         size="sm"
                         onClick={() => onSendRequest(contact.id)}
-                        className="flex items-center gap-2 h-9 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 shadow-md hover:shadow-lg transition-all"
+                        className="flex items-center gap-2 h-9 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 shadow-md hover:shadow-lg transition-[color,box-shadow]"
                       >
                         <UserPlus className="h-4 w-4" />
                         <span className="text-sm">{t('actions.add')}</span>

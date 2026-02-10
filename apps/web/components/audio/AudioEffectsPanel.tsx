@@ -72,7 +72,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all cursor-pointer"
+            className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
             title={appliedEffects.length === 1 ? `Effet: ${appliedEffects[0]}` : `${appliedEffects.length} effets appliqués`}
           >
             {appliedEffects.length === 1 ? (
@@ -88,11 +88,11 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
               className="grid w-full bg-gray-100 dark:bg-gray-800 p-1"
               style={{ gridTemplateColumns: `repeat(${appliedEffects.length + 1}, 1fr)` }}
             >
-              <TabsTrigger value="overview" className={`flex items-center justify-center p-2 rounded-lg transition-all ${EFFECT_TAB_CLASSES['overview']}`}>
+              <TabsTrigger value="overview" className={`flex items-center justify-center p-2 rounded-lg transition-colors ${EFFECT_TAB_CLASSES['overview']}`}>
                 <Sliders className="w-5 h-5" />
               </TabsTrigger>
               {appliedEffects.map((effect) => (
-                <TabsTrigger key={effect} value={effect} className={`flex items-center justify-center p-2 rounded-lg transition-all ${EFFECT_TAB_CLASSES[effect]}`}>
+                <TabsTrigger key={effect} value={effect} className={`flex items-center justify-center p-2 rounded-lg transition-colors ${EFFECT_TAB_CLASSES[effect]}`}>
                   <AudioEffectIcon effect={effect} className="w-5 h-5" />
                 </TabsTrigger>
               ))}

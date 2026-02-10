@@ -95,7 +95,7 @@ export function AudioEffectTile({
     <>
       <Card
         className={cn(
-          'relative overflow-hidden cursor-pointer transition-all duration-300',
+          'relative overflow-hidden cursor-pointer transition-[transform,box-shadow] duration-300',
           'hover:scale-[1.02] hover:shadow-lg',
           `bg-gradient-to-br ${visuals.gradient}`,
           visuals.borderColor,

@@ -69,7 +69,7 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
           {users.map((user) => (
             <Card
               key={user.id}
-              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 ${
+              className={`cursor-pointer transition-[box-shadow,transform] duration-200 hover:shadow-lg hover:-translate-y-1 ${
                 selectedUser?.id === user.id
                   ? 'ring-2 ring-primary shadow-lg'
                   : 'hover:shadow-md'

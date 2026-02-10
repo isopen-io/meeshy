@@ -168,6 +168,7 @@ export function AttachmentContextMenu({
           size="icon"
           className="h-6 w-6 flex-shrink-0 ml-2"
           onClick={onClose}
+          aria-label="Fermer"
         >
           <X className="h-3 w-3" />
         </Button>

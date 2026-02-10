@@ -374,7 +374,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                 aria-controls={`emoji-panel-${category.id}`}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-xs font-medium',
-                  'transition-all duration-200 flex-shrink-0',
+                  'transition-colors duration-200 flex-shrink-0',
                   'hover:bg-secondary',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                   activeCategory === category.id

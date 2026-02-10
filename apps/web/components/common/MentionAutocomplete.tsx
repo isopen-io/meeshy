@@ -311,7 +311,7 @@ export function MentionAutocomplete({
               key={suggestion.id}
               data-index={index}
               variants={itemVariants}
-              className={`w-full flex items-center gap-3 px-3 py-2 transition-all duration-300 ${
+              className={`w-full flex items-center gap-3 px-3 py-2 transition-colors duration-300 ${
                 index === selectedIndex
                   ? 'bg-gradient-to-r from-blue-100/85 via-indigo-100/75 to-blue-100/85 dark:from-blue-900/40 dark:via-indigo-900/30 dark:to-blue-900/40'
                   : 'hover:bg-gradient-to-r hover:from-blue-50/70 hover:via-indigo-50/60 hover:to-blue-50/70 dark:hover:from-blue-900/20 dark:hover:via-indigo-900/15 dark:hover:to-blue-900/20'

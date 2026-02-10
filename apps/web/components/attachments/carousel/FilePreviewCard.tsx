@@ -97,7 +97,7 @@ export const FilePreviewCard = React.memo(function FilePreviewCard({
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <div className="relative group pt-3 pb-2">
-            <div className={`relative flex ${isAudio ? 'flex-row items-center justify-between px-3' : isVideo ? 'flex-col items-center justify-center' : 'flex-col items-center justify-center'} ${cardSizeClass} bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 hover:shadow-md dark:hover:shadow-blue-500/20 ${
+            <div className={`relative flex ${isAudio ? 'flex-row items-center justify-between px-3' : isVideo ? 'flex-col items-center justify-center' : 'flex-col items-center justify-center'} ${cardSizeClass} bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] duration-200 hover:shadow-md dark:hover:shadow-blue-500/20 ${
               isUploading ? 'border-blue-400 dark:border-blue-500' : ''
             } ${isUploaded ? 'border-green-400 dark:border-green-500' : ''} ${
               isAudio ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border-green-400 dark:border-green-500' : ''
@@ -163,7 +163,7 @@ export const FilePreviewCard = React.memo(function FilePreviewCard({
             </div>
 
             {/* Size badge */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[9px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
               {formatFileSize(file.size)}
             </div>
           </div>

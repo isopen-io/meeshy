@@ -51,7 +51,7 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
           }
         }}
         className={cn(
-          "relative overflow-hidden rounded-md border-l-2 px-2 py-1.5 cursor-pointer transition-all duration-200 group text-xs",
+          "relative overflow-hidden rounded-md border-l-2 px-2 py-1.5 cursor-pointer transition-colors duration-200 group text-xs",
           isOwnMessage
             ? "bg-white/20 border-white/40 backdrop-blur-sm hover:bg-white/30"
             : "bg-gray-50/90 dark:bg-gray-700/40 border-blue-400 dark:border-blue-500 hover:bg-gray-100/90 dark:hover:bg-gray-700/60"

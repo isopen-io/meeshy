@@ -84,7 +84,7 @@ export function CallControls({
         variant={audioEnabled ? 'default' : 'destructive'}
         onClick={onToggleAudio}
         className={cn(
-          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-all touch-manipulation',
+          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
           audioEnabled
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
@@ -105,7 +105,7 @@ export function CallControls({
         variant={videoEnabled ? 'default' : 'destructive'}
         onClick={onToggleVideo}
         className={cn(
-          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-all touch-manipulation',
+          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
           videoEnabled
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
@@ -126,7 +126,7 @@ export function CallControls({
           size="icon"
           variant="default"
           onClick={onSwitchCamera}
-          className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-all touch-manipulation"
+          className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors touch-manipulation"
           aria-label="Switch camera"
           title="Switch camera"
         >
@@ -140,7 +140,7 @@ export function CallControls({
         variant="default"
         onClick={handleSpeakerToggle}
         className={cn(
-          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-all touch-manipulation',
+          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
           speakerEnabled
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-gray-800 hover:bg-gray-700 text-white'
@@ -162,7 +162,7 @@ export function CallControls({
           variant="default"
           onClick={onToggleAudioEffects}
           className={cn(
-            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-all touch-manipulation',
+            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
             audioEffectsActive
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
@@ -181,7 +181,7 @@ export function CallControls({
           variant="default"
           onClick={onToggleStats}
           className={cn(
-            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-all touch-manipulation',
+            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
             showStats
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
@@ -198,7 +198,7 @@ export function CallControls({
         size="icon"
         variant="destructive"
         onClick={onHangUp}
-        className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all touch-manipulation"
+        className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors touch-manipulation"
         aria-label="End call"
         title="End call"
       >

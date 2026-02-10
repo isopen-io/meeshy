@@ -90,8 +90,8 @@ export function ConversationDropdown({
   // S'il n'y a aucune conversation, afficher un bouton simple
   if (!loading && conversations.length === 0) {
     const buttonClasses = variant === 'outline'
-      ? "flex items-center gap-2 h-9 px-4 border-2 hover:bg-accent shadow-md hover:shadow-lg transition-all"
-      : "flex items-center gap-2 h-9 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-all";
+      ? "flex items-center gap-2 h-9 px-4 border-2 hover:bg-accent shadow-md hover:shadow-lg transition-[color,box-shadow]"
+      : "flex items-center gap-2 h-9 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-[color,box-shadow]";
 
     return (
       <Button
@@ -111,12 +111,12 @@ export function ConversationDropdown({
 
   // Définir les classes en fonction de la variante
   const mainButtonClasses = variant === 'outline'
-    ? "flex items-center gap-2 h-9 px-3 rounded-r-none border-2 hover:bg-accent shadow-md hover:shadow-lg transition-all"
-    : "flex items-center gap-2 h-9 px-3 rounded-r-none bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-all";
+    ? "flex items-center gap-2 h-9 px-3 rounded-r-none border-2 hover:bg-accent shadow-md hover:shadow-lg transition-[color,box-shadow]"
+    : "flex items-center gap-2 h-9 px-3 rounded-r-none bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-[color,box-shadow]";
 
   const dropdownButtonClasses = variant === 'outline'
-    ? "h-9 px-2 rounded-l-none border-l-0 border-2 hover:bg-accent shadow-md hover:shadow-lg transition-all"
-    : "h-9 px-2 rounded-l-none border-l border-blue-500 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-all";
+    ? "h-9 px-2 rounded-l-none border-l-0 border-2 hover:bg-accent shadow-md hover:shadow-lg transition-[color,box-shadow]"
+    : "h-9 px-2 rounded-l-none border-l border-blue-500 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md hover:shadow-lg transition-[color,box-shadow]";
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>

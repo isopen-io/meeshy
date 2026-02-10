@@ -118,7 +118,7 @@ export function ResponsiveTabsWithContent({
           <TabsTrigger
             key={item.value}
             value={item.value}
-            className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
+            className="data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 md:py-3 px-2 md:px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
             title={item.label}
           >
             {item.icon && <span className="shrink-0">{item.icon}</span>}

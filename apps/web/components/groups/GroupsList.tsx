@@ -120,7 +120,7 @@ export const GroupsList = memo(function GroupsList({
               className="w-full h-8 text-sm px-3 py-2 border border-border/30 dark:border-border/50 rounded-lg
                        bg-background/50 dark:bg-background/70 text-foreground
                        placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-primary/20 focus:border-primary/30
-                       transition-all outline-none"
+                       transition-colors outline-none"
             />
           </div>
         </div>

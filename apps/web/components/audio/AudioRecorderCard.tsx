@@ -398,7 +398,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       <div className="relative group pt-2 pb-1">
         <div className="relative flex flex-col items-center justify-center !w-36 !h-11 !min-w-[144px] !min-h-[44px] !max-w-[144px] !max-h-[44px] bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-2 border-blue-400 dark:border-blue-500 rounded-lg">
           <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
-          <div className="text-[8px] text-blue-600 dark:text-blue-400 mt-0.5">
+          <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
             Initializing...
           </div>
         </div>
@@ -419,7 +419,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       <div className="relative group pt-2 pb-1">
         <div className="relative flex flex-col items-center justify-center !w-36 !h-11 !min-w-[144px] !min-h-[44px] !max-w-[144px] !max-h-[44px] bg-red-50 dark:bg-red-900/20 border-2 border-red-400 dark:border-red-500 rounded-lg">
           <Mic className="w-3.5 h-3.5 text-red-600 dark:text-red-400 mb-0.5" />
-          <div className="text-[7px] text-red-600 dark:text-red-400 text-center px-1">
+          <div className="text-[11px] text-red-600 dark:text-red-400 text-center px-1">
             {permissionError}
           </div>
         </div>
@@ -446,22 +446,22 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             </div>
             <div className="flex items-center gap-1 mt-0.5">
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-[9px] text-red-600 dark:text-red-400 font-medium leading-none">REC</span>
+              <span className="text-[11px] text-red-600 dark:text-red-400 font-medium leading-none">REC</span>
             </div>
           </div>
 
           {/* Bouton stop */}
           <button
             onClick={stopRecording}
-            className="group flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer !p-1"
+            className="group flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer !p-1"
           >
             <Square className="!w-4 !h-4 fill-white dark:fill-white stroke-gray-700 dark:stroke-gray-300 group-hover:stroke-red-600 dark:group-hover:stroke-red-500 stroke-[1.5]" />
-            <span className="text-[9px] leading-none font-semibold text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-500">STOP</span>
+            <span className="text-[11px] leading-none font-semibold text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-500">STOP</span>
           </button>
         </div>
 
         {/* Badge durée max */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[7px] px-1 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
           Max {Math.floor(effectiveDuration / 60)}min
         </div>
       </div>
@@ -493,10 +493,10 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             <div className="text-xs font-bold text-green-600 dark:text-green-400 font-mono tabular-nums leading-none">
               {formatTime(recordingTime)}
             </div>
-            <div className="text-[7px] text-green-600 dark:text-green-400 font-medium leading-none mt-0.5">
+            <div className="text-[11px] text-green-600 dark:text-green-400 font-medium leading-none mt-0.5">
               {audioFormat} · {(audioBlob.size / 1024).toFixed(0)} KB
             </div>
-            <div className="text-[7px] text-gray-500 dark:text-gray-400 leading-none mt-0.5">
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-none mt-0.5">
               {isPlaying ? 'Playing...' : 'Ready'}
             </div>
           </div>
@@ -504,7 +504,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
           {/* Bouton Play/Pause */}
           <button
             onClick={togglePlayPause}
-            className="bg-green-600 hover:bg-green-700 rounded-full flex-shrink-0 flex items-center justify-center transition-all cursor-pointer !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] sm:!w-6 sm:!h-6 sm:!min-w-[24px] sm:!min-h-[24px] sm:!max-w-[24px] sm:!max-h-[24px] !p-0"
+            className="bg-green-600 hover:bg-green-700 rounded-full flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] sm:!w-6 sm:!h-6 sm:!min-w-[24px] sm:!min-h-[24px] sm:!max-w-[24px] sm:!max-h-[24px] !p-0"
           >
             {isPlaying ? (
               <Pause className="!w-2 !h-2 sm:!w-2.5 sm:!h-2.5 fill-white" />

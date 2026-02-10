@@ -160,7 +160,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
 
         {/* Sidebar - Hidden on mobile, visible on desktop */}
         <div className={`
-          bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 flex flex-col
+          bg-white dark:bg-gray-800 shadow-lg transition-[transform,width] duration-300 flex flex-col
           fixed md:static inset-y-0 left-0 z-50
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           ${isSidebarOpen ? 'w-64' : 'w-16'}
@@ -183,6 +183,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 size="sm"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="p-2 hidden md:flex"
+                aria-label={isSidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu'}
               >
                 {isSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </Button>
@@ -192,6 +193,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 size="sm"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-2 md:hidden"
+                aria-label="Fermer le menu"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -230,6 +232,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 onClick={() => router.push('/dashboard')}
                 onMouseEnter={() => preloadRouteModules('/dashboard')}
                 onFocus={() => preloadRouteModules('/dashboard')}
+                aria-label={!isSidebarOpen ? 'Retour dashboard' : undefined}
               >
                 <Home className="w-5 h-5" />
                 {isSidebarOpen && <span className="ml-3">Retour dashboard</span>}
@@ -248,6 +251,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     onClick={() => router.push(item.href)}
                     onMouseEnter={() => preloadRouteModules(item.href)}
                     onFocus={() => preloadRouteModules(item.href)}
+                    aria-label={!isSidebarOpen ? item.label : undefined}
                   >
                     <Icon className="w-5 h-5" />
                     {isSidebarOpen && <span className="ml-3">{item.label}</span>}
@@ -263,6 +267,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
               variant="ghost"
               className={`w-full ${isSidebarOpen ? 'justify-start' : 'justify-center'} h-10 text-red-600 hover:text-red-700 hover:bg-red-50`}
               onClick={handleLogout}
+              aria-label={!isSidebarOpen ? 'Déconnexion' : undefined}
             >
               <LogOut className="w-5 h-5" />
               {isSidebarOpen && <span className="ml-3">Déconnexion</span>}
@@ -282,6 +287,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                   size="sm"
                   onClick={() => setIsMobileMenuOpen(true)}
                   className="p-2 md:hidden"
+                  aria-label="Ouvrir le menu"
                 >
                   <Menu className="w-5 h-5" />
                 </Button>
@@ -306,8 +312,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9">
-                      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                      <Sun className="h-4 w-4 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
+                      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
                       <span className="sr-only">Changer de thème</span>
                     </Button>
                   </DropdownMenuTrigger>

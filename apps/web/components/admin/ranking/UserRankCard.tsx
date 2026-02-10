@@ -28,7 +28,7 @@ export const UserRankCard = React.memo(({ item, criterion }: UserRankCardProps) 
 
   return (
     <div
-      className={`flex items-center justify-between p-4 rounded-lg transition-all hover:shadow-md ${
+      className={`flex items-center justify-between p-4 rounded-lg transition-[color,box-shadow] hover:shadow-md ${
         isTopThree
           ? 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-2 border-yellow-300 dark:border-yellow-700'
           : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700'

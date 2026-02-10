@@ -79,12 +79,12 @@ export const FileAttachment = React.memo(function FileAttachment({
             tabIndex={0}
             aria-label={`Ouvrir le fichier ${attachment.originalName}`}
           >
-            <div className={`relative flex flex-col items-center justify-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 transition-all hover:shadow-md dark:hover:shadow-blue-500/20 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+            <div className={`relative flex flex-col items-center justify-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-md dark:hover:shadow-blue-500/20 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
               isMobile ? 'w-14 h-14' : 'w-16 h-16'
             }`}>
               <div className="flex flex-col items-center gap-0.5">
                 {getFileIcon(attachment)}
-                <div className="text-[9px] font-medium text-gray-600 dark:text-gray-300">
+                <div className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
                   {extension.toUpperCase()}
                 </div>
               </div>
@@ -104,7 +104,7 @@ export const FileAttachment = React.memo(function FileAttachment({
                 </div>
               )}
             </div>
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[8px] px-1 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-gray-700 dark:bg-gray-600 text-white text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
               {formatFileSize(attachment.fileSize)}
             </div>
           </div>

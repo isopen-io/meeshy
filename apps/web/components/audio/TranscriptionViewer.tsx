@@ -366,7 +366,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
         <span
           key={`${segment.startMs}-${segment.endMs}-${index}`}
           data-segment-index={index}
-          className={`inline transition-all duration-200 ${
+          className={`inline transition-[color,font-weight] duration-200 ${
             isActive
               ? `font-bold ${colors.text}`
               : 'text-slate-700 dark:text-slate-300'
@@ -391,7 +391,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
 
   return (
     <div
-      className={`transition-all duration-300 ease-out ${
+      className={`transition-[opacity,transform] duration-300 ease-out ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       }`}
       role="region"
@@ -402,7 +402,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
       <div
         id="transcription-content"
         ref={transcriptionRef}
-        className={`text-sm leading-relaxed transition-all duration-300 ${
+        className={`text-sm leading-relaxed transition-[max-height] duration-300 ${
           isExpanded ? 'max-h-96 overflow-y-auto' : 'max-h-32 overflow-y-auto'
         }`}
         style={{
@@ -454,7 +454,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
                 <Tooltip key={speaker.sid} delayDuration={200}>
                   <TooltipTrigger asChild>
                     <span
-                      className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${colors.bg} ${colors.border} border-2 ${colors.text} cursor-pointer transition-all hover:shadow-md hover:scale-110`}
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${colors.bg} ${colors.border} border-2 ${colors.text} cursor-pointer transition-[transform,box-shadow] hover:shadow-md hover:scale-110`}
                     >
                       {/* Avatar de l'utilisateur ou icône de genre avec couleur */}
                       {isUser && userAvatar ? (

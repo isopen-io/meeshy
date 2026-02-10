@@ -31,6 +31,8 @@ const config: Config = {
         'comic-neue': ['var(--font-comic-neue)', 'cursive'],
         lexend: ['var(--font-lexend)', 'system-ui', 'sans-serif'],
         roboto: ['var(--font-roboto)', 'system-ui', 'sans-serif'],
+        'dm-sans': ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
+        'playfair-display': ['var(--font-playfair-display)', 'Georgia', 'serif'],
         'geist-sans': ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
         'geist-mono': ['var(--font-geist-mono)', 'monospace'],
       },

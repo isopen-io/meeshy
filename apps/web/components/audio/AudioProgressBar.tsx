@@ -47,7 +47,7 @@ export const AudioProgressBar = memo<AudioProgressBarProps>(({
       {/* Pourcentage centré dans la barre */}
       {duration > 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-[9px] font-semibold text-white dark:text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+          <span className="text-[11px] font-semibold text-white dark:text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
             {progress.toFixed(0)}%
           </span>
         </div>

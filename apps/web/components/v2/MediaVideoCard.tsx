@@ -228,7 +228,7 @@ const LanguageSelector = memo(function LanguageSelector({
           'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
           'border border-[var(--gp-border)]',
           'hover:bg-[var(--gp-surface-elevated)] hover:border-[var(--gp-border-subtle)]',
-          'transition-all duration-300',
+          'transition-colors duration-300',
           'text-sm font-medium text-[var(--gp-text-primary)]'
         )}
       >
@@ -324,7 +324,7 @@ const SpeedControl = memo(function SpeedControl({ currentSpeed, onSpeedChange }:
           key={speed}
           onClick={() => onSpeedChange(speed)}
           className={cn(
-            'px-2 py-1 rounded-md text-xs font-medium transition-all duration-300',
+            'px-2 py-1 rounded-md text-xs font-medium transition-colors duration-300',
             currentSpeed === speed
               ? 'bg-[var(--gp-surface-elevated)] text-[var(--gp-text-primary)]'
               : 'text-white/80 hover:text-white hover:bg-white/10'
@@ -383,7 +383,7 @@ const TranscriptionPreview = memo(function TranscriptionPreview({
         {isTruncated && onViewMore && (
           <button
             onClick={onViewMore}
-            className="ml-1 font-medium hover:underline transition-all duration-300 text-[var(--gp-terracotta)]"
+            className="ml-1 font-medium hover:underline transition-colors duration-300 text-[var(--gp-terracotta)]"
           >
             voir plus...
           </button>
@@ -661,7 +661,7 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                   'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
                   'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
                   'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
-                  'transition-all duration-300 ease-out',
+                  'transition-[transform,background-color] duration-300 ease-out',
                   'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
                 )}
               >
@@ -715,7 +715,7 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                       'w-16 h-16 rounded-full flex items-center justify-center',
                       'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
                       'shadow-[var(--gp-shadow-lg)]',
-                      'transition-all duration-300 ease-out',
+                      'transition-[transform,background-color] duration-300 ease-out',
                       'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
                     )}
                   >
@@ -736,7 +736,7 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                 >
                   {/* Progress Fill */}
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full transition-all bg-[var(--gp-terracotta)]"
+                    className="absolute inset-y-0 left-0 rounded-full transition-[width] bg-[var(--gp-terracotta)]"
                     style={{ width: `${progress}%` }}
                   />
                   {/* Progress Handle */}

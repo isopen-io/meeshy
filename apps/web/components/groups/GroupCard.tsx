@@ -30,7 +30,7 @@ export const GroupCard = memo(function GroupCard({
     <div
       onClick={() => onSelect(group)}
       className={cn(
-        "flex items-start p-4 rounded-2xl cursor-pointer transition-all border-2",
+        "flex items-start p-4 rounded-2xl cursor-pointer transition-colors border-2",
         isSelected
           ? "bg-primary/20 dark:bg-primary/30 border-primary/40 dark:border-primary/50 shadow-md"
           : "hover:bg-accent/50 dark:hover:bg-accent/70 border-transparent hover:border-border/30 dark:hover:border-border/40"

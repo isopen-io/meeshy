@@ -241,7 +241,7 @@ export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
                     cy={p.y.toFixed(2)}
                     r="4"
                     fill={CURVE_COLORS[idx % CURVE_COLORS.length]}
-                    className="cursor-pointer transition-all"
+                    className="cursor-pointer transition-[r]"
                     onClick={() => onSeekToTime(p.timestamp)}
                     onMouseEnter={(e) => e.currentTarget.setAttribute('r', '6')}
                     onMouseLeave={(e) => e.currentTarget.setAttribute('r', '4')}
@@ -261,7 +261,7 @@ export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
           <button
             key={key}
             onClick={() => onToggleCurve(key)}
-            className={`px-2 py-0.5 md:py-1 text-xs rounded-full border transition-all ${
+            className={`px-2 py-0.5 md:py-1 text-xs rounded-full border transition-[background-color,border-color,opacity] ${
               visibleCurves[key] !== false
                 ? 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
                 : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 opacity-50'

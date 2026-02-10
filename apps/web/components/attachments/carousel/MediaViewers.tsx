@@ -36,7 +36,7 @@ export const ImageViewer = React.memo(function ImageViewer({
 }: ImageViewerProps) {
   return (
     <div
-      className="absolute inset-0 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 hover:scale-105 transition-all group-hover:ring-2 group-hover:ring-blue-400"
+      className="absolute inset-0 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 hover:scale-105 transition-[opacity,transform,box-shadow] group-hover:ring-2 group-hover:ring-blue-400"
       onClick={(e) => {
         e.stopPropagation();
         onOpenLightbox();
@@ -57,7 +57,7 @@ export const ImageViewer = React.memo(function ImageViewer({
       ) : isLoadingThumbnail ? (
         <div className="flex flex-col items-center gap-1">
           <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-          <div className="text-[9px] text-gray-500 dark:text-gray-400">
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">
             Aperçu...
           </div>
         </div>
@@ -77,7 +77,7 @@ export const ImageViewer = React.memo(function ImageViewer({
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
           <div className="text-center">
             <Loader2 className="w-4 h-4 text-white animate-spin mx-auto mb-1" />
-            <div className="text-white text-[8px] font-medium">
+            <div className="text-white text-[11px] font-medium">
               {Math.round(progress || 0)}%
             </div>
           </div>
@@ -136,7 +136,7 @@ export const VideoViewer = React.memo(function VideoViewer({
             e.stopPropagation();
             onOpenLightbox();
           }}
-          className="w-full py-1.5 px-3 rounded-md bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center gap-1.5 transition-all text-xs font-medium text-purple-700 dark:text-purple-300"
+          className="w-full py-1.5 px-3 rounded-md bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center gap-1.5 transition-colors text-xs font-medium text-purple-700 dark:text-purple-300"
           title="Ouvrir en plein écran"
         >
           <Maximize className="w-3.5 h-3.5" />
@@ -149,7 +149,7 @@ export const VideoViewer = React.memo(function VideoViewer({
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
           <div className="text-center">
             <Loader2 className="w-4 h-4 text-white animate-spin mx-auto mb-1" />
-            <div className="text-white text-[8px] font-medium">
+            <div className="text-white text-[11px] font-medium">
               {Math.round(progress || 0)}%
             </div>
           </div>
@@ -206,7 +206,7 @@ export const DocumentViewer = React.memo(function DocumentViewer({
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
           <div className="text-center">
             <Loader2 className="w-4 h-4 text-white animate-spin mx-auto mb-1" />
-            <div className="text-white text-[8px] font-medium">
+            <div className="text-white text-[11px] font-medium">
               {Math.round(progress || 0)}%
             </div>
           </div>

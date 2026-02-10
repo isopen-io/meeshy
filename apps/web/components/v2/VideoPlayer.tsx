@@ -192,7 +192,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                 'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
                 'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
                 'shadow-[var(--gp-shadow-lg)]',
-                'transition-all duration-300 ease-out',
+                'transition-[transform,background-color] duration-300 ease-out',
                 'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
               )}
             >
@@ -243,7 +243,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                     'w-16 h-16 rounded-full flex items-center justify-center',
                     'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
                     'shadow-[var(--gp-shadow-lg)]',
-                    'transition-all duration-300 ease-out',
+                    'transition-[transform,background-color] duration-300 ease-out',
                     'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
                   )}
                 >
@@ -270,7 +270,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               >
                 {/* Progress Fill */}
                 <div
-                  className="absolute inset-y-0 left-0 bg-[var(--gp-terracotta)] rounded-full transition-all"
+                  className="absolute inset-y-0 left-0 bg-[var(--gp-terracotta)] rounded-full transition-[width]"
                   style={{ width: `${progress}%` }}
                 />
                 {/* Progress Handle */}

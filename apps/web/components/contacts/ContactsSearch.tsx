@@ -32,7 +32,7 @@ const ContactsSearch = React.memo<ContactsSearchProps>(({
       <Button
         onClick={onInviteClick}
         variant="default"
-        className="h-12 rounded-xl px-6 font-semibold shadow-md hover:shadow-lg transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+        className="h-12 rounded-xl px-6 font-semibold shadow-md hover:shadow-lg transition-[color,box-shadow] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
       >
         <Share2 className="h-5 w-5 mr-2" />
         <span>{t('inviteContact')}</span>

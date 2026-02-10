@@ -188,7 +188,7 @@ export default function BetaPlayground({ user, onUserUpdate }: BetaPlaygroundPro
           return (
             <Card
               key={feature.id}
-              className={`transition-all ${feature.enabled ? 'border-2 border-blue-500 shadow-lg' : ''}`}
+              className={`transition-[color,box-shadow] ${feature.enabled ? 'border-2 border-blue-500 shadow-lg' : ''}`}
             >
               <CardHeader>
                 <div className="flex items-start justify-between">

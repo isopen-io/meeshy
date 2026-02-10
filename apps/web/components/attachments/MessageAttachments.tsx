@@ -198,7 +198,7 @@ export const MessageAttachments = React.memo(function MessageAttachments({
             >
               <div className="flex flex-col items-center gap-1">
                 <Grid3X3 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <span className="text-[9px] text-gray-500 dark:text-gray-400 font-medium">
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
                   +{attachmentsWithUrls.length - multiRowThreshold}
                 </span>
               </div>

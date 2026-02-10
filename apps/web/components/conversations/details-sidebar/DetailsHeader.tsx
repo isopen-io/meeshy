@@ -58,7 +58,7 @@ export function DetailsHeader({
       {canModifyImage ? (
         <div className="relative group mx-auto w-fit">
           <Avatar
-            className="h-16 w-16 ring-2 ring-primary/20 cursor-pointer group-hover:ring-primary/50 transition-all"
+            className="h-16 w-16 ring-2 ring-primary/20 cursor-pointer group-hover:ring-primary/50 transition-[box-shadow]"
             onClick={onOpenImageUpload}
           >
             <AvatarImage src={avatarUrl} />

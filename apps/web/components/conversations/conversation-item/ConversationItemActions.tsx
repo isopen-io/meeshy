@@ -60,6 +60,7 @@ export const ConversationItemActions = memo(function ConversationItemActions({
             isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}
           onClick={(e) => e.stopPropagation()}
+          aria-label="Actions de la conversation"
         >
           <MoreVertical className="h-4 w-4" />
         </Button>

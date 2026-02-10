@@ -609,7 +609,7 @@ export function ConversationSettingsModal({
             <TabsList className="w-full grid grid-cols-2 h-12 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 p-1">
               <TabsTrigger
                 value="preferences"
-                className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-200"
+                className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-colors duration-200"
               >
                 <User className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">{t('conversationDetails.myPreferences') || 'Préférences'}</span>
@@ -617,7 +617,7 @@ export function ConversationSettingsModal({
               {canAccessAdminSettings && (
                 <TabsTrigger
                   value="config"
-                  className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-all duration-200"
+                  className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-colors duration-200"
                 >
                   <Settings className="h-4 w-4 flex-shrink-0" />
                   <span className="truncate">{t('conversationDetails.configuration') || 'Configuration'}</span>
@@ -653,7 +653,7 @@ export function ConversationSettingsModal({
                       {/* Épingler */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-[color,box-shadow] duration-200 min-w-0"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
@@ -685,7 +685,7 @@ export function ConversationSettingsModal({
                       {/* Notifications */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-[color,box-shadow] duration-200 min-w-0"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
@@ -717,7 +717,7 @@ export function ConversationSettingsModal({
                       {/* Archiver */}
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-all duration-200 min-w-0"
+                        className="flex items-center justify-between gap-3 p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 shadow-sm hover:shadow-md transition-[color,box-shadow] duration-200 min-w-0"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={cn(
@@ -809,7 +809,7 @@ export function ConversationSettingsModal({
                                 type="button"
                                 onClick={() => setReaction(reaction === emoji ? '' : emoji)}
                                 className={cn(
-                                  "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 relative",
+                                  "flex items-center justify-center w-10 h-10 rounded-lg transition-[color,background-color,transform,box-shadow] duration-200 relative",
                                   "hover:scale-110 hover:bg-amber-100 dark:hover:bg-amber-900/50",
                                   reaction === emoji
                                     ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30 scale-105"
@@ -842,6 +842,7 @@ export function ConversationSettingsModal({
                                 size="icon"
                                 onClick={() => setReaction('')}
                                 className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                                aria-label="Supprimer la réaction"
                               >
                                 <X className="h-4 w-4" />
                               </Button>

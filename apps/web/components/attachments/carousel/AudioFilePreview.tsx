@@ -112,18 +112,18 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
           <div className="text-sm font-bold text-green-600 dark:text-green-400 font-mono tabular-nums">
             {formatTime(isPlayingAudio ? audioDuration - currentTime : audioDuration)}
           </div>
-          <div className="text-[9px] text-green-600 dark:text-green-400 font-medium">
+          <div className="text-[11px] text-green-600 dark:text-green-400 font-medium">
             {extension.toUpperCase()}
           </div>
         </div>
 
         {/* Barre de progression - Interactive */}
         <div
-          className="relative w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden cursor-pointer hover:h-1.5 transition-all"
+          className="relative w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden cursor-pointer hover:h-1.5 transition-[height]"
           onClick={handleProgressBarClick}
         >
           <div
-            className="absolute top-0 left-0 h-full bg-green-600 dark:bg-green-500 rounded-full transition-all duration-100 pointer-events-none"
+            className="absolute top-0 left-0 h-full bg-green-600 dark:bg-green-500 rounded-full transition-[width] duration-100 pointer-events-none"
             style={{
               width: `${audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0}%`
             }}
@@ -131,7 +131,7 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
         </div>
 
         {/* Taille et status */}
-        <div className="flex items-center justify-between text-[8px] text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
           <span>{(file.size / 1024).toFixed(0)} KB</span>
           <span>{isPlayingAudio ? 'Playing...' : 'Ready'}</span>
         </div>
@@ -155,7 +155,7 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
           <div className="text-center">
             <Loader2 className="w-4 h-4 text-white animate-spin mx-auto mb-1" />
-            <div className="text-white text-[8px] font-medium">
+            <div className="text-white text-[11px] font-medium">
               {Math.round(progress || 0)}%
             </div>
           </div>

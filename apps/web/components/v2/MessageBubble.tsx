@@ -198,7 +198,7 @@ export function MessageBubble({
             <button
               onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
               className={cn(
-                'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all duration-300',
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-opacity duration-300',
                 otherVersions.length > 0 && 'hover:opacity-80 cursor-pointer',
                 isSent
                   ? 'bg-white/20 text-white'

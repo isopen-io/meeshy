@@ -102,7 +102,7 @@ export function PasswordRequirementsChecklist({
               >
                 <div
                   className={cn(
-                    'flex items-center justify-center w-4 h-4 rounded-full transition-all duration-200 flex-shrink-0',
+                    'flex items-center justify-center w-4 h-4 rounded-full transition-colors duration-200 flex-shrink-0',
                     requirement.met
                       ? 'bg-green-500 dark:bg-green-600'
                       : 'bg-gray-200 dark:bg-gray-700'

@@ -288,7 +288,7 @@ export function ApplicationSettings() {
                 <button
                   key={color.value}
                   onClick={() => handlePreferenceChange('accentColor', color.value)}
-                  className={`relative w-12 h-12 rounded-lg ${color.color} transition-all ${
+                  className={`relative w-12 h-12 rounded-lg ${color.color} transition-transform ${
                     preferences.accentColor === color.value
                       ? 'ring-2 ring-offset-2 ring-primary scale-110'
                       : 'hover:scale-105'

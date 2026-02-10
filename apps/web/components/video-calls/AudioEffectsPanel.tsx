@@ -131,7 +131,7 @@ export function AudioEffectsPanel({
           </div>
           <div>
             <h3 className="text-white text-sm font-bold">{t('title')}</h3>
-            <p className="text-gray-400 text-[8px]">{t('subtitle')}</p>
+            <p className="text-gray-400 text-[11px]">{t('subtitle')}</p>
           </div>
         </div>
 
@@ -179,7 +179,7 @@ export function AudioEffectsPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* Voice Coder Effect */}
         <Card className={cn(
-          "bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-500/30 p-1.5 hover:border-blue-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/20",
+          "bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-500/30 p-1.5 hover:border-blue-400/50 transition-[color,box-shadow] duration-300 hover:shadow-lg hover:shadow-blue-500/20",
           "hidden md:block",
           selectedMobileEffect === 'voice-coder' && "!block"
         )}>
@@ -401,7 +401,7 @@ export function AudioEffectsPanel({
 
         {/* Background Ambiance Effect */}
         <Card className={cn(
-          "bg-gradient-to-br from-green-900/40 to-green-800/20 border-green-500/30 p-1.5 hover:border-green-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-green-500/20",
+          "bg-gradient-to-br from-green-900/40 to-green-800/20 border-green-500/30 p-1.5 hover:border-green-400/50 transition-[color,box-shadow] duration-300 hover:shadow-lg hover:shadow-green-500/20",
           "hidden md:block",
           selectedMobileEffect === 'back-sound' && "!block"
         )}>
@@ -512,7 +512,7 @@ export function AudioEffectsPanel({
 
         {/* Baby Voice Effect */}
         <Card className={cn(
-          "bg-gradient-to-br from-pink-900/40 to-pink-800/20 border-pink-500/30 p-1.5 hover:border-pink-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/20",
+          "bg-gradient-to-br from-pink-900/40 to-pink-800/20 border-pink-500/30 p-1.5 hover:border-pink-400/50 transition-[color,box-shadow] duration-300 hover:shadow-lg hover:shadow-pink-500/20",
           "hidden md:block",
           selectedMobileEffect === 'baby-voice' && "!block"
         )}>
@@ -586,7 +586,7 @@ export function AudioEffectsPanel({
 
         {/* Demon Voice Effect */}
         <Card className={cn(
-          "bg-gradient-to-br from-red-900/40 to-red-800/20 border-red-500/30 p-1.5 hover:border-red-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20",
+          "bg-gradient-to-br from-red-900/40 to-red-800/20 border-red-500/30 p-1.5 hover:border-red-400/50 transition-[color,box-shadow] duration-300 hover:shadow-lg hover:shadow-red-500/20",
           "hidden md:block",
           selectedMobileEffect === 'demon-voice' && "!block"
         )}>

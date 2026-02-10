@@ -127,7 +127,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
     <TooltipProvider>
       <div
         className={cn(
-          'flex items-center gap-1.5 px-1 py-1 transition-all duration-200',
+          'flex items-center gap-1.5 px-1 py-1 transition-opacity duration-200',
           isOwnMessage ? 'justify-end' : 'justify-start',
           'max-h-[32px]',
           'opacity-100',

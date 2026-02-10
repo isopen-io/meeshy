@@ -54,7 +54,7 @@ export function ConnectionQualityBadge({
             className={cn(
               'flex items-center gap-2 px-3 py-2 rounded-lg',
               'bg-black/60 backdrop-blur-sm',
-              'transition-all duration-300',
+              'transition-colors duration-300',
               className
             )}
           >

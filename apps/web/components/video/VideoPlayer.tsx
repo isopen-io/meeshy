@@ -56,7 +56,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hasError
           ? 'border-red-300 dark:border-red-700'
           : 'border-purple-200 dark:border-gray-700'
-      } shadow-md hover:shadow-lg transition-all duration-200 w-full sm:max-w-2xl min-w-0 overflow-hidden ${className}`}
+      } shadow-md hover:shadow-lg transition-shadow duration-200 w-full sm:max-w-2xl min-w-0 overflow-hidden ${className}`}
     >
       <div
         className="relative w-full max-w-[90vw] sm:max-w-2xl min-w-0 bg-black rounded-lg overflow-hidden"
@@ -95,7 +95,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {!isPlaying && !isLoading && !hasError && (
           <button
             onClick={togglePlay}
-            className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-all duration-200 group"
+            className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200 group"
           >
             <div className="w-16 h-16 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
               <Play className="w-8 h-8 text-white ml-1 fill-current" />

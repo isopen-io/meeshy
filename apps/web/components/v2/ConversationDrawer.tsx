@@ -129,6 +129,7 @@ export function ConversationDrawer({
           <button
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
+            aria-label="Fermer"
           >
             <svg
               className="w-5 h-5 text-[var(--gp-text-muted)]"
@@ -213,6 +214,7 @@ export function ConversationDrawer({
                     background: color,
                     ringColor: color,
                   }}
+                  aria-label={`Couleur de thème ${color}`}
                 >
                   {themeColor === color && (
                     <svg className="w-4 h-4 mx-auto text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

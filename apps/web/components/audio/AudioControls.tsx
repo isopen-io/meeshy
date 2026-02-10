@@ -108,7 +108,7 @@ export const AudioControls = memo<AudioControlsProps>(({
       {/* Timer */}
       <div className="text-[12px] font-mono tabular-nums text-gray-600 dark:text-gray-300">
         {hasError ? (
-          <span className="font-semibold text-red-600 dark:text-red-400 text-[10px]">
+          <span className="font-semibold text-red-600 dark:text-red-400 text-[11px]">
             {errorMessage}
           </span>
         ) : duration > 0 ? (
@@ -116,7 +116,7 @@ export const AudioControls = memo<AudioControlsProps>(({
             {formatTime(Math.max(0, duration - currentTime))}
           </span>
         ) : (
-          <span className="font-semibold text-gray-400 dark:text-gray-500 text-[10px]">
+          <span className="font-semibold text-gray-400 dark:text-gray-500 text-[11px]">
             Chargement...
           </span>
         )}
@@ -126,7 +126,7 @@ export const AudioControls = memo<AudioControlsProps>(({
       <DropdownMenu open={isSpeedPopoverOpen} onOpenChange={setIsSpeedPopoverOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all cursor-pointer"
+            className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
             title={`Vitesse: ${playbackRate}x`}
             aria-label={`Vitesse de lecture: ${playbackRate}x`}
           >
@@ -154,7 +154,7 @@ export const AudioControls = memo<AudioControlsProps>(({
                 aria-label="Ajuster la vitesse de lecture"
               />
             </div>
-            <div className="text-[8px] font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+            <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
               {playbackRate.toFixed(1)}x
             </div>
           </div>
@@ -166,7 +166,7 @@ export const AudioControls = memo<AudioControlsProps>(({
         <DropdownMenu open={isLanguageDropdownOpen} onOpenChange={setIsLanguageDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <button
-              className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all cursor-pointer"
+              className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
               title={`Langue: ${LANGUAGE_NAMES[selectedLanguage] || selectedLanguage}`}
               aria-label={`Sélectionner la langue audio (${LANGUAGE_NAMES[selectedLanguage] || selectedLanguage})`}
             >
@@ -320,7 +320,7 @@ export const AudioControls = memo<AudioControlsProps>(({
       ) : transcription ? (
         <button
           onClick={() => setIsTranscriptionExpanded(!isTranscriptionExpanded)}
-          className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all cursor-pointer"
+          className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
           title="Voir la transcription"
           aria-label="Afficher/masquer la transcription"
           aria-expanded={isTranscriptionExpanded}
@@ -330,7 +330,7 @@ export const AudioControls = memo<AudioControlsProps>(({
       ) : (
         <button
           onClick={requestTranscription}
-          className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all cursor-pointer"
+          className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
           title={transcriptionError || "Transcrire l'audio (texte)"}
           aria-label="Demander la transcription"
         >

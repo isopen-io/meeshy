@@ -49,7 +49,7 @@ export const StreamHeader = memo(function StreamHeader({
     <div className="row-start-1 px-4 pt-4 pb-2 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-50 to-transparent dark:from-gray-900/80 dark:to-transparent pointer-events-none hidden md:block">
       <div className="pointer-events-auto">
         {typingUsers.length > 0 && isConnected ? (
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full text-sm backdrop-blur-sm bg-blue-100/90 text-blue-800 dark:bg-blue-900/90 dark:text-blue-200 border border-blue-200/80 dark:border-blue-700/80 transition-all">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full text-sm backdrop-blur-sm bg-blue-100/90 text-blue-800 dark:bg-blue-900/90 dark:text-blue-200 border border-blue-200/80 dark:border-blue-700/80 transition-colors">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>
               {typingUsers.length === 1
@@ -61,7 +61,7 @@ export const StreamHeader = memo(function StreamHeader({
             </span>
           </div>
         ) : (
-          <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-sm backdrop-blur-sm transition-all ${
+          <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-sm backdrop-blur-sm transition-colors ${
             isConnected
               ? 'bg-green-100/80 text-green-800 dark:bg-green-900/80 dark:text-green-200 border border-green-200/60 dark:border-green-700/60'
               : 'bg-orange-100/80 text-orange-800 dark:bg-orange-900/80 dark:text-orange-200 border border-orange-200/60 dark:border-orange-700/60'
