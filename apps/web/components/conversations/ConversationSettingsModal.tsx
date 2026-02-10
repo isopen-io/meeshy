@@ -65,8 +65,11 @@ import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
-import type { Conversation, ConversationParticipant, Message } from '@meeshy/shared/types';
+import type { Conversation, ConversationParticipant, Message, ThreadMember, SocketIOUser } from '@meeshy/shared/types';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
+import { OnlineIndicator } from '@/components/ui/online-indicator';
+import { getUserStatus } from '@/lib/user-status';
+import { useUserStore } from '@/stores/user-store';
 import { AttachmentService } from '@/services/attachmentService';
 import {
   FoldableSection,
@@ -106,6 +109,7 @@ interface ConversationSettingsModalProps {
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
   currentUser?: any; // User from shared/types - optionnel pour compatibilité
+  conversationParticipants?: ThreadMember[]; // Pour accéder aux données de l'autre utilisateur
   messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
   onConversationUpdate?: (conversation: Conversation) => void;
@@ -122,6 +126,7 @@ export function ConversationSettingsModal({
   onOpenChange,
   conversation,
   currentUser,
+  conversationParticipants = [],
   messages = [],
   currentUserRole = 'MEMBER',
   onConversationUpdate,
@@ -131,6 +136,7 @@ export function ConversationSettingsModal({
   const router = useRouter();
   const searchParams = useSearchParams();
   const preferencesStore = useConversationPreferencesStore();
+  const userStore = useUserStore();
 
   // Utilisateur factice si currentUser n'est pas fourni (pour compatibilité avec anciens appels)
   const safeCurrentUser = currentUser || {
@@ -140,6 +146,49 @@ export function ConversationSettingsModal({
     role: 'MEMBER' as any,
     systemLanguage: 'en'
   };
+
+  // Extraire l'autre utilisateur pour les conversations directes
+  const isDirect = conversation.type === 'direct';
+  const otherUser = useMemo(() => {
+    if (!isDirect || !safeCurrentUser.id) return null;
+
+    // Chercher dans conversationParticipants d'abord
+    const otherParticipant = conversationParticipants.find(p => p.userId !== safeCurrentUser.id);
+    if (otherParticipant?.user) return otherParticipant.user;
+
+    // Fallback sur conversation.participants
+    const convParticipants = (conversation as any).participants;
+    if (Array.isArray(convParticipants)) {
+      const other = convParticipants.find((p: any) => p.userId !== safeCurrentUser.id);
+      if (other?.user) return other.user;
+    }
+
+    // Fallback sur conversation.members
+    const members = (conversation as any).members;
+    if (Array.isArray(members)) {
+      const other = members.find((m: any) => m.userId !== safeCurrentUser.id);
+      if (other?.user) return other.user;
+    }
+
+    return null;
+  }, [isDirect, safeCurrentUser.id, conversationParticipants, conversation]);
+
+  // Nom de l'autre utilisateur (direct) ou titre de la conversation
+  const displayTitle = useMemo(() => {
+    if (isDirect && otherUser) {
+      return otherUser.displayName || otherUser.username ||
+        [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || 'Utilisateur';
+    }
+    return conversation.title || 'Conversation';
+  }, [isDirect, otherUser, conversation.title]);
+
+  // Statut en temps réel de l'autre utilisateur
+  const otherUserStatus = useMemo(() => {
+    if (!isDirect || !otherUser) return 'offline';
+    const freshUser = userStore.getUserById(otherUser.id);
+    if (freshUser) return getUserStatus(freshUser);
+    return getUserStatus(otherUser);
+  }, [isDirect, otherUser, userStore, userStore._lastStatusUpdate]);
 
   // Hooks pour les stats et la gestion des participants
   const { isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
@@ -420,29 +469,106 @@ export function ConversationSettingsModal({
         className="w-[400px] sm:w-[500px] p-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 border-r border-white/20 dark:border-gray-700/30 flex flex-col h-full overflow-hidden"
         style={{ maxWidth: '100vw' }}
       >
-        {/* Header avec effet glassmorphism */}
-        <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3"
-          >
-            <Avatar className="h-12 w-12 border-2 border-white dark:border-gray-800 shadow-lg">
-              <AvatarImage src={conversation.image || conversation.avatar} />
-              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg">
-                {(conversation.title || 'C')[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <SheetTitle className="truncate text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-                {t('conversationDetails.title') || 'Paramètres'}
-              </SheetTitle>
-              <SheetDescription className="truncate text-sm">
-                {conversation.title || t('conversationDetails.conversation') || 'Conversation'}
-              </SheetDescription>
-            </div>
-          </motion.div>
-        </SheetHeader>
+        {/* Header - Profil utilisateur pour DM, glassmorphism pour groupes */}
+        {isDirect && otherUser ? (
+          <SheetHeader className="p-0 border-b border-white/20 dark:border-gray-700/30">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              {/* Bannière */}
+              <div className="relative h-28 sm:h-32 overflow-hidden">
+                {otherUser.banner ? (
+                  <img
+                    src={otherUser.banner}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500" />
+                )}
+                {/* Overlay dégradé bas pour lisibilité */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
+              </div>
+
+              {/* Avatar + Infos superposés sur la bannière */}
+              <div className="relative px-5 pb-4 -mt-10">
+                <div className="flex items-end gap-3">
+                  {/* Avatar avec indicateur de statut */}
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="h-20 w-20 border-[3px] border-white dark:border-gray-900 shadow-xl">
+                      <AvatarImage src={otherUser.avatar || undefined} alt={displayTitle} className="object-cover" />
+                      <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white font-bold text-2xl">
+                        {displayTitle.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <OnlineIndicator
+                      isOnline={otherUserStatus === 'online'}
+                      status={otherUserStatus as any}
+                      size="md"
+                      className="absolute -bottom-0.5 -right-0.5 ring-[3px] ring-white dark:ring-gray-900"
+                    />
+                  </div>
+
+                  {/* Nom + bio - wrap sur plusieurs lignes */}
+                  <div className="flex-1 min-w-0 pb-1">
+                    <SheetTitle
+                      className={cn(
+                        "font-bold leading-tight break-words text-gray-900 dark:text-gray-50",
+                        displayTitle.length > 30 ? "text-sm" : displayTitle.length > 20 ? "text-base" : "text-lg"
+                      )}
+                      style={{ wordBreak: 'break-word' }}
+                    >
+                      {displayTitle}
+                    </SheetTitle>
+                    {otherUser.username && (
+                      <SheetDescription className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        @{otherUser.username}
+                      </SheetDescription>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bio si disponible */}
+                {otherUser.bio && (
+                  <p className="mt-2.5 text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3 break-words">
+                    {otherUser.bio}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </SheetHeader>
+        ) : (
+          <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3"
+            >
+              <Avatar className="h-12 w-12 border-2 border-white dark:border-gray-800 shadow-lg">
+                <AvatarImage src={conversation.image || conversation.avatar} />
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg">
+                  {(conversation.title || 'C')[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent leading-tight break-words" style={{ wordBreak: 'break-word' }}>
+                  {t('conversationDetails.title') || 'Paramètres'}
+                </SheetTitle>
+                <SheetDescription
+                  className={cn(
+                    "mt-0.5 leading-tight break-words",
+                    (conversation.title || '').length > 40 ? "text-xs" : "text-sm"
+                  )}
+                  style={{ wordBreak: 'break-word' }}
+                >
+                  {conversation.title || t('conversationDetails.conversation') || 'Conversation'}
+                </SheetDescription>
+              </div>
+            </motion.div>
+          </SheetHeader>
+        )}
 
         <Tabs
           value={activeTab}

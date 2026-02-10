@@ -189,6 +189,8 @@ export function ConversationHeader({
             open={isSettingsModalOpen}
             onOpenChange={setIsSettingsModalOpen}
             conversation={conversation}
+            currentUser={currentUser}
+            conversationParticipants={conversationParticipants}
             currentUserRole={getCurrentUserRole()}
             onConversationUpdate={() => {
               window.location.reload();

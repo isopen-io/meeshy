@@ -338,7 +338,7 @@ sequenceDiagram
     participant Cache as Redis
 
     User->>FE: Saisit username/password
-    FE->>GW: POST /login<br/>{username, password}
+    FE->>GW: POST /login<br/>#123;username, password#125;
 
     GW->>DB: Recherche utilisateur<br/>par username
     DB-->>GW: Retourne User
@@ -355,9 +355,9 @@ sequenceDiagram
 
     GW->>DB: Met à jour<br/>lastActiveAt, isOnline
 
-    GW->>Cache: Stocke session<br/>Key: session:{userId}
+    GW->>Cache: Stocke session<br/>Key: session:#123;userId#125;
 
-    GW-->>FE: 200 OK<br/>{user, token, expiresIn}
+    GW-->>FE: 200 OK<br/>#123;user, token, expiresIn#125;
 
     FE->>FE: Stocke token<br/>localStorage
 
@@ -365,11 +365,11 @@ sequenceDiagram
 
     FE-->>User: ✅ Connexion réussie
 
-    FE->>GW: Socket.IO Connect<br/>auth: {token}
+    FE->>GW: Socket.IO Connect<br/>auth: #123;token#125;
     GW->>GW: Valide JWT token
     GW-->>FE: Socket authenticated
 
-    Note over FE,GW: Toutes les requêtes suivantes<br/>incluent: Authorization: Bearer {token}
+    Note over FE,GW: Toutes les requêtes suivantes<br/>incluent: Authorization: Bearer #123;token#125;
 ```
 
 ---
@@ -393,7 +393,7 @@ sequenceDiagram
     User->>FE: Tape message + Envoie
     FE->>FE: Optimistic UI Update
 
-    FE->>Socket: emit('message:send')<br/>{conversationId, content}
+    FE->>Socket: emit('message:send')<br/>#123;conversationId, content#125;
 
     Socket->>GW: Reçoit événement
     GW->>MS: handleMessage()
@@ -406,7 +406,7 @@ sequenceDiagram
     MS->>DB: Sauvegarde message<br/>CREATE Message
     DB-->>MS: message.id
 
-    MS-->>Socket: Callback<br/>{success, messageId}
+    MS-->>Socket: Callback<br/>#123;success, messageId#125;
     Socket-->>FE: Confirmation immédiate
     FE->>FE: Met à jour messageId local
 
@@ -420,15 +420,15 @@ sequenceDiagram
         DB-->>TS: ['en', 'es', 'ar']
 
         loop Pour chaque langue cible
-            TS->>ZMQ: PUSH translation request<br/>{messageId, source, target, content}
+            TS->>ZMQ: PUSH translation request<br/>#123;messageId, source, target, content#125;
             ZMQ->>Trans: ZMQ REQ/REP
             Trans->>Trans: ML Translation<br/>(NLLB-200 model)
             Trans-->>ZMQ: Translated content
             ZMQ-->>TS: Translation result
 
-            TS->>DB: CREATE MessageTranslation<br/>{messageId, targetLanguage}
+            TS->>DB: CREATE MessageTranslation<br/>#123;messageId, targetLanguage#125;
 
-            TS->>Socket: emit('translation:received')<br/>{messageId, translations}
+            TS->>Socket: emit('translation:received')<br/>#123;messageId, translations#125;
             Socket-->>FE: Translation reçue
             FE-->>User: 🌍 Traduction affichée
         end
@@ -454,12 +454,12 @@ sequenceDiagram
     participant SUB as ZMQ SUB<br/>Port 5558
     participant PUB as ZMQ PUB<br/>Translator
 
-    GW->>GW: requestTranslation()<br/>{messageId, source, target, text}
+    GW->>GW: requestTranslation()<br/>#123;messageId, source, target, text#125;
 
     GW->>PUSH: PUSH message<br/>JSON payload
     PUSH->>Trans: Reçoit sur PULL socket
 
-    Trans->>Cache: Vérifie cache<br/>Key: translation:{hash}
+    Trans->>Cache: Vérifie cache<br/>Key: translation:#123;hash#125;
 
     alt Cache HIT
         Cache-->>Trans: Traduction en cache
@@ -474,7 +474,7 @@ sequenceDiagram
         Trans->>Cache: Store in cache<br/>TTL: 7 days
     end
 
-    Trans->>PUB: PUBLISH result<br/>{messageId, translation}
+    Trans->>PUB: PUBLISH result<br/>#123;messageId, translation#125;
     PUB->>SUB: Broadcast via ZMQ PUB/SUB
     SUB->>GW: Reçoit translation
 
@@ -544,24 +544,24 @@ sequenceDiagram
             AS->>FS: Save file directly
         end
 
-        AS->>DB: CREATE MessageAttachment<br/>{fileName, mimeType, size, ...}
+        AS->>DB: CREATE MessageAttachment<br/>#123;fileName, mimeType, size, ...#125;
         DB-->>AS: attachment.id
 
-        AS->>AS: Generate public URL<br/>/attachments/{id}
+        AS->>AS: Generate public URL<br/>/attachments/#123;id#125;
     end
 
     AS-->>GW: Array<ProcessedAttachment>
-    GW-->>FE: 200 OK<br/>[{id, url, metadata}]
+    GW-->>FE: 200 OK<br/>[#123;id, url, metadata#125;]
 
     FE->>FE: Update message UI<br/>with attachments + inline viewers
     FE-->>User: ✅ Fichiers uploadés
 
     opt Message envoyé avec attachments
-        FE->>GW: POST /messages<br/>{content, attachmentIds[]}
+        FE->>GW: POST /messages<br/>#123;content, attachmentIds[]#125;
         GW->>DB: Link attachments<br/>to message
     end
 
-    Note over FS: Structure:<br/>uploads/attachments/2025/01/{userId}/<br/>  ├─ file.jpg<br/>  └─ thumbnails/file_thumb.jpg
+    Note over FS: Structure:<br/>uploads/attachments/2025/01/#123;userId#125;/<br/>  ├─ file.jpg<br/>  └─ thumbnails/file_thumb.jpg
 ```
 
 ---
@@ -604,9 +604,9 @@ graph TB
         CallCleanupService[🧹 Call Cleanup Service]
     end
 
-    User1 -->|Socket.IO Connect<br/>auth: {token}| SocketManager
-    User2 -->|Socket.IO Connect<br/>auth: {token}| SocketManager
-    User3 -->|Socket.IO Connect<br/>auth: {sessionToken}| SocketManager
+    User1 -->|Socket.IO Connect<br/>auth: #123;token#125;| SocketManager
+    User2 -->|Socket.IO Connect<br/>auth: #123;token#125;| SocketManager
+    User3 -->|Socket.IO Connect<br/>auth: #123;sessionToken#125;| SocketManager
 
     SocketManager -->|join rooms| ConvRoom1
     SocketManager -->|join rooms| ConvRoom2
@@ -629,7 +629,7 @@ graph TB
     CallService -.->|emit('call:initiated')| UserRoom2
     CallService -.->|emit('call:participant-joined')| CallRoom1
 
-    User1 -.->|emit('call:signal')<br/>{offer/answer/ice}| CallHandler
+    User1 -.->|emit('call:signal')<br/>#123;offer/answer/ice#125;| CallHandler
     CallHandler -.->|forward signal| User2
 
     CallService --> CallCleanupService
@@ -1051,9 +1051,9 @@ sequenceDiagram
     FE_A->>FE_A: getUserMedia()<br/>request camera/mic
     FE_A->>Store_A: Set localStream
 
-    FE_A->>Socket_A: emit('call:initiate')<br/>{conversationId}
+    FE_A->>Socket_A: emit('call:initiate')<br/>#123;conversationId#125;
     Socket_A->>GW: Rate limit check (5/min)
-    GW->>GW: CREATE CallSession<br/>{mode: 'p2p', status: 'initiated'}
+    GW->>GW: CREATE CallSession<br/>#123;mode: 'p2p', status: 'initiated'#125;
 
     GW->>Socket_B: emit('call:initiated')<br/>to user:Bob
     Socket_B->>FE_B: Call notification + ringtone
@@ -1063,12 +1063,12 @@ sequenceDiagram
     FE_B->>FE_B: getUserMedia()<br/>request camera/mic
     FE_B->>Store_B: Set localStream
 
-    FE_B->>Socket_B: emit('call:join')<br/>{callId}
+    FE_B->>Socket_B: emit('call:join')<br/>#123;callId#125;
     Socket_B->>GW: Join call
-    GW->>GW: UPDATE CallSession<br/>{status: 'ringing'}
+    GW->>GW: UPDATE CallSession<br/>#123;status: 'ringing'#125;
     GW->>GW: CREATE CallParticipant<br/>(Bob)
 
-    GW->>Socket_A: emit('call:participant-joined')<br/>{participantId: Bob}
+    GW->>Socket_A: emit('call:participant-joined')<br/>#123;participantId: Bob#125;
     Socket_A->>FE_A: Participant joined
 
     Note over FE_A,FE_B: WebRTC P2P Setup
@@ -1083,7 +1083,7 @@ sequenceDiagram
     WS_A->>WS_A: createOffer()
     WS_A->>WS_A: setLocalDescription(offer)
 
-    FE_A->>Socket_A: emit('call:signal')<br/>{to: Bob, signal: {type: 'offer', sdp}}
+    FE_A->>Socket_A: emit('call:signal')<br/>#123;to: Bob, signal: #123;type: 'offer', sdp#125;#125;
     Socket_A->>GW: Forward signal
     GW->>Socket_B: emit('call:signal')
     Socket_B->>FE_B: Receive offer
@@ -1096,7 +1096,7 @@ sequenceDiagram
     WS_B->>WS_B: createAnswer()
     WS_B->>WS_B: setLocalDescription(answer)
 
-    FE_B->>Socket_B: emit('call:signal')<br/>{to: Alice, signal: {type: 'answer', sdp}}
+    FE_B->>Socket_B: emit('call:signal')<br/>#123;to: Alice, signal: #123;type: 'answer', sdp#125;#125;
     Socket_B->>GW: Forward signal
     GW->>Socket_A: emit('call:signal')
     Socket_A->>FE_A: Receive answer
@@ -1105,14 +1105,14 @@ sequenceDiagram
 
     loop ICE Candidate Exchange
         WS_A->>WS_A: onicecandidate event
-        FE_A->>Socket_A: emit('call:signal')<br/>{type: 'ice-candidate'}
+        FE_A->>Socket_A: emit('call:signal')<br/>#123;type: 'ice-candidate'#125;
         Socket_A->>GW: Forward
         GW->>Socket_B: Forward to Bob
         Socket_B->>FE_B: Receive ICE
         FE_B->>WS_B: addIceCandidate()
 
         WS_B->>WS_B: onicecandidate event
-        FE_B->>Socket_B: emit('call:signal')<br/>{type: 'ice-candidate'}
+        FE_B->>Socket_B: emit('call:signal')<br/>#123;type: 'ice-candidate'#125;
         Socket_B->>GW: Forward
         GW->>Socket_A: Forward to Alice
         Socket_A->>FE_A: Receive ICE
@@ -1127,7 +1127,7 @@ sequenceDiagram
     WS_B->>Store_B: Set remoteStreams[Alice]
     FE_B-->>Bob: 📹 Alice visible
 
-    GW->>GW: UPDATE CallSession<br/>{status: 'active', answeredAt}
+    GW->>GW: UPDATE CallSession<br/>#123;status: 'active', answeredAt#125;
 
     Note over FE_A,FE_B: ✅ P2P Connection établie<br/>Direct audio/video streaming
 
@@ -1136,7 +1136,7 @@ sequenceDiagram
         FE_A->>Store_A: Set isAudioEnabled = false
         FE_A->>WS_A: toggleAudio()
         WS_A->>WS_A: localStream.getAudioTracks()[0]<br/>.enabled = false
-        FE_A->>Socket_A: emit('call:media-toggle')<br/>{audio: false}
+        FE_A->>Socket_A: emit('call:media-toggle')<br/>#123;audio: false#125;
         Socket_A->>GW: Update participant state
         GW->>Socket_B: Broadcast media state
         Socket_B->>FE_B: Update UI (muted icon)
@@ -1154,12 +1154,12 @@ sequenceDiagram
     WS_A->>WS_A: peerConnection.close()
     WS_A->>WS_A: Stop tracks
 
-    FE_A->>Socket_A: emit('call:leave')<br/>{callId}
+    FE_A->>Socket_A: emit('call:leave')<br/>#123;callId#125;
     Socket_A->>GW: Leave call
-    GW->>GW: UPDATE CallParticipant<br/>{leftAt}
-    GW->>GW: UPDATE CallSession<br/>{status: 'ended', endedAt, duration}
+    GW->>GW: UPDATE CallParticipant<br/>#123;leftAt#125;
+    GW->>GW: UPDATE CallSession<br/>#123;status: 'ended', endedAt, duration#125;
 
-    GW->>Socket_B: emit('call:participant-left')<br/>{participantId: Alice}
+    GW->>Socket_B: emit('call:participant-left')<br/>#123;participantId: Alice#125;
     Socket_B->>FE_B: Participant left
     FE_B->>WS_B: close()
 
@@ -1390,7 +1390,7 @@ Architecture des viewers pour documents avec lightbox et inline display.
 ```mermaid
 graph TB
     subgraph "Message Attachments"
-        Attachment[MessageAttachment<br/>{mimeType, fileUrl, fileName}]
+        Attachment[MessageAttachment<br/>#123;mimeType, fileUrl, fileName#125;]
     end
 
     subgraph "Viewer Selection Logic"
@@ -1480,24 +1480,24 @@ sequenceDiagram
     User->>UI: Clique "Pin conversation"
     UI->>Service: togglePin(conversationId)
 
-    Service->>Service: Check cache<br/>Key: prefs:{userId}:{conversationId}
+    Service->>Service: Check cache<br/>Key: prefs:#123;userId#125;:#123;conversationId#125;
 
     alt Cache HIT
         Service->>Service: Update local cache<br/>isPinned = true
-        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>{isPinned: true}
+        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>#123;isPinned: true#125;
     else Cache MISS
         Service->>GW: GET /api/user-preferences/<br/>conversations/:id
-        GW->>DB: FIND UserConversationPreferences<br/>{userId, conversationId}
+        GW->>DB: FIND UserConversationPreferences<br/>#123;userId, conversationId#125;
         DB-->>GW: Current preferences or null
         GW-->>Service: Preferences
         Service->>Service: Store in cache
-        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>{isPinned: true}
+        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>#123;isPinned: true#125;
     end
 
-    GW->>DB: UPSERT UserConversationPreferences<br/>{userId, conversationId, isPinned: true}
+    GW->>DB: UPSERT UserConversationPreferences<br/>#123;userId, conversationId, isPinned: true#125;
     DB-->>GW: Updated preferences
 
-    GW-->>Service: 200 OK<br/>{preferences}
+    GW-->>Service: 200 OK<br/>#123;preferences#125;
     Service->>Service: Invalidate cache
     Service-->>UI: Success
 
@@ -1505,7 +1505,7 @@ sequenceDiagram
     UI->>List: Refresh conversation list
     List->>Service: getAllPreferences()
     Service->>GW: GET /api/user-preferences/conversations
-    GW->>DB: FIND all UserConversationPreferences<br/>{userId}
+    GW->>DB: FIND all UserConversationPreferences<br/>#123;userId#125;
     DB-->>GW: Array of preferences
     GW-->>Service: All preferences
     Service-->>List: Preferences map
@@ -1519,7 +1519,7 @@ sequenceDiagram
         UI->>UI: Show category selector
         User->>UI: Select "Work"
         UI->>Service: updateCategory(conversationId, categoryId)
-        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>{categoryId, orderInCategory}
+        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>#123;categoryId, orderInCategory#125;
         GW->>DB: UPDATE UserConversationPreferences
         GW-->>Service: Success
         Service->>Service: Invalidate cache
@@ -1531,7 +1531,7 @@ sequenceDiagram
         UI->>UI: Show tag input
         User->>UI: Enter "urgent, client"
         UI->>Service: updateTags(conversationId, ['urgent', 'client'])
-        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>{tags: ['urgent', 'client']}
+        Service->>GW: PUT /api/user-preferences/<br/>conversations/:id<br/>#123;tags: ['urgent', 'client']#125;
         GW->>DB: UPDATE UserConversationPreferences
         Service->>Service: Invalidate cache
         List->>List: Show colored tag badges<br/>(hash-based colors)
