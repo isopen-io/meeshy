@@ -10,6 +10,7 @@ export interface AttachmentsByType {
   audios: Attachment[];
   pdfs: Attachment[];
   pptxs: Attachment[];
+  /** @deprecated Markdown files are now treated as text files */
   markdowns: Attachment[];
   texts: Attachment[];
   others: Attachment[];
@@ -44,16 +45,10 @@ export function separateAttachmentsByType(attachments: Attachment[]): Attachment
     ) {
       pptxs.push(att);
     } else if (
+      (type === 'text' || type === 'code') ||
       att.mimeType === 'text/markdown' ||
       att.mimeType === 'text/x-markdown' ||
       att.originalName.toLowerCase().endsWith('.md')
-    ) {
-      markdowns.push(att);
-    } else if (
-      (type === 'text' || type === 'code') &&
-      att.mimeType !== 'text/markdown' &&
-      att.mimeType !== 'text/x-markdown' &&
-      !att.originalName.toLowerCase().endsWith('.md')
     ) {
       texts.push(att);
     } else {

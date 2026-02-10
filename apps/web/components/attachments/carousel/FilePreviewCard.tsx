@@ -65,13 +65,13 @@ export const FilePreviewCard = React.memo(function FilePreviewCard({
 
   const handleOpenLightbox = () => {
     const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    const isMarkdown = file.name.toLowerCase().endsWith('.md');
     const isPPTX = file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
                   file.type === 'application/vnd.ms-powerpoint' ||
                   file.name.toLowerCase().endsWith('.pptx') ||
                   file.name.toLowerCase().endsWith('.ppt');
     const isText = file.type.startsWith('text/') ||
                   file.name.toLowerCase().endsWith('.txt') ||
+                  file.name.toLowerCase().endsWith('.md') ||
                   file.name.toLowerCase().endsWith('.sh') ||
                   file.name.toLowerCase().endsWith('.js') ||
                   file.name.toLowerCase().endsWith('.ts') ||
@@ -85,8 +85,6 @@ export const FilePreviewCard = React.memo(function FilePreviewCard({
       onOpenLightbox(file, 'pdf');
     } else if (isPPTX) {
       onOpenLightbox(file, 'pptx');
-    } else if (isMarkdown) {
-      onOpenLightbox(file, 'markdown');
     } else if (isText) {
       onOpenLightbox(file, 'text');
     }

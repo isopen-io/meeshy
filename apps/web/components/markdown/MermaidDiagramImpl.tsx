@@ -84,16 +84,32 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
       try {
         initializeMermaid();
 
+        // Valider le chart avant de tenter le rendu
+        if (!chart.trim()) {
+          setError('Le contenu du diagramme est vide');
+          setSvg('');
+          return;
+        }
+
+        // Valider la syntaxe avec mermaid.parse() avant le rendu
+        // Cela capture les erreurs sans que mermaid ne les log dans la console
+        try {
+          await mermaid.parse(chart);
+        } catch (parseErr: any) {
+          const msg = parseErr?.message || parseErr?.str || '';
+          const cleanMsg = msg
+            .replace(/mermaid version [\d.]+/g, '')
+            .replace(/Syntax error in text/gi, '')
+            .trim();
+          setError(cleanMsg || 'Syntaxe Mermaid invalide');
+          setSvg('');
+          return;
+        }
+
         // Générer un ID unique pour ce diagramme
         const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
 
-        // Valider le chart avant de tenter le rendu
-        if (!chart.trim()) {
-          throw new Error('Le contenu du diagramme est vide');
-        }
-
-        // Rendre le diagramme avec une gestion d'erreur renforcée
-        // mermaid.render génère du SVG sécurisé (securityLevel: strict)
+        // Rendre le diagramme — mermaid.render génère du SVG sécurisé (securityLevel: strict)
         const { svg: renderedSvg } = await mermaid.render(id, chart);
         setSvg(renderedSvg);
         setError(null);
@@ -104,30 +120,17 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
           errorElement.remove();
         }
 
-        // Extraire un message d'erreur plus clair
-        let errorMessage = 'Erreur de syntaxe dans le diagramme Mermaid';
-
-        if (err?.message) {
-          // Nettoyer le message d'erreur de Mermaid
-          const cleanMessage = err.message
-            .replace(/mermaid version [\d.]+/g, '')
-            .replace(/Syntax error in text/g, '')
-            .trim();
-
-          if (cleanMessage) {
-            errorMessage = cleanMessage;
-          }
-        }
-
-        console.error('Erreur Mermaid (arrêtée):', errorMessage, err);
-        setError(errorMessage);
-        setSvg(''); // S'assurer qu'aucun SVG partiel n'est affiché
+        const msg = err?.message || '';
+        const cleanMsg = msg
+          .replace(/mermaid version [\d.]+/g, '')
+          .replace(/Syntax error in text/gi, '')
+          .trim();
+        setError(cleanMsg || 'Erreur de syntaxe dans le diagramme Mermaid');
+        setSvg('');
       }
     };
 
-    // Encapsuler dans un try-catch supplémentaire pour vraiment tout capter
-    renderDiagram().catch((err) => {
-      console.error('Erreur critique Mermaid (capturée):', err);
+    renderDiagram().catch(() => {
       setError('Impossible de rendre le diagramme');
       setSvg('');
     });
