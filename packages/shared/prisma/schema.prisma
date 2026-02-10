@@ -222,6 +222,12 @@ model User {
 
   // Conversation sharing
   sharedConversations ConversationShare[] @relation("ConversationSharer")
+
+  // Social (Posts, Stories, Status/Moods)
+  posts             Post[]           @relation("UserPosts")
+  postComments      PostComment[]    @relation("UserPostComments")
+  postViews         PostView[]       @relation("UserPostViews")
+  postBookmarks     PostBookmark[]   @relation("UserPostBookmarks")
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -1143,6 +1149,7 @@ model Community {
   sharedConversations ConversationShare[]        @relation("CommunityShares")
   Conversation        Conversation[]
   userPreferences     UserCommunityPreferences[]
+  posts               Post[]                     @relation("CommunityPosts")
 }
 
 /// Appartenance aux communautés
@@ -2432,4 +2439,267 @@ model PushToken {
   @@index([isActive, failedAttempts])
   /// Index for platform-specific queries
   @@index([platform, type])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SOCIAL: POSTS, STORIES, STATUS/MOODS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Type de contenu social
+enum PostType {
+  POST   // Permanent — feed classique (texte, media, reposts, commentaires)
+  STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
+  STATUS // Éphémère 1h  — mood textuel avec audio optionnel
+}
+
+/// Visibilité d'un post
+enum PostVisibility {
+  PUBLIC    // Visible par tous
+  FRIENDS   // Amis uniquement
+  COMMUNITY // Membres de la communauté uniquement
+  PRIVATE   // Brouillon / seulement l'auteur
+}
+
+/// Contenu social unifié (posts permanents, stories éphémères, status/moods)
+model Post {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  authorId       String         @db.ObjectId
+  type           PostType
+  visibility     PostVisibility @default(PUBLIC)
+
+  // ============================================
+  // CONTENU
+  // ============================================
+  /// Texte du post (optionnel pour stories image-only)
+  content          String?
+  /// Langue originale du contenu (ISO 639-1, détectée automatiquement à la création)
+  originalLanguage String?
+  /// Traductions auto-générées à la demande selon la langue du viewer
+  /// Quand un utilisateur consulte un post dans une langue différente de originalLanguage,
+  /// le backend traduit et cache le résultat ici (même pipeline que Message).
+  /// Structure: {
+  ///   "en": {
+  ///     text: string,
+  ///     translationModel: "basic" | "medium" | "premium",
+  ///     confidenceScore?: number,
+  ///     createdAt: Date,
+  ///     updatedAt?: Date
+  ///   },
+  ///   "es": { ... },
+  ///   "fr": { ... }
+  /// }
+  /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
+  translations     Json?
+
+  // ============================================
+  // CONTEXTE
+  // ============================================
+  /// Communauté cible (null = feed personnel)
+  communityId String? @db.ObjectId
+
+  // ============================================
+  // REPOST / QUOTE
+  // ============================================
+  /// Post original si repost/quote
+  repostOfId String?  @db.ObjectId
+  /// true = quote (avec contenu ajouté), false = repost simple
+  isQuote    Boolean  @default(false)
+
+  // ============================================
+  // STORY-SPECIFIC
+  // ============================================
+  /// Effets visuels/audio pour stories (Json flexible)
+  /// {
+  ///   background: "#hex" | "gradient:from,to" | "image_url",
+  ///   textStyle: "bold" | "neon" | "typewriter" | "handwriting",
+  ///   textColor: "#hex",
+  ///   textPosition: { x: 0-1, y: 0-1 },
+  ///   audioUrl: "url",
+  ///   audioDuration: ms,
+  ///   linkUrl: "url",
+  ///   linkPreview: { title, description, image, domain },
+  ///   filter: "vintage" | "bw" | "warm" | "cool" | "dramatic" | null,
+  ///   stickers: [{ emoji, x, y, scale, rotation }]
+  /// }
+  storyEffects Json?
+
+  // ============================================
+  // STATUS/MOOD-SPECIFIC
+  // ============================================
+  /// Emoji mood (ex: "😴", "🎉", "💪", "☕")
+  moodEmoji     String?
+  /// Audio court optionnel (voix/musique)
+  audioUrl      String?
+  /// Durée audio en millisecondes
+  audioDuration Int?
+
+  // ============================================
+  // EXPIRATION
+  // ============================================
+  /// null = permanent (POST), auto-set: STORY = now+21h, STATUS = now+1h
+  expiresAt DateTime?
+
+  // ============================================
+  // RÉACTIONS (embedded — approche hybride)
+  // ============================================
+  /// Compteurs agrégés par emoji: { "❤️": 12, "🔥": 5, "😂": 3 }
+  reactionSummary Json?
+  /// Total réactions (dénormalisé)
+  reactionCount   Int  @default(0)
+  /// Détail des réactions: [{ userId, emoji, createdAt }]
+  reactions       Json? @default("[]")
+
+  // ============================================
+  // VUES (embedded pour stories/status)
+  // ============================================
+  /// Vues stories/status: [{ userId, viewedAt, duration? }]
+  storyViews Json? @default("[]")
+
+  // ============================================
+  // COMPTEURS DÉNORMALISÉS
+  // ============================================
+  likeCount     Int @default(0)
+  commentCount  Int @default(0)
+  repostCount   Int @default(0)
+  viewCount     Int @default(0)
+  bookmarkCount Int @default(0)
+  shareCount    Int @default(0)
+
+  // ============================================
+  // FLAGS
+  // ============================================
+  isPinned  Boolean   @default(false)
+  isEdited  Boolean   @default(false)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ============================================
+  // RELATIONS
+  // ============================================
+  author    User       @relation("UserPosts", fields: [authorId], references: [id])
+  community Community? @relation("CommunityPosts", fields: [communityId], references: [id])
+  repostOf  Post?      @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reposts   Post[]     @relation("PostReposts")
+  media     PostMedia[]
+  comments  PostComment[]
+  views     PostView[]
+  bookmarks PostBookmark[]
+
+  @@index([authorId, type, createdAt])
+  @@index([communityId, type, createdAt])
+  @@index([type, visibility, createdAt])
+  @@index([expiresAt])
+  @@index([type, createdAt])
+}
+
+/// Media attaché à un post (images, vidéos, audio, documents)
+model PostMedia {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  postId       String @db.ObjectId
+
+  // Fichier
+  fileName     String
+  originalName String
+  mimeType     String
+  fileSize     Int      // bytes
+  filePath     String
+  fileUrl      String
+
+  // Metadata visuelle (images/vidéos)
+  width        Int?
+  height       Int?
+  thumbnailPath String?
+  thumbnailUrl  String?
+
+  // Metadata audio/vidéo
+  duration     Int?     // ms
+  codec        String?
+
+  // Ordering dans le carousel
+  order        Int      @default(0)
+
+  // Description
+  caption      String?
+  alt          String?  // Accessibilité
+
+  createdAt    DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, order])
+}
+
+/// Commentaire sur un post (hiérarchique — réponses imbriquées)
+model PostComment {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId           String   @db.ObjectId
+  authorId         String   @db.ObjectId
+  /// null = top-level, sinon réponse à un autre commentaire
+  parentId         String?  @db.ObjectId
+
+  content          String
+  /// Langue originale du commentaire (ISO 639-1, détectée automatiquement)
+  originalLanguage String?
+  /// Traductions auto-générées à la demande selon la langue du viewer
+  /// Même format et pipeline que Post.translations et Message.translations.
+  /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
+  /// { "en": { text, translationModel, confidenceScore, createdAt }, ... }
+  translations     Json?
+
+  /// Compteurs dénormalisés
+  likeCount  Int @default(0)
+  replyCount Int @default(0)
+
+  /// Réactions embedded: { "❤️": 3, "😂": 1 }
+  reactionSummary Json?
+
+  isEdited  Boolean   @default(false)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User         @relation("UserPostComments", fields: [authorId], references: [id])
+  parent  PostComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies PostComment[] @relation("CommentReplies")
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+  @@index([authorId])
+}
+
+/// Vue d'un post (collection séparée pour les posts permanents — analytics, pagination)
+model PostView {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId   String   @db.ObjectId
+  userId   String   @db.ObjectId
+  viewedAt DateTime @default(now())
+  /// Durée de vue en ms (temps passé sur le post)
+  duration Int?
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostViews", fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+/// Bookmark/sauvegarde d'un post
+model PostBookmark {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  userId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostBookmarks", fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@index([userId, createdAt])
 }
