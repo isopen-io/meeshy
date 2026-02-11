@@ -10,45 +10,26 @@ import {
   ConversationItem,
   CategoryHeader,
   CategoryIcons,
-  CommunityCarousel,
   ThemeToggle,
 } from '@/components/v2';
-import type { CommunityItem, TagItem, ConversationItemData } from '@/components/v2';
+import type { TagItem, ConversationItemData } from '@/components/v2';
 import { useConversationsV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useSplitView } from './SplitViewContext';
 
 // Conversation filter categories
-type ConversationFilter = 'public' | 'groupe' | 'globale' | 'direct' | 'non_lue';
+type ConversationFilter = 'toutes' | 'public' | 'groupe' | 'globale' | 'direct' | 'non_lue' | 'archivee';
 
 const FILTER_STORAGE_KEY = 'meeshy_v2_conversation_filter';
 
-// Mock data for communities
-const mockCommunities: CommunityItem[] = [
-  {
-    id: '1',
-    name: 'Tech Polyglots',
-    banner: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=300&h=200&fit=crop',
-    memberCount: 1243,
-    conversationCount: 89,
-    color: theme.colors.deepTeal,
-  },
-  {
-    id: '2',
-    name: 'Language Learners',
-    banner: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&h=200&fit=crop',
-    memberCount: 892,
-    conversationCount: 156,
-    color: theme.colors.royalIndigo,
-  },
-];
-
 interface FilterCounts {
+  toutes: number;
   public: number;
   groupe: number;
   globale: number;
   direct: number;
   non_lue: number;
+  archivee: number;
 }
 
 function FilterTabs({
@@ -63,6 +44,16 @@ function FilterTabs({
   isVisible: boolean;
 }) {
   const filters: { id: ConversationFilter; label: string; count?: number; icon?: React.ReactNode }[] = [
+    {
+      id: 'toutes',
+      label: 'Toutes',
+      count: counts.toutes,
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+        </svg>
+      ),
+    },
     {
       id: 'public',
       label: 'Public',
@@ -110,6 +101,16 @@ function FilterTabs({
       icon: (
         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="6" />
+        </svg>
+      ),
+    },
+    {
+      id: 'archivee',
+      label: 'Archivées',
+      count: counts.archivee,
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
         </svg>
       ),
     },
@@ -298,13 +299,12 @@ export function ConversationSidebar() {
   const [activeFilter, setActiveFilter] = useState<ConversationFilter>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(FILTER_STORAGE_KEY);
-      if (saved && ['public', 'groupe', 'globale', 'direct', 'non_lue'].includes(saved)) {
+      if (saved && ['toutes', 'public', 'groupe', 'globale', 'direct', 'non_lue', 'archivee'].includes(saved)) {
         return saved as ConversationFilter;
       }
     }
-    return 'direct';
+    return 'toutes';
   });
-  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -337,6 +337,10 @@ export function ConversationSidebar() {
     }
 
     switch (activeFilter) {
+      case 'toutes':
+        // No additional filtering — show all non-archived
+        filtered = filtered.filter((conv) => !(conv as any).isArchived);
+        break;
       case 'public':
         filtered = filtered.filter((conv) => conv.isGroup && (conv as any).visibility === 'public');
         break;
@@ -352,6 +356,9 @@ export function ConversationSidebar() {
       case 'non_lue':
         filtered = filtered.filter((conv) => conv.unreadCount > 0);
         break;
+      case 'archivee':
+        filtered = filtered.filter((conv) => (conv as any).isArchived);
+        break;
     }
 
     return filtered;
@@ -362,11 +369,13 @@ export function ConversationSidebar() {
 
   // Filter counts
   const filterCounts = useMemo<FilterCounts>(() => ({
+    toutes: conversationItems.filter((conv) => !(conv as any).isArchived).length,
     public: conversationItems.filter((conv) => conv.isGroup && (conv as any).visibility === 'public').length,
     groupe: conversationItems.filter((conv) => conv.isGroup && (conv as any).visibility !== 'public').length,
     globale: conversationItems.filter((conv) => (conv as any).type === 'global' || (conv as any).type === 'broadcast').length,
     direct: conversationItems.filter((conv) => !conv.isGroup).length,
     non_lue: conversationItems.filter((conv) => conv.unreadCount > 0).length,
+    archivee: conversationItems.filter((conv) => (conv as any).isArchived).length,
   }), [conversationItems]);
 
   // Handle conversation selection
@@ -456,22 +465,13 @@ export function ConversationSidebar() {
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
               </svg>
-              {{ public: 'Public', groupe: 'Groupe', globale: 'Globale', direct: 'Direct', non_lue: 'Non lue' }[activeFilter]}
+              {{ toutes: 'Toutes', public: 'Public', groupe: 'Groupe', globale: 'Globale', direct: 'Direct', non_lue: 'Non lue', archivee: 'Archivées' }[activeFilter]}
             </button>
           )}
         </div>
       </div>
 
-      {/* Communities Carousel + Filter Tabs */}
-      <CommunityCarousel
-        communities={mockCommunities}
-        isVisible={searchFocused}
-        onCommunityClick={(id) => setSelectedCommunityId(id === '__all__' ? null : id)}
-        totalConversations={conversationItems.length}
-        archivedConversations={0}
-        selectedId={selectedCommunityId}
-      />
-
+      {/* Filter Tabs */}
       <FilterTabs
         activeFilter={activeFilter}
         onFilterChange={handleFilterChange}
@@ -499,7 +499,7 @@ export function ConversationSidebar() {
             <p style={{ color: 'var(--gp-text-muted)' }}>
               {searchQuery
                 ? 'Aucun resultat pour cette recherche'
-                : `Aucune conversation ${({ public: 'publique', groupe: 'de groupe', globale: 'globale', direct: 'privee', non_lue: 'non lue' } as const)[activeFilter]}`}
+                : `Aucune conversation ${({ toutes: '', public: 'publique', groupe: 'de groupe', globale: 'globale', direct: 'privee', non_lue: 'non lue', archivee: 'archivee' } as const)[activeFilter]}`}
             </p>
           </div>
         ) : (
