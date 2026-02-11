@@ -33,7 +33,7 @@ transformers>=4.46.3
 # Cache et base de données
 redis==5.2.1
 asyncpg==0.30.0
-aiosqlite==0.20.0
+aiosqlite==0.22.1
 dnspython==2.7.0
 
 # Détection de langue et analyse de texte
