@@ -76,6 +76,7 @@ import { twoFactorRoutes } from './routes/two-factor';
 import { magicLinkRoutes } from './routes/magic-link';
 import userDeletionsRoutes from './routes/user-deletions';
 import { pushTokenRoutes } from './routes/push-tokens';
+import { postRoutes } from './routes/posts';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -961,6 +962,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     } else {
       logger.warn('⚠️ ZMQ client not available, voice routes not registered');
     }
+
+    // Register post/feed routes with /api/v1 prefix
+    await this.server.register(async (instance) => {
+      await postRoutes(instance);
+    }, { prefix: API_PREFIX });
+    logger.info('✓ Post/Feed routes registered');
 
     logger.info('✓ REST API routes configured successfully');
   }

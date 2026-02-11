@@ -457,6 +457,7 @@ struct ThemedActionButton: View {
 // MARK: - Themed Feed Overlay
 struct ThemedFeedOverlay: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var viewModel = FeedViewModel()
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
 
@@ -489,13 +490,31 @@ struct ThemedFeedOverlay: View {
                     // Composer (padding is included in the component)
                     ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
 
-                    // Feed posts with media support - staggered entrance
-                    ForEach(Array(FeedSampleData.posts.enumerated()), id: \.element.id) { index, post in
+                    // Feed posts with infinite scroll
+                    ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
                         FeedPostCard(post: post)
                             .staggeredAppear(index: index, baseDelay: 0.06)
+                            .onAppear {
+                                Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                            }
+                    }
+
+                    // Loading indicator
+                    if viewModel.isLoadingMore {
+                        ProgressView()
+                            .tint(Color(hex: "4ECDC4"))
+                            .padding()
                     }
                 }
                 .padding(.bottom, 100)
+            }
+            .refreshable {
+                await viewModel.refresh()
+            }
+        }
+        .task {
+            if viewModel.posts.isEmpty {
+                await viewModel.loadFeed()
             }
         }
     }

@@ -22,6 +22,9 @@
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
 		D22635DE1CE583B57963A2C3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4041235D6D9700A3BADC3E86 /* DesignSystem.swift */; };
 		F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83758F8E8BD422CF1E9551E /* ConversationListView.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */; };
+		E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +46,9 @@
 		C83758F8E8BD422CF1E9551E /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAnalyzer.swift; sourceTree = "<group>"; };
 		FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableFloatingButton.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
+		F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -72,6 +78,8 @@
 			children = (
 				239EA92B51CC63E846FDE461 /* Components */,
 				F2299A4649663A9E3837B193 /* Models */,
+				A7B8C9D0E1F2A3B4C5D6E7F8 /* Services */,
+				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
 			path = Main;
@@ -130,8 +138,25 @@
 			isa = PBXGroup;
 			children = (
 				1F52D4DD36D01276DA42A395 /* Models.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		A7B8C9D0E1F2A3B4C5D6E7F8 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -218,6 +243,9 @@
 				CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */,
 				4DC22D80309C97D00C3EE9A9 /* TextAnalyzer.swift in Sources */,
 				475968E0CE4126EF67ABACC2 /* Theme.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */,
+				E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

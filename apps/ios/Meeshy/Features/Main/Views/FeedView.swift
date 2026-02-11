@@ -374,6 +374,7 @@ struct FeedSampleData {
 // MARK: - Feed View
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var viewModel = FeedViewModel()
     @State private var searchText = ""
     @State private var showComposer = false
     @FocusState private var isComposerFocused: Bool
@@ -381,8 +382,13 @@ struct FeedView: View {
     @State private var composerText = ""
     @State private var expandedComments: Set<String> = []
 
-    // Sample posts with comments and reposts
+    // Computed property — uses ViewModel data (falls back to sample)
     private var posts: [FeedPost] {
+        viewModel.posts.isEmpty ? FeedSampleData.posts : viewModel.posts
+    }
+
+    // Legacy inline sample data removed — now served by FeedViewModel + FeedSampleData fallback
+    private var _legacyPosts: [FeedPost] {
         [
             // === POSTS WITH MEDIA TYPES (NEWEST - AT TOP) ===
 
@@ -760,7 +766,7 @@ struct FeedView: View {
                 composerPlaceholder
                     .padding(.bottom, 8)
 
-                // Posts
+                // Posts with infinite scroll
                 ForEach(posts) { post in
                     FeedPostCard(
                         post: post,
@@ -776,10 +782,28 @@ struct FeedView: View {
                             HapticFeedback.light()
                         }
                     )
+                    .onAppear {
+                        Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                    }
+                }
+
+                // Loading more indicator
+                if viewModel.isLoadingMore {
+                    ProgressView()
+                        .tint(Color(hex: "4ECDC4"))
+                        .padding()
                 }
             }
             .padding(.top, 12)
             .padding(.bottom, 100)
+        }
+        .refreshable {
+            await viewModel.refresh()
+        }
+        .task {
+            if viewModel.posts.isEmpty {
+                await viewModel.loadFeed()
+            }
         }
     }
 
