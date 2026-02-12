@@ -137,12 +137,19 @@ const ConnectedContactsTab = React.memo<ConnectedContactsTabProps>(({
 
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${otherUser.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                          {otherUser.isOnline ? t('status.online') : t('status.offline')}
-                        </span>
-                      </div>
+                      {(() => {
+                        const s = getUserStatus(otherUser);
+                        const dotColors = { online: 'bg-green-500', away: 'bg-orange-400', offline: 'bg-gray-400' };
+                        const labels = { online: t('status.online'), away: t('status.away', { defaultValue: 'Absent' }), offline: t('status.offline') };
+                        return (
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[s]}`} />
+                            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                              {labels[s]}
+                            </span>
+                          </div>
+                        );
+                      })()}
 
                       {otherUser.email && (
                         <div className="flex items-center space-x-2 min-w-0">

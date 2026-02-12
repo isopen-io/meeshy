@@ -95,7 +95,6 @@ export class MaintenanceService {
       });
 
       if (inactiveUsers.length > 0) {
-        // Mettre à jour leur statut en ligne
         await this.prisma.user.updateMany({
           where: {
             id: {
@@ -107,10 +106,17 @@ export class MaintenanceService {
           }
         });
 
+        // Broadcaster le changement pour que les clients mettent à jour leur UI
+        if (this.statusBroadcastCallback) {
+          for (const u of inactiveUsers) {
+            this.statusBroadcastCallback(u.id, false, false);
+          }
+        }
+
         logger.warn(`🔄 [CLEANUP] ${inactiveUsers.length} utilisateurs marqués comme hors ligne (inactifs depuis >${this.OFFLINE_THRESHOLD_MINUTES}min)`, {
-          users: inactiveUsers.map(u => ({ 
-            id: u.id, 
-            username: u.username, 
+          users: inactiveUsers.map(u => ({
+            id: u.id,
+            username: u.username,
             lastActiveAt: u.lastActiveAt,
             inactiveMinutes: Math.floor((Date.now() - u.lastActiveAt.getTime()) / 60000)
           }))
@@ -136,7 +142,6 @@ export class MaintenanceService {
       });
 
       if (inactiveAnonymous.length > 0) {
-        // Mettre à jour leur statut en ligne
         await this.prisma.anonymousParticipant.updateMany({
           where: {
             id: {
@@ -148,10 +153,17 @@ export class MaintenanceService {
           }
         });
 
+        // Broadcaster le changement pour que les clients mettent à jour leur UI
+        if (this.statusBroadcastCallback) {
+          for (const p of inactiveAnonymous) {
+            this.statusBroadcastCallback(p.id, false, true);
+          }
+        }
+
         logger.warn(`🔄 [CLEANUP] ${inactiveAnonymous.length} participants anonymes marqués comme hors ligne (inactifs depuis >${this.OFFLINE_THRESHOLD_MINUTES}min)`, {
-          participants: inactiveAnonymous.map(p => ({ 
-            id: p.id, 
-            username: p.username, 
+          participants: inactiveAnonymous.map(p => ({
+            id: p.id,
+            username: p.username,
             lastActiveAt: p.lastActiveAt,
             inactiveMinutes: Math.floor((Date.now() - p.lastActiveAt.getTime()) / 60000)
           }))
@@ -169,13 +181,10 @@ export class MaintenanceService {
    */
   async updateUserOnlineStatus(userId: string, isOnline: boolean, broadcast: boolean = false): Promise<void> {
     try {
-      // ✅ FIX: Ne JAMAIS mettre lastActiveAt à undefined
-      // Quand l'utilisateur se déconnecte, on garde sa dernière activité pour calculer "away" vs "offline"
-      const updateData: { isOnline: boolean; lastActiveAt?: Date } = {
-        isOnline
-      };
-
-      // Mettre à jour lastActiveAt seulement si l'utilisateur se connecte
+      // lastActiveAt mis à jour uniquement à la connexion (= opération utilisateur réelle)
+      // À la déconnexion, on garde le dernier lastActiveAt pour que le calcul
+      // VERT→ORANGE→GRIS reflète la vraie dernière activité
+      const updateData: { isOnline: boolean; lastActiveAt?: Date } = { isOnline };
       if (isOnline) {
         updateData.lastActiveAt = new Date();
       }
@@ -187,7 +196,6 @@ export class MaintenanceService {
 
       logger.info(`👤 Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}`);
 
-      // CORRECTION: Broadcaster le changement de statut si demandé
       if (broadcast && this.statusBroadcastCallback) {
         this.statusBroadcastCallback(userId, isOnline, false);
       }
@@ -231,13 +239,7 @@ export class MaintenanceService {
    */
   async updateAnonymousOnlineStatus(participantId: string, isOnline: boolean, broadcast: boolean = false): Promise<void> {
     try {
-      // ✅ FIX: Ne JAMAIS mettre lastActiveAt à undefined
-      // Quand l'utilisateur se déconnecte, on garde sa dernière activité pour calculer "away" vs "offline"
-      const updateData: { isOnline: boolean; lastActiveAt?: Date } = {
-        isOnline
-      };
-
-      // Mettre à jour lastActiveAt seulement si l'utilisateur se connecte
+      const updateData: { isOnline: boolean; lastActiveAt?: Date } = { isOnline };
       if (isOnline) {
         updateData.lastActiveAt = new Date();
       }
@@ -249,7 +251,6 @@ export class MaintenanceService {
 
       logger.info(`👤 Statut participant anonyme ${participantId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}`);
 
-      // CORRECTION: Broadcaster le changement de statut si demandé
       if (broadcast && this.statusBroadcastCallback) {
         this.statusBroadcastCallback(participantId, isOnline, true);
       }

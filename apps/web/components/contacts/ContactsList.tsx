@@ -106,16 +106,27 @@ const ContactsList = React.memo<ContactsListProps>(({
                     </h3>
 
                     <div className="flex flex-row items-center gap-2 flex-shrink-0">
-                      <Badge
-                        variant={contact.isOnline ? 'default' : 'secondary'}
-                        className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${
-                          contact.isOnline
-                            ? 'bg-green-500 hover:bg-green-600'
-                            : 'bg-gray-400 hover:bg-gray-500'
-                        }`}
-                      >
-                        {contact.isOnline ? t('status.online') : t('status.offline')}
-                      </Badge>
+                      {(() => {
+                        const contactStatus = getUserStatus(contact);
+                        const badgeColors = {
+                          online: 'bg-green-500 hover:bg-green-600',
+                          away: 'bg-orange-400 hover:bg-orange-500',
+                          offline: 'bg-gray-400 hover:bg-gray-500',
+                        };
+                        const badgeLabels = {
+                          online: t('status.online'),
+                          away: t('status.away', { defaultValue: 'Absent' }),
+                          offline: t('status.offline'),
+                        };
+                        return (
+                          <Badge
+                            variant={contactStatus === 'offline' ? 'secondary' : 'default'}
+                            className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${badgeColors[contactStatus]}`}
+                          >
+                            {badgeLabels[contactStatus]}
+                          </Badge>
+                        );
+                      })()}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-10 sm:w-10 p-0 hover:bg-gray-200 dark:hover:bg-gray-700 flex-shrink-0">
@@ -173,7 +184,10 @@ const ContactsList = React.memo<ContactsListProps>(({
                   </button>
 
                   <div className="flex items-center space-x-2 mb-3">
-                    <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${contact.isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                    {(() => {
+                      const dotColors = { online: 'bg-green-500 animate-pulse', away: 'bg-orange-400', offline: 'bg-gray-400' };
+                      return <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[getUserStatus(contact)]}`} />;
+                    })()}
                     <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
                       {formatLastSeen(contact)}
                     </span>

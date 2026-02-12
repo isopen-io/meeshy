@@ -26,6 +26,7 @@ interface UserStoreState {
   // Actions
   setParticipants: (participants: User[]) => void;
   updateUserStatus: (userId: string, updates: UserStatusUpdate) => void;
+  triggerStatusTick: () => void;
   getUserById: (userId: string) => User | undefined;
   clearStore: () => void;
 }
@@ -86,6 +87,14 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
       participants: newParticipants,
       _lastStatusUpdate: Date.now()
     });
+  },
+
+  /**
+   * Tick local : force un re-render pour que getUserStatus() recalcule
+   * les transitions temporelles (VERT→ORANGE→GRIS) sans appel réseau.
+   */
+  triggerStatusTick: () => {
+    set({ _lastStatusUpdate: Date.now() });
   },
 
   /**
