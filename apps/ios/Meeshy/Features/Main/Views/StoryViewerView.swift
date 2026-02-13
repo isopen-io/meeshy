@@ -298,7 +298,6 @@ struct StoryViewerView: View {
                                         showTextEmojiPicker = false
                                     }
                                     isComposerEngaged = false
-                                    resumeTimer()
                                 }
                             }
                     )
@@ -330,7 +329,6 @@ struct StoryViewerView: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showFullEmojiPicker = false
                         }
-                        resumeTimer()
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -352,7 +350,6 @@ struct StoryViewerView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     showEmojiStrip.toggle()
                 }
-                if showEmojiStrip { pauseTimer() } else { resumeTimer() }
             }
             .overlay(alignment: .trailing) {
                 if showEmojiStrip {
@@ -366,7 +363,6 @@ struct StoryViewerView: View {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showEmojiStrip = false
                             }
-                            resumeTimer()
                         },
                         onExpandFullPicker: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -388,28 +384,16 @@ struct StoryViewerView: View {
             // Reply (scroll to/focus composer)
             sidebarButton(icon: "arrowshape.turn.up.left.fill", color: .white) {
                 HapticFeedback.light()
-                pauseTimer()
             }
 
             // Reshare
             sidebarButton(icon: "arrow.2.squarepath", color: .white) {
-                pauseTimer()
                 reshareStory()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    if !isComposerEngaged { resumeTimer() }
-                }
             }
 
             // Language
             sidebarButton(icon: "globe", color: .white) {
                 HapticFeedback.light()
-                pauseTimer()
-                // Auto-resume after brief interaction
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    if !isComposerEngaged {
-                        resumeTimer()
-                    }
-                }
             }
         }
     }
@@ -460,12 +444,11 @@ struct StoryViewerView: View {
             bigReactionPhase = 0
         }
 
-        // Collapse strip after reaction
+        // Collapse strip after reaction (timer auto-resumes when showEmojiStrip=false)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showEmojiStrip = false
             }
-            resumeTimer()
         }
 
         sendReaction(emoji: emoji)
@@ -487,13 +470,11 @@ struct StoryViewerView: View {
                             showTextEmojiPicker = false
                         }
                     }
-                    pauseTimer()
                 } else {
                     // Only disengage if emoji panel isn't showing
                     if !showTextEmojiPicker {
                         isComposerEngaged = false
                     }
-                    resumeTimer()
                 }
             },
             onRequestTextEmoji: {
@@ -508,7 +489,6 @@ struct StoryViewerView: View {
                         showTextEmojiPicker = true
                     }
                 }
-                pauseTimer()
             },
             injectedEmoji: $emojiToInject,
             storyId: currentStory?.id,
@@ -524,25 +504,10 @@ struct StoryViewerView: View {
                 return (text: draft.text, attachments: draft.attachments)
             },
             onAnyInteraction: {
-                // Pause the timer on any interaction, but only set isComposerEngaged
-                // for sustained interactions (focus, recording, emoji panel).
-                // Simple taps (button presses) just pause the timer temporarily.
-                pauseTimer()
-                // Auto-resume after a short delay if no sustained interaction took over
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    if !isComposerEngaged {
-                        resumeTimer()
-                    }
-                }
+                // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
             onRecordingChange: { recording in
-                if recording {
-                    isComposerEngaged = true
-                    pauseTimer()
-                } else {
-                    isComposerEngaged = false
-                    resumeTimer()
-                }
+                isComposerEngaged = recording
             }
         )
     }
@@ -1130,6 +1095,19 @@ struct StoryViewerView: View {
 
     // MARK: - Timer
 
+    /// State-driven pause: the timer checks ALL active UI states each tick
+    /// instead of relying on paired pauseTimer/resumeTimer event calls.
+    /// `isPaused` is ONLY for direct user gestures (long press, drag).
+    private var shouldPauseTimer: Bool {
+        isPaused
+        || isComposerEngaged
+        || showEmojiStrip
+        || showFullEmojiPicker
+        || showTextEmojiPicker
+        || isTransitioning
+        || isDismissing
+    }
+
     private func startTimer() {
         timerCancellable?.cancel()
         progress = 0
@@ -1139,7 +1117,7 @@ struct StoryViewerView: View {
         timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .sink { _ in
-                guard !isPaused else { return }
+                guard !shouldPauseTimer else { return }
                 if progress >= 1.0 {
                     goToNext()
                 } else {
@@ -1148,8 +1126,16 @@ struct StoryViewerView: View {
             }
     }
 
-    private func restartTimer() { startTimer() }
+    /// Restart timer AND clear manual pause (e.g., after drag→transition).
+    private func restartTimer() {
+        isPaused = false
+        startTimer()
+    }
+
+    /// Manual pause — only for direct gesture holds (long press, drag).
     private func pauseTimer() { isPaused = true }
+
+    /// Manual resume — only for ending gesture holds.
     private func resumeTimer() { isPaused = false }
 
     // MARK: - Actions
@@ -1161,7 +1147,6 @@ struct StoryViewerView: View {
             authorName: group.username,
             preview: story.content ?? "Story"
         )
-        resumeTimer()
 
         // Fire & forget comment
         Task {
