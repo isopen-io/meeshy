@@ -21,6 +21,8 @@ struct StoryViewerView: View {
     @State private var isComposerEngaged = false
     /// True when composer has pending attachments (voice, photo, file, etc.)
     @State private var hasComposerAttachments = false
+    /// True when voice recording is active
+    @State private var isRecording = false
 
     // Per-story draft storage
     @State private var storyDrafts: [String: StoryDraft] = [:]
@@ -502,7 +504,7 @@ struct StoryViewerView: View {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
             onRecordingChange: { recording in
-                isComposerEngaged = recording
+                isRecording = recording
             },
             onHasAttachmentsChange: { hasAttachments in
                 hasComposerAttachments = hasAttachments
@@ -1099,6 +1101,7 @@ struct StoryViewerView: View {
     private var shouldPauseTimer: Bool {
         isPaused
         || isComposerEngaged
+        || isRecording
         || hasComposerAttachments
         || showEmojiStrip
         || showFullEmojiPicker
