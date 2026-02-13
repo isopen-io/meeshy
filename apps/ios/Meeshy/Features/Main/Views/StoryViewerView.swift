@@ -57,6 +57,9 @@ struct StoryViewerView: View {
     // Transition lock — prevents overlapping animations
     @State private var isTransitioning = false
 
+    // Text parallax offset (slides up during cross-dissolve for depth)
+    @State private var textSlideOffset: CGFloat = 0
+
     // Horizontal swipe (group ↔ group)
     @State private var horizontalDrag: CGFloat = 0
     @State private var gestureAxis: Int = 0 // 0=undecided, 1=horizontal, 2=vertical
@@ -194,7 +197,7 @@ struct StoryViewerView: View {
             // === Layer 3: Filter overlay (tint on top of image) ===
             filterOverlay
 
-            // === Layer 4: Text content + stickers ===
+            // === Layer 4: Text content + stickers (with parallax slide on transition) ===
             VStack(spacing: 8) {
                 if let content = currentStory?.content, !content.isEmpty {
                     storyTextContent(content)
@@ -210,17 +213,32 @@ struct StoryViewerView: View {
                 }
             }
             .opacity(contentOpacity)
+            .offset(y: textSlideOffset)
             .padding(.top, geometry.safeAreaInsets.top + 80)
             .padding(.bottom, 120)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // === Layer 5: Gradient scrims for readability over photos ===
             VStack {
-                LinearGradient(colors: [.black.opacity(0.6), .black.opacity(0.0)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: geometry.safeAreaInsets.top + 100)
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.7), location: 0),
+                        .init(color: .black.opacity(0.4), location: 0.5),
+                        .init(color: .black.opacity(0.0), location: 1)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: geometry.safeAreaInsets.top + 110)
                 Spacer()
-                LinearGradient(colors: [.black.opacity(0.0), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 160)
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.0), location: 0),
+                        .init(color: .black.opacity(0.35), location: 0.5),
+                        .init(color: .black.opacity(0.65), location: 1)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 180)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -249,13 +267,15 @@ struct StoryViewerView: View {
             }
             .padding(.bottom, 100 + geometry.safeAreaInsets.bottom)
 
-            // === Layer 9: Big reaction emoji overlay ===
+            // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
                 Text(emoji)
-                    .font(.system(size: 90))
-                    .scaleEffect(bigReactionPhase == 1 ? 1.4 : (bigReactionPhase == 2 ? 0.6 : 0.1))
+                    .font(.system(size: 100))
+                    .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
                     .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
-                    .offset(y: bigReactionPhase == 2 ? -250 : 0)
+                    .offset(y: bigReactionPhase == 2 ? -280 : 0)
+                    .rotationEffect(.degrees(bigReactionPhase == 1 ? -6 : (bigReactionPhase == 2 ? 12 : 0)))
+                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
                     .allowsHitTesting(false)
             }
 
@@ -418,18 +438,24 @@ struct StoryViewerView: View {
     // MARK: - Story Reactions
 
     private func triggerStoryReaction(_ emoji: String) {
-        HapticFeedback.light()
+        HapticFeedback.medium()
 
-        // Big floating emoji
+        // Big floating emoji — dramatic 3-phase animation
         bigReactionEmoji = emoji
         bigReactionPhase = 0
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) {
+        // Phase 1: burst in with overshoot
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) {
             bigReactionPhase = 1
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            withAnimation(.easeOut(duration: 0.5)) { bigReactionPhase = 2 }
+        // Phase 1.5: subtle pulse at peak (secondary haptic)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            HapticFeedback.light()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        // Phase 2: float up and dissolve
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            withAnimation(.easeOut(duration: 0.6)) { bigReactionPhase = 2 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             bigReactionEmoji = nil
             bigReactionPhase = 0
         }
@@ -582,12 +608,25 @@ struct StoryViewerView: View {
             if let group = currentGroup {
                 ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
                     GeometryReader { barGeo in
+                        let w = progressWidth(for: index, totalWidth: barGeo.size.width)
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.white.opacity(0.3))
+                                .fill(Color.white.opacity(0.2))
                             Capsule()
-                                .fill(Color.white)
-                                .frame(width: progressWidth(for: index, totalWidth: barGeo.size.width))
+                                .fill(
+                                    index == currentStoryIndex ?
+                                    AnyShapeStyle(LinearGradient(
+                                        colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B"), Color(hex: "08D9D6")],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )) :
+                                    AnyShapeStyle(Color.white)
+                                )
+                                .frame(width: w)
+                                .shadow(
+                                    color: index == currentStoryIndex ? Color(hex: "FF2E63").opacity(0.6) : .clear,
+                                    radius: 4, y: 0
+                                )
                         }
                     }
                     .frame(height: 2.5)
@@ -611,21 +650,35 @@ struct StoryViewerView: View {
     private var storyHeader: some View {
         HStack(spacing: 12) {
             if let group = currentGroup {
-                // Avatar
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: group.avatarColor), Color(hex: group.avatarColor).opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                // Avatar with gradient ring
+                ZStack {
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2
                         )
-                    )
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Text(String(group.username.prefix(1)).uppercased())
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                        .frame(width: 38, height: 38)
+
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: group.avatarColor), Color(hex: group.avatarColor).opacity(0.65)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Text(String(group.username.prefix(1)).uppercased())
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        )
+                }
+                .shadow(color: Color(hex: group.avatarColor).opacity(0.3), radius: 4, y: 2)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.username)
@@ -633,9 +686,19 @@ struct StoryViewerView: View {
                         .foregroundColor(.white)
 
                     if let story = currentStory {
-                        Text(story.timeAgo)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
+                        HStack(spacing: 4) {
+                            Text(story.timeAgo)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
+                                Text("\u{00B7}")
+                                    .foregroundColor(.white.opacity(0.35))
+                                Text(storyTimeRemaining(expiresAt))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.45))
+                            }
+                        }
                     }
                 }
             }
@@ -683,6 +746,15 @@ struct StoryViewerView: View {
                 }
             )
             .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
+            // Neon glow effect for neon text style
+            .shadow(
+                color: fontStyle == "neon" ? color.opacity(0.7) : .clear,
+                radius: fontStyle == "neon" ? 12 : 0
+            )
+            .shadow(
+                color: fontStyle == "neon" ? color.opacity(0.4) : .clear,
+                radius: fontStyle == "neon" ? 24 : 0
+            )
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
             .offset(y: offsetY)
@@ -981,6 +1053,7 @@ struct StoryViewerView: View {
     /// True cross-dissolve for stories within the same user.
     /// Old content stays visible (outgoing layer) while new content fades in on top —
     /// eliminates the flash caused by AsyncImage reloading between swaps.
+    /// Text gets a subtle parallax slide-up for cinematic depth.
     private func crossFadeStory(update: @escaping () -> Void) {
         isTransitioning = true
 
@@ -988,19 +1061,21 @@ struct StoryViewerView: View {
         outgoingStory = currentStory
         outgoingOpacity = 1
         contentOpacity = 0
+        textSlideOffset = 14 // Start text slightly below for parallax entrance
 
         // 2. Instantly swap to the new story
         update()
         markCurrentViewed()
 
-        // 3. Simultaneously cross-dissolve: old fades out, new fades in
-        withAnimation(.easeInOut(duration: 0.3)) {
+        // 3. Simultaneously cross-dissolve with text parallax
+        withAnimation(.easeOut(duration: 0.35)) {
             outgoingOpacity = 0
             contentOpacity = 1
+            textSlideOffset = 0
         }
 
         restartTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             outgoingStory = nil
             isTransitioning = false
         }
@@ -1133,6 +1208,19 @@ struct StoryViewerView: View {
                 HapticFeedback.error()
             }
         }
+    }
+
+    // MARK: - Story Time Remaining
+
+    private func storyTimeRemaining(_ expiresAt: Date) -> String {
+        let seconds = Int(expiresAt.timeIntervalSinceNow)
+        if seconds <= 0 { return "expire bientot" }
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        if hours > 0 {
+            return "expire dans \(hours)h"
+        }
+        return "expire dans \(minutes)min"
     }
 
     // MARK: - Mark Viewed

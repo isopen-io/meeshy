@@ -5,7 +5,8 @@ struct StoryTrayView: View {
     var onViewStory: (Int) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var addButtonPulse = false
+    @State private var ringRotation: Double = 0
+    @State private var addButtonGlow = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,24 +16,46 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 100)
+        .frame(height: 108)
+        .onAppear {
+            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+                ringRotation = 360
+            }
+        }
+    }
+
+    // MARK: - Animated Ring Gradient
+
+    private var animatedRingGradient: AngularGradient {
+        AngularGradient(
+            gradient: Gradient(colors: [
+                Color(hex: "FF2E63"),
+                Color(hex: "FF6B6B"),
+                Color(hex: "F27121"),
+                Color(hex: "E94057"),
+                Color(hex: "A855F7"),
+                Color(hex: "08D9D6"),
+                Color(hex: "FF2E63")
+            ]),
+            center: .center,
+            startAngle: .degrees(ringRotation),
+            endAngle: .degrees(ringRotation + 360)
+        )
     }
 
     // MARK: - Story Scroll View
 
     private var storyScrollView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                // "+" Add story button
+            HStack(spacing: 12) {
                 addStoryButton
                     .bounceOnAppear(delay: 0)
 
-                // Story rings
                 ForEach(Array(viewModel.storyGroups.enumerated()), id: \.element.id) { index, group in
                     storyRing(group: group, index: index)
-                        .staggeredAppear(index: index, baseDelay: 0.06)
+                        .staggeredAppear(index: index, baseDelay: 0.05)
                         .onTapGesture {
-                            HapticFeedback.light()
+                            HapticFeedback.medium()
                             onViewStory(index)
                         }
                 }
@@ -45,54 +68,74 @@ struct StoryTrayView: View {
     // MARK: - Add Story Button
 
     private var addStoryButton: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 5) {
             ZStack {
+                // Radial ambient glow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(hex: "FF2E63").opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: 22,
+                            endRadius: 44
+                        )
+                    )
+                    .frame(width: 84, height: 84)
+                    .opacity(addButtonGlow ? 1 : 0.4)
+
+                // Main gradient circle
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
+                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057"), Color(hex: "08D9D6")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 60, height: 60)
-                    .shadow(
-                        color: Color(hex: "FF2E63").opacity(addButtonPulse ? 0.5 : 0.3),
-                        radius: addButtonPulse ? 12 : 8,
-                        y: 4
-                    )
+                    .frame(width: 62, height: 62)
+                    .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 12, y: 4)
 
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
+                // Camera icon
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
             }
-            .scaleEffect(addButtonPulse ? 1.05 : 1.0)
+            .scaleEffect(addButtonGlow ? 1.04 : 1.0)
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    addButtonPulse = true
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    addButtonGlow = true
                 }
             }
 
             Text("Story")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
         }
     }
 
     // MARK: - Story Ring
 
     private func storyRing(group: StoryGroup, index: Int) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 5) {
             ZStack {
-                // Outer ring
-                Circle()
-                    .stroke(
-                        group.hasUnviewed ?
-                            MeeshyColors.avatarRingGradient :
-                            LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.3)], startPoint: .top, endPoint: .bottom),
-                        lineWidth: 2.5
-                    )
-                    .frame(width: 64, height: 64)
+                if group.hasUnviewed {
+                    // Ambient glow behind unviewed stories
+                    Circle()
+                        .fill(Color(hex: group.avatarColor).opacity(0.2))
+                        .frame(width: 80, height: 80)
+                        .blur(radius: 10)
+
+                    // Animated rotating gradient ring
+                    Circle()
+                        .stroke(animatedRingGradient, lineWidth: 3)
+                        .frame(width: 68, height: 68)
+                } else {
+                    // Subtle viewed ring
+                    Circle()
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1.5)
+                        .frame(width: 68, height: 68)
+                }
 
                 // Avatar circle
                 Circle()
@@ -100,25 +143,49 @@ struct StoryTrayView: View {
                         LinearGradient(
                             colors: [
                                 Color(hex: group.avatarColor),
-                                Color(hex: group.avatarColor).opacity(0.7)
+                                Color(hex: group.avatarColor).opacity(0.6)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 56, height: 56)
+                    .frame(width: 58, height: 58)
                     .overlay(
                         Text(String(group.username.prefix(1)).uppercased())
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                     )
+                    .shadow(color: Color(hex: group.avatarColor).opacity(0.25), radius: 6, y: 3)
+
+                // Story count dots (multiple stories indicator)
+                if group.stories.count > 1 {
+                    storyCountDots(count: group.stories.count, unviewed: group.hasUnviewed)
+                        .offset(y: 38)
+                }
             }
 
             Text(group.username)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .font(.system(size: 11, weight: group.hasUnviewed ? .semibold : .medium))
+                .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
                 .lineLimit(1)
-                .frame(width: 64)
+                .frame(width: 68)
+        }
+    }
+
+    // MARK: - Story Count Dots
+
+    private func storyCountDots(count: Int, unviewed: Bool) -> some View {
+        HStack(spacing: 3) {
+            ForEach(0..<min(count, 5), id: \.self) { _ in
+                Circle()
+                    .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                    .frame(width: 4, height: 4)
+            }
+            if count > 5 {
+                Text("+")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
+            }
         }
     }
 
@@ -126,15 +193,20 @@ struct StoryTrayView: View {
 
     private var shimmerPlaceholder: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 ForEach(0..<6, id: \.self) { _ in
-                    VStack(spacing: 6) {
+                    VStack(spacing: 5) {
                         Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 60, height: 60)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 62, height: 62)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 2)
+                                    .frame(width: 68, height: 68)
+                            )
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.gray.opacity(0.15))
-                            .frame(width: 40, height: 8)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 42, height: 8)
                     }
                     .shimmer()
                 }
