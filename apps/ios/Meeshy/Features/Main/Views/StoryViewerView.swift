@@ -613,35 +613,22 @@ struct StoryViewerView: View {
     private var storyHeader: some View {
         HStack(spacing: 12) {
             if let group = currentGroup {
-                // Avatar with gradient ring
-                ZStack {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
+                // Simple avatar — no ring needed, we're already inside the story
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: group.avatarColor), Color(hex: group.avatarColor).opacity(0.65)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 38, height: 38)
-
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: group.avatarColor), Color(hex: group.avatarColor).opacity(0.65)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Text(String(group.username.prefix(1)).uppercased())
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                        )
-                }
-                .shadow(color: Color(hex: group.avatarColor).opacity(0.3), radius: 4, y: 2)
+                    )
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Text(String(group.username.prefix(1)).uppercased())
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    )
+                    .shadow(color: Color(hex: group.avatarColor).opacity(0.3), radius: 4, y: 2)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.username)
