@@ -282,8 +282,9 @@ struct UniversalComposerBar: View {
     /// Called when recording state changes (true = started, false = stopped)
     var onRecordingChange: ((Bool) -> Void)? = nil
 
-    /// Called when attachments count changes (true = has attachments, false = empty)
-    var onHasAttachmentsChange: ((Bool) -> Void)? = nil
+    /// Called when composer content changes (text, attachments, or recording).
+    /// True = has pending content that should block story timer.
+    var onHasContentChange: ((Bool) -> Void)? = nil
 
     // MARK: - State
 
@@ -395,9 +396,8 @@ struct UniversalComposerBar: View {
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
-        .onChange(of: allAttachments.count) { newCount in
-            onHasAttachmentsChange?(newCount > 0)
-        }
+        .onChange(of: attachments.count) { _ in notifyContentChange() }
+        .onChange(of: isRecording) { _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
             previousStoryId = storyId
@@ -439,6 +439,7 @@ struct UniversalComposerBar: View {
             isFocused = false
             textAnalyzer.reset()
             previousStoryId = newId
+            notifyContentChange()
         }
         .onChange(of: isFocused) { focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
@@ -457,6 +458,7 @@ struct UniversalComposerBar: View {
         }
         .onChange(of: text) { newValue in
             onAnyInteraction?()
+            notifyContentChange()
             textAnalyzer.analyze(text: newValue)
             // Ripple wave on each keystroke
             if isFocused {
@@ -730,6 +732,11 @@ struct UniversalComposerBar: View {
             }
         }
         .menuAnimation(showMenu: showAttachOptions, delay: delay)
+    }
+
+    /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
+    private func notifyContentChange() {
+        onHasContentChange?(hasText || !attachments.isEmpty || isRecording)
     }
 
     private func closeAttachMenu() {

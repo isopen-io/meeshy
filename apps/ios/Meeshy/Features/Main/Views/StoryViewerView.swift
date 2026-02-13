@@ -19,10 +19,8 @@ struct StoryViewerView: View {
     @State private var isPaused = false
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
     @State private var isComposerEngaged = false
-    /// True when composer has pending attachments (voice, photo, file, etc.)
-    @State private var hasComposerAttachments = false
-    /// True when voice recording is active
-    @State private var isRecording = false
+    /// True when composer has pending content (text, attachments, or recording)
+    @State private var hasComposerContent = false
 
     // Per-story draft storage
     @State private var storyDrafts: [String: StoryDraft] = [:]
@@ -504,10 +502,10 @@ struct StoryViewerView: View {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
             onRecordingChange: { recording in
-                isRecording = recording
+                isComposerEngaged = recording
             },
-            onHasAttachmentsChange: { hasAttachments in
-                hasComposerAttachments = hasAttachments
+            onHasContentChange: { hasContent in
+                hasComposerContent = hasContent
             }
         )
     }
@@ -1101,8 +1099,7 @@ struct StoryViewerView: View {
     private var shouldPauseTimer: Bool {
         isPaused
         || isComposerEngaged
-        || isRecording
-        || hasComposerAttachments
+        || hasComposerContent
         || showEmojiStrip
         || showFullEmojiPicker
         || showTextEmojiPicker
