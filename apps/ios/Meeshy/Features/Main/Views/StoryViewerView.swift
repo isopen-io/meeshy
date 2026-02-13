@@ -19,6 +19,8 @@ struct StoryViewerView: View {
     @State private var isPaused = false
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
     @State private var isComposerEngaged = false
+    /// True when composer has pending attachments (voice, photo, file, etc.)
+    @State private var hasComposerAttachments = false
 
     // Per-story draft storage
     @State private var storyDrafts: [String: StoryDraft] = [:]
@@ -290,14 +292,7 @@ struct StoryViewerView: View {
                             .onEnded { value in
                                 // Swipe down on composer → dismiss keyboard & disengage
                                 if value.translation.height > 40 && abs(value.translation.width) < value.translation.height {
-                                    UIApplication.shared.sendAction(
-                                        #selector(UIResponder.resignFirstResponder),
-                                        to: nil, from: nil, for: nil
-                                    )
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        showTextEmojiPicker = false
-                                    }
-                                    isComposerEngaged = false
+                                    dismissComposer()
                                 }
                             }
                     )
@@ -508,6 +503,9 @@ struct StoryViewerView: View {
             },
             onRecordingChange: { recording in
                 isComposerEngaged = recording
+            },
+            onHasAttachmentsChange: { hasAttachments in
+                hasComposerAttachments = hasAttachments
             }
         )
     }
@@ -856,7 +854,7 @@ struct StoryViewerView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    guard !isComposerEngaged else { return }
+                    if isComposerEngaged { dismissComposer(); return }
                     goToPrevious()
                 }
 
@@ -864,7 +862,7 @@ struct StoryViewerView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    guard !isComposerEngaged else { return }
+                    if isComposerEngaged { dismissComposer(); return }
                     goToNext()
                 }
         }
@@ -1101,6 +1099,7 @@ struct StoryViewerView: View {
     private var shouldPauseTimer: Bool {
         isPaused
         || isComposerEngaged
+        || hasComposerAttachments
         || showEmojiStrip
         || showFullEmojiPicker
         || showTextEmojiPicker
@@ -1137,6 +1136,20 @@ struct StoryViewerView: View {
 
     /// Manual resume — only for ending gesture holds.
     private func resumeTimer() { isPaused = false }
+
+    // MARK: - Dismiss Composer
+
+    private func dismissComposer() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showTextEmojiPicker = false
+            showFullEmojiPicker = false
+        }
+        isComposerEngaged = false
+    }
 
     // MARK: - Actions
 
