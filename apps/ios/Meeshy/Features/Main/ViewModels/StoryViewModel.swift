@@ -1,0 +1,221 @@
+import Foundation
+import SwiftUI
+
+@MainActor
+class StoryViewModel: ObservableObject {
+    @Published var storyGroups: [StoryGroup] = []
+    @Published var isLoading = false
+
+    private let api = APIClient.shared
+
+    // MARK: - Load Stories
+
+    func loadStories() async {
+        guard !isLoading else { return }
+        isLoading = true
+
+        do {
+            let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
+                endpoint: "/posts/feed/stories",
+                limit: 50
+            )
+
+            if response.success {
+                storyGroups = response.data.toStoryGroups()
+            } else {
+                fallbackToSampleData()
+            }
+        } catch {
+            fallbackToSampleData()
+        }
+
+        isLoading = false
+    }
+
+    // MARK: - Mark Story as Viewed
+
+    func markViewed(storyId: String) {
+        // Fire & forget
+        Task {
+            do {
+                let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                    endpoint: "/posts/\(storyId)/view",
+                    method: "POST"
+                )
+            } catch {
+                // Silent failure
+            }
+        }
+
+        // Update local state
+        for i in storyGroups.indices {
+            if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
+                var updated = storyGroups[i].stories
+                updated[j] = StoryItem(
+                    id: updated[j].id,
+                    content: updated[j].content,
+                    media: updated[j].media,
+                    storyEffects: updated[j].storyEffects,
+                    createdAt: updated[j].createdAt,
+                    expiresAt: updated[j].expiresAt,
+                    isViewed: true
+                )
+                storyGroups[i] = StoryGroup(
+                    id: storyGroups[i].id,
+                    username: storyGroups[i].username,
+                    avatarColor: storyGroups[i].avatarColor,
+                    stories: updated
+                )
+                return
+            }
+        }
+    }
+
+    // MARK: - Lookup Methods
+
+    func storyGroupForUser(userId: String) -> StoryGroup? {
+        storyGroups.first { $0.id == userId }
+    }
+
+    func groupIndex(forUserId userId: String) -> Int? {
+        storyGroups.firstIndex { $0.id == userId }
+    }
+
+    func hasStories(forUserId userId: String) -> Bool {
+        storyGroups.contains { $0.id == userId }
+    }
+
+    func hasUnviewedStories(forUserId userId: String) -> Bool {
+        storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
+    }
+
+    // MARK: - Sample Data Fallback
+
+    private func fallbackToSampleData() {
+        if storyGroups.isEmpty {
+            storyGroups = Self.sampleGroups
+        }
+    }
+
+    static let sampleGroups: [StoryGroup] = {
+        let now = Date()
+        return [
+            StoryGroup(
+                id: "user_me",
+                username: "Moi",
+                avatarColor: "FF2E63",
+                stories: [
+                    StoryItem(
+                        id: "s1",
+                        content: "Premier jour de vacances!",
+                        media: [.image(url: "https://picsum.photos/id/1035/1080/1920", color: "FF6B6B")],
+                        storyEffects: StoryEffects(textStyle: "bold", textColor: "FFFFFF", textPosition: "center", textSize: 30, textBg: "000000"),
+                        createdAt: now.addingTimeInterval(-3600),
+                        expiresAt: now.addingTimeInterval(72000),
+                        isViewed: true
+                    )
+                ]
+            ),
+            StoryGroup(
+                id: "user_alice",
+                username: "Alice",
+                avatarColor: DynamicColorGenerator.colorForName("Alice"),
+                stories: [
+                    StoryItem(
+                        id: "s2",
+                        content: nil,
+                        media: [.image(url: "https://picsum.photos/id/1015/1080/1920", color: "4ECDC4")],
+                        storyEffects: nil,
+                        createdAt: now.addingTimeInterval(-7200),
+                        expiresAt: now.addingTimeInterval(68400),
+                        isViewed: false
+                    ),
+                    StoryItem(
+                        id: "s3",
+                        content: "Sunset vibes",
+                        media: [.image(url: "https://picsum.photos/id/1040/1080/1920", color: "FF6B6B")],
+                        storyEffects: StoryEffects(background: nil, textStyle: "bold", textColor: "FFFFFF", textPosition: "bottom", filter: "warm", stickers: nil),
+                        createdAt: now.addingTimeInterval(-3600),
+                        expiresAt: now.addingTimeInterval(72000),
+                        isViewed: false
+                    )
+                ]
+            ),
+            StoryGroup(
+                id: "user_bob",
+                username: "Bob",
+                avatarColor: DynamicColorGenerator.colorForName("Bob"),
+                stories: [
+                    StoryItem(
+                        id: "s4",
+                        content: "New project launch!",
+                        media: [],
+                        storyEffects: StoryEffects(background: "9B59B6", textStyle: "neon", textColor: "FFFFFF", textPosition: "center", filter: nil, stickers: ["🚀"], textBg: "000000"),
+                        createdAt: now.addingTimeInterval(-5400),
+                        expiresAt: now.addingTimeInterval(70200),
+                        isViewed: true
+                    )
+                ]
+            ),
+            StoryGroup(
+                id: "user_sarah",
+                username: "Sarah",
+                avatarColor: DynamicColorGenerator.colorForName("Sarah"),
+                stories: [
+                    StoryItem(
+                        id: "s5",
+                        content: nil,
+                        media: [.image(url: "https://picsum.photos/id/1025/1080/1920", color: "F8B500")],
+                        storyEffects: StoryEffects(background: nil, textStyle: nil, textColor: nil, textPosition: nil, filter: "vintage", stickers: nil),
+                        createdAt: now.addingTimeInterval(-1800),
+                        expiresAt: now.addingTimeInterval(73800),
+                        isViewed: false
+                    ),
+                    StoryItem(
+                        id: "s6",
+                        content: "Cooking time 🍝",
+                        media: [.image(url: "https://picsum.photos/id/292/1080/1920", color: "2ECC71")],
+                        storyEffects: StoryEffects(textStyle: "bold", textColor: "FFFFFF", textPosition: "bottom", textBg: "000000"),
+                        createdAt: now.addingTimeInterval(-900),
+                        expiresAt: now.addingTimeInterval(74700),
+                        isViewed: false
+                    )
+                ]
+            ),
+            StoryGroup(
+                id: "user_emma",
+                username: "Emma",
+                avatarColor: DynamicColorGenerator.colorForName("Emma"),
+                stories: [
+                    StoryItem(
+                        id: "s7",
+                        content: "Morning run done!",
+                        media: [],
+                        storyEffects: StoryEffects(background: "08D9D6", textStyle: nil, textColor: "0F0C29", textPosition: "top", filter: nil, stickers: ["💪", "🏃‍♀️"]),
+                        createdAt: now.addingTimeInterval(-10800),
+                        expiresAt: now.addingTimeInterval(64800),
+                        isViewed: false
+                    ),
+                    StoryItem(
+                        id: "s8",
+                        content: nil,
+                        media: [.image(url: "https://picsum.photos/id/1069/1080/1920", color: "E91E63")],
+                        storyEffects: nil,
+                        createdAt: now.addingTimeInterval(-7200),
+                        expiresAt: now.addingTimeInterval(68400),
+                        isViewed: false
+                    ),
+                    StoryItem(
+                        id: "s9",
+                        content: "Best coffee ever ☕",
+                        media: [],
+                        storyEffects: StoryEffects(background: "F8B500", textStyle: "handwriting", textColor: "FFFFFF", textPosition: "center", filter: "warm", stickers: nil, textAlign: "right", textSize: 28),
+                        createdAt: now.addingTimeInterval(-3600),
+                        expiresAt: now.addingTimeInterval(72000),
+                        isViewed: false
+                    )
+                ]
+            )
+        ]
+    }()
+}
