@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader } from '@/components/v2';
+import { useRouter } from 'next/navigation';
+import { Button, Card, Badge, LanguageOrb, Input, Label, Dialog, DialogHeader, DialogBody, DialogFooter, useToast, PageHeader } from '@/components/v2';
 
 interface Community {
   id: number;
@@ -21,6 +22,7 @@ const initialCommunities: Community[] = [
 ];
 
 export default function V2CommunitiesPage() {
+  const router = useRouter();
   const [communities, setCommunities] = useState<Community[]>(initialCommunities);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCommunityName, setNewCommunityName] = useState('');
@@ -70,7 +72,7 @@ export default function V2CommunitiesPage() {
   };
 
   const handleCardClick = (community: Community) => {
-    alert(`Détails de la communauté:\n\nNom: ${community.name}\nDescription: ${community.description}\nMembres: ${community.members}\nLangues: ${community.langs.join(', ')}\nStatut: ${community.joined ? 'Membre' : 'Non membre'}`);
+    router.push(`/v2/communities/${community.id}`);
   };
 
   return (
@@ -203,74 +205,49 @@ export default function V2CommunitiesPage() {
         </section>
       </main>
 
-      {/* Modal de création */}
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/50"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl p-6 shadow-xl bg-[var(--gp-surface)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2
-              className="text-xl font-semibold mb-6 text-[var(--gp-text-primary)]"
-              style={{ fontFamily: theme.fonts.display }}
-            >
-              Créer une communauté
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-                  Nom de la communauté
-                </label>
-                <Input
-                  placeholder="Ex: French Learners"
-                  value={newCommunityName}
-                  onChange={(e) => setNewCommunityName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-                  Description
-                </label>
-                <Input
-                  placeholder="Décrivez votre communauté..."
-                  value={newCommunityDescription}
-                  onChange={(e) => setNewCommunityDescription(e.target.value)}
-                />
-              </div>
+      {/* Create Community Dialog */}
+      <Dialog open={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <DialogHeader>
+          <h2 className="text-xl font-semibold text-[var(--gp-text-primary)]">
+            Créer une communauté
+          </h2>
+        </DialogHeader>
+        <DialogBody>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-2">Nom de la communauté</Label>
+              <Input
+                placeholder="Ex: French Learners"
+                value={newCommunityName}
+                onChange={(e) => setNewCommunityName(e.target.value)}
+              />
             </div>
-
-            <div className="flex gap-3 mt-6">
-              <Button
-                variant="ghost"
-                className="flex-1"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setNewCommunityName('');
-                  setNewCommunityDescription('');
-                }}
-              >
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={handleCreateCommunity}
-              >
-                Créer
-              </Button>
+            <div>
+              <Label className="mb-2">Description</Label>
+              <Input
+                placeholder="Décrivez votre communauté..."
+                value={newCommunityDescription}
+                onChange={(e) => setNewCommunityDescription(e.target.value)}
+              />
             </div>
           </div>
-        </div>
-      )}
-
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setIsModalOpen(false);
+              setNewCommunityName('');
+              setNewCommunityDescription('');
+            }}
+          >
+            Annuler
+          </Button>
+          <Button variant="primary" onClick={handleCreateCommunity}>
+            Créer
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

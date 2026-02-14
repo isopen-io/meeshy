@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Button, Card, Input, LanguageOrb, theme } from '@/components/v2';
+import { Button, Card, Input, LanguageOrb, ProgressSteps, theme } from '@/components/v2';
 import { useSignupV2 } from '@/hooks/v2/use-signup-v2';
 
 export default function V2SignupPage() {
@@ -61,20 +61,7 @@ export default function V2SignupPage() {
         </Link>
 
         {/* Progress */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div
-            className="w-3 h-3 rounded-full transition-colors"
-            style={{ background: 'var(--gp-terracotta)' }}
-          />
-          <div
-            className="w-12 h-1 rounded-full transition-colors"
-            style={{ background: state.step >= 2 ? 'var(--gp-terracotta)' : 'var(--gp-border)' }}
-          />
-          <div
-            className="w-3 h-3 rounded-full transition-colors"
-            style={{ background: state.step >= 2 ? 'var(--gp-terracotta)' : 'var(--gp-border)' }}
-          />
-        </div>
+        <ProgressSteps steps={2} currentStep={state.step} className="mb-8" />
 
         <Card variant="elevated" hover={false} className="p-8">
           {/* Error message */}

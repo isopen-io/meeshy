@@ -2,11 +2,16 @@ import SwiftUI
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
+    @StateObject private var storyViewModel = StoryViewModel()
+    @StateObject private var statusViewModel = StatusViewModel()
     @State private var showConversation = false
     @State private var showFeed = false
     @State private var showMenu = false
     @State private var selectedConversation: Conversation?
     @State private var notificationCount = 3
+    @State private var pendingReplyContext: ReplyContext?
+    @State private var showStoryViewerFromConv = false
+    @State private var selectedStoryGroupIndexFromConv = 0
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -33,11 +38,16 @@ struct RootView: View {
 
             // 2. Main content
             if showConversation {
-                ConversationView(conversation: selectedConversation) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        showConversation = false
+                ConversationView(
+                    conversation: selectedConversation,
+                    replyContext: pendingReplyContext,
+                    onBack: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            showConversation = false
+                            pendingReplyContext = nil
+                        }
                     }
-                }
+                )
                 .transition(
                     .asymmetric(
                         insertion: .move(edge: .trailing)
@@ -56,6 +66,10 @@ struct RootView: View {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             showConversation = true
                         }
+                    },
+                    onStoryViewRequest: { groupIndex, _ in
+                        selectedStoryGroupIndexFromConv = groupIndex
+                        showStoryViewerFromConv = true
                     }
                 )
                 .transition(
@@ -104,9 +118,47 @@ struct RootView: View {
                 menuLadder
             }
         }
+        .environmentObject(storyViewModel)
+        .environmentObject(statusViewModel)
+        .task {
+            await storyViewModel.loadStories()
+            await statusViewModel.loadStatuses()
+        }
+        .fullScreenCover(isPresented: $showStoryViewerFromConv) {
+            if selectedStoryGroupIndexFromConv < storyViewModel.storyGroups.count {
+                StoryViewerView(
+                    viewModel: storyViewModel,
+                    groups: storyViewModel.storyGroups,
+                    currentGroupIndex: selectedStoryGroupIndexFromConv,
+                    isPresented: $showStoryViewerFromConv,
+                    onReplyToStory: { replyContext in
+                        showStoryViewerFromConv = false
+                        handleStoryReply(replyContext)
+                    }
+                )
+            }
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showConversation)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
+    }
+
+    // MARK: - Handle Story Reply
+    private func handleStoryReply(_ context: ReplyContext) {
+        // Find the conversation for the story author
+        let authorName: String
+        switch context {
+        case .story(_, let name, _): authorName = name
+        case .status(_, let name, _, _): authorName = name
+        }
+
+        if let conversation = SampleData.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
+            pendingReplyContext = context
+            selectedConversation = conversation
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                showConversation = true
+            }
+        }
     }
 
     // MARK: - Themed Background
@@ -458,8 +510,13 @@ struct ThemedActionButton: View {
 struct ThemedFeedOverlay: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = FeedViewModel()
+    @EnvironmentObject var storyViewModel: StoryViewModel
+    @EnvironmentObject var statusViewModel: StatusViewModel
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
+    @State private var showStoryViewer = false
+    @State private var selectedGroupIndex = 0
+    @State private var showStatusComposer = false
 
     var body: some View {
         ZStack {
@@ -487,6 +544,12 @@ struct ThemedFeedOverlay: View {
                 LazyVStack(spacing: 14) {
                     Spacer().frame(height: 70)
 
+                    // Story Tray
+                    StoryTrayView(viewModel: storyViewModel) { groupIndex in
+                        selectedGroupIndex = groupIndex
+                        showStoryViewer = true
+                    }
+
                     // Composer (padding is included in the component)
                     ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
 
@@ -510,12 +573,28 @@ struct ThemedFeedOverlay: View {
             }
             .refreshable {
                 await viewModel.refresh()
+                await storyViewModel.loadStories()
+                await statusViewModel.loadStatuses()
             }
         }
         .task {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
+            await storyViewModel.loadStories()
+            await statusViewModel.loadStatuses()
+        }
+        .fullScreenCover(isPresented: $showStoryViewer) {
+            StoryViewerView(
+                viewModel: storyViewModel,
+                groups: storyViewModel.storyGroups,
+                currentGroupIndex: selectedGroupIndex,
+                isPresented: $showStoryViewer
+            )
+        }
+        .sheet(isPresented: $showStatusComposer) {
+            StatusComposerView(viewModel: statusViewModel)
+                .presentationDetents([.medium])
         }
     }
 }

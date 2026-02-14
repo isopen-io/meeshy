@@ -57,6 +57,10 @@ struct FeedMedia: Identifiable {
         FeedMedia(type: .image, thumbnailColor: color, width: 1200, height: 800)
     }
 
+    static func image(url: String, color: String = "4ECDC4") -> FeedMedia {
+        FeedMedia(type: .image, url: url, thumbnailColor: color, width: 1200, height: 800)
+    }
+
     static func video(duration: Int, color: String = "FF6B6B") -> FeedMedia {
         FeedMedia(type: .video, thumbnailColor: color, width: 1920, height: 1080, duration: duration)
     }
@@ -375,12 +379,17 @@ struct FeedSampleData {
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = FeedViewModel()
+    @StateObject private var storyViewModel = StoryViewModel()
+    @StateObject private var statusViewModel = StatusViewModel()
     @State private var searchText = ""
     @State private var showComposer = false
     @FocusState private var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
     @State private var composerText = ""
     @State private var expandedComments: Set<String> = []
+    @State private var showStoryViewer = false
+    @State private var selectedGroupIndex = 0
+    @State private var showStatusComposer = false
 
     // Computed property — uses ViewModel data (falls back to sample)
     private var posts: [FeedPost] {
@@ -762,6 +771,12 @@ struct FeedView: View {
                 // Top spacer for floating buttons
                 Spacer().frame(height: 100)
 
+                // Story Tray
+                StoryTrayView(viewModel: storyViewModel) { groupIndex in
+                    selectedGroupIndex = groupIndex
+                    showStoryViewer = true
+                }
+
                 // Composer placeholder
                 composerPlaceholder
                     .padding(.bottom, 8)
@@ -799,11 +814,27 @@ struct FeedView: View {
         }
         .refreshable {
             await viewModel.refresh()
+            await storyViewModel.loadStories()
+            await statusViewModel.loadStatuses()
         }
         .task {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
+            await storyViewModel.loadStories()
+            await statusViewModel.loadStatuses()
+        }
+        .fullScreenCover(isPresented: $showStoryViewer) {
+            StoryViewerView(
+                viewModel: storyViewModel,
+                groups: storyViewModel.storyGroups,
+                currentGroupIndex: selectedGroupIndex,
+                isPresented: $showStoryViewer
+            )
+        }
+        .sheet(isPresented: $showStatusComposer) {
+            StatusComposerView(viewModel: statusViewModel)
+                .presentationDetents([.medium])
         }
     }
 

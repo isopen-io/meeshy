@@ -9,6 +9,7 @@ import { Avatar } from './Avatar';
 import { Label } from './Label';
 import { Textarea } from './Textarea';
 import { Separator } from './Separator';
+import { RadioGroup, RadioGroupItem } from './RadioGroup';
 
 export interface Participant {
   id: string;
@@ -219,42 +220,16 @@ export function ConversationSettings({
           {/* Type de conversation */}
           <div>
             <Label className="mb-3">Type de conversation</Label>
-            <div className="space-y-2">
+            <RadioGroup value={conversationType} onValueChange={(v) => onTypeChange(v as typeof conversationType)}>
               {typeOptions.map((option) => (
-                <button
+                <RadioGroupItem
                   key={option.value}
-                  onClick={() => onTypeChange(option.value)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-300 ${
-                    conversationType === option.value ? '' : 'hover:bg-[var(--gp-hover)]'
-                  }`}
-                  style={{
-                    borderColor: conversationType === option.value ? 'var(--gp-terracotta)' : 'var(--gp-border)',
-                    background: conversationType === option.value ? 'var(--gp-terracotta-light)' : 'transparent',
-                  }}
-                >
-                  <div
-                    className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors duration-300"
-                    style={{
-                      borderColor: conversationType === option.value ? 'var(--gp-terracotta)' : 'var(--gp-text-muted)',
-                    }}
-                  >
-                    {conversationType === option.value && (
-                      <div
-                        className="w-2 h-2 rounded-full bg-[var(--gp-terracotta)]"
-                      />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[var(--gp-text-primary)] transition-colors duration-300">
-                      {option.label}
-                    </p>
-                    <p className="text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
-                      {option.description}
-                    </p>
-                  </div>
-                </button>
+                  value={option.value}
+                  label={option.label}
+                  description={option.description}
+                />
               ))}
-            </div>
+            </RadioGroup>
           </div>
 
           {/* Options */}

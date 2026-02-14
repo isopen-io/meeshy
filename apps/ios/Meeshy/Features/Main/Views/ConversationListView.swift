@@ -53,8 +53,16 @@ struct ConversationListView: View {
     @Binding var isScrollingDown: Bool
     @Binding var feedIsVisible: Bool  // Track Feed visibility to show search bar when Feed closes
     let onSelect: (Conversation) -> Void
+    var onStoryViewRequest: ((Int, Bool) -> Void)? = nil  // (groupIndex, fromTray)
 
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject var storyViewModel: StoryViewModel
+    @EnvironmentObject var statusViewModel: StatusViewModel
+
+    // Status bubble overlay state
+    @State private var showStatusBubble = false
+    @State private var selectedStatusEntry: StatusEntry?
+    @State private var moodBadgeAnchor: CGPoint = .zero
     @State private var searchText = ""
     @State private var selectedCategory: ConversationCategory = .all
     @FocusState private var isSearching: Bool
@@ -79,10 +87,11 @@ struct ConversationListView: View {
     @State private var dropTargetSection: String? = nil
 
     // Alternative init without binding for backward compatibility
-    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void) {
+    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
+        self.onStoryViewRequest = onStoryViewRequest
     }
 
     private var filtered: [Conversation] {
@@ -188,7 +197,13 @@ struct ConversationListView: View {
         ThemedConversationRow(
             conversation: conversation,
             availableWidth: rowWidth,
-            isDragging: draggingConversation?.id == conversation.id
+            isDragging: draggingConversation?.id == conversation.id,
+            onAvatarTap: {
+                handleAvatarTap(conversation)
+            },
+            onMoodBadgeTap: { anchor in
+                handleMoodBadgeTap(conversation, at: anchor)
+            }
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -236,6 +251,11 @@ struct ConversationListView: View {
 
                     // Top spacer
                     Color.clear.frame(height: 70)
+
+                    // Story carousel
+                    StoryTrayView(viewModel: storyViewModel) { groupIndex in
+                        onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
+                    }
 
                     // Sectioned conversation list
                     sectionsContent
@@ -358,6 +378,71 @@ struct ConversationListView: View {
                 }
             }
         }
+        .overlay {
+            // Status bubble overlay
+            if showStatusBubble, let status = selectedStatusEntry {
+                StatusBubbleOverlay(
+                    status: status,
+                    anchorPoint: moodBadgeAnchor,
+                    isPresented: $showStatusBubble,
+                    onReply: {
+                        // Find conversation for this user and navigate
+                        if let conv = SampleData.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
+                            onSelect(conv)
+                        }
+                    },
+                    onShare: {
+                        // Find conversation for this user and navigate (share context)
+                        if let conv = SampleData.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
+                            onSelect(conv)
+                        }
+                    },
+                    onReaction: { emoji in
+                        // Fire & forget reaction to status
+                        Task {
+                            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                                endpoint: "/posts/\(status.id)/like",
+                                body: ["emoji": emoji]
+                            )
+                        }
+                    }
+                )
+                .zIndex(200)
+            }
+        }
+    }
+
+    // MARK: - Handle Avatar Tap (opens stories)
+    private func handleAvatarTap(_ conversation: Conversation) {
+        guard conversation.type == .direct else { return }
+
+        // 1. Check for stories by participantUserId
+        if let userId = conversation.participantUserId,
+           let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+            HapticFeedback.light()
+            onStoryViewRequest?(groupIndex, false)  // fromTray = false → single group
+            return
+        }
+
+        // 2. Fallback: match by conversation name == group username
+        if let groupIndex = storyViewModel.storyGroups.firstIndex(where: { $0.username == conversation.name }) {
+            HapticFeedback.light()
+            onStoryViewRequest?(groupIndex, false)  // fromTray = false → single group
+            return
+        }
+
+        // 3. No stories — just haptic
+        HapticFeedback.light()
+    }
+
+    // MARK: - Handle Mood Badge Tap (opens status bubble)
+    private func handleMoodBadgeTap(_ conversation: Conversation, at anchor: CGPoint) {
+        guard conversation.type == .direct,
+              let userId = conversation.participantUserId,
+              let status = statusViewModel.statusForUser(userId: userId) else { return }
+        selectedStatusEntry = status
+        moodBadgeAnchor = anchor
+        showStatusBubble = true
     }
 
     // MARK: - Context Menu
@@ -921,8 +1006,14 @@ struct ThemedConversationRow: View {
     let conversation: Conversation
     var availableWidth: CGFloat = 200 // Default width for tags calculation
     var isDragging: Bool = false
+    var onAvatarTap: (() -> Void)? = nil
+    var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject var storyViewModel: StoryViewModel
+    @EnvironmentObject var statusViewModel: StatusViewModel
+
+    @State private var showLastSeenTooltip = false
 
     private var accentColor: String { conversation.accentColor }
 
@@ -1051,50 +1142,159 @@ struct ThemedConversationRow: View {
     }
 
     // MARK: - Avatar
+
+    private var hasStoryRing: Bool {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return false }
+        return storyViewModel.hasStories(forUserId: userId)
+    }
+
+    private var hasUnviewedStoryRing: Bool {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return false }
+        return storyViewModel.hasUnviewedStories(forUserId: userId)
+    }
+
+    private var moodStatus: StatusEntry? {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
+        return statusViewModel.statusForUser(userId: userId)
+    }
+
     private var avatarView: some View {
         ZStack {
-            // Animated ring for online/active conversations
-            if conversation.type == .direct || conversation.unreadCount > 0 {
-                Circle()
-                    .stroke(
-                        AngularGradient(
-                            colors: [Color(hex: accentColor), Color(hex: conversation.colorPalette.secondary), Color(hex: accentColor)],
-                            center: .center
-                        ),
-                        lineWidth: 2.5
-                    )
-                    .frame(width: 56, height: 56)
-                    .pulse(intensity: 0.03)
+            // Avatar body — tap opens stories
+            Button {
+                onAvatarTap?()
+            } label: {
+                ZStack {
+                    // Ring: story gradient or default ring
+                    if hasStoryRing {
+                        Circle()
+                            .stroke(
+                                hasUnviewedStoryRing ?
+                                LinearGradient(
+                                    colors: [Color(hex: "FF6B6B"), Color(hex: "F8B500"), Color(hex: "4ECDC4"), Color(hex: "9B59B6")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ) :
+                                LinearGradient(
+                                    colors: [Color.gray.opacity(0.5), Color.gray.opacity(0.3)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2.5
+                            )
+                            .frame(width: 56, height: 56)
+                    } else if conversation.type == .direct || conversation.unreadCount > 0 {
+                        Circle()
+                            .stroke(
+                                AngularGradient(
+                                    colors: [Color(hex: accentColor), Color(hex: conversation.colorPalette.secondary), Color(hex: accentColor)],
+                                    center: .center
+                                ),
+                                lineWidth: 2.5
+                            )
+                            .frame(width: 56, height: 56)
+                            .pulse(intensity: 0.03)
+                    }
+
+                    // Gradient circle background
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: accentColor),
+                                    Color(hex: conversation.colorPalette.secondary)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 52, height: 52)
+                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
+
+                    // Initial
+                    Text(String(conversation.name.prefix(1)))
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            // Long press context menu — stories, profile, info
+            .contextMenu {
+                if hasStoryRing {
+                    Button {
+                        onAvatarTap?()
+                    } label: {
+                        Label("Voir les stories", systemImage: "play.circle.fill")
+                    }
+                }
+
+                Button {
+                    HapticFeedback.light()
+                    // TODO: Navigate to profile
+                } label: {
+                    Label("Voir le profil", systemImage: "person.fill")
+                }
+
+                if conversation.type == .direct {
+                    Button {
+                        HapticFeedback.light()
+                        // TODO: Show user info
+                    } label: {
+                        Label("Infos utilisateur", systemImage: "info.circle.fill")
+                    }
+                }
+            }
+            // Mood badge / online dot — positioned at bottom-trailing via overlay (no .offset!)
+            .overlay(alignment: .bottomTrailing) {
+                if let status = moodStatus {
+                    // Mood badge — GeometryReader captures REAL screen position at tap time
+                    GeometryReader { geo in
+                        Text(status.moodEmoji)
+                            .font(.system(size: 14))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Circle())
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                let f = geo.frame(in: .global)
+                                onMoodBadgeTap?(CGPoint(x: f.midX, y: f.midY))
+                            }
+                    }
+                    .frame(width: 24, height: 24)
+                    .pulse(intensity: 0.15)
+                } else if conversation.type == .direct {
+                    // Online dot (tap → last seen tooltip)
+                    Circle()
+                        .fill(Color(hex: "2ECC71"))
+                        .frame(width: 14, height: 14)
+                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                showLastSeenTooltip = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    showLastSeenTooltip = false
+                                }
+                            }
+                        }
+                        .pulse(intensity: 0.15)
+                }
             }
 
-            // Gradient circle background
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: accentColor),
-                            Color(hex: conversation.colorPalette.secondary)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // Last seen tooltip
+            if showLastSeenTooltip, let text = conversation.lastSeenText {
+                Text(text)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(0.75))
                     )
-                )
-                .frame(width: 52, height: 52)
-                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
-
-            // Initial
-            Text(String(conversation.name.prefix(1)))
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-
-            // Online indicator for direct chats with pulse
-            if conversation.type == .direct {
-                Circle()
-                    .fill(Color(hex: "2ECC71"))
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
-                    .offset(x: 18, y: 18)
-                    .pulse(intensity: 0.15)
+                    .offset(x: 0, y: -34)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
     }

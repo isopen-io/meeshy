@@ -12,6 +12,7 @@ import {
   ImageGallery,
   AudioPlayer,
   VideoPlayer,
+  Tooltip,
   theme,
   ConversationDrawer,
   useSplitView,
@@ -445,16 +446,20 @@ export default function V2ChatsPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" title="Appel audio">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-            </svg>
-          </Button>
-          <Button variant="ghost" size="sm" title="Options" onClick={() => setDrawerOpen(true)}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
-          </Button>
+          <Tooltip content="Appel audio">
+            <Button variant="ghost" size="sm">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </Button>
+          </Tooltip>
+          <Tooltip content="Options">
+            <Button variant="ghost" size="sm" onClick={() => setDrawerOpen(true)}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -535,22 +540,24 @@ export default function V2ChatsPage() {
                   />
 
                   <div className={`absolute top-0 ${isSent ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
-                    <button
-                      onClick={() => handleReply(msg)}
-                      className="p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors text-[var(--gp-text-muted)]"
-                      title="Repondre"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleReaction(msg.id, '👍')}
-                      className="p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors text-[var(--gp-text-muted)]"
-                      title="Reagir"
-                    >
-                      <span className="text-sm">👍</span>
-                    </button>
+                    <Tooltip content="Repondre">
+                      <button
+                        onClick={() => handleReply(msg)}
+                        className="p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors text-[var(--gp-text-muted)]"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Reagir">
+                      <button
+                        onClick={() => handleReaction(msg.id, '👍')}
+                        className="p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors text-[var(--gp-text-muted)]"
+                      >
+                        <span className="text-sm">👍</span>
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               </div>

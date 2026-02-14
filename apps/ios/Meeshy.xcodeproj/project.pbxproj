@@ -25,6 +25,17 @@
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */; };
 		C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */; };
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */; };
+		AA11BB22CC33DD44EE55FF01 /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660011 /* StoryModels.swift */; };
+		AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */; };
+		AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */; };
+		AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */; };
+		AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */; };
+		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
+		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
+		DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */; };
+		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
+		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
+		DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +60,17 @@
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
 		F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModel.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660011 /* StoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryModels.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModel.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTrayView.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
+		CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
+		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
+		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
+		CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiReactionPicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -59,6 +81,9 @@
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
 				FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
+				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
+				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
+				CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */,
 				F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */,
 			);
 			path = Components;
@@ -114,6 +139,10 @@
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
+				BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */,
+				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
+				BB22CC33DD44EE55FF660066 /* StatusBarView.swift */,
+				BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -139,6 +168,7 @@
 			children = (
 				1F52D4DD36D01276DA42A395 /* Models.swift */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */,
+				BB22CC33DD44EE55FF660011 /* StoryModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -147,6 +177,7 @@
 			isa = PBXGroup;
 			children = (
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */,
+				CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -155,6 +186,8 @@
 			isa = PBXGroup;
 			children = (
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */,
+				BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */,
+				BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -246,6 +279,17 @@
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */,
+				AA11BB22CC33DD44EE55FF01 /* StoryModels.swift in Sources */,
+				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
+				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
+				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */,
+				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
+				DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */,
+				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
+				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
+				DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { theme } from './theme';
+import { Tooltip } from './Tooltip';
 
 export interface Attachment {
   id: string;
@@ -462,64 +463,69 @@ export const MessageComposer = forwardRef<
 
             {/* Icônes d'action à droite du sélecteur de langue */}
             {showAttachment && (
+              <Tooltip content="Piece jointe">
+                <button
+                  onClick={onAttachmentClick}
+                  disabled={disabled || isRecording}
+                  className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                  style={{ color: 'var(--gp-text-muted)' }}
+                  aria-label="Ajouter une piece jointe"
+                >
+                  <AttachmentIcon className="w-5 h-5 md:w-4 md:h-4" />
+                </button>
+              </Tooltip>
+            )}
+
+            <Tooltip content="Emoji">
               <button
-                onClick={onAttachmentClick}
                 disabled={disabled || isRecording}
                 className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
                 style={{ color: 'var(--gp-text-muted)' }}
-                title="Pièce jointe"
-                aria-label="Ajouter une pièce jointe"
+                aria-label="Ajouter un emoji"
               >
-                <AttachmentIcon className="w-5 h-5 md:w-4 md:h-4" />
+                <EmojiIcon className="w-5 h-5 md:w-4 md:h-4" />
               </button>
-            )}
-
-            <button
-              disabled={disabled || isRecording}
-              className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
-              style={{ color: 'var(--gp-text-muted)' }}
-              title="Emoji"
-              aria-label="Ajouter un emoji"
-            >
-              <EmojiIcon className="w-5 h-5 md:w-4 md:h-4" />
-            </button>
+            </Tooltip>
 
             {showVoice && (
               isRecording ? (
-                <button
-                  onClick={stopRecording}
-                  className="p-2 md:p-1.5 rounded-full transition-colors duration-300 animate-pulse"
-                  style={{ background: '#EF4444', color: 'white' }}
-                  title="Arrêter"
-                  aria-label="Arrêter l'enregistrement"
-                >
-                  <StopIcon className="w-5 h-5 md:w-4 md:h-4" />
-                </button>
+                <Tooltip content="Arreter">
+                  <button
+                    onClick={stopRecording}
+                    className="p-2 md:p-1.5 rounded-full transition-colors duration-300 animate-pulse"
+                    style={{ background: '#EF4444', color: 'white' }}
+                    aria-label="Arreter l'enregistrement"
+                  >
+                    <StopIcon className="w-5 h-5 md:w-4 md:h-4" />
+                  </button>
+                </Tooltip>
               ) : (
-                <button
-                  onClick={startRecording}
-                  disabled={disabled}
-                  className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
-                  style={{ color: 'var(--gp-text-muted)' }}
-                  title="Message vocal"
-                  aria-label="Enregistrer un message vocal"
-                >
-                  <MicIcon className="w-5 h-5 md:w-4 md:h-4" />
-                </button>
+                <Tooltip content="Message vocal">
+                  <button
+                    onClick={startRecording}
+                    disabled={disabled}
+                    className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                    style={{ color: 'var(--gp-text-muted)' }}
+                    aria-label="Enregistrer un message vocal"
+                  >
+                    <MicIcon className="w-5 h-5 md:w-4 md:h-4" />
+                  </button>
+                </Tooltip>
               )
             )}
 
             {showLocation && !isRecording && (
-              <button
-                onClick={requestLocation}
-                disabled={disabled}
-                className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
-                style={{ color: 'var(--gp-text-muted)' }}
-                title="Position"
-                aria-label="Partager ma position"
-              >
-                <LocationIcon className="w-5 h-5 md:w-4 md:h-4" />
-              </button>
+              <Tooltip content="Position">
+                <button
+                  onClick={requestLocation}
+                  disabled={disabled}
+                  className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
+                  style={{ color: 'var(--gp-text-muted)' }}
+                  aria-label="Partager ma position"
+                >
+                  <LocationIcon className="w-5 h-5 md:w-4 md:h-4" />
+                </button>
+              </Tooltip>
             )}
 
             {isRecording && (
@@ -549,19 +555,20 @@ export const MessageComposer = forwardRef<
 
           {/* Bouton envoyer - à droite dans le textarea (visible seulement s'il y a du contenu) */}
           {hasContent && (
-            <button
-              onClick={handleSend}
-              disabled={disabled}
-              className="absolute right-2 bottom-2 p-2 rounded-full transition-transform duration-300 hover:scale-105 active:scale-95"
-              style={{
-                background: 'var(--gp-terracotta)',
-                color: 'white',
-              }}
-              title="Envoyer"
-              aria-label="Envoyer le message"
-            >
-              <SendIcon className="w-5 h-5" />
-            </button>
+            <Tooltip content="Envoyer" side="left">
+              <button
+                onClick={handleSend}
+                disabled={disabled}
+                className="absolute right-2 bottom-2 p-2 rounded-full transition-transform duration-300 hover:scale-105 active:scale-95"
+                style={{
+                  background: 'var(--gp-terracotta)',
+                  color: 'white',
+                }}
+                aria-label="Envoyer le message"
+              >
+                <SendIcon className="w-5 h-5" />
+              </button>
+            </Tooltip>
           )}
 
           {/* Compteur de caractères */}

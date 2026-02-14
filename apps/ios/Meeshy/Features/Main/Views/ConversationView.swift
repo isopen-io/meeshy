@@ -4,9 +4,11 @@ import CoreLocation
 
 struct ConversationView: View {
     let conversation: Conversation?
+    var replyContext: ReplyContext? = nil
     let onBack: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject var storyViewModel: StoryViewModel
     @StateObject private var locationManager = LocationManager()
     @State private var messageText = ""
     @State private var messages: [ChatMessage] = []
@@ -26,6 +28,14 @@ struct ConversationView: View {
     @GestureState private var dragOffset: CGFloat = 0
     @StateObject private var textAnalyzer = TextAnalyzer()
     @State private var showLanguagePicker = false
+    @State private var pendingReplyReference: ReplyReference?
+    @State private var showStoryViewerFromHeader = false
+    @State private var storyGroupIndexForHeader = 0
+
+    private var headerHasStoryRing: Bool {
+        guard let userId = conversation?.participantUserId else { return false }
+        return storyViewModel.hasStories(forUserId: userId)
+    }
 
     private var accentColor: String {
         conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
@@ -116,22 +126,42 @@ struct ConversationView: View {
 
                     Spacer()
 
-                    // Avatar button
+                    // Avatar button with story ring — tap toggles options menu
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?",
                         color: accentColor,
                         secondaryColor: secondaryColor,
-                        isExpanded: showOptions
+                        isExpanded: showOptions,
+                        hasStoryRing: headerHasStoryRing
                     ) {
-                        if showOptions {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showOptions.toggle()
+                        }
+                    }
+                    .contextMenu {
+                        // Long press: view stories, profile, info
+                        if headerHasStoryRing {
+                            Button {
+                                if let userId = conversation?.participantUserId,
+                                   let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                                    storyGroupIndexForHeader = groupIndex
+                                    showStoryViewerFromHeader = true
+                                }
+                            } label: {
+                                Label("Voir les stories", systemImage: "play.circle.fill")
+                            }
+                        }
+
+                        Button {
                             actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOptions = false
-                            }
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOptions = true
-                            }
+                        } label: {
+                            Label("Voir le profil", systemImage: "person.fill")
+                        }
+
+                        Button {
+                            actionAlert = "Infos de la conversation"
+                        } label: {
+                            Label("Infos conversation", systemImage: "info.circle.fill")
                         }
                     }
                 }
@@ -171,7 +201,23 @@ struct ConversationView: View {
         .offset(x: dragOffset)
         .scaleEffect(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.05) : 1.0)
         .opacity(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.3) : 1.0)
-        .onAppear { messages = sampleMessages }
+        .onAppear {
+            messages = sampleMessages
+            // Pre-populate reply reference from story/status reply
+            if let context = replyContext {
+                pendingReplyReference = context.toReplyReference
+            }
+        }
+        .fullScreenCover(isPresented: $showStoryViewerFromHeader) {
+            if storyGroupIndexForHeader < storyViewModel.storyGroups.count {
+                StoryViewerView(
+                    viewModel: storyViewModel,
+                    groups: [storyViewModel.storyGroups[storyGroupIndexForHeader]],
+                    currentGroupIndex: 0,
+                    isPresented: $showStoryViewerFromHeader
+                )
+            }
+        }
         .alert("Action sélectionnée", isPresented: Binding(
             get: { actionAlert != nil },
             set: { if !$0 { actionAlert = nil } }
@@ -823,6 +869,7 @@ struct ThemedAvatarButton: View {
     let color: String
     let secondaryColor: String
     let isExpanded: Bool
+    var hasStoryRing: Bool = false
     let action: () -> Void
     @State private var isPressed = false
 
@@ -835,6 +882,20 @@ struct ThemedAvatarButton: View {
             action()
         }) {
             ZStack {
+                // Story ring
+                if hasStoryRing {
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(hex: "FF6B6B"), Color(hex: "F8B500"), Color(hex: "4ECDC4"), Color(hex: "9B59B6")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2.5
+                        )
+                        .frame(width: 46, height: 46)
+                }
+
                 Circle()
                     .fill(
                         LinearGradient(
