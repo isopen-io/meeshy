@@ -256,9 +256,19 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         durationMs: duration
       });
 
+      // Normalize delivery field for old notifications missing pushSent/emailSent
+      const normalizedNotifications = notifications.map((n: any) => ({
+        ...n,
+        delivery: {
+          emailSent: false,
+          pushSent: false,
+          ...(typeof n.delivery === 'object' && n.delivery !== null ? n.delivery : {}),
+        },
+      }));
+
       return reply.send({
         success: true,
-        data: notifications,
+        data: normalizedNotifications,
         pagination: {
           total: totalCount,
           limit: limitNum,

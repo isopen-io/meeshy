@@ -200,7 +200,7 @@ export class NotificationDigestJob {
       await this.prisma.notification.updateMany({
         where: { id: { in: pendingIds } },
         data: {
-          delivery: { emailSent: true, emailSentAt: new Date().toISOString() },
+          delivery: { emailSent: true, emailSentAt: new Date().toISOString(), pushSent: false },
         },
       });
       return true;
