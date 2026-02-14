@@ -18,7 +18,7 @@ import {
   updateRoleValidationSchema,
   updateStatusValidationSchema,
   resetPasswordValidationSchema
-} from '@meeshy/shared/types/validation';
+} from '@meeshy/shared/types/validation/admin-user';
 
 // Schémas de validation locaux pour les endpoints admin
 const verifyEmailSchema = z.object({

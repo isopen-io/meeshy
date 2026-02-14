@@ -44,8 +44,9 @@ import { invitationRoutes } from './routes/admin/invitations';
 import { analyticsRoutes } from './routes/admin/analytics';
 import { languagesRoutes } from './routes/admin/languages';
 import { messagesRoutes } from './routes/admin/messages';
-// import { communityAdminRoutes } from './routes/admin/communities';
-// import { linksAdminRoutes } from './routes/admin/links';
+import { registerContentRoutes } from './routes/admin/content';
+import { anonymousUsersAdminRoutes } from './routes/admin/anonymous-users';
+import { systemRankingsRoutes } from './routes/admin/system-rankings';
 import { userRoutes } from './routes/users';
 // TODO: Migrer user-features vers UserPreferences + ConsentService
 // import userFeaturesRoutes from './routes/user-features';
@@ -880,14 +881,17 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Register admin languages routes (at /api/admin/languages)
     await this.server.register(languagesRoutes, { prefix: `${API_PREFIX}/admin/languages` });
 
-    // Register admin messages routes (at /api/admin/messages)
+    // Register admin messages routes (at /api/admin/messages/stats|trends|engagement)
     await this.server.register(messagesRoutes, { prefix: `${API_PREFIX}/admin/messages` });
 
-    // Register admin communities routes (at /api/admin/communities)
-    //     await this.server.register(communityAdminRoutes, { prefix: '/api/admin/communities' });
-    //
-    //     // Register admin links routes (at /api/admin/links)
-    //     await this.server.register(linksAdminRoutes, { prefix: '/api/admin/links' });
+    // Register admin content routes (messages list, communities, translations, share-links)
+    await this.server.register(registerContentRoutes, { prefix: `${API_PREFIX}/admin` });
+
+    // Register admin anonymous users routes (at /api/admin/anonymous-users)
+    await this.server.register(anonymousUsersAdminRoutes, { prefix: `${API_PREFIX}/admin` });
+
+    // Register admin rankings routes (at /api/admin/ranking)
+    await this.server.register(systemRankingsRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });
