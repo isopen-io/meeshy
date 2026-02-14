@@ -190,7 +190,7 @@ export class NotificationDigestJob {
         };
       }),
       markAllReadUrl: `${frontendUrl}/notifications?markAllRead=true`,
-      settingsUrl: `${frontendUrl}/settings`,
+      settingsUrl: `${frontendUrl}/settings#notifications`,
     };
 
     const result = await this.emailService.sendNotificationDigestEmail(digestData);

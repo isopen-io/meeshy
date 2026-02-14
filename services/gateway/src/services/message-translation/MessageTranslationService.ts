@@ -1042,28 +1042,25 @@ export class MessageTranslationService extends EventEmitter {
         }
       }
 
-      // 5. Émettre événement pour notifier les clients (Socket.IO)
-      // Utiliser savedTranslatedAudios qui contient les URLs locales accessibles
+      // 5. Émettre un événement par langue pour notifier les clients (Socket.IO)
+      // Format singulier (translatedAudio) cohérent avec progressive/completed
       logger.info(
-        `📡 [TranslationService] Émission audioTranslationReady | ` +
-        `TaskID: ${data.taskId} | Msg: ${data.messageId} | Att: ${data.attachmentId} | ` +
-        `HasTranscription: ${!!data.transcription} | Audios: ${savedTranslatedAudios.length} (${savedTranslatedAudios.map(ta => ta.targetLanguage).join(', ')})`
+        `📡 [TranslationService] Émission audioTranslationReady (${savedTranslatedAudios.length} langue(s)) | ` +
+        `TaskID: ${data.taskId} | Msg: ${data.messageId} | Att: ${data.attachmentId}`
       );
 
-      // DEBUG: Vérifier que les URLs sont présentes dans savedTranslatedAudios
-      logger.info(`🔍 [TranslationService] URLs des audios traduits envoyées via WebSocket:`);
       for (const ta of savedTranslatedAudios) {
         logger.info(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}", path="${ta.path || '⚠️ VIDE'}"`);
+        this.emit('audioTranslationReady', {
+          taskId: data.taskId,
+          messageId: data.messageId,
+          attachmentId: data.attachmentId,
+          language: ta.targetLanguage,
+          translatedAudio: ta,
+          transcription: data.transcription,
+          processingTimeMs: data.processingTimeMs
+        });
       }
-
-      this.emit('audioTranslationReady', {
-        taskId: data.taskId,
-        messageId: data.messageId,
-        attachmentId: data.attachmentId,
-        transcription: data.transcription,
-        translatedAudios: savedTranslatedAudios,
-        processingTimeMs: data.processingTimeMs
-      });
 
       const totalTime = Date.now() - startTime;
       logger.info(`   ⏱️ Persistance audio terminée en ${totalTime}ms`);
@@ -1806,22 +1803,27 @@ export class MessageTranslationService extends EventEmitter {
           );
         }
 
-        // 4. Émettre l'événement audioTranslationReady pour diffusion Socket.IO
-        this.emit('audioTranslationReady', {
-          taskId: data.jobId,
-          messageId: jobMetadata.messageId,
-          attachmentId: jobMetadata.attachmentId,
-          transcription: data.result.originalAudio ? {
-            text: data.result.originalAudio.transcription,
-            language: data.result.originalAudio.language,
-            confidence: data.result.originalAudio.confidence,
-            durationMs: data.result.originalAudio.durationMs
-          } : undefined,
-          translatedAudios: savedTranslatedAudios,
-          processingTimeMs: data.result.processingTimeMs
-        });
+        // 4. Émettre un événement par langue pour diffusion Socket.IO (format singulier)
+        const transcriptionInfo = data.result.originalAudio ? {
+          text: data.result.originalAudio.transcription,
+          language: data.result.originalAudio.language,
+          confidence: data.result.originalAudio.confidence,
+          durationMs: data.result.originalAudio.durationMs
+        } : undefined;
 
-        logger.info(`📡 Événement audioTranslationReady émis vers Socket.IO`);
+        for (const ta of savedTranslatedAudios) {
+          this.emit('audioTranslationReady', {
+            taskId: data.jobId,
+            messageId: jobMetadata.messageId,
+            attachmentId: jobMetadata.attachmentId,
+            language: ta.targetLanguage,
+            translatedAudio: ta,
+            transcription: transcriptionInfo,
+            processingTimeMs: data.result.processingTimeMs
+          });
+        }
+
+        logger.info(`📡 Événement audioTranslationReady émis pour ${savedTranslatedAudios.length} langue(s)`);
       } else {
         // Job standalone (pas d'attachment) - juste émettre l'événement de job
         logger.info(`📋 [TranslationService] Job standalone (pas d'attachment)`);

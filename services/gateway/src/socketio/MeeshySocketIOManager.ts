@@ -1696,18 +1696,18 @@ export class MeeshySocketIOManager {
         conversationId: normalizedId,
         language: data.language || data.translatedAudio.targetLanguage,
         translatedAudio: {
-          id: data.attachmentId,
+          id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
           path: data.translatedAudio.path,
-          transcription: data.translatedAudio.transcription || '',
+          transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
           durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
           format: data.translatedAudio.format || 'mp3',
           cloned: data.translatedAudio.cloned || false,
           quality: data.translatedAudio.quality || 0,
           voiceModelId: data.translatedAudio.voiceModelId,
           ttsModel: data.translatedAudio.ttsModel || 'xtts',
-          segments: data.translatedAudio.segments  // ← SEGMENTS COMPLETS
+          segments: data.translatedAudio.segments
         },
         processingTimeMs: data.phase ? undefined : 0
       };
