@@ -38,6 +38,10 @@ import {
   VALID_THEMES,
   VALID_FONT_SIZES
 } from '../../config/user-preferences-defaults';
+import {
+  NOTIFICATION_PREFERENCE_DEFAULTS,
+  type NotificationPreference as NotifPrefs,
+} from '@meeshy/shared/types/preferences';
 
 export class PreferencesService {
   constructor(private prisma: PrismaClient) {}
@@ -48,50 +52,53 @@ export class PreferencesService {
 
   /**
    * Get notification preferences for a user
-   * Returns stored preferences or defaults if none exist
+   * Reads from UserPreferences.notification (JSON) — source unique de vérité.
+   * L'ancienne table NotificationPreference est décomissionnée.
    */
   async getNotificationPreferences(userId: string): Promise<NotificationPreferencesDTO> {
-    const preferences = await this.prisma.notificationPreference.findUnique({
-      where: { userId }
+    const userPrefs = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { notification: true, createdAt: true, updatedAt: true },
     });
 
-    if (preferences) {
+    const raw = (userPrefs?.notification ?? null) as Partial<NotifPrefs> | null;
+
+    if (raw && Object.keys(raw).length > 0) {
+      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
       return {
-        pushEnabled: preferences.pushNotifications,
-        emailEnabled: preferences.emailNotifications,
-        soundEnabled: preferences.soundEnabled,
-        newMessageEnabled: preferences.newMessage,
-        missedCallEnabled: preferences.missedCall,
-        systemEnabled: true, // TODO: Add to schema if needed
-        conversationEnabled: preferences.newConversation,
-        replyEnabled: preferences.messageReply,
-        mentionEnabled: preferences.messageMention,
-        reactionEnabled: true, // TODO: Add to schema if needed
-        contactRequestEnabled: preferences.friendRequest,
-        memberJoinedEnabled: preferences.friendRequestAccepted,
-        dndEnabled: preferences.dndEnabled,
-        dndStartTime: preferences.dndStartTime,
-        dndEndTime: preferences.dndEndTime,
+        pushEnabled: prefs.pushEnabled,
+        emailEnabled: prefs.emailEnabled,
+        soundEnabled: prefs.soundEnabled,
+        newMessageEnabled: prefs.newMessageEnabled,
+        missedCallEnabled: prefs.missedCallEnabled,
+        systemEnabled: prefs.systemEnabled,
+        conversationEnabled: prefs.conversationEnabled,
+        replyEnabled: prefs.replyEnabled,
+        mentionEnabled: prefs.mentionEnabled,
+        reactionEnabled: prefs.reactionEnabled,
+        contactRequestEnabled: prefs.contactRequestEnabled,
+        memberJoinedEnabled: prefs.memberJoinedEnabled,
+        dndEnabled: prefs.dndEnabled,
+        dndStartTime: prefs.dndStartTime,
+        dndEndTime: prefs.dndEndTime,
         isDefault: false,
-        createdAt: preferences.createdAt,
-        updatedAt: preferences.updatedAt
+        createdAt: userPrefs?.createdAt ?? null,
+        updatedAt: userPrefs?.updatedAt ?? null,
       };
     }
 
     // Return defaults
     return {
-      id: null,
-      userId,
       ...NOTIFICATION_PREFERENCES_DEFAULTS,
       isDefault: true,
       createdAt: null,
-      updatedAt: null
+      updatedAt: null,
     } as NotificationPreferencesDTO;
   }
 
   /**
-   * Update notification preferences (upsert)
-   * Validates input and performs partial updates
+   * Update notification preferences (merge partiel)
+   * Écrit dans UserPreferences.notification (JSON) — source unique de vérité.
    */
   async updateNotificationPreferences(
     userId: string,
@@ -105,91 +112,64 @@ export class PreferencesService {
       throw new Error('Invalid dndEndTime format. Expected HH:MM (e.g., 08:00)');
     }
 
-    // If DND is being enabled, validate times are set
-    if (data.dndEnabled === true) {
-      const existingPrefs = await this.prisma.notificationPreference.findUnique({
-        where: { userId }
-      });
-
-      const startTime = data.dndStartTime ?? existingPrefs?.dndStartTime;
-      const endTime = data.dndEndTime ?? existingPrefs?.dndEndTime;
-
-      if (!startTime || !endTime) {
-        throw new Error('dndStartTime and dndEndTime are required when enabling DND');
-      }
-    }
-
-    // Map DTO fields to database fields
-    const dbUpdateData: any = {};
-    if (data.pushEnabled !== undefined) dbUpdateData.pushNotifications = data.pushEnabled;
-    if (data.emailEnabled !== undefined) dbUpdateData.emailNotifications = data.emailEnabled;
-    if (data.soundEnabled !== undefined) dbUpdateData.soundEnabled = data.soundEnabled;
-    if (data.newMessageEnabled !== undefined) dbUpdateData.newMessage = data.newMessageEnabled;
-    if (data.missedCallEnabled !== undefined) dbUpdateData.missedCall = data.missedCallEnabled;
-    if (data.conversationEnabled !== undefined) dbUpdateData.newConversation = data.conversationEnabled;
-    if (data.replyEnabled !== undefined) dbUpdateData.messageReply = data.replyEnabled;
-    if (data.mentionEnabled !== undefined) dbUpdateData.messageMention = data.mentionEnabled;
-    if (data.contactRequestEnabled !== undefined) dbUpdateData.friendRequest = data.contactRequestEnabled;
-    if (data.memberJoinedEnabled !== undefined) dbUpdateData.friendRequestAccepted = data.memberJoinedEnabled;
-    if (data.dndEnabled !== undefined) dbUpdateData.dndEnabled = data.dndEnabled;
-    if (data.dndStartTime !== undefined) dbUpdateData.dndStartTime = data.dndStartTime;
-    if (data.dndEndTime !== undefined) dbUpdateData.dndEndTime = data.dndEndTime;
-
-    const preferences = await this.prisma.notificationPreference.upsert({
+    // Récupérer les prefs existantes
+    const existing = await this.prisma.userPreferences.findUnique({
       where: { userId },
-      create: {
-        userId,
-        pushNotifications: NOTIFICATION_PREFERENCES_DEFAULTS.pushEnabled ?? true,
-        emailNotifications: NOTIFICATION_PREFERENCES_DEFAULTS.emailEnabled ?? true,
-        soundEnabled: NOTIFICATION_PREFERENCES_DEFAULTS.soundEnabled ?? true,
-        newMessage: NOTIFICATION_PREFERENCES_DEFAULTS.newMessageEnabled ?? true,
-        messageReply: NOTIFICATION_PREFERENCES_DEFAULTS.replyEnabled ?? true,
-        messageMention: NOTIFICATION_PREFERENCES_DEFAULTS.mentionEnabled ?? true,
-        newConversation: NOTIFICATION_PREFERENCES_DEFAULTS.conversationEnabled ?? true,
-        conversationInvite: true,
-        friendRequest: NOTIFICATION_PREFERENCES_DEFAULTS.contactRequestEnabled ?? true,
-        friendRequestAccepted: NOTIFICATION_PREFERENCES_DEFAULTS.memberJoinedEnabled ?? true,
-        groupInvite: true,
-        missedCall: NOTIFICATION_PREFERENCES_DEFAULTS.missedCallEnabled ?? true,
-        voicemailReceived: true,
-        vibrationEnabled: true,
-        dndEnabled: NOTIFICATION_PREFERENCES_DEFAULTS.dndEnabled ?? false,
-        dndStartTime: NOTIFICATION_PREFERENCES_DEFAULTS.dndStartTime,
-        dndEndTime: NOTIFICATION_PREFERENCES_DEFAULTS.dndEndTime,
-        ...dbUpdateData
-      },
-      update: dbUpdateData
+      select: { notification: true },
     });
 
+    const current = (existing?.notification ?? {}) as Record<string, unknown>;
+    const merged = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...current, ...data };
+
+    // If DND is being enabled, validate times are set
+    if (data.dndEnabled === true && (!merged.dndStartTime || !merged.dndEndTime)) {
+      throw new Error('dndStartTime and dndEndTime are required when enabling DND');
+    }
+
+    // Upsert dans UserPreferences.notification
+    const updated = await this.prisma.userPreferences.upsert({
+      where: { userId },
+      create: { userId, notification: merged as any },
+      update: { notification: merged as any },
+      select: { notification: true, createdAt: true, updatedAt: true },
+    });
+
+    const prefs = updated.notification as NotifPrefs;
     return {
-      pushEnabled: preferences.pushNotifications,
-      emailEnabled: preferences.emailNotifications,
-      soundEnabled: preferences.soundEnabled,
-      newMessageEnabled: preferences.newMessage,
-      missedCallEnabled: preferences.missedCall,
-      systemEnabled: true,
-      conversationEnabled: preferences.newConversation,
-      replyEnabled: preferences.messageReply,
-      mentionEnabled: preferences.messageMention,
-      reactionEnabled: true,
-      contactRequestEnabled: preferences.friendRequest,
-      memberJoinedEnabled: preferences.friendRequestAccepted,
-      dndEnabled: preferences.dndEnabled,
-      dndStartTime: preferences.dndStartTime,
-      dndEndTime: preferences.dndEndTime,
+      pushEnabled: prefs.pushEnabled,
+      emailEnabled: prefs.emailEnabled,
+      soundEnabled: prefs.soundEnabled,
+      newMessageEnabled: prefs.newMessageEnabled,
+      missedCallEnabled: prefs.missedCallEnabled,
+      systemEnabled: prefs.systemEnabled,
+      conversationEnabled: prefs.conversationEnabled,
+      replyEnabled: prefs.replyEnabled,
+      mentionEnabled: prefs.mentionEnabled,
+      reactionEnabled: prefs.reactionEnabled,
+      contactRequestEnabled: prefs.contactRequestEnabled,
+      memberJoinedEnabled: prefs.memberJoinedEnabled,
+      dndEnabled: prefs.dndEnabled,
+      dndStartTime: prefs.dndStartTime,
+      dndEndTime: prefs.dndEndTime,
       isDefault: false,
-      createdAt: preferences.createdAt,
-      updatedAt: preferences.updatedAt
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
     };
   }
 
   /**
    * Reset notification preferences to defaults
+   * Met le champ notification à null dans UserPreferences (les defaults seront retournés au GET)
    */
   async resetNotificationPreferences(userId: string): Promise<void> {
-    await this.prisma.notificationPreference.deleteMany({
-      where: { userId }
-    });
+    try {
+      await this.prisma.userPreferences.update({
+        where: { userId },
+        data: { notification: null as any },
+      });
+    } catch {
+      // Si le record n'existe pas, rien à reset
+    }
   }
 
   // ============================================================================

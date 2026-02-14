@@ -140,7 +140,7 @@ export class NotificationDigestJob {
   }
 
   private async processUser(userId: string, unreadCount: number): Promise<boolean> {
-    // Check user preferences (UserPreferences.notification JSON)
+    // Check user preferences — source unique : UserPreferences.notification (JSON)
     const prefs = await this.prisma.userPreferences.findFirst({
       where: { userId },
       select: { notification: true },
@@ -148,15 +148,6 @@ export class NotificationDigestJob {
 
     const notifPrefs = prefs?.notification as Record<string, unknown> | null;
     if (notifPrefs?.emailEnabled === false) {
-      return false;
-    }
-
-    // Also check NotificationPreference.emailNotifications (dedicated table)
-    const notifPref = await this.prisma.notificationPreference.findFirst({
-      where: { userId },
-      select: { emailNotifications: true },
-    });
-    if (notifPref && notifPref.emailNotifications === false) {
       return false;
     }
 

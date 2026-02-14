@@ -9,6 +9,10 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import {
+  NOTIFICATION_PREFERENCE_DEFAULTS,
+  type NotificationPreference as NotifPrefs,
+} from '@meeshy/shared/types/preferences';
 
 // ============================================
 // TYPES
@@ -156,6 +160,44 @@ export class PushNotificationService {
   }
 
   /**
+   * Vérifie si les push sont autorisés selon UserPreferences.notification
+   */
+  private async isPushAllowed(userId: string): Promise<boolean> {
+    try {
+      const userPrefs = await this.prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { notification: true },
+      });
+      const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
+      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
+
+      if (!prefs.pushEnabled) return false;
+
+      // Vérifier DND
+      if (prefs.dndEnabled) {
+        const now = new Date();
+        if (prefs.dndDays && prefs.dndDays.length > 0) {
+          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+          const today = dayMap[now.getUTCDay()];
+          if (!prefs.dndDays.includes(today as any)) return true; // pas DND aujourd'hui
+        }
+        const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
+        const start = prefs.dndStartTime;
+        const end = prefs.dndEndTime;
+        if (start > end) {
+          if (currentTime >= start || currentTime < end) return false;
+        } else {
+          if (currentTime >= start && currentTime < end) return false;
+        }
+      }
+
+      return true;
+    } catch {
+      return true; // fail open
+    }
+  }
+
+  /**
    * Send push notification to a user
    */
   async sendToUser(options: SendPushOptions): Promise<PushResult[]> {
@@ -166,6 +208,13 @@ export class PushNotificationService {
     }
 
     const { userId, payload, types, platforms } = options;
+
+    // Vérifier les préférences push utilisateur (UserPreferences.notification)
+    const pushAllowed = await this.isPushAllowed(userId);
+    if (!pushAllowed) {
+      console.log(`[PUSH] Push blocked by user preferences for user ${userId}`);
+      return [];
+    }
 
     // Build query for user's push tokens
     const whereClause: any = {

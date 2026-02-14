@@ -16,6 +16,10 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import {
+  NOTIFICATION_PREFERENCE_DEFAULTS,
+  type NotificationPreference as NotifPrefs,
+} from '@meeshy/shared/types/preferences';
 
 // Type temporaire jusqu'à recompilation de @meeshy/shared
 type NotificationActor = {
@@ -32,6 +36,96 @@ export class NotificationService {
     private prisma: PrismaClient,
     private io?: SocketIOServer
   ) {}
+
+  // ==============================================
+  // PREFERENCE CHECKS
+  // ==============================================
+
+  /**
+   * Vérifie si une notification doit être créée selon les préférences utilisateur.
+   * Lit UserPreferences.notification (JSON) — source unique de vérité.
+   * Les notifications système passent toujours.
+   */
+  private async shouldCreateNotification(userId: string, type: NotificationType): Promise<boolean> {
+    // Les notifications système/sécurité passent toujours
+    if (type === 'system') return true;
+
+    try {
+      const userPrefs = await this.prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { notification: true },
+      });
+
+      const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
+      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
+
+      // 1) Vérifier le toggle par type
+      if (!this.isTypeEnabled(prefs, type)) {
+        notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
+        return false;
+      }
+
+      // 2) Vérifier le mode Ne Pas Déranger
+      if (this.isDNDActive(prefs)) {
+        notificationLogger.info('Notification bloquée par DND', { userId, type });
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
+      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId, type });
+      return true;
+    }
+  }
+
+  /**
+   * Mapping NotificationType → champ booléen dans UserPreferences.notification
+   */
+  private isTypeEnabled(prefs: NotifPrefs, type: NotificationType): boolean {
+    switch (type) {
+      case 'new_message':       return prefs.newMessageEnabled;
+      case 'missed_call':       return prefs.missedCallEnabled;
+      case 'system':            return prefs.systemEnabled;
+      case 'user_mentioned':    return prefs.mentionEnabled;
+      case 'message_reaction':  return prefs.reactionEnabled;
+      case 'friend_request':
+      case 'friend_accepted':   return prefs.contactRequestEnabled;
+      case 'member_joined':     return prefs.memberJoinedEnabled;
+      case 'message_reply':     return prefs.replyEnabled;
+      case 'translation_ready': return true; // toujours activé
+      default:                  return true;
+    }
+  }
+
+  /**
+   * Vérifie si le mode DND est actuellement actif.
+   * Utilise l'heure UTC du serveur.
+   */
+  private isDNDActive(prefs: NotifPrefs): boolean {
+    if (!prefs.dndEnabled) return false;
+
+    const now = new Date();
+
+    // Si dndDays est défini et non vide, vérifier le jour
+    if (prefs.dndDays && prefs.dndDays.length > 0) {
+      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+      const today = dayMap[now.getUTCDay()];
+      if (!prefs.dndDays.includes(today as any)) return false;
+    }
+
+    const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
+    const start = prefs.dndStartTime;
+    const end = prefs.dndEndTime;
+
+    // DND nocturne (ex: 22:00 - 08:00)
+    if (start > end) {
+      return currentTime >= start || currentTime < end;
+    }
+
+    // DND diurne (ex: 14:00 - 16:00)
+    return currentTime >= start && currentTime < end;
+  }
 
   // ==============================================
   // CORE - Méthode générique de création
@@ -51,6 +145,12 @@ export class NotificationService {
     expiresAt?: Date;
   }): Promise<Notification | null> {
     try {
+      // Vérifier les préférences utilisateur avant création
+      const allowed = await this.shouldCreateNotification(params.userId, params.type);
+      if (!allowed) {
+        return null;
+      }
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: params.userId,
