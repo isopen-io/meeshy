@@ -23,7 +23,8 @@ import {
   Sun,
   Moon,
   Laptop,
-  Trophy
+  Trophy,
+  Mail
 } from 'lucide-react';
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
@@ -111,6 +112,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
       permission: 'canViewAnalytics',
     },
     {
+      icon: Mail,
+      label: 'Broadcasts',
+      href: '/admin/broadcasts',
+      permission: 'canManageNotifications',
+    },
+    {
       icon: Settings,
       label: 'Paramètres système',
       href: '/admin/settings',
@@ -118,7 +125,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
     },
   ];
 
-  const filteredNavigation = navigationItems.filter(item => 
+  const filteredNavigation = navigationItems.filter(item =>
     PermissionsService.hasPermission(user, item.permission as keyof typeof user.permissions)
   );
 
@@ -152,8 +159,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Mobile Overlay */}
         {isMobileMenuOpen && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 md:hidden" 
+          <div
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
@@ -299,6 +306,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     {currentPage === '/admin/audit' && 'Logs d\'audit'}
                     {currentPage === '/admin/analytics' && 'Analyses'}
                     {currentPage === '/admin/ranking' && 'Classements'}
+                    {currentPage === '/admin/broadcasts' && 'Broadcasts Email'}
                     {currentPage === '/admin/settings' && 'Paramètres système'}
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">

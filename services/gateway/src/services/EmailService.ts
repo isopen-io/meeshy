@@ -106,6 +106,15 @@ export interface NotificationDigestEmailData {
   settingsUrl: string;
 }
 
+export interface BroadcastEmailData {
+  to: string;
+  recipientName: string;
+  subject: string;
+  body: string;
+  language: string;
+  unsubscribeUrl: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -1060,5 +1069,83 @@ export class EmailService {
       },
     };
     return translations[language] || translations['en'];
+  }
+
+  async sendBroadcastEmail(data: BroadcastEmailData): Promise<EmailResult> {
+    const lang = data.language || 'en';
+    const copyright = `\u00a9 ${new Date().getFullYear()} Meeshy. All rights reserved.`;
+
+    // Convert plain text body to HTML paragraphs
+    const bodyHtml = data.body
+      .split('\n\n')
+      .map(p => p.trim())
+      .filter(p => p.length > 0)
+      .map(p => `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+
+    const greetings: Record<string, string> = {
+      fr: 'Bonjour', en: 'Hello', es: 'Hola', pt: 'Ol\u00e1', it: 'Ciao', de: 'Hallo'
+    };
+    const teams: Record<string, string> = {
+      fr: "L'\u00e9quipe Meeshy", en: 'The Meeshy Team', es: 'El equipo de Meeshy',
+      pt: 'A equipe Meeshy', it: 'Il team Meeshy', de: 'Das Meeshy-Team'
+    };
+    const managePrefs: Record<string, string> = {
+      fr: 'G\u00e9rer mes pr\u00e9f\u00e9rences email', en: 'Manage email preferences',
+      es: 'Gestionar preferencias de correo', pt: 'Gerenciar prefer\u00eancias de email',
+      it: 'Gestisci preferenze email', de: 'E-Mail-Einstellungen verwalten'
+    };
+
+    const greeting = greetings[lang] || greetings['en'];
+    const team = teams[lang] || teams['en'];
+    const manage = managePrefs[lang] || managePrefs['en'];
+
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${this.escapeHtml(data.subject)}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" style="border-radius:12px 12px 0 0">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
+      </a>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${this.escapeHtml(data.subject)}</h1>
+    </div>
+
+    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
+      <p>${greeting} <strong class="link-text">${this.escapeHtml(data.recipientName)}</strong>,</p>
+      ${bodyHtml}
+      <p style="font-size:14px;margin-top:30px">${team}</p>
+    </div>
+
+    <div class="footer">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
+      </a>
+      <p style="margin:15px 0 0">${copyright}</p>
+      <p style="font-size:11px;margin:10px 0 0">
+        <a href="${data.unsubscribeUrl}" class="link-text" style="text-decoration:none">${manage}</a> &bull;
+        <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">Privacy</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const text = `${greeting} ${data.recipientName},\n\n${data.body}\n\n${team}\n\n${copyright}\n\n${manage}: ${data.unsubscribeUrl}`;
+
+    return this.sendEmail({
+      to: data.to,
+      subject: data.subject,
+      html,
+      text,
+    });
   }
 }

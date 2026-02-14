@@ -1373,6 +1373,33 @@ model AdminAuditLog {
   @@index([createdAt])
 }
 
+model AdminBroadcast {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  subject            String
+  body               String
+  sourceLanguage     String   @default("en")
+  targeting          Json     // { languages?: string[], countries?: string[], activityStatus: "active"|"inactive"|"all", inactiveSinceDays?: number }
+  translatedSubjects Json?    // Record<lang, translatedSubject>
+  translatedBodies   Json?    // Record<lang, translatedBody>
+  status             String   @default("DRAFT") // DRAFT | TRANSLATING | READY | SENDING | SENT | FAILED
+  totalRecipients    Int      @default(0)
+  sentCount          Int      @default(0)
+  failedCount        Int      @default(0)
+  targetLanguages    String[] @default([])
+  createdById        String   @db.ObjectId
+  sentById           String?  @db.ObjectId
+  sentAt             DateTime?
+  completedAt        DateTime?
+  errorMessage       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
 /// Signalement de contenu inapproprié
 model Report {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId

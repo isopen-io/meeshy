@@ -47,6 +47,7 @@ import { messagesRoutes } from './routes/admin/messages';
 import { registerContentRoutes } from './routes/admin/content';
 import { anonymousUsersAdminRoutes } from './routes/admin/anonymous-users';
 import { systemRankingsRoutes } from './routes/admin/system-rankings';
+import { broadcastRoutes } from './routes/admin/broadcasts';
 import { userRoutes } from './routes/users';
 // TODO: Migrer user-features vers UserPreferences + ConsentService
 // import userFeaturesRoutes from './routes/user-features';
@@ -126,7 +127,7 @@ const logger = winston.createLogger({
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
-    config.isDev 
+    config.isDev
       ? winston.format.combine(
           winston.format.colorize(),
           winston.format.printf(({ timestamp, level, message, stack }) => {
@@ -166,13 +167,13 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.Console(),
     ...(!config.isDev ? [
-      new winston.transports.File({ 
-        filename: 'logs/error.log', 
+      new winston.transports.File({
+        filename: 'logs/error.log',
         level: 'error',
         maxsize: 5242880, // 5MB
         maxFiles: 5
       }),
-      new winston.transports.File({ 
+      new winston.transports.File({
         filename: 'logs/combined.log',
         maxsize: 5242880, // 5MB
         maxFiles: 5
@@ -187,7 +188,7 @@ const logger = winston.createLogger({
 
 class AuthenticationError extends Error {
   public statusCode: number;
-  
+
   constructor(message: string = 'Authentication failed') {
     super(message);
     this.name = 'AuthenticationError';
@@ -197,7 +198,7 @@ class AuthenticationError extends Error {
 
 class ValidationError extends Error {
   public statusCode: number;
-  
+
   constructor(message: string = 'Validation failed') {
     super(message);
     this.name = 'ValidationError';
@@ -207,7 +208,7 @@ class ValidationError extends Error {
 
 class TranslationError extends Error {
   public statusCode: number;
-  
+
   constructor(message: string = 'Translation failed') {
     super(message);
     this.name = 'TranslationError';
@@ -343,7 +344,7 @@ class MeeshyServer {
 
       logger.info('🌐 Gateway starting in HTTP mode');
     }
-    
+
     this.prisma = new PrismaClient({
       log: ['warn', 'error'] // Désactivation des logs query et info pour réduire le bruit
     });
@@ -731,7 +732,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   }
 
   // --------------------------------------------------------------------------
-  // HELPER METHODS  
+  // HELPER METHODS
   // --------------------------------------------------------------------------
 
   private sendWebSocketMessage(connection: WebSocketConnection, message: WebSocketResponse): void {
@@ -766,7 +767,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           this.prisma.user.count(),
           this.translationService.healthCheck().catch(() => false)
         ]);
-        
+
         const health = {
           status: 'healthy',
           timestamp: new Date().toISOString(),
@@ -779,7 +780,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           },
           uptime: process.uptime()
         };
-        
+
         reply.code(200).send(health);
       } catch (error) {
         logger.error('Health check failed:', error);
@@ -790,7 +791,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         });
       }
     });
-    
+
     // Service information endpoint
     this.server.get('/info', async (request, reply) => {
       return {
@@ -828,7 +829,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Enregistrer les routes de gestion des jobs de traduction
       await fastify.register(translationJobsRoutes);
     }, { prefix: API_PREFIX });
-    
+
     // Register authentication routes with /api/auth prefix
     await this.server.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
 
@@ -850,13 +851,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }, { prefix: API_PREFIX });
     // Register links management routes
     await this.server.register(linksRoutes, { prefix: API_PREFIX });
-    
+
     // Register tracking links routes
     await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });
-    
+
     // Register anonymous participation routes
     await this.server.register(anonymousRoutes, { prefix: API_PREFIX });
-    
+
     // Register community routes
     await this.server.register(communityRoutes, { prefix: API_PREFIX });
 
@@ -892,6 +893,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register admin rankings routes (at /api/admin/ranking)
     await this.server.register(systemRankingsRoutes, { prefix: `${API_PREFIX}/admin` });
+
+    // Register admin broadcasts routes (at /api/admin/broadcasts)
+    await this.server.register(broadcastRoutes, { prefix: `${API_PREFIX}/admin/broadcasts` });
 
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });
@@ -931,7 +935,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register maintenance routes with /api prefix
     await this.server.register(maintenanceRoutes, { prefix: API_PREFIX });
-    
+
     // Register message routes with /api prefix
     await this.server.register(messageRoutes, { prefix: API_PREFIX });
 
@@ -950,7 +954,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register notification routes with /api prefix
     await this.server.register(notificationRoutes, { prefix: API_PREFIX });
-    
+
     // Register friend request routes with /api prefix
     await this.server.register(friendRequestRoutes, { prefix: API_PREFIX });
 
@@ -989,20 +993,20 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
   private async initializeServices(): Promise<void> {
     logger.info('Initializing external services...');
-    
+
     // Test database connection
     try {
       logger.info('🔍 Testing database connection...');
       // Test connection with a simple query instead
       await this.prisma.user.findFirst();
       logger.info(`✓ Database connected successfully`);
-      
+
       // Initialize database with default data
       const initService = new InitService(this.prisma);
-      
+
       // Check if initialization is needed
       const shouldInit = await initService.shouldInitialize();
-      
+
       if (shouldInit) {
         const forceReset = process.env.FORCE_DB_RESET === 'true';
         if (forceReset) {
@@ -1015,7 +1019,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       } else {
         logger.info('✅ Database already initialized, skipping initialization');
       }
-      
+
     } catch (error) {
       logger.error('✗ Database connection failed:', error);
       logger.info('⚠️ Continuing without database initialization (development mode)');
@@ -1044,7 +1048,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       }
     }
   }
-  
+
   private displayStartupBanner(): void {
     const dbStatus = config.databaseUrl ? 'Connected' : 'Not configured'.padEnd(48);
     const translateUrl = `tcp://0.0.0.0:${(process.env.ZMQ_TRANSLATOR_PORT || '5555').padEnd(37)}`;
@@ -1096,7 +1100,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         `.trim();
         logger.info(`🔌 WebSocket: ${wsProtocol}://gate.${domain}:${config.port}`);
       }
-      
+
     }
   }
 
@@ -1122,9 +1126,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.setupRoutes();
 
       // Start the server
-      await this.server.listen({ 
-        port: config.port, 
-        host: '0.0.0.0' 
+      await this.server.listen({
+        port: config.port,
+        host: '0.0.0.0'
       });
 
       // Display success banner

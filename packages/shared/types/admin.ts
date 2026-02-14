@@ -190,7 +190,7 @@ export type AdminAuditAction =
   | 'VIEW_COMMUNITY'
   | 'VIEW_REPORT'
   | 'VIEW_STATS'
-  // Actions de création/modification
+  // Actions de creation/modification
   | 'CREATE_USER'
   | 'UPDATE_PROFILE'
   | 'UPDATE_EMAIL'
@@ -199,7 +199,7 @@ export type AdminAuditAction =
   | 'UPDATE_STATUS'
   | 'UPDATE_COMMUNITY'
   | 'UPDATE_CONVERSATION'
-  // Actions de sécurité
+  // Actions de securite
   | 'CHANGE_PASSWORD'
   | 'RESET_PASSWORD'
   | 'ENABLE_2FA'
@@ -219,19 +219,23 @@ export type AdminAuditAction =
   | 'RESTORE_USER'
   | 'DELETE_COMMUNITY'
   | 'DELETE_CONVERSATION'
-  // Actions de vérification
+  // Actions de verification
   | 'VERIFY_EMAIL'
   | 'VERIFY_PHONE'
-  // Actions de modération
+  // Actions de moderation
   | 'RESOLVE_REPORT'
   | 'REJECT_REPORT'
   | 'BAN_USER'
   | 'UNBAN_USER'
   | 'WARN_USER'
-  | 'REMOVE_CONTENT';
+  | 'REMOVE_CONTENT'
+  // Actions de broadcast
+  | 'CREATE_BROADCAST'
+  | 'SEND_BROADCAST'
+  | 'DELETE_BROADCAST';
 
 /**
- * Types d'entités auditées
+ * Types d'entites auditees
  */
 export type AdminAuditEntity =
   | 'User'
@@ -241,10 +245,11 @@ export type AdminAuditEntity =
   | 'Report'
   | 'Attachment'
   | 'Session'
-  | 'TrackingLink';
+  | 'TrackingLink'
+  | 'Broadcast';
 
 /**
- * Détail d'un changement dans l'audit
+ * Detail d'un changement dans l'audit
  */
 export interface AdminAuditChange {
   readonly before: unknown;
@@ -252,7 +257,7 @@ export interface AdminAuditChange {
 }
 
 /**
- * Métadonnées d'audit admin
+ * Metadonnees d'audit admin
  */
 export interface AdminAuditMetadata {
   readonly reason?: string;
@@ -269,25 +274,25 @@ export interface AdminAuditMetadata {
 export interface AdminAuditLog {
   readonly id: string;
 
-  /** ID de l'utilisateur affecté par l'action */
+  /** ID de l'utilisateur affecte par l'action */
   readonly userId: string;
 
-  /** ID de l'administrateur qui a effectué l'action */
+  /** ID de l'administrateur qui a effectue l'action */
   readonly adminId: string;
 
   /** Type d'action (VIEW_USER, CREATE_USER, UPDATE_PROFILE, etc.) */
   readonly action: AdminAuditAction | string;
 
-  /** Type d'entité affectée (User, Community, etc.) */
+  /** Type d'entite affectee (User, Community, etc.) */
   readonly entity: AdminAuditEntity | string;
 
-  /** ID de l'entité affectée */
+  /** ID de l'entite affectee */
   readonly entityId: string;
 
-  /** Changements effectués (JSON stringifié) */
+  /** Changements effectues (JSON stringifie) */
   readonly changes?: string | Record<string, AdminAuditChange>;
 
-  /** Métadonnées supplémentaires (JSON stringifié) */
+  /** Metadonnees supplementaires (JSON stringifie) */
   readonly metadata?: string | AdminAuditMetadata;
 
   /** Adresse IP de l'admin */
@@ -296,12 +301,12 @@ export interface AdminAuditLog {
   /** User agent du navigateur */
   readonly userAgent?: string;
 
-  /** Date de création du log */
+  /** Date de creation du log */
   readonly createdAt: Date;
 }
 
 /**
- * Log d'audit parsé avec les changements et métadonnées décodés
+ * Log d'audit parse avec les changements et metadonnees decodes
  */
 export interface AdminAuditLogParsed extends Omit<AdminAuditLog, 'changes' | 'metadata'> {
   readonly changes?: Record<string, AdminAuditChange>;
@@ -309,7 +314,7 @@ export interface AdminAuditLogParsed extends Omit<AdminAuditLog, 'changes' | 'me
 }
 
 /**
- * DTO pour créer un log d'audit
+ * DTO pour creer un log d'audit
  */
 export interface CreateAdminAuditLogDTO {
   readonly userId: string;
@@ -341,7 +346,7 @@ export interface AdminAuditLogFilters {
 }
 
 /**
- * Réponse paginée pour les logs d'audit
+ * Reponse paginee pour les logs d'audit
  */
 export interface AdminAuditLogResponse {
   readonly logs: readonly AdminAuditLogParsed[];
@@ -349,7 +354,7 @@ export interface AdminAuditLogResponse {
 }
 
 /**
- * Parse un AdminAuditLog brut en version parsée
+ * Parse un AdminAuditLog brut en version parsee
  */
 export function parseAdminAuditLog(log: AdminAuditLog): AdminAuditLogParsed {
   let changes: Record<string, AdminAuditChange> | undefined;

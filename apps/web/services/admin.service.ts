@@ -317,5 +317,72 @@ export const adminService = {
       console.error('Erreur lors de la récupération des classements:', error);
       throw error;
     }
-  }
+  },
+
+  // ===== BROADCASTS =====
+
+  async getBroadcasts(offset: number = 0, limit: number = 20, status?: string): Promise<ApiResponse<any>> {
+    try {
+      const params: any = { offset, limit };
+      if (status) params.status = status;
+      return await apiService.get<any>('/admin/broadcasts', params);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des broadcasts:', error);
+      throw error;
+    }
+  },
+
+  async getBroadcast(id: string): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.get<any>(`/admin/broadcasts/${id}`);
+    } catch (error) {
+      console.error('Erreur lors de la récupération du broadcast:', error);
+      throw error;
+    }
+  },
+
+  async createBroadcast(data: { name: string; subject: string; body: string; sourceLanguage: string; targeting: any }): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.post<any>('/admin/broadcasts', data);
+    } catch (error) {
+      console.error('Erreur lors de la création du broadcast:', error);
+      throw error;
+    }
+  },
+
+  async updateBroadcast(id: string, data: any): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.put<any>(`/admin/broadcasts/${id}`, data);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du broadcast:', error);
+      throw error;
+    }
+  },
+
+  async previewBroadcast(id: string): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.post<any>(`/admin/broadcasts/${id}/preview`, {});
+    } catch (error) {
+      console.error('Erreur lors de la prévisualisation du broadcast:', error);
+      throw error;
+    }
+  },
+
+  async sendBroadcast(id: string): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.post<any>(`/admin/broadcasts/${id}/send`, {});
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi du broadcast:', error);
+      throw error;
+    }
+  },
+
+  async deleteBroadcast(id: string): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.delete<any>(`/admin/broadcasts/${id}`);
+    } catch (error) {
+      console.error('Erreur lors de la suppression du broadcast:', error);
+      throw error;
+    }
+  },
 };
