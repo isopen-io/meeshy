@@ -81,7 +81,7 @@ export interface SpeakerAnalysis {
   /** Durée totale de l'audio en millisecondes */
   readonly totalDurationMs: number;
   /** Méthode de diarisation utilisée */
-  readonly method: 'pyannote' | 'pitch_clustering' | 'single_speaker';
+  readonly method: 'pyannote' | 'pitch_clustering' | 'single_speaker' | 'single_fallback' | 'speechbrain' | 'speechbrain_cleaned';
 }
 
 /**

@@ -257,12 +257,15 @@ export class SecuritySanitizer {
       'member_joined',
       'contact_request',
       'contact_accepted',
+      'friend_request',
+      'friend_accepted',
       'user_mentioned',
       'message_reaction',
       'missed_call',
       'system',
       'new_conversation',
-      'message_edited'
+      'message_edited',
+      'translation_ready',
     ];
 
     return validTypes.includes(type);

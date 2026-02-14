@@ -482,18 +482,26 @@ class AudioHandler:
                 except Exception as e:
                     logger.warning(f"[MULTIPART] Erreur décodage embedding: {e}")
 
-                # Metadata sans base64
+                # Metadata sans embedding base64 (envoyé en binaire via binaryFrames)
                 new_voice_profile_metadata = {
                     'userId': nvp.user_id,
                     'profileId': nvp.profile_id,
-                    # Pas de embedding base64 - données dans binaryFrames
                     'qualityScore': nvp.quality_score,
                     'audioCount': nvp.audio_count,
                     'totalDurationMs': nvp.total_duration_ms,
                     'version': nvp.version,
                     'fingerprint': nvp.fingerprint,
-                    'voiceCharacteristics': nvp.voice_characteristics
+                    'voiceCharacteristics': nvp.voice_characteristics,
                 }
+
+                # Champs optionnels pour Chatterbox TTS et audio de référence
+                if getattr(nvp, 'chatterbox_conditionals_base64', None):
+                    new_voice_profile_metadata['chatterbox_conditionals_base64'] = nvp.chatterbox_conditionals_base64
+                if getattr(nvp, 'reference_audio_id', None):
+                    new_voice_profile_metadata['reference_audio_id'] = nvp.reference_audio_id
+                if getattr(nvp, 'reference_audio_url', None):
+                    new_voice_profile_metadata['reference_audio_url'] = nvp.reference_audio_url
+
                 logger.info(f"📦 [TRANSLATOR] Nouveau profil vocal multipart pour Gateway: {nvp.user_id}")
 
             # ═══════════════════════════════════════════════════════════════

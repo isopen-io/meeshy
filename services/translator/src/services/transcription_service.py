@@ -765,11 +765,11 @@ class TranscriptionService:
                     'voiceCharacteristics': voice_chars
                 })
 
+            # Structure alignée avec TypeScript SpeakerAnalysis:
+            # { speakers: SpeakerInfo[], totalDurationMs: number, method: string }
+            # Les champs speakerCount, primarySpeakerId, senderVoiceIdentified,
+            # senderSpeakerId sont déjà au niveau transcription (pas de duplication)
             transcription.speaker_analysis = {
-                'speakerCount': diarization.speaker_count,
-                'primarySpeakerId': diarization.primary_speaker_id,
-                'senderIdentified': diarization.sender_identified,
-                'senderSpeakerId': diarization.sender_speaker_id,
                 'speakers': speakers_list,
                 'totalDurationMs': diarization.total_duration_ms,
                 'method': diarization.method

@@ -573,12 +573,13 @@ export class ZmqMessageHandler extends EventEmitter {
     };
 
     // Émettre l'événement de traduction unique prête
+    // Utilise translatedAudio (singulier) comme audioTranslationsProgressive/Completed
     this.emit('audioTranslationReady', {
       taskId: event.taskId,
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       language: event.language,
-      translatedAudios: [enrichedTranslatedAudio]
+      translatedAudio: enrichedTranslatedAudio
     });
   }
 

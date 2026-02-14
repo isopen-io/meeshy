@@ -28,14 +28,23 @@ type NotificationActor = {
   displayName?: string | null;
   avatar?: string | null;
 };
-import { notificationLogger } from '../../utils/logger-enhanced';
+import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
 
 export class NotificationService {
+  // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
+  private recentMentions: Map<string, number[]> = new Map();
+  private readonly MAX_MENTIONS_PER_MINUTE = 5;
+  private readonly MENTION_WINDOW_MS = 60000; // 1 minute
+
   constructor(
     private prisma: PrismaClient,
     private io?: SocketIOServer
-  ) {}
+  ) {
+    // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
+    setInterval(() => this.cleanupOldMentions(), 120000);
+  }
 
   // ==============================================
   // PREFERENCE CHECKS
@@ -145,26 +154,57 @@ export class NotificationService {
     expiresAt?: Date;
   }): Promise<Notification | null> {
     try {
+      // SECURITY: Validate notification type
+      if (!SecuritySanitizer.isValidNotificationType(params.type)) {
+        securityLogger.logViolation('INVALID_NOTIFICATION_TYPE', {
+          type: params.type,
+          userId: params.userId,
+        });
+        return null;
+      }
+
+      // SECURITY: Validate priority
+      if (!SecuritySanitizer.isValidPriority(params.priority)) {
+        securityLogger.logViolation('INVALID_NOTIFICATION_PRIORITY', {
+          priority: params.priority,
+          userId: params.userId,
+        });
+        return null;
+      }
+
       // Vérifier les préférences utilisateur avant création
       const allowed = await this.shouldCreateNotification(params.userId, params.type);
       if (!allowed) {
         return null;
       }
 
+      // SECURITY: Sanitize user-provided content (defense-in-depth)
+      const sanitizedContent = SecuritySanitizer.sanitizeText(params.content);
+      const sanitizedActor = params.actor ? {
+        ...params.actor,
+        displayName: params.actor.displayName
+          ? SecuritySanitizer.sanitizeText(params.actor.displayName)
+          : params.actor.displayName,
+        avatar: params.actor.avatar
+          ? SecuritySanitizer.sanitizeURL(params.actor.avatar) ?? params.actor.avatar
+          : params.actor.avatar,
+      } : undefined;
+      const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: params.userId,
           type: params.type,
           priority: params.priority,
-          content: params.content,
+          content: sanitizedContent,
 
           // Relation optionnelle avec Message
           messageId: params.context.messageId || null,
 
           // Groupes V2 (cast en any car Prisma doit être régénéré)
-          actor: (params.actor || null) as any,
+          actor: (sanitizedActor || null) as any,
           context: params.context as any,
-          metadata: params.metadata as any,
+          metadata: sanitizedMetadata as any,
 
           // State (isRead, readAt, createdAt en DB, expiresAt si fourni)
           isRead: false,
@@ -431,6 +471,15 @@ export class NotificationService {
     conversationId: string;
     messagePreview: string;
   }): Promise<Notification | null> {
+    // Anti-spam: rate limit des mentions par paire (sender → recipient)
+    if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
+      notificationLogger.info('Mention notification blocked (rate limit)', {
+        senderId: params.mentionerUserId,
+        mentionedUserId: params.mentionedUserId,
+      });
+      return null;
+    }
+
     const mentioner = await this.prisma.user.findUnique({
       where: { id: params.mentionerUserId },
       select: { username: true, displayName: true, avatar: true },
@@ -489,6 +538,15 @@ export class NotificationService {
     for (const userId of mentionedUserIds) {
       if (userId === commonData.senderId) continue;
       if (!memberIds.includes(userId)) continue;
+
+      // Anti-spam: rate limit per sender:recipient pair
+      if (!this.shouldCreateMentionNotification(commonData.senderId, userId)) {
+        notificationLogger.info('Batch mention blocked (rate limit)', {
+          senderId: commonData.senderId,
+          recipientId: userId,
+        });
+        continue;
+      }
 
       const notification = await this.createMentionNotification({
         mentionedUserId: userId,
@@ -844,6 +902,63 @@ export class NotificationService {
         systemType: params.systemType,
       },
     });
+  }
+
+  // ==============================================
+  // ANTI-SPAM & UTILITIES
+  // ==============================================
+
+  /**
+   * Vérifie le rate limit des mentions par paire (sender → recipient).
+   * Maximum MAX_MENTIONS_PER_MINUTE mentions par minute par paire.
+   */
+  private shouldCreateMentionNotification(senderId: string, recipientId: string): boolean {
+    const key = `${senderId}:${recipientId}`;
+    const now = Date.now();
+    const cutoff = now - this.MENTION_WINDOW_MS;
+
+    const timestamps = this.recentMentions.get(key) || [];
+    const recentTimestamps = timestamps.filter(ts => ts > cutoff);
+
+    if (recentTimestamps.length >= this.MAX_MENTIONS_PER_MINUTE) {
+      return false;
+    }
+
+    recentTimestamps.push(now);
+    this.recentMentions.set(key, recentTimestamps);
+    return true;
+  }
+
+  /**
+   * Nettoie les entrées périmées de la map recentMentions.
+   * Appelé automatiquement toutes les 2 minutes via setInterval.
+   */
+  private cleanupOldMentions(): void {
+    const now = Date.now();
+    const cutoff = now - this.MENTION_WINDOW_MS;
+
+    for (const [key, timestamps] of this.recentMentions.entries()) {
+      const recent = timestamps.filter(ts => ts > cutoff);
+      if (recent.length === 0) {
+        this.recentMentions.delete(key);
+      } else {
+        this.recentMentions.set(key, recent);
+      }
+    }
+  }
+
+  /**
+   * Tronque un message par nombre de mots (pas de caractères).
+   * Plus naturel pour les aperçus de messages multilingues.
+   */
+  private truncateMessage(message: string, maxWords: number = 25): string {
+    if (!message) return '';
+
+    const words = message.trim().split(/\s+/);
+    if (words.length <= maxWords) {
+      return message;
+    }
+    return words.slice(0, maxWords).join(' ') + '...';
   }
 
   // ==============================================

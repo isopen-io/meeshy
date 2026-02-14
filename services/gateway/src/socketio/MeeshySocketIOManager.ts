@@ -1736,114 +1736,57 @@ export class MeeshySocketIOManager {
 
   /**
    * Gère un événement de traduction audio unique (1 seule langue demandée).
-   * Reçoit translatedAudios (array) et broadcaster pour chaque langue.
+   * Format unifié: translatedAudio (singulier) — cohérent avec progressive/completed.
    */
   private async _handleAudioTranslationReady(data: any) {
-    // Support des deux formats: translatedAudios (array) et translatedAudio (singular)
-    if (data.translatedAudios && Array.isArray(data.translatedAudios)) {
-      for (const translatedAudio of data.translatedAudios) {
-        await this._broadcastTranslationEvent(
-          {
-            taskId: data.taskId,
-            messageId: data.messageId,
-            attachmentId: data.attachmentId,
-            language: translatedAudio.targetLanguage,
-            translatedAudio: translatedAudio,
-            transcription: data.transcription
-          },
-          'audioTranslationReady',
-          SERVER_EVENTS.AUDIO_TRANSLATION_READY,
-          '🎯'
-        );
-      }
-    } else if (data.translatedAudio) {
-      // Format singular émis par _processTranslationEvent
-      await this._broadcastTranslationEvent(
-        {
-          taskId: data.taskId,
-          messageId: data.messageId,
-          attachmentId: data.attachmentId,
-          language: data.language || data.translatedAudio.targetLanguage,
-          translatedAudio: data.translatedAudio,
-          transcription: data.transcription,
-          phase: data.phase
-        },
-        'audioTranslationReady',
-        SERVER_EVENTS.AUDIO_TRANSLATION_READY,
-        '🎯'
-      );
-    } else {
-      logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: ni translatedAudios ni translatedAudio dans data`, {
+    if (!data.translatedAudio) {
+      logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: translatedAudio manquant`, {
         keys: Object.keys(data),
         messageId: data.messageId
       });
+      return;
     }
+
+    await this._broadcastTranslationEvent(
+      {
+        taskId: data.taskId,
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        language: data.language || data.translatedAudio.targetLanguage,
+        translatedAudio: data.translatedAudio,
+        transcription: data.transcription,
+        phase: data.phase
+      },
+      'audioTranslationReady',
+      SERVER_EVENTS.AUDIO_TRANSLATION_READY,
+      '🎯'
+    );
   }
 
   /**
    * Gère un événement de traduction progressive (multi-langues, pas la dernière).
-   * Support pour les deux formats: nouveau (avec translatedAudios array) et ancien (singular)
+   * Format unifié: translatedAudio (singulier).
    */
   private async _handleAudioTranslationsProgressive(data: any) {
-    // Si c'est le nouveau format avec translatedAudios array
-    if (data.translatedAudios && Array.isArray(data.translatedAudios)) {
-      for (const translatedAudio of data.translatedAudios) {
-        await this._broadcastTranslationEvent(
-          {
-            taskId: data.taskId,
-            messageId: data.messageId,
-            attachmentId: data.attachmentId,
-            language: translatedAudio.targetLanguage,
-            translatedAudio: translatedAudio,
-            transcription: data.transcription
-          },
-          'audioTranslationsProgressive',
-          SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE,
-          '🔄'
-        );
-      }
-    } else {
-      // Format ancien (singular)
-      await this._broadcastTranslationEvent(
-        data,
-        'audioTranslationsProgressive',
-        SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE,
-        '🔄'
-      );
-    }
+    await this._broadcastTranslationEvent(
+      data,
+      'audioTranslationsProgressive',
+      SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE,
+      '🔄'
+    );
   }
 
   /**
    * Gère un événement de dernière traduction terminée (multi-langues).
-   * Support pour les deux formats: nouveau (avec translatedAudios array) et ancien (singular)
+   * Format unifié: translatedAudio (singulier).
    */
   private async _handleAudioTranslationsCompleted(data: any) {
-    // Si c'est le nouveau format avec translatedAudios array
-    if (data.translatedAudios && Array.isArray(data.translatedAudios)) {
-      for (const translatedAudio of data.translatedAudios) {
-        await this._broadcastTranslationEvent(
-          {
-            taskId: data.taskId,
-            messageId: data.messageId,
-            attachmentId: data.attachmentId,
-            language: translatedAudio.targetLanguage,
-            translatedAudio: translatedAudio,
-            transcription: data.transcription
-          },
-          'audioTranslationsCompleted',
-          SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
-          '✅'
-        );
-      }
-    } else {
-      // Format ancien (singular)
-      await this._broadcastTranslationEvent(
-        data,
-        'audioTranslationsCompleted',
-        SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
-        '✅'
-      );
-    }
+    await this._broadcastTranslationEvent(
+      data,
+      'audioTranslationsCompleted',
+      SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
+      '✅'
+    );
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {

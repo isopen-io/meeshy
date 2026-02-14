@@ -1494,7 +1494,7 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Gère un événement de traduction audio unique (1 seule langue demandée).
-   * Note: ZmqMessageHandler envoie translatedAudios (array), on extrait le premier élément.
+   * ZmqMessageHandler émet translatedAudio (singulier), cohérent avec progressive/completed.
    */
   private async _handleAudioTranslationReady(data: {
     taskId: string;
@@ -1514,30 +1514,14 @@ export class MessageTranslationService extends EventEmitter {
       _audioBinary?: Buffer | null;
       audioDataBase64?: string;
     };
-    translatedAudios?: Array<{
-      targetLanguage: string;
-      translatedText: string;
-      audioUrl: string;
-      audioPath: string;
-      durationMs: number;
-      voiceCloned: boolean;
-      voiceQuality: number;
-      audioMimeType: string;
-      segments?: TranscriptionSegment[];
-      _audioBinary?: Buffer | null;
-      audioDataBase64?: string;
-    }>;
   }) {
     try {
-      // Adapter: ZmqMessageHandler envoie translatedAudios (array), on extrait le premier
-      const translatedAudio = data.translatedAudio || (data.translatedAudios?.[0]);
+      const translatedAudio = data.translatedAudio;
 
       if (!translatedAudio) {
         logger.error(
           `❌ [TranslationService] Aucun audio traduit dans l'événement | ` +
           `hasTranslatedAudio: ${!!data.translatedAudio} | ` +
-          `hasTranslatedAudios: ${!!data.translatedAudios} | ` +
-          `translatedAudiosLength: ${data.translatedAudios?.length || 0} | ` +
           `keys: ${Object.keys(data).join(',')}`
         );
         return;
