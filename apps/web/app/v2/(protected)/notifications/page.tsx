@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { Button, Card, Badge, LanguageOrb, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useNotificationsV2 } from '@/hooks/v2';
 
@@ -66,6 +69,8 @@ function NotificationTypeIcon({ type }: { type: string }) {
 }
 
 export default function V2NotificationsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     notifications,
     unreadCount,
@@ -77,6 +82,19 @@ export default function V2NotificationsPage() {
     markAllAsRead,
     error,
   } = useNotificationsV2();
+
+  // Handle ?markAllRead=true from email digest link
+  const markAllReadHandled = useRef(false);
+  useEffect(() => {
+    if (markAllReadHandled.current) return;
+    if (searchParams.get('markAllRead') === 'true') {
+      markAllReadHandled.current = true;
+      markAllAsRead().then(() => {
+        toast.success('Toutes les notifications marquees comme lues');
+        router.replace('/v2/notifications');
+      });
+    }
+  }, [searchParams, markAllAsRead, router]);
 
   const handleNotificationClick = async (notificationId: string, actionUrl?: string) => {
     await markAsRead(notificationId);

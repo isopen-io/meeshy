@@ -16,7 +16,7 @@ export function AuthGuardV2({ children, fallback }: AuthGuardV2Props) {
   useEffect(() => {
     if (!isChecking && !isAuthenticated) {
       // Sauver URL pour redirection post-login
-      const returnUrl = window.location.pathname;
+      const returnUrl = window.location.pathname + window.location.search;
       router.push(`/v2/login?returnUrl=${encodeURIComponent(returnUrl)}`);
     }
   }, [isAuthenticated, isChecking, router]);

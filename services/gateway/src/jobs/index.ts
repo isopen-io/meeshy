@@ -6,15 +6,19 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CleanupExpiredTokens } from './cleanup-expired-tokens';
 import { UnlockAccountsJob } from './unlock-accounts';
+import { NotificationDigestJob } from './notification-digest';
+import { EmailService } from '../services/EmailService';
 
 export class BackgroundJobsManager {
   private cleanupTokensJob: CleanupExpiredTokens;
   private unlockAccountsJob: UnlockAccountsJob;
+  private notificationDigestJob: NotificationDigestJob;
   private isRunning: boolean = false;
 
-  constructor(private prisma: PrismaClient) {
+  constructor(private prisma: PrismaClient, emailService: EmailService) {
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
+    this.notificationDigestJob = new NotificationDigestJob(prisma, emailService);
   }
 
   /**
@@ -30,6 +34,7 @@ export class BackgroundJobsManager {
 
     this.cleanupTokensJob.start();
     this.unlockAccountsJob.start();
+    this.notificationDigestJob.start();
 
     this.isRunning = true;
     console.log('[BackgroundJobs] ✅ All background jobs started successfully');
@@ -48,6 +53,7 @@ export class BackgroundJobsManager {
 
     this.cleanupTokensJob.stop();
     this.unlockAccountsJob.stop();
+    this.notificationDigestJob.stop();
 
     this.isRunning = false;
     console.log('[BackgroundJobs] ✅ All background jobs stopped successfully');
@@ -61,6 +67,7 @@ export class BackgroundJobsManager {
 
     await this.cleanupTokensJob.runNow();
     await this.unlockAccountsJob.runNow();
+    await this.notificationDigestJob.runNow();
 
     console.log('[BackgroundJobs] ✅ All jobs completed');
   }
@@ -71,7 +78,8 @@ export class BackgroundJobsManager {
   getJobs() {
     return {
       cleanupTokens: this.cleanupTokensJob,
-      unlockAccounts: this.unlockAccountsJob
+      unlockAccounts: this.unlockAccountsJob,
+      notificationDigest: this.notificationDigestJob,
     };
   }
 

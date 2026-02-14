@@ -82,6 +82,8 @@ import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
+import { BackgroundJobsManager } from './jobs';
+import { EmailService } from './services/EmailService';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -286,6 +288,7 @@ class MeeshyServer {
   private authMiddleware: AuthMiddleware;
   private socketIOHandler: MeeshySocketIOHandler;
   private callCleanupService: CallCleanupService;
+  private backgroundJobs: BackgroundJobsManager;
   private jobMappingCache: MultiLevelJobMappingCache;
 
   constructor() {
@@ -401,6 +404,10 @@ class MeeshyServer {
 
     // Initialiser le service de nettoyage automatique des appels
     this.callCleanupService = new CallCleanupService(this.prisma);
+
+    // Initialiser les background jobs (cleanup, digest, etc.)
+    const emailService = new EmailService();
+    this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService);
   }
 
   // --------------------------------------------------------------------------
@@ -1124,6 +1131,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.callCleanupService.start();
       logger.info('✓ Call cleanup service started');
 
+      // Start background jobs (token cleanup, account unlock, notification digest)
+      this.backgroundJobs.startAll();
+
     } catch (error) {
       logger.error('❌ Failed to start server: ', error);
       process.exit(1);
@@ -1138,6 +1148,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.callCleanupService) {
         this.callCleanupService.stop();
         logger.info('✓ Call cleanup service stopped');
+      }
+
+      // Stop background jobs
+      if (this.backgroundJobs) {
+        this.backgroundJobs.stopAll();
+        logger.info('✓ Background jobs stopped');
       }
 
       // SECURITY: Clear all cryptographic material from memory

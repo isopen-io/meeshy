@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
+import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import type { Notification } from '@/services/notification.service';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -35,9 +36,11 @@ interface FilterOption {
 function NotificationsPageContent() {
   const { t } = useI18n('notifications');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const markAllReadHandled = useRef(false);
 
   const {
     notifications,
@@ -47,6 +50,17 @@ function NotificationsPageContent() {
     markAllAsRead,
     deleteNotification,
   } = useNotificationsManagerRQ();
+
+  // Handle ?markAllRead=true from email digest link
+  useEffect(() => {
+    if (markAllReadHandled.current) return;
+    if (searchParams.get('markAllRead') === 'true') {
+      markAllReadHandled.current = true;
+      markAllAsRead();
+      toast.success('Toutes les notifications marquees comme lues');
+      router.replace('/notifications');
+    }
+  }, [searchParams, markAllAsRead, router]);
 
   // Filters configuration
   const filters: FilterOption[] = [

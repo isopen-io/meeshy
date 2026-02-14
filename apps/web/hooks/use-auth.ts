@@ -299,9 +299,10 @@ export function useAuth() {
         return;
       }
       
-      // Sauvegarder l'URL actuelle pour redirection après connexion
-      const returnUrl = pathname !== '/' ? pathname : undefined;
-      const loginUrl = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
+      // Sauvegarder l'URL actuelle pour redirection après connexion (avec query params)
+      const search = typeof window !== 'undefined' ? window.location.search : '';
+      const fullPath = pathname !== '/' ? pathname + search : undefined;
+      const loginUrl = fullPath ? `/login?returnUrl=${encodeURIComponent(fullPath)}` : '/login';
       devLog('[USE_AUTH] Redirection vers login car non authentifié. Auth state:', authState);
       redirectInProgress.current = true;
       router.push(loginUrl);

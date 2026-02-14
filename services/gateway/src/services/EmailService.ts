@@ -91,6 +91,21 @@ export interface EmailChangeVerificationData {
   language?: string;
 }
 
+export interface NotificationDigestEmailData {
+  to: string;
+  name: string;
+  language: string;
+  unreadCount: number;
+  notifications: Array<{
+    type: string;
+    actorName: string;
+    content: string;
+    createdAt: string;
+  }>;
+  markAllReadUrl: string;
+  settingsUrl: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -851,6 +866,198 @@ export class EmailService {
         privacy: 'Datenschutz',
         terms: 'AGB'
       }
+    };
+    return translations[language] || translations['en'];
+  }
+
+  // ==========================================================================
+  // NOTIFICATION DIGEST EMAIL
+  // ==========================================================================
+
+  async sendNotificationDigestEmail(data: NotificationDigestEmailData): Promise<EmailResult> {
+    const lang = data.language || 'en';
+    const copyright = `© ${new Date().getFullYear()} Meeshy. All rights reserved.`;
+    const t = this.getDigestTranslations(lang);
+
+    const notifListHtml = data.notifications.map(n => {
+      const timeAgo = this.formatTimeAgo(n.createdAt, lang);
+      return `<tr>
+        <td style="padding:12px 0;border-bottom:1px solid #e5e7eb">
+          <strong class="link-text">${this.escapeHtml(n.actorName)}</strong>
+          <span style="color:#6b7280"> ${this.escapeHtml(n.content)}</span>
+          <br><span style="font-size:12px;color:#9ca3af">${timeAgo}</span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const countText = t.unreadTitle.replace('{count}', data.unreadCount.toString());
+
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${t.subject.replace('{count}', data.unreadCount.toString())}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" style="border-radius:12px 12px 0 0">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
+      </a>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${countText}</h1>
+      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${t.subtitle}</p>
+    </div>
+
+    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
+      <p>${t.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
+      <p>${t.intro.replace('{count}', data.unreadCount.toString())}</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:20px 0">
+        ${notifListHtml}
+      </table>
+
+      ${data.unreadCount > data.notifications.length ? `<p style="font-size:13px;color:#9ca3af;text-align:center">${t.andMore.replace('{count}', (data.unreadCount - data.notifications.length).toString())}</p>` : ''}
+
+      <div style="text-align:center;margin:30px 0">
+        <a href="${data.markAllReadUrl}" class="button" style="font-size:18px;padding:16px 40px">
+          ${t.buttonText}
+        </a>
+      </div>
+
+      <p style="font-size:14px;margin-top:20px">${t.footer}</p>
+    </div>
+
+    <div class="footer">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
+      </a>
+      <p style="margin:15px 0 0">${copyright}</p>
+      <p style="font-size:11px;margin:10px 0 0">
+        <a href="${data.settingsUrl}" class="link-text" style="text-decoration:none">${t.managePrefs}</a> &bull;
+        <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">${t.privacy}</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const notifListText = data.notifications.map(n => `- ${n.actorName}: ${n.content}`).join('\n');
+    const text = `${countText}\n\n${t.greeting} ${data.name},\n\n${t.intro.replace('{count}', data.unreadCount.toString())}\n\n${notifListText}\n\n${t.buttonText}: ${data.markAllReadUrl}\n\n${t.managePrefs}: ${data.settingsUrl}\n\n${t.footer}\n\n${copyright}`;
+
+    return this.sendEmail({
+      to: data.to,
+      subject: t.subject.replace('{count}', data.unreadCount.toString()),
+      html,
+      text,
+    });
+  }
+
+  private escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  private formatTimeAgo(dateStr: string, lang: string): string {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    const labels: Record<string, { min: string; hour: string; day: string; days: string }> = {
+      fr: { min: 'min', hour: 'h', day: 'jour', days: 'jours' },
+      en: { min: 'min', hour: 'h', day: 'day', days: 'days' },
+      es: { min: 'min', hour: 'h', day: 'dia', days: 'dias' },
+      pt: { min: 'min', hour: 'h', day: 'dia', days: 'dias' },
+      it: { min: 'min', hour: 'h', day: 'giorno', days: 'giorni' },
+      de: { min: 'Min', hour: 'Std', day: 'Tag', days: 'Tage' },
+    };
+    const l = labels[lang] || labels['en'];
+
+    if (diffMins < 60) return `${diffMins} ${l.min}`;
+    if (diffHours < 24) return `${diffHours} ${l.hour}`;
+    if (diffDays === 1) return `1 ${l.day}`;
+    return `${diffDays} ${l.days}`;
+  }
+
+  private getDigestTranslations(language: string): Record<string, string> {
+    const translations: Record<string, Record<string, string>> = {
+      fr: {
+        subject: 'Vous avez {count} notifications non lues - Meeshy',
+        unreadTitle: 'Vous avez {count} notifications non lues',
+        subtitle: 'Voici un resume de votre activite',
+        greeting: 'Bonjour',
+        intro: 'Vous avez {count} notifications en attente sur Meeshy. Voici les plus recentes :',
+        andMore: '... et {count} autres notifications',
+        buttonText: 'Voir mes notifications',
+        footer: "L'equipe Meeshy",
+        managePrefs: 'Gerer mes preferences email',
+        privacy: 'Confidentialite',
+      },
+      en: {
+        subject: 'You have {count} unread notifications - Meeshy',
+        unreadTitle: 'You have {count} unread notifications',
+        subtitle: "Here's a summary of your activity",
+        greeting: 'Hello',
+        intro: 'You have {count} pending notifications on Meeshy. Here are the most recent:',
+        andMore: '... and {count} more notifications',
+        buttonText: 'View my notifications',
+        footer: 'The Meeshy Team',
+        managePrefs: 'Manage email preferences',
+        privacy: 'Privacy',
+      },
+      es: {
+        subject: 'Tienes {count} notificaciones sin leer - Meeshy',
+        unreadTitle: 'Tienes {count} notificaciones sin leer',
+        subtitle: 'Aqui tienes un resumen de tu actividad',
+        greeting: 'Hola',
+        intro: 'Tienes {count} notificaciones pendientes en Meeshy. Aqui estan las mas recientes:',
+        andMore: '... y {count} notificaciones mas',
+        buttonText: 'Ver mis notificaciones',
+        footer: 'El equipo de Meeshy',
+        managePrefs: 'Gestionar preferencias de correo',
+        privacy: 'Privacidad',
+      },
+      pt: {
+        subject: 'Voce tem {count} notificacoes nao lidas - Meeshy',
+        unreadTitle: 'Voce tem {count} notificacoes nao lidas',
+        subtitle: 'Aqui esta um resumo da sua atividade',
+        greeting: 'Ola',
+        intro: 'Voce tem {count} notificacoes pendentes no Meeshy. Aqui estao as mais recentes:',
+        andMore: '... e mais {count} notificacoes',
+        buttonText: 'Ver minhas notificacoes',
+        footer: 'A equipe Meeshy',
+        managePrefs: 'Gerenciar preferencias de email',
+        privacy: 'Privacidade',
+      },
+      it: {
+        subject: 'Hai {count} notifiche non lette - Meeshy',
+        unreadTitle: 'Hai {count} notifiche non lette',
+        subtitle: 'Ecco un riepilogo della tua attivita',
+        greeting: 'Ciao',
+        intro: 'Hai {count} notifiche in sospeso su Meeshy. Ecco le piu recenti:',
+        andMore: '... e altre {count} notifiche',
+        buttonText: 'Vedi le mie notifiche',
+        footer: 'Il team Meeshy',
+        managePrefs: 'Gestisci preferenze email',
+        privacy: 'Privacy',
+      },
+      de: {
+        subject: 'Du hast {count} ungelesene Benachrichtigungen - Meeshy',
+        unreadTitle: 'Du hast {count} ungelesene Benachrichtigungen',
+        subtitle: 'Hier ist eine Zusammenfassung deiner Aktivitat',
+        greeting: 'Hallo',
+        intro: 'Du hast {count} ausstehende Benachrichtigungen auf Meeshy. Hier sind die neuesten:',
+        andMore: '... und {count} weitere Benachrichtigungen',
+        buttonText: 'Meine Benachrichtigungen ansehen',
+        footer: 'Das Meeshy-Team',
+        managePrefs: 'E-Mail-Einstellungen verwalten',
+        privacy: 'Datenschutz',
+      },
     };
     return translations[language] || translations['en'];
   }
