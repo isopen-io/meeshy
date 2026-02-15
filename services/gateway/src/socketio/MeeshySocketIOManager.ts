@@ -938,6 +938,9 @@ export class MeeshySocketIOManager {
               logger.error(`[Socket.IO] Failed to join personal room for user ${user.id}:`, error);
             }
 
+            // Retirer le guard de disconnect (reconnexion)
+            this.statusService.markConnected(user.id, false);
+
             // Mettre à jour l'état en ligne dans la base de données et broadcaster
             await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
 
@@ -1171,13 +1174,16 @@ export class MeeshySocketIOManager {
         this.connectedUsers.set(user.id, user);
         this.socketToUser.set(socket.id, user.isAnonymous ? user.sessionToken! : user.id);
         
+        // Retirer le guard de disconnect (reconnexion)
+        this.statusService.markConnected(user.id, user.isAnonymous);
+
         // CORRECTION: Mettre à jour l'état en ligne selon le type d'utilisateur et broadcaster
         if (user.isAnonymous) {
           await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
         } else {
           await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
         }
-        
+
         // Rejoindre les conversations de l'utilisateur
         await this._joinUserConversations(socket, user.id, user.isAnonymous);
 
@@ -1837,6 +1843,10 @@ export class MeeshySocketIOManager {
       // (en cas de reconnexion rapide, une nouvelle socket peut avoir été créée)
       const currentUser = result?.user;
       if (currentUser && currentUser.socketId === socket.id) {
+        // Guard race condition: marquer comme déconnecté AVANT le cleanup
+        // Empêche les updates fire-and-forget de StatusService de s'exécuter après ce point
+        this.statusService.markDisconnected(userId, isAnonymous);
+
         // IMPORTANT: Automatically leave any active video/audio calls
         try {
           const activeParticipations = await this.prisma.callParticipant.findMany({
@@ -1953,9 +1963,10 @@ export class MeeshySocketIOManager {
           // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
           const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
 
-          // Broadcaster dans toutes les conversations de l'utilisateur
-          for (const conv of user.conversations) {
-            this.io.to(`conversation_${conv.conversationId}`).emit(SERVER_EVENTS.USER_STATUS, {
+          // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
+          const rooms = user.conversations.map(c => `conversation_${c.conversationId}`);
+          if (rooms.length > 0) {
+            this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
               username: displayName,
               isOnline,

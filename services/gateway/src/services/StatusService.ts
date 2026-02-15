@@ -22,6 +22,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
 
 export interface StatusUpdateMetrics {
   totalRequests: number;
@@ -37,6 +38,14 @@ export class StatusService {
   // Caches séparés pour activité légère et connexion
   private activityCache = new Map<string, number>();
   private connectionCache = new Map<string, number>();
+
+  // Guard contre les race conditions: empêche les updates fire-and-forget après un disconnect
+  private disconnectedUsers = new Map<string, number>(); // key -> timestamp disconnect
+  private readonly DISCONNECT_GUARD_MAX_AGE_MS = 60000; // 60s avant purge auto
+
+  // Redis presence keys (TTL-based, survit aux crashs)
+  private redis: RedisWrapper;
+  private readonly PRESENCE_TTL_SECONDS = 120; // 2 minutes
 
   // Throttling différencié
   private readonly ACTIVITY_THROTTLE_MS = 5000; // 5 secondes (activité légère)
@@ -58,8 +67,46 @@ export class StatusService {
   };
 
   constructor(private prisma: PrismaClient) {
+    this.redis = getRedisWrapper();
     this.startCacheCleanup();
-    logger.info('✅ StatusService initialisé (activity: 5s, connection: 60s)');
+    logger.info('✅ StatusService initialisé (activity: 5s, connection: 60s, Redis presence TTL: 120s)');
+  }
+
+  /**
+   * Marquer un utilisateur comme déconnecté (empêche les updates fire-and-forget post-disconnect)
+   */
+  markDisconnected(userId: string, isAnonymous: boolean): void {
+    const key = isAnonymous ? `anon_activity_${userId}` : userId;
+    this.disconnectedUsers.set(key, Date.now());
+    // Aussi le key connection pour anonymes
+    if (isAnonymous) {
+      this.disconnectedUsers.set(`anon_connection_${userId}`, Date.now());
+    }
+    this.activityCache.delete(key);
+    this.connectionCache.delete(isAnonymous ? `anon_connection_${userId}` : userId);
+
+    // Supprimer la clé Redis de présence
+    const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
+    this.redis.del(redisKey).catch(err => {
+      logger.debug(`Failed to delete Redis presence key ${redisKey}:`, err);
+    });
+  }
+
+  /**
+   * Marquer un utilisateur comme connecté (retire le guard de disconnect)
+   */
+  markConnected(userId: string, isAnonymous: boolean): void {
+    const key = isAnonymous ? `anon_activity_${userId}` : userId;
+    this.disconnectedUsers.delete(key);
+    if (isAnonymous) {
+      this.disconnectedUsers.delete(`anon_connection_${userId}`);
+    }
+
+    // Créer la clé Redis de présence avec TTL
+    const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
+    this.redis.setex(redisKey, this.PRESENCE_TTL_SECONDS, String(Date.now())).catch(err => {
+      logger.debug(`Failed to set Redis presence key ${redisKey}:`, err);
+    });
   }
 
   /**
@@ -69,6 +116,9 @@ export class StatusService {
    */
   async updateUserLastSeen(userId: string): Promise<void> {
     this.metrics.totalRequests++;
+
+    // Guard: skip si l'utilisateur est déjà déconnecté (évite race condition)
+    if (this.disconnectedUsers.has(userId)) return;
 
     const now = Date.now();
     const lastUpdate = this.activityCache.get(userId) || 0;
@@ -81,6 +131,9 @@ export class StatusService {
 
     this.activityCache.set(userId, now);
     this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+
+    // Renouveler le TTL Redis de présence
+    this.redis.setex(`presence:user:${userId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -105,6 +158,9 @@ export class StatusService {
    */
   async updateUserLastActive(userId: string): Promise<void> {
     this.metrics.totalRequests++;
+
+    // Guard: skip si l'utilisateur est déjà déconnecté (évite race condition)
+    if (this.disconnectedUsers.has(userId)) return;
 
     const now = Date.now();
     const lastUpdate = this.connectionCache.get(userId) || 0;
@@ -141,8 +197,12 @@ export class StatusService {
   async updateAnonymousLastSeen(participantId: string): Promise<void> {
     this.metrics.totalRequests++;
 
-    const now = Date.now();
     const cacheKey = `anon_activity_${participantId}`;
+
+    // Guard: skip si l'utilisateur est déjà déconnecté (évite race condition)
+    if (this.disconnectedUsers.has(cacheKey)) return;
+
+    const now = Date.now();
     const lastUpdate = this.activityCache.get(cacheKey) || 0;
 
     // Throttling: 1 update max toutes les 5 secondes
@@ -153,6 +213,9 @@ export class StatusService {
 
     this.activityCache.set(cacheKey, now);
     this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+
+    // Renouveler le TTL Redis de présence
+    this.redis.setex(`presence:anon:${participantId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.anonymousParticipant.update({
@@ -178,8 +241,12 @@ export class StatusService {
   async updateAnonymousLastActive(participantId: string): Promise<void> {
     this.metrics.totalRequests++;
 
-    const now = Date.now();
     const cacheKey = `anon_connection_${participantId}`;
+
+    // Guard: skip si l'utilisateur est déjà déconnecté (évite race condition)
+    if (this.disconnectedUsers.has(cacheKey)) return;
+
+    const now = Date.now();
     const lastUpdate = this.connectionCache.get(cacheKey) || 0;
 
     // Throttling: 1 update max par minute
@@ -261,6 +328,14 @@ export class StatusService {
     for (const [key, timestamp] of this.connectionCache.entries()) {
       if (now - timestamp > this.CACHE_MAX_AGE_MS) {
         this.connectionCache.delete(key);
+        deletedCount++;
+      }
+    }
+
+    // Purger les entries disconnectedUsers de plus de 60s (évite fuite mémoire)
+    for (const [key, timestamp] of this.disconnectedUsers.entries()) {
+      if (now - timestamp > this.DISCONNECT_GUARD_MAX_AGE_MS) {
+        this.disconnectedUsers.delete(key);
         deletedCount++;
       }
     }
@@ -359,6 +434,7 @@ export class StatusService {
 
     this.activityCache.clear();
     this.connectionCache.clear();
+    this.disconnectedUsers.clear();
     logger.info('🛑 StatusService arrêté');
   }
 }

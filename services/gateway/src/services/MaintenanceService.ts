@@ -37,6 +37,23 @@ export class MaintenanceService {
   async startMaintenanceTasks(): Promise<void> {
     logger.info('🚀 Démarrage des tâches de maintenance...');
 
+    // Reset all stale online statuses from previous instance
+    try {
+      const [resetUsers, resetAnon] = await Promise.all([
+        this.prisma.user.updateMany({
+          where: { isOnline: true },
+          data: { isOnline: false }
+        }),
+        this.prisma.anonymousParticipant.updateMany({
+          where: { isOnline: true },
+          data: { isOnline: false }
+        })
+      ]);
+      logger.info(`🔄 Reset presence: ${resetUsers.count} users, ${resetAnon.count} anonymous`);
+    } catch (error) {
+      logger.error('❌ Failed to reset stale presence on startup:', error);
+    }
+
     // OPTIMISATION: Tâche de maintenance pour l'état en ligne/hors ligne (toutes les 15 secondes)
     // Ancien: 60000ms (60s) -> Nouveau: 15000ms (15s) = 4x plus rapide
     this.maintenanceInterval = setInterval(async () => {
