@@ -233,8 +233,13 @@ export function useProfileV2(options: UseProfileV2Options = {}): ProfileV2Return
   // Transform to profile
   const profile = useMemo(() => {
     if (!rawUser) return null;
-    return transformToProfile(rawUser);
-  }, [rawUser]);
+    const p = transformToProfile(rawUser);
+    // L'utilisateur courant est forcément en ligne puisqu'il charge la page
+    if (isCurrentUser) {
+      p.isOnline = true;
+    }
+    return p;
+  }, [rawUser, isCurrentUser]);
 
   // Transform stats
   const stats = useMemo(() => {
