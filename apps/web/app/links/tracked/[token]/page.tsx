@@ -384,7 +384,7 @@ export default function TrackingLinkDetailsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Megaphone className="h-5 w-5" />
-                  {t('tracking.details.campaignInfo') || 'Campaign Information'}
+                  {t('tracking.details.campaignInfo')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -393,7 +393,7 @@ export default function TrackingLinkDetailsPage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Tag className="h-3.5 w-3.5" />
-                        {t('tracking.details.campaign') || 'Campaign'}
+                        {t('tracking.details.campaign')}
                       </p>
                       <p className="text-lg font-bold">{trackingLink.campaign}</p>
                     </div>
@@ -402,7 +402,7 @@ export default function TrackingLinkDetailsPage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Share2 className="h-3.5 w-3.5" />
-                        {t('tracking.details.source') || 'Source'}
+                        {t('tracking.details.source')}
                       </p>
                       <p className="text-lg font-bold">{trackingLink.source}</p>
                     </div>
@@ -411,7 +411,7 @@ export default function TrackingLinkDetailsPage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Activity className="h-3.5 w-3.5" />
-                        {t('tracking.details.medium') || 'Medium'}
+                        {t('tracking.details.medium')}
                       </p>
                       <p className="text-lg font-bold">{trackingLink.medium}</p>
                     </div>
@@ -563,7 +563,7 @@ export default function TrackingLinkDetailsPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Laptop className="h-5 w-5" />
-                    {t('tracking.details.clicksByOS') || 'Clicks by OS'}
+                    {t('tracking.details.clicksByOS')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
