@@ -22,7 +22,11 @@ import {
   Activity,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Laptop,
+  Tag,
+  Megaphone,
+  Share2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -47,6 +51,7 @@ interface TrackingLinkStats {
   clicksByCountry: Array<{ country: string; clicks: number }>;
   clicksByDevice: Array<{ device: string; clicks: number }>;
   clicksByBrowser: Array<{ browser: string; clicks: number }>;
+  clicksByOS: Array<{ os: string; clicks: number }>;
   topReferrers: Array<{ referrer: string; clicks: number }>;
 }
 
@@ -92,6 +97,9 @@ export default function TrackingLinkDetailsPage() {
           .sort((a, b) => b.clicks - a.clicks),
         clicksByBrowser: Object.entries(data.clicksByBrowser || {})
           .map(([browser, clicks]) => ({ browser, clicks: clicks as number }))
+          .sort((a, b) => b.clicks - a.clicks),
+        clicksByOS: Object.entries(data.clicksByOS || {})
+          .map(([os, clicks]) => ({ os, clicks: clicks as number }))
           .sort((a, b) => b.clicks - a.clicks),
         topReferrers: (data.topReferrers || []).map(r => ({
           referrer: r.referrer,
@@ -250,8 +258,8 @@ export default function TrackingLinkDetailsPage() {
                       <Link2 className="h-8 w-8" />
                     </div>
                     <div>
-                      <h1 className="text-3xl md:text-4xl font-bold">{trackingLink.shortUrl}</h1>
-                      <p className="text-blue-100 mt-1">Token: {trackingLink.token}</p>
+                      <h1 className="text-3xl md:text-4xl font-bold">{trackingLink.name || trackingLink.token}</h1>
+                      <p className="text-blue-100 mt-1 font-mono">{trackingLink.shortUrl}</p>
                     </div>
                   </div>
 
@@ -369,6 +377,49 @@ export default function TrackingLinkDetailsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Campaign Information - conditionnel */}
+          {(trackingLink.campaign || trackingLink.source || trackingLink.medium) && (
+            <Card className="border-2 bg-white dark:bg-gray-950">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Megaphone className="h-5 w-5" />
+                  {t('tracking.details.campaignInfo') || 'Campaign Information'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {trackingLink.campaign && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                        <Tag className="h-3.5 w-3.5" />
+                        {t('tracking.details.campaign') || 'Campaign'}
+                      </p>
+                      <p className="text-lg font-bold">{trackingLink.campaign}</p>
+                    </div>
+                  )}
+                  {trackingLink.source && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                        <Share2 className="h-3.5 w-3.5" />
+                        {t('tracking.details.source') || 'Source'}
+                      </p>
+                      <p className="text-lg font-bold">{trackingLink.source}</p>
+                    </div>
+                  )}
+                  {trackingLink.medium && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                        <Activity className="h-3.5 w-3.5" />
+                        {t('tracking.details.medium') || 'Medium'}
+                      </p>
+                      <p className="text-lg font-bold">{trackingLink.medium}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Graphes et données détaillées */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -505,6 +556,38 @@ export default function TrackingLinkDetailsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Clics par OS */}
+            {stats.clicksByOS && stats.clicksByOS.length > 0 && (
+              <Card className="border-2 bg-white dark:bg-gray-950">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Laptop className="h-5 w-5" />
+                    {t('tracking.details.clicksByOS') || 'Clicks by OS'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.clicksByOS.slice(0, 5).map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.os || t('tracking.details.unknown')}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-32 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-600"
+                              style={{
+                                width: `${(item.clicks / trackingLink.totalClicks) * 100}%`
+                              }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold w-12 text-right">{item.clicks}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Graphique des clics avec moyenne */}
@@ -603,33 +686,6 @@ export default function TrackingLinkDetailsPage() {
               </Card>
             );
           })()}
-
-          {/* Informations du lien */}
-          <Card className="border-2 bg-white dark:bg-gray-950">
-            <CardHeader>
-              <CardTitle>{t('tracking.details.linkInformation')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.details.token')}</p>
-                  <p className="text-lg font-bold">{trackingLink.token}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.details.createdOn')}</p>
-                  <p className="text-lg font-bold">{formatDate(trackingLink.createdAt)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.details.shortUrl')}</p>
-                  <p className="text-lg font-bold break-all">{trackingLink.shortUrl}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.details.originalUrl')}</p>
-                  <p className="text-lg font-bold break-all">{trackingLink.originalUrl}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
         </div>
       </DashboardLayout>

@@ -22,6 +22,10 @@ export function enrichTrackingLink(link: TrackingLink, request?: FastifyRequest)
  */
 export const createTrackingLinkSchema = z.object({
   originalUrl: z.string().url('URL invalide'),
+  name: z.string().max(32).optional(),
+  campaign: z.string().max(100).optional(),
+  source: z.string().max(100).optional(),
+  medium: z.string().max(100).optional(),
   conversationId: z.string().optional(),
   messageId: z.string().optional(),
   expiresAt: z.string().datetime().optional()

@@ -69,9 +69,14 @@ export function ExpandableTrackingLinkCard({
           <div className="flex-1 min-w-0">
             {/* Header: Token (Code) + Badge + Menu */}
             <div className="flex items-start justify-between gap-2 mb-1">
-              <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white break-words flex-1">
-                {link.token}
-              </h3>
+              <div className="flex-1">
+                <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white break-words">
+                  {link.name || link.token}
+                </h3>
+                {link.name && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{link.token}</p>
+                )}
+              </div>
 
               <div className="flex flex-row items-center gap-2 flex-shrink-0">
                 <Badge

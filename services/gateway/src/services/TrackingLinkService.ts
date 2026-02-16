@@ -74,6 +74,10 @@ export class TrackingLinkService {
    */
   async createTrackingLink(params: {
     originalUrl: string;
+    name?: string;
+    campaign?: string;
+    source?: string;
+    medium?: string;
     createdBy?: string;
     conversationId?: string;
     messageId?: string;
@@ -87,6 +91,10 @@ export class TrackingLinkService {
     const trackingLink = await this.prisma.trackingLink.create({
       data: {
         token,
+        name: params.name,
+        campaign: params.campaign,
+        source: params.source,
+        medium: params.medium,
         originalUrl: params.originalUrl,
         shortUrl,
         createdBy: params.createdBy,
@@ -252,6 +260,7 @@ export class TrackingLinkService {
     clicksByCountry: { [country: string]: number };
     clicksByDevice: { [device: string]: number };
     clicksByBrowser: { [browser: string]: number };
+    clicksByOS: { [os: string]: number };
     clicksByDate: { [date: string]: number };
     topReferrers: { referrer: string; count: number }[];
   }> {
@@ -285,6 +294,7 @@ export class TrackingLinkService {
     const clicksByCountry: { [country: string]: number } = {};
     const clicksByDevice: { [device: string]: number } = {};
     const clicksByBrowser: { [browser: string]: number } = {};
+    const clicksByOS: { [os: string]: number } = {};
     const clicksByDate: { [date: string]: number } = {};
     const referrerCounts: { [referrer: string]: number } = {};
 
@@ -302,6 +312,11 @@ export class TrackingLinkService {
       // Par navigateur
       if (click.browser) {
         clicksByBrowser[click.browser] = (clicksByBrowser[click.browser] || 0) + 1;
+      }
+
+      // Par OS
+      if (click.os) {
+        clicksByOS[click.os] = (clicksByOS[click.os] || 0) + 1;
       }
 
       // Par date
@@ -337,6 +352,7 @@ export class TrackingLinkService {
       clicksByCountry,
       clicksByDevice,
       clicksByBrowser,
+      clicksByOS,
       clicksByDate,
       topReferrers
     };

@@ -17,6 +17,10 @@ export type DeviceType = 'mobile' | 'desktop' | 'tablet';
 export interface TrackingLink {
   readonly id: string;
   readonly token: string; // Token unique de 6 caractères
+  readonly name?: string; // Nom du lien
+  readonly campaign?: string; // UTM campaign name
+  readonly source?: string; // UTM source
+  readonly medium?: string; // UTM medium
   readonly originalUrl: string; // URL originale complète
   readonly shortUrl: string; // URL courte (meeshy.me/l/<token>)
   readonly createdBy?: string; // ID de l'utilisateur créateur (null si anonyme)
@@ -62,6 +66,10 @@ export interface TrackingLinkClick {
  */
 export interface CreateTrackingLinkRequest {
   readonly originalUrl: string;
+  readonly name?: string;
+  readonly campaign?: string;
+  readonly source?: string;
+  readonly medium?: string;
   readonly conversationId?: string;
   readonly messageId?: string;
   readonly expiresAt?: Date;
@@ -171,6 +179,7 @@ export interface TrackingLinkStatsResponseData {
   readonly clicksByCountry: Readonly<Record<string, number>>;
   readonly clicksByDevice: Readonly<Record<string, number>>;
   readonly clicksByBrowser: Readonly<Record<string, number>>;
+  readonly clicksByOS: Readonly<Record<string, number>>;
   readonly clicksByDate: Readonly<Record<string, number>>;
   readonly topReferrers: readonly TopReferrer[];
 }

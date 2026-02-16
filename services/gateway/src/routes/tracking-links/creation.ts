@@ -51,6 +51,26 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             format: 'uri',
             description: 'The original URL to track'
           },
+          name: {
+            type: 'string',
+            maxLength: 32,
+            description: 'Optional display name for the link'
+          },
+          campaign: {
+            type: 'string',
+            maxLength: 100,
+            description: 'UTM campaign name'
+          },
+          source: {
+            type: 'string',
+            maxLength: 100,
+            description: 'UTM source (e.g., facebook, newsletter)'
+          },
+          medium: {
+            type: 'string',
+            maxLength: 100,
+            description: 'UTM medium (e.g., social, email, cpc)'
+          },
           conversationId: {
             type: 'string',
             description: 'Optional conversation ID to associate with this link'
@@ -142,6 +162,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.createTrackingLink({
         originalUrl: body.originalUrl,
+        name: body.name,
+        campaign: body.campaign,
+        source: body.source,
+        medium: body.medium,
         createdBy,
         conversationId: body.conversationId,
         messageId: body.messageId,
