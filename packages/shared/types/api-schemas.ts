@@ -2385,17 +2385,18 @@ export const trackingLinkSchema = {
   description: 'Marketing/analytics tracking link',
   properties: {
     id: { type: 'string', description: 'Link ID' },
-    userId: { type: 'string', description: 'Creator user ID' },
-    shortCode: { type: 'string', description: 'Short URL code' },
-    destinationUrl: { type: 'string', description: 'Target URL' },
-    title: { type: 'string', nullable: true, description: 'Link title' },
-    campaign: { type: 'string', nullable: true, description: 'Campaign name' },
-    source: { type: 'string', nullable: true, description: 'Traffic source' },
-    medium: { type: 'string', nullable: true, description: 'Traffic medium' },
+    token: { type: 'string', description: 'Unique 6-character tracking token' },
+    name: { type: 'string', nullable: true, description: 'Link display name' },
+    originalUrl: { type: 'string', description: 'Original destination URL' },
+    shortUrl: { type: 'string', description: 'Short redirect URL (meeshy.me/l/<token>)' },
+    createdBy: { type: 'string', nullable: true, description: 'Creator user ID' },
+    conversationId: { type: 'string', nullable: true, description: 'Associated conversation ID' },
+    messageId: { type: 'string', nullable: true, description: 'Associated message ID' },
     totalClicks: { type: 'number', description: 'Total click count' },
     uniqueClicks: { type: 'number', description: 'Unique visitor clicks' },
     isActive: { type: 'boolean', description: 'Whether link is active' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
+    lastClickedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last click timestamp' },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'Last update' }
   }
@@ -2409,17 +2410,21 @@ export const trackingLinkClickSchema = {
   description: 'Click event on tracking link',
   properties: {
     id: { type: 'string', description: 'Click ID' },
-    linkId: { type: 'string', description: 'Tracking link ID' },
+    trackingLinkId: { type: 'string', description: 'Tracking link ID' },
+    userId: { type: 'string', nullable: true, description: 'Authenticated user who clicked' },
+    anonymousId: { type: 'string', nullable: true, description: 'Anonymous participant who clicked' },
     ipAddress: { type: 'string', nullable: true, description: 'Visitor IP' },
     userAgent: { type: 'string', nullable: true, description: 'User agent' },
     referrer: { type: 'string', nullable: true, description: 'Referrer URL' },
     country: { type: 'string', nullable: true, description: 'Visitor country' },
     city: { type: 'string', nullable: true, description: 'Visitor city' },
-    deviceType: { type: 'string', nullable: true, description: 'Device type' },
+    region: { type: 'string', nullable: true, description: 'Visitor region' },
+    device: { type: 'string', nullable: true, description: 'Device type (mobile/desktop/tablet)' },
     browser: { type: 'string', nullable: true, description: 'Browser name' },
     os: { type: 'string', nullable: true, description: 'Operating system' },
-    isUnique: { type: 'boolean', description: 'First visit from this visitor' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Click timestamp' }
+    language: { type: 'string', nullable: true, description: 'Preferred language' },
+    deviceFingerprint: { type: 'string', nullable: true, description: 'Device fingerprint' },
+    clickedAt: { type: 'string', format: 'date-time', description: 'Click timestamp' }
   }
 } as const;
 

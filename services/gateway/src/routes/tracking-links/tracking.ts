@@ -360,58 +360,46 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              additionalProperties: true,
               properties: {
+                trackingLink: { type: 'object', additionalProperties: true },
                 totalClicks: { type: 'number', description: 'Total number of clicks' },
                 uniqueClicks: { type: 'number', description: 'Number of unique visitors' },
                 clicksByCountry: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      country: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by country name'
                 },
                 clicksByDevice: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      device: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by device type'
                 },
                 clicksByBrowser: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      browser: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by browser name'
                 },
                 clicksByOS: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      os: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  }
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by OS name'
                 },
                 clicksByDate: {
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by ISO date string'
+                },
+                topReferrers: {
                   type: 'array',
                   items: {
                     type: 'object',
                     properties: {
-                      date: { type: 'string', format: 'date' },
+                      referrer: { type: 'string' },
                       count: { type: 'number' }
                     }
-                  }
+                  },
+                  description: 'Top referrer sources sorted by count'
                 }
               }
             }
