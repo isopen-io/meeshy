@@ -9,9 +9,9 @@ import { authManager } from '@/services/auth-manager.service';
 // Regex pour détecter les liens
 const URL_REGEX = /(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*))/gi;
 // Détecte les liens de tracking sur n'importe quel domaine: http(s)://exemple.com/l/<token>
-const TRACKING_LINK_REGEX = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9+\-_=]{6})/gi;
+const TRACKING_LINK_REGEX = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/gi;
 // Détecte le format court: m+<token>
-const MSHY_SHORT_REGEX = /\bm\+([a-zA-Z0-9+\-_=]{6})\b/gi;
+const MSHY_SHORT_REGEX = /\bm\+([a-zA-Z0-9_-]{2,50})\b/gi;
 
 export interface ParsedLink {
   type: 'text' | 'url' | 'tracking-link' | 'mshy-link';
@@ -346,7 +346,7 @@ export function extractTrackingToken(url: string): string | null {
   if (match && match.length > 0) {
     // Extraire le token du match complet
     const fullMatch = match[0];
-    const tokenMatch = fullMatch.match(/\/l\/([a-zA-Z0-9+\-_=]{6})/);
+    const tokenMatch = fullMatch.match(/\/l\/([a-zA-Z0-9_-]{2,50})/);
     if (tokenMatch && tokenMatch[1]) {
       return tokenMatch[1];
     }

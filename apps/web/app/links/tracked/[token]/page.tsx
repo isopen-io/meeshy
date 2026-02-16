@@ -49,6 +49,7 @@ import {
 
 interface TrackingLinkStats {
   trackingLink: TrackingLink;
+  confirmedClicks: number;
   clicksByDate: Array<{ date: string; clicks: number; uniqueClicks: number }>;
   clicksByCountry: Array<{ country: string; clicks: number }>;
   clicksByDevice: Array<{ device: string; clicks: number }>;
@@ -87,6 +88,7 @@ export default function TrackingLinkDetailsPage() {
       // Transformer les données du format API vers le format attendu par le composant
       const transformedStats: TrackingLinkStats = {
         trackingLink: data.trackingLink,
+        confirmedClicks: data.confirmedClicks || 0,
         clicksByDate: Object.entries(data.clicksByDate || {})
           .map(([date, clicks]) => ({
             date,
@@ -361,10 +363,10 @@ export default function TrackingLinkDetailsPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.stats.conversionRate')}</p>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">{t('tracking.stats.redirectSuccessRate')}</p>
                     <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                       {trackingLink.totalClicks > 0
-                        ? Math.round((trackingLink.uniqueClicks / trackingLink.totalClicks) * 100)
+                        ? Math.round((stats.confirmedClicks / trackingLink.totalClicks) * 100)
                         : 0}%
                     </p>
                   </div>

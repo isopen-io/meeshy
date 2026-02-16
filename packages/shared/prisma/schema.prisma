@@ -1363,6 +1363,8 @@ model TrackingLinkClick {
   utmClickTerm        String?  // utm_term du lien cliqué
   utmClickContent     String?  // utm_content du lien cliqué
 
+  redirectStatus    String?   @default("pending") // pending | confirmed | failed
+
   clickedAt         DateTime @default(now())
 
   trackingLink  TrackingLink          @relation(fields: [trackingLinkId], references: [id])

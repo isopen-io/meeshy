@@ -234,8 +234,45 @@ export default function TrackingLinkPage() {
         if (response.ok) {
           const result = await response.json();
           const originalUrl = result.data?.originalUrl || result.originalUrl;
+          const clickId = result.data?.clickId;
 
           if (originalUrl) {
+            if (clickId) {
+              // Préparer le beacon de confirmation de redirection
+              const beaconUrl = buildApiUrl(`/tracking-links/${token}/redirect-status`);
+              const confirmPayload = new Blob(
+                [JSON.stringify({ clickId, status: 'confirmed' })],
+                { type: 'application/json' }
+              );
+
+              let beaconSent = false;
+              const confirmRedirect = () => {
+                if (beaconSent) return;
+                beaconSent = true;
+                navigator.sendBeacon(beaconUrl, confirmPayload);
+              };
+
+              // Détecter quand l'utilisateur quitte la page = redirect réussie
+              document.addEventListener('visibilitychange', () => {
+                if (document.hidden) confirmRedirect();
+              }, { once: true });
+
+              window.addEventListener('pagehide', confirmRedirect, { once: true });
+
+              // Timeout fallback : si toujours là après 5s, la redirect a échoué
+              setTimeout(() => {
+                if (!beaconSent) {
+                  fetch(beaconUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clickId, status: 'failed' }),
+                    keepalive: true
+                  }).catch(() => {});
+                  setError(true);
+                }
+              }, 5000);
+            }
+
             // 4. Redirect
             window.location.replace(originalUrl);
             return;

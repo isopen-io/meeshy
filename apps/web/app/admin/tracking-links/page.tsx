@@ -156,15 +156,15 @@ export default function AdminTrackingLinksPage() {
 
   // -- Create link --
   const handleCreate = async () => {
-    if (!formUrl || !formToken) return;
-    if (tokenAvailable === false) return;
+    if (!formUrl) return;
+    if (formToken && tokenAvailable === false) return;
 
     setCreating(true);
     try {
       const payload: Record<string, unknown> = {
         originalUrl: formUrl,
-        customToken: formToken,
       };
+      if (formToken) payload.customToken = formToken;
       if (formName) payload.name = formName;
       if (formCampaign) payload.campaign = formCampaign;
       if (formSource) payload.source = formSource;
@@ -265,7 +265,7 @@ export default function AdminTrackingLinksPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5" />
-              Creer un tracking link avec token custom
+              Creer un tracking link
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -280,7 +280,7 @@ export default function AdminTrackingLinksPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="formToken">Token custom *</Label>
+                <Label htmlFor="formToken">Token custom (optionnel)</Label>
                 <div className="relative">
                   <Input
                     id="formToken"
@@ -347,7 +347,7 @@ export default function AdminTrackingLinksPage() {
             <div className="mt-4 flex items-center gap-4">
               <Button
                 onClick={handleCreate}
-                disabled={!formUrl || !formToken || tokenAvailable !== true || creating}
+                disabled={!formUrl || (formToken.length > 0 && formToken.length < 2) || (formToken && tokenAvailable === false) || creating}
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                 Creer le lien

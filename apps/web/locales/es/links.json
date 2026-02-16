@@ -269,6 +269,7 @@
         "uniqueClicks": "Visitantes únicos",
         "activeLinks": "Enlaces activos",
         "conversionRate": "Tasa de conversión",
+        "redirectSuccessRate": "Exito de redireccion",
         "lastClick": "Último clic",
         "never": "Nunca"
       },

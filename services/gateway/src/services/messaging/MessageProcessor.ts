@@ -429,7 +429,7 @@ export class MessageProcessor {
     if (processedContent === data.content) return;
 
     try {
-      const meeshyTokenRegex = /m\+([a-zA-Z0-9+\-_=]{6})/gi;
+      const meeshyTokenRegex = /m\+([a-zA-Z0-9_-]{2,50})/gi;
       const matches = processedContent.matchAll(meeshyTokenRegex);
 
       for (const match of matches) {

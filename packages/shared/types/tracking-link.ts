@@ -73,6 +73,7 @@ export interface TrackingLinkClick {
   readonly utmClickCampaign?: string;
   readonly utmClickTerm?: string;
   readonly utmClickContent?: string;
+  readonly redirectStatus?: string;
   readonly clickedAt: Date;
 }
 
@@ -159,6 +160,7 @@ export interface RecordClickRequest {
  */
 export interface RecordClickResponseData {
   readonly originalUrl: string;
+  readonly clickId: string;
   readonly trackingLink: TrackingLink;
 }
 
@@ -204,6 +206,7 @@ export interface TrackingLinkStatsResponseData {
   readonly clicksBySocialSource: Readonly<Record<string, number>>;
   readonly clicksByDate: Readonly<Record<string, number>>;
   readonly topReferrers: readonly TopReferrer[];
+  readonly confirmedClicks: number;
 }
 
 /**
@@ -248,9 +251,9 @@ export interface LinkParserOptions {
 // ============================================================================
 
 /**
- * Longueur du token de lien de tracking
+ * Longueur par défaut du token de lien de tracking
  */
-export const TRACKING_LINK_TOKEN_LENGTH = 6 as const;
+export const TRACKING_LINK_DEFAULT_TOKEN_LENGTH = 6 as const;
 
 /**
  * URL de base pour les liens courts
@@ -259,8 +262,9 @@ export const TRACKING_LINK_BASE_URL = 'meeshy.me/l/' as const;
 
 /**
  * Expression régulière pour détecter les liens de tracking Meeshy
+ * Supporte des tokens de 2 à 50 caractères (alphanumériques, tirets, underscores)
  */
-export const TRACKING_LINK_REGEX = /https?:\/\/(?:www\.)?meeshy\.me\/l\/([a-zA-Z0-9]{6})/g;
+export const TRACKING_LINK_REGEX = /https?:\/\/(?:www\.)?meeshy\.me\/l\/([a-zA-Z0-9_-]{2,50})/g;
 
 /**
  * Expression régulière pour détecter les URLs

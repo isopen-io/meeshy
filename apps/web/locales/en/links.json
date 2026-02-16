@@ -269,6 +269,7 @@
         "uniqueClicks": "Unique visitors",
         "activeLinks": "Active links",
         "conversionRate": "Conversion rate",
+        "redirectSuccessRate": "Redirect success",
         "lastClick": "Last click",
         "never": "Never"
       },

@@ -107,7 +107,7 @@ export function EditTrackingLinkModal({
     }
 
     if (newToken && newToken !== link.token) {
-      if (!/^[a-zA-Z0-9]{6}$/.test(newToken)) {
+      if (!/^[a-zA-Z0-9_-]{2,50}$/.test(newToken)) {
         toast.error(t('tracking.edit.errors.invalidToken'));
         return;
       }
@@ -208,9 +208,9 @@ export function EditTrackingLinkModal({
                 <Input
                   id="token"
                   value={newToken}
-                  onChange={(e) => setNewToken(e.target.value.slice(0, 6))}
-                  placeholder="abc123"
-                  maxLength={6}
+                  onChange={(e) => setNewToken(e.target.value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50))}
+                  placeholder="my-token"
+                  maxLength={50}
                   disabled={isSubmitting}
                   className="pr-10"
                 />
