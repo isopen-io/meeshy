@@ -106,7 +106,7 @@ export default function AdminTrackingLinksPage() {
       const params: Record<string, unknown> = { limit: pageSize, offset };
       if (linksSearch) params.search = linksSearch;
 
-      const response = await apiService.get<{ trackingLinks: TrackingLinkAdmin[]; total: number }>(
+      const response = await apiService.get<any>(
         '/tracking-links/admin/all',
         params
       );
@@ -201,7 +201,7 @@ export default function AdminTrackingLinksPage() {
     setClicksLoading(true);
     try {
       const offset = (clicksPage - 1) * clicksPageSize;
-      const response = await apiService.get<{ clicks: TrackingClick[]; total: number }>(
+      const response = await apiService.get<any>(
         `/tracking-links/admin/${token}/clicks`,
         { limit: clicksPageSize, offset }
       );

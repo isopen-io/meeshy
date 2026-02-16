@@ -630,13 +630,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-                total: { type: 'number' }
-              }
-            }
+            trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            total: { type: 'number' }
           }
         },
         403: { ...errorResponseSchema },
@@ -653,7 +648,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: result
+        trackingLinks: result.trackingLinks,
+        total: result.total
       });
     } catch (error) {
       logError(fastify.log, 'Admin get all tracking links error:', error);
@@ -693,13 +689,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-                total: { type: 'number' }
-              }
-            }
+            clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            total: { type: 'number' }
           }
         },
         404: { ...errorResponseSchema },
@@ -725,7 +716,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         success: true,
-        data: result
+        clicks: result.clicks,
+        total: result.total
       });
     } catch (error) {
       logError(fastify.log, 'Admin get tracking link clicks error:', error);
