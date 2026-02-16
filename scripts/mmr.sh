@@ -437,7 +437,7 @@ authenticate() {
     fi
     
     log_step "Step 1/3: Authentication..."
-    log_debug "POST ${API_URL}/api/auth/login"
+    log_debug "POST ${API_URL}/api/v1/auth/login"
     
     # Create request body in temp file (more secure than inline)
     local request_file
@@ -449,7 +449,7 @@ authenticate() {
         '{username: $user, password: $pass}' > "$request_file"
     
     # Make authentication request
-    result=$(http_request POST "${API_URL}/api/auth/login" \
+    result=$(http_request POST "${API_URL}/api/v1/auth/login" \
         -H "Content-Type: application/json" \
         -H "User-Agent: MMR/${SCRIPT_VERSION}" \
         -c "$COOKIE_FILE" \
@@ -501,10 +501,10 @@ check_conversation_access() {
     validate_conversation_id "$conv_id"
     
     log_step "Step 2/3: Verifying conversation access..."
-    log_debug "GET ${API_URL}/api/conversations/${conv_id}"
+    log_debug "GET ${API_URL}/api/v1/conversations/${conv_id}"
     
     # Request conversation details
-    result=$(http_request GET "${API_URL}/api/conversations/${conv_id}" \
+    result=$(http_request GET "${API_URL}/api/v1/conversations/${conv_id}" \
         -H "Authorization: Bearer ${token}" \
         -H "User-Agent: MMR/${SCRIPT_VERSION}" \
         -b "$COOKIE_FILE")
@@ -560,7 +560,7 @@ retrieve_messages() {
     log_step "Step 3/3: Retrieving messages..."
     
     # Build URL with query parameters
-    url="${API_URL}/api/conversations/${conv_id}/messages"
+    url="${API_URL}/api/v1/conversations/${conv_id}/messages"
     
     local query_params=()
     
