@@ -52,8 +52,27 @@ export interface TrackingLinkClick {
   readonly os?: string;
   readonly device?: DeviceType;
   readonly language?: string;
+  readonly languages?: string;
   readonly referrer?: string;
   readonly deviceFingerprint?: string;
+  readonly screenResolution?: string;
+  readonly viewportSize?: string;
+  readonly pixelRatio?: number;
+  readonly colorDepth?: number;
+  readonly timezone?: string;
+  readonly connectionType?: string;
+  readonly connectionSpeed?: number;
+  readonly touchSupport?: boolean;
+  readonly platform?: string;
+  readonly cookiesEnabled?: boolean;
+  readonly hardwareConcurrency?: number;
+  readonly deviceMemory?: number;
+  readonly socialSource?: string;
+  readonly utmClickSource?: string;
+  readonly utmClickMedium?: string;
+  readonly utmClickCampaign?: string;
+  readonly utmClickTerm?: string;
+  readonly utmClickContent?: string;
   readonly clickedAt: Date;
 }
 
@@ -180,6 +199,9 @@ export interface TrackingLinkStatsResponseData {
   readonly clicksByDevice: Readonly<Record<string, number>>;
   readonly clicksByBrowser: Readonly<Record<string, number>>;
   readonly clicksByOS: Readonly<Record<string, number>>;
+  readonly clicksByLanguage: Readonly<Record<string, number>>;
+  readonly clicksByHour: Readonly<Record<string, number>>;
+  readonly clicksBySocialSource: Readonly<Record<string, number>>;
   readonly clicksByDate: Readonly<Record<string, number>>;
   readonly topReferrers: readonly TopReferrer[];
 }

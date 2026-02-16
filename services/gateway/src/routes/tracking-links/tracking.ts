@@ -189,8 +189,27 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           os: { type: 'string', description: 'Operating system (auto-detected if not provided)' },
           device: { type: 'string', enum: ['mobile', 'tablet', 'desktop'], description: 'Device type (auto-detected if not provided)' },
           language: { type: 'string', description: 'Preferred language code' },
+          languages: { type: 'string', description: 'Full language list (e.g. "fr,en-US,en")' },
           referrer: { type: 'string', description: 'Referrer URL' },
-          deviceFingerprint: { type: 'string', description: 'Unique device fingerprint for tracking unique visitors' }
+          deviceFingerprint: { type: 'string', description: 'Unique device fingerprint for tracking unique visitors' },
+          screenResolution: { type: 'string', description: 'Screen resolution (e.g. "1920x1080")' },
+          viewportSize: { type: 'string', description: 'Viewport size (e.g. "1440x900")' },
+          pixelRatio: { type: 'number', description: 'Device pixel ratio' },
+          colorDepth: { type: 'integer', description: 'Screen color depth' },
+          timezone: { type: 'string', description: 'IANA timezone (e.g. "Europe/Paris")' },
+          connectionType: { type: 'string', description: 'Connection type (4g, wifi, etc.)' },
+          connectionSpeed: { type: 'number', description: 'Connection downlink in Mbps' },
+          touchSupport: { type: 'boolean', description: 'Touch screen support' },
+          platform: { type: 'string', description: 'Navigator platform' },
+          cookiesEnabled: { type: 'boolean', description: 'Cookies enabled' },
+          hardwareConcurrency: { type: 'integer', description: 'CPU core count' },
+          deviceMemory: { type: 'number', description: 'Device memory in GB' },
+          socialSource: { type: 'string', description: 'Detected social source (whatsapp, telegram, etc.)' },
+          utmClickSource: { type: 'string', description: 'UTM source from click URL' },
+          utmClickMedium: { type: 'string', description: 'UTM medium from click URL' },
+          utmClickCampaign: { type: 'string', description: 'UTM campaign from click URL' },
+          utmClickTerm: { type: 'string', description: 'UTM term from click URL' },
+          utmClickContent: { type: 'string', description: 'UTM content from click URL' }
         }
       },
       response: {
@@ -266,8 +285,27 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         city: body.city,
         region: body.region,
         language: body.language,
+        languages: body.languages,
         referrer: body.referrer,
-        deviceFingerprint: body.deviceFingerprint
+        deviceFingerprint: body.deviceFingerprint,
+        screenResolution: body.screenResolution,
+        viewportSize: body.viewportSize,
+        pixelRatio: body.pixelRatio,
+        colorDepth: body.colorDepth,
+        timezone: body.timezone,
+        connectionType: body.connectionType,
+        connectionSpeed: body.connectionSpeed,
+        touchSupport: body.touchSupport,
+        platform: body.platform,
+        cookiesEnabled: body.cookiesEnabled,
+        hardwareConcurrency: body.hardwareConcurrency,
+        deviceMemory: body.deviceMemory,
+        socialSource: body.socialSource,
+        utmClickSource: body.utmClickSource,
+        utmClickMedium: body.utmClickMedium,
+        utmClickCampaign: body.utmClickCampaign,
+        utmClickTerm: body.utmClickTerm,
+        utmClickContent: body.utmClickContent,
       });
 
       return reply.send({
@@ -384,6 +422,21 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
                   type: 'object',
                   additionalProperties: { type: 'number' },
                   description: 'Click counts keyed by OS name'
+                },
+                clicksByLanguage: {
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by language code'
+                },
+                clicksByHour: {
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by hour (00-23)'
+                },
+                clicksBySocialSource: {
+                  type: 'object',
+                  additionalProperties: { type: 'number' },
+                  description: 'Click counts keyed by social source (WhatsApp, Telegram, etc.)'
                 },
                 clicksByDate: {
                   type: 'object',

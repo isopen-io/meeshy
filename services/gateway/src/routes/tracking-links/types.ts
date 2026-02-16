@@ -41,8 +41,28 @@ export const recordClickSchema = z.object({
   os: z.string().optional(),
   device: z.string().optional(),
   language: z.string().optional(),
+  languages: z.string().optional(),
   referrer: z.string().optional(),
-  deviceFingerprint: z.string().optional()
+  deviceFingerprint: z.string().optional(),
+  // Rich tracking fields
+  screenResolution: z.string().optional(),
+  viewportSize: z.string().optional(),
+  pixelRatio: z.number().optional(),
+  colorDepth: z.number().int().optional(),
+  timezone: z.string().optional(),
+  connectionType: z.string().optional(),
+  connectionSpeed: z.number().optional(),
+  touchSupport: z.boolean().optional(),
+  platform: z.string().optional(),
+  cookiesEnabled: z.boolean().optional(),
+  hardwareConcurrency: z.number().int().optional(),
+  deviceMemory: z.number().optional(),
+  socialSource: z.string().optional(),
+  utmClickSource: z.string().optional(),
+  utmClickMedium: z.string().optional(),
+  utmClickCampaign: z.string().optional(),
+  utmClickTerm: z.string().optional(),
+  utmClickContent: z.string().optional(),
 });
 
 export const getStatsSchema = z.object({

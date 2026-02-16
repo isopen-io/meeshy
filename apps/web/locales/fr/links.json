@@ -303,6 +303,9 @@
         "clicks": "Clics",
         "clicksCount": "{count} clics",
         "uniqueCount": "{count} uniques",
+        "clicksBySocialSource": "Clics par source sociale",
+        "clicksByLanguage": "Clics par langue",
+        "clicksByHour": "Clics par heure",
         "unknown": "Inconnu",
         "direct": "Direct",
         "copy": "Copier"

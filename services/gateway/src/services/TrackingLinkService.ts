@@ -157,8 +157,27 @@ export class TrackingLinkService {
     os?: string;
     device?: string;
     language?: string;
+    languages?: string;
     referrer?: string;
     deviceFingerprint?: string;
+    screenResolution?: string;
+    viewportSize?: string;
+    pixelRatio?: number;
+    colorDepth?: number;
+    timezone?: string;
+    connectionType?: string;
+    connectionSpeed?: number;
+    touchSupport?: boolean;
+    platform?: string;
+    cookiesEnabled?: boolean;
+    hardwareConcurrency?: number;
+    deviceMemory?: number;
+    socialSource?: string;
+    utmClickSource?: string;
+    utmClickMedium?: string;
+    utmClickCampaign?: string;
+    utmClickTerm?: string;
+    utmClickContent?: string;
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
     // Vérifier que le lien existe et est actif
     const trackingLink = await this.getTrackingLinkByToken(params.token);
@@ -197,8 +216,27 @@ export class TrackingLinkService {
         os: params.os,
         device: params.device,
         language: params.language,
+        languages: params.languages,
         referrer: params.referrer,
-        deviceFingerprint: params.deviceFingerprint
+        deviceFingerprint: params.deviceFingerprint,
+        screenResolution: params.screenResolution,
+        viewportSize: params.viewportSize,
+        pixelRatio: params.pixelRatio,
+        colorDepth: params.colorDepth,
+        timezone: params.timezone,
+        connectionType: params.connectionType,
+        connectionSpeed: params.connectionSpeed,
+        touchSupport: params.touchSupport,
+        platform: params.platform,
+        cookiesEnabled: params.cookiesEnabled,
+        hardwareConcurrency: params.hardwareConcurrency,
+        deviceMemory: params.deviceMemory,
+        socialSource: params.socialSource,
+        utmClickSource: params.utmClickSource,
+        utmClickMedium: params.utmClickMedium,
+        utmClickCampaign: params.utmClickCampaign,
+        utmClickTerm: params.utmClickTerm,
+        utmClickContent: params.utmClickContent,
       }
     });
 
@@ -261,6 +299,9 @@ export class TrackingLinkService {
     clicksByDevice: { [device: string]: number };
     clicksByBrowser: { [browser: string]: number };
     clicksByOS: { [os: string]: number };
+    clicksByLanguage: { [language: string]: number };
+    clicksByHour: { [hour: string]: number };
+    clicksBySocialSource: { [source: string]: number };
     clicksByDate: { [date: string]: number };
     topReferrers: { referrer: string; count: number }[];
   }> {
@@ -295,6 +336,9 @@ export class TrackingLinkService {
     const clicksByDevice: { [device: string]: number } = {};
     const clicksByBrowser: { [browser: string]: number } = {};
     const clicksByOS: { [os: string]: number } = {};
+    const clicksByLanguage: { [language: string]: number } = {};
+    const clicksByHour: { [hour: string]: number } = {};
+    const clicksBySocialSource: { [source: string]: number } = {};
     const clicksByDate: { [date: string]: number } = {};
     const referrerCounts: { [referrer: string]: number } = {};
 
@@ -317,6 +361,20 @@ export class TrackingLinkService {
       // Par OS
       if (click.os) {
         clicksByOS[click.os] = (clicksByOS[click.os] || 0) + 1;
+      }
+
+      // Par langue
+      if (click.language) {
+        clicksByLanguage[click.language] = (clicksByLanguage[click.language] || 0) + 1;
+      }
+
+      // Par heure (0-23)
+      const hour = click.clickedAt.getHours().toString().padStart(2, '0');
+      clicksByHour[hour] = (clicksByHour[hour] || 0) + 1;
+
+      // Par source sociale
+      if (click.socialSource) {
+        clicksBySocialSource[click.socialSource] = (clicksBySocialSource[click.socialSource] || 0) + 1;
       }
 
       // Par date
@@ -353,6 +411,9 @@ export class TrackingLinkService {
       clicksByDevice,
       clicksByBrowser,
       clicksByOS,
+      clicksByLanguage,
+      clicksByHour,
+      clicksBySocialSource,
       clicksByDate,
       topReferrers
     };

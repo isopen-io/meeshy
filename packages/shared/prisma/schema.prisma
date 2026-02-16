@@ -1337,8 +1337,32 @@ model TrackingLinkClick {
   os                String? // Système d'exploitation
   device            String? // Type d'appareil (mobile, desktop, tablet)
   language          String? // Langue du navigateur
+  languages         String? // Liste complète des langues (ex: "fr,en-US,en")
   referrer          String? // Page d'origine
   deviceFingerprint String? // Empreinte unique du device
+
+  // Rich tracking - données navigateur client-side
+  screenResolution    String?  // ex: "1920x1080"
+  viewportSize        String?  // ex: "1440x900"
+  pixelRatio          Float?   // ex: 2.0
+  colorDepth          Int?     // ex: 24
+  timezone            String?  // ex: "Europe/Paris"
+  connectionType      String?  // ex: "4g", "wifi", "ethernet"
+  connectionSpeed     Float?   // downlink en Mbps
+  touchSupport        Boolean? // écran tactile
+  platform            String?  // ex: "MacIntel", "Win32", "Linux armv81"
+  cookiesEnabled      Boolean?
+  hardwareConcurrency Int?     // nombre de cœurs CPU
+  deviceMemory        Float?   // RAM en GB
+  socialSource        String?  // source sociale détectée: whatsapp, telegram, facebook, etc.
+
+  // UTM params capturés depuis l'URL du clic (si présents)
+  utmClickSource      String?  // utm_source du lien cliqué
+  utmClickMedium      String?  // utm_medium du lien cliqué
+  utmClickCampaign    String?  // utm_campaign du lien cliqué
+  utmClickTerm        String?  // utm_term du lien cliqué
+  utmClickContent     String?  // utm_content du lien cliqué
+
   clickedAt         DateTime @default(now())
 
   trackingLink  TrackingLink          @relation(fields: [trackingLinkId], references: [id])

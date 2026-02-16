@@ -26,7 +26,9 @@ import {
   Laptop,
   Tag,
   Megaphone,
-  Share2
+  Share2,
+  Languages,
+  MessageCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -52,6 +54,9 @@ interface TrackingLinkStats {
   clicksByDevice: Array<{ device: string; clicks: number }>;
   clicksByBrowser: Array<{ browser: string; clicks: number }>;
   clicksByOS: Array<{ os: string; clicks: number }>;
+  clicksBySocialSource: Array<{ source: string; clicks: number }>;
+  clicksByLanguage: Array<{ language: string; clicks: number }>;
+  clicksByHour: Array<{ hour: string; clicks: number }>;
   topReferrers: Array<{ referrer: string; clicks: number }>;
 }
 
@@ -101,6 +106,15 @@ export default function TrackingLinkDetailsPage() {
         clicksByOS: Object.entries(data.clicksByOS || {})
           .map(([os, clicks]) => ({ os, clicks: clicks as number }))
           .sort((a, b) => b.clicks - a.clicks),
+        clicksBySocialSource: Object.entries(data.clicksBySocialSource || {})
+          .map(([source, clicks]) => ({ source, clicks: clicks as number }))
+          .sort((a, b) => b.clicks - a.clicks),
+        clicksByLanguage: Object.entries(data.clicksByLanguage || {})
+          .map(([language, clicks]) => ({ language, clicks: clicks as number }))
+          .sort((a, b) => b.clicks - a.clicks),
+        clicksByHour: Object.entries(data.clicksByHour || {})
+          .map(([hour, clicks]) => ({ hour, clicks: clicks as number }))
+          .sort((a, b) => a.hour.localeCompare(b.hour)),
         topReferrers: (data.topReferrers || []).map(r => ({
           referrer: r.referrer,
           clicks: r.count
@@ -584,6 +598,107 @@ export default function TrackingLinkDetailsPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sources sociales */}
+            {stats.clicksBySocialSource && stats.clicksBySocialSource.length > 0 && (
+              <Card className="border-2 bg-white dark:bg-gray-950">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageCircle className="h-5 w-5" />
+                    {t('tracking.details.clicksBySocialSource')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.clicksBySocialSource.slice(0, 8).map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.source || t('tracking.details.unknown')}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-32 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-pink-600"
+                              style={{
+                                width: `${(item.clicks / trackingLink.totalClicks) * 100}%`
+                              }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold w-12 text-right">{item.clicks}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Clics par langue */}
+            {stats.clicksByLanguage && stats.clicksByLanguage.length > 0 && (
+              <Card className="border-2 bg-white dark:bg-gray-950">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Languages className="h-5 w-5" />
+                    {t('tracking.details.clicksByLanguage')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.clicksByLanguage.slice(0, 8).map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{item.language || t('tracking.details.unknown')}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-32 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-teal-600"
+                              style={{
+                                width: `${(item.clicks / trackingLink.totalClicks) * 100}%`
+                              }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold w-12 text-right">{item.clicks}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Distribution horaire */}
+            {stats.clicksByHour && stats.clicksByHour.length > 0 && (
+              <Card className="border-2 bg-white dark:bg-gray-950 lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    {t('tracking.details.clicksByHour')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-end gap-1 h-32">
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const hourKey = i.toString().padStart(2, '0');
+                      const hourData = stats.clicksByHour.find(h => h.hour === hourKey);
+                      const clicks = hourData?.clicks || 0;
+                      const maxClicks = Math.max(...stats.clicksByHour.map(h => h.clicks), 1);
+                      const heightPercent = (clicks / maxClicks) * 100;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div className="w-full flex items-end justify-center" style={{ height: '96px' }}>
+                            <div
+                              className="w-full max-w-[20px] bg-amber-500 rounded-t transition-all hover:bg-amber-600"
+                              style={{ height: `${Math.max(heightPercent, 2)}%` }}
+                              title={`${hourKey}h: ${clicks} clicks`}
+                            />
+                          </div>
+                          {i % 3 === 0 && (
+                            <span className="text-[10px] text-muted-foreground">{hourKey}h</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
