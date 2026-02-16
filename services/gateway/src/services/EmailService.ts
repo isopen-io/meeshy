@@ -115,6 +115,24 @@ export interface BroadcastEmailData {
   unsubscribeUrl: string;
 }
 
+export interface FriendRequestEmailData {
+  to: string;
+  recipientName: string;
+  senderName: string;
+  senderAvatar?: string | null;
+  viewRequestUrl: string;
+  language?: string;
+}
+
+export interface FriendAcceptedEmailData {
+  to: string;
+  recipientName: string;
+  accepterName: string;
+  accepterAvatar?: string | null;
+  conversationUrl: string;
+  language?: string;
+}
+
 // ============================================================================
 // I18N TRANSLATIONS
 // ============================================================================
@@ -165,6 +183,20 @@ interface EmailTranslations {
     expiry: string;
     ignoreNote: string;
   };
+  friendRequest: {
+    subject: string;
+    title: string;
+    intro: string;
+    buttonText: string;
+    footer: string;
+  };
+  friendAccepted: {
+    subject: string;
+    title: string;
+    intro: string;
+    buttonText: string;
+    footer: string;
+  };
 }
 
 const translations: Record<SupportedLanguage, EmailTranslations> = {
@@ -211,6 +243,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmer le changement',
       expiry: 'Ce lien expire dans {hours} heures.',
       ignoreNote: 'Si vous n\'avez pas demandé ce changement, ignorez cet email. Votre adresse email actuelle restera inchangée.'
+    },
+    friendRequest: {
+      subject: 'Nouvelle demande de contact - Meeshy',
+      title: 'Nouvelle demande de contact',
+      intro: '{sender} souhaite vous ajouter comme contact sur Meeshy.',
+      buttonText: 'Voir la demande',
+      footer: 'Vous pouvez accepter ou refuser cette demande depuis votre espace contacts.'
+    },
+    friendAccepted: {
+      subject: 'Demande de contact acceptee - Meeshy',
+      title: 'Demande de contact acceptee',
+      intro: '{accepter} a accepte votre demande de contact sur Meeshy.',
+      buttonText: 'Envoyer un message',
+      footer: 'Vous pouvez maintenant discuter ensemble sur Meeshy.'
     }
   },
   en: {
@@ -256,6 +302,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirm change',
       expiry: 'This link expires in {hours} hours.',
       ignoreNote: 'If you did not request this change, please ignore this email. Your current email address will remain unchanged.'
+    },
+    friendRequest: {
+      subject: 'New friend request - Meeshy',
+      title: 'New Friend Request',
+      intro: '{sender} wants to connect with you on Meeshy.',
+      buttonText: 'View request',
+      footer: 'You can accept or decline this request from your contacts page.'
+    },
+    friendAccepted: {
+      subject: 'Friend request accepted - Meeshy',
+      title: 'Friend Request Accepted',
+      intro: '{accepter} accepted your friend request on Meeshy.',
+      buttonText: 'Send a message',
+      footer: 'You can now chat together on Meeshy.'
     }
   },
   es: {
@@ -301,6 +361,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmar cambio',
       expiry: 'Este enlace expira en {hours} horas.',
       ignoreNote: 'Si no solicitaste este cambio, ignora este correo. Tu dirección de correo actual permanecerá sin cambios.'
+    },
+    friendRequest: {
+      subject: 'Nueva solicitud de amistad - Meeshy',
+      title: 'Nueva solicitud de amistad',
+      intro: '{sender} quiere conectar contigo en Meeshy.',
+      buttonText: 'Ver solicitud',
+      footer: 'Puedes aceptar o rechazar esta solicitud desde tu pagina de contactos.'
+    },
+    friendAccepted: {
+      subject: 'Solicitud de amistad aceptada - Meeshy',
+      title: 'Solicitud de amistad aceptada',
+      intro: '{accepter} acepto tu solicitud de amistad en Meeshy.',
+      buttonText: 'Enviar un mensaje',
+      footer: 'Ahora pueden chatear juntos en Meeshy.'
     }
   },
   pt: {
@@ -346,6 +420,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmar alteração',
       expiry: 'Este link expira em {hours} horas.',
       ignoreNote: 'Se você não solicitou esta alteração, ignore este email. Seu endereço de email atual permanecerá inalterado.'
+    },
+    friendRequest: {
+      subject: 'Novo pedido de amizade - Meeshy',
+      title: 'Novo pedido de amizade',
+      intro: '{sender} quer se conectar com voce no Meeshy.',
+      buttonText: 'Ver pedido',
+      footer: 'Voce pode aceitar ou recusar este pedido na sua pagina de contatos.'
+    },
+    friendAccepted: {
+      subject: 'Pedido de amizade aceite - Meeshy',
+      title: 'Pedido de amizade aceite',
+      intro: '{accepter} aceitou seu pedido de amizade no Meeshy.',
+      buttonText: 'Enviar uma mensagem',
+      footer: 'Voces agora podem conversar juntos no Meeshy.'
     }
   },
   it: {
@@ -391,6 +479,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Conferma cambio',
       expiry: 'Questo link scade tra {hours} ore.',
       ignoreNote: 'Se non hai richiesto questo cambio, ignora questa email. Il tuo indirizzo email attuale rimarrà invariato.'
+    },
+    friendRequest: {
+      subject: 'Nuova richiesta di amicizia - Meeshy',
+      title: 'Nuova richiesta di amicizia',
+      intro: '{sender} vuole connettersi con te su Meeshy.',
+      buttonText: 'Vedi richiesta',
+      footer: 'Puoi accettare o rifiutare questa richiesta dalla tua pagina contatti.'
+    },
+    friendAccepted: {
+      subject: 'Richiesta di amicizia accettata - Meeshy',
+      title: 'Richiesta di amicizia accettata',
+      intro: '{accepter} ha accettato la tua richiesta di amicizia su Meeshy.',
+      buttonText: 'Invia un messaggio',
+      footer: 'Ora potete chattare insieme su Meeshy.'
     }
   },
   de: {
@@ -436,6 +538,20 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Änderung bestätigen',
       expiry: 'Dieser Link läuft in {hours} Stunden ab.',
       ignoreNote: 'Wenn du diese Änderung nicht angefordert hast, ignoriere diese E-Mail. Deine aktuelle E-Mail-Adresse bleibt unverändert.'
+    },
+    friendRequest: {
+      subject: 'Neue Freundschaftsanfrage - Meeshy',
+      title: 'Neue Freundschaftsanfrage',
+      intro: '{sender} mochte sich mit dir auf Meeshy verbinden.',
+      buttonText: 'Anfrage ansehen',
+      footer: 'Du kannst diese Anfrage auf deiner Kontaktseite annehmen oder ablehnen.'
+    },
+    friendAccepted: {
+      subject: 'Freundschaftsanfrage akzeptiert - Meeshy',
+      title: 'Freundschaftsanfrage akzeptiert',
+      intro: '{accepter} hat deine Freundschaftsanfrage auf Meeshy akzeptiert.',
+      buttonText: 'Nachricht senden',
+      footer: 'Ihr konnt jetzt zusammen auf Meeshy chatten.'
     }
   }
 };
@@ -682,6 +798,34 @@ export class EmailService {
     const text = `${t.emailChange.title}\n\n${t.common.greeting} ${data.name},\n\n${t.emailChange.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.emailChange.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
 
     return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text });
+  }
+
+  async sendFriendRequestEmail(data: FriendRequestEmailData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
+    const intro = t.friendRequest.intro.replace('{sender}', data.senderName);
+    const avatarHtml = data.senderAvatar
+      ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
+      : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>👋 ${t.friendRequest.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.viewRequestUrl}" class="button">${t.friendRequest.buttonText}</a></div><div class="info"><p style="margin:0">${t.friendRequest.footer}</p></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const text = `${t.friendRequest.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendRequest.buttonText}: ${data.viewRequestUrl}\n\n${t.friendRequest.footer}\n\n${t.common.footer}\n\n${copyright}`;
+
+    return this.sendEmail({ to: data.to, subject: t.friendRequest.subject, html, text });
+  }
+
+  async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
+    const t = this.getTranslations(data.language);
+    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
+    const intro = t.friendAccepted.intro.replace('{accepter}', data.accepterName);
+    const avatarHtml = data.accepterAvatar
+      ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
+      : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>🎉 ${t.friendAccepted.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.conversationUrl}" class="button">${t.friendAccepted.buttonText}</a></div><div class="success"><p style="margin:0">${t.friendAccepted.footer}</p></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
+    const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${copyright}`;
+
+    return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text });
   }
 
   async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {

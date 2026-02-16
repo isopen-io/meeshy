@@ -410,6 +410,9 @@ class MeeshyServer {
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
     this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService);
+
+    // Expose emailService for use in routes (friend requests, etc.)
+    this.server.decorate('emailService', emailService);
   }
 
   // --------------------------------------------------------------------------

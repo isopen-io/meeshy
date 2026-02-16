@@ -6,6 +6,8 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, PaginationParams, IdParams, FriendRequestBody, FriendRequestActionBody, UserIdParams, AffiliateTokenData } from './types';
+import type { NotificationService } from '../../services/notifications/NotificationService';
+import type { EmailService } from '../../services/EmailService';
 
 /**
  * Validate and sanitize pagination parameters
@@ -218,7 +220,17 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       }
 
       const receiver = await fastify.prisma.user.findUnique({
-        where: { id: receiverId }
+        where: { id: receiverId },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true,
+          email: true,
+          systemLanguage: true
+        }
       });
 
       if (!receiver) {
@@ -273,6 +285,40 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
           }
         }
       });
+
+      // Notification in-app au destinataire
+      const notificationService = (fastify as any).notificationService as NotificationService;
+      if (notificationService) {
+        await notificationService.createFriendRequestNotification({
+          recipientUserId: receiverId,
+          requesterId: senderId,
+          friendRequestId: friendRequest.id,
+        }).catch((err: any) => console.error('Notification friend request error:', err));
+      }
+
+      // Email au destinataire (respect des preferences)
+      const emailService = (fastify as any).emailService as EmailService;
+      if (emailService && receiver.email) {
+        const userPrefs = await fastify.prisma.userPreferences.findUnique({
+          where: { userId: receiverId },
+          select: { notification: true }
+        });
+        const prefs = userPrefs?.notification as any;
+        const shouldEmail = (prefs?.emailEnabled !== false) && (prefs?.contactRequestEnabled !== false);
+
+        if (shouldEmail) {
+          const sender = friendRequest.sender;
+          const senderName = sender.displayName || sender.username || `${sender.firstName} ${sender.lastName}`.trim();
+          await emailService.sendFriendRequestEmail({
+            to: receiver.email,
+            recipientName: receiver.displayName || receiver.username || '',
+            senderName,
+            senderAvatar: sender.avatar,
+            viewRequestUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/contacts#pending`,
+            language: receiver.systemLanguage || undefined,
+          }).catch((err: any) => console.error('Email friend request error:', err));
+        }
+      }
 
       return reply.send({
         success: true,
@@ -433,6 +479,95 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
             }
           }
         });
+
+        if (action === 'accept') {
+          // Create direct conversation if none exists
+          const existingConversation = await fastify.prisma.conversation.findFirst({
+            where: {
+              type: 'direct',
+              AND: [
+                { members: { some: { userId: friendRequest.senderId } } },
+                { members: { some: { userId: friendRequest.receiverId } } }
+              ]
+            }
+          });
+
+          let conversationId: string | undefined;
+          if (!existingConversation) {
+            const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
+            const conversation = await fastify.prisma.conversation.create({
+              data: {
+                identifier,
+                type: 'direct',
+                members: {
+                  create: [
+                    { userId: friendRequest.senderId, role: 'member' },
+                    { userId: friendRequest.receiverId, role: 'member' }
+                  ]
+                }
+              }
+            });
+            conversationId = conversation.id;
+          } else {
+            conversationId = existingConversation.id;
+          }
+
+          // Notification in-app a l'expediteur original
+          const notificationService = (fastify as any).notificationService as NotificationService;
+          if (notificationService) {
+            await notificationService.createFriendAcceptedNotification({
+              recipientUserId: friendRequest.senderId,
+              accepterUserId: userId,
+              conversationId,
+            }).catch((err: any) => console.error('Notification friend accepted error:', err));
+          }
+
+          // Email a l'expediteur original (respect des preferences)
+          const emailService = (fastify as any).emailService as EmailService;
+          if (emailService) {
+            const sender = await fastify.prisma.user.findUnique({
+              where: { id: friendRequest.senderId },
+              select: { email: true, displayName: true, username: true, systemLanguage: true }
+            });
+
+            if (sender?.email) {
+              const userPrefs = await fastify.prisma.userPreferences.findUnique({
+                where: { userId: friendRequest.senderId },
+                select: { notification: true }
+              });
+              const prefs = userPrefs?.notification as any;
+              const shouldEmail = (prefs?.emailEnabled !== false) && (prefs?.contactRequestEnabled !== false);
+
+              if (shouldEmail) {
+                const accepter = updatedRequest.receiver;
+                const accepterName = accepter.displayName || accepter.username || `${accepter.firstName} ${accepter.lastName}`.trim();
+                await emailService.sendFriendAcceptedEmail({
+                  to: sender.email,
+                  recipientName: sender.displayName || sender.username || '',
+                  accepterName,
+                  accepterAvatar: accepter.avatar,
+                  conversationUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/conversations/${conversationId}`,
+                  language: sender.systemLanguage || undefined,
+                }).catch((err: any) => console.error('Email friend accepted error:', err));
+              }
+            }
+          }
+        }
+
+        if (action === 'reject') {
+          // Notification system a l'expediteur
+          const notificationService = (fastify as any).notificationService as NotificationService;
+          if (notificationService) {
+            const receiver = updatedRequest.receiver;
+            const receiverName = receiver.displayName || receiver.username;
+            await notificationService.createSystemNotification({
+              recipientUserId: friendRequest.senderId,
+              content: `${receiverName} declined your friend request`,
+              priority: 'low',
+              systemType: 'announcement',
+            }).catch((err: any) => console.error('Notification friend rejected error:', err));
+          }
+        }
 
         return reply.send({
           success: true,
