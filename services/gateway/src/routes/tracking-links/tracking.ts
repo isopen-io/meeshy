@@ -8,6 +8,9 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import {
+  requireAnalyticsPermission
+} from '../../middleware/admin-permissions.middleware';
+import {
   trackingLinkSchema,
   errorResponseSchema,
   validationErrorResponseSchema,
@@ -51,8 +54,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -82,7 +85,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
     try {
       const { token } = request.params as { token: string };
 
-      if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
+      if (!/^[a-zA-Z0-9_-]{2,50}$/.test(token)) {
         return reply.status(400).send({
           success: false,
           error: 'Token invalide'
@@ -172,8 +175,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -222,6 +225,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
               type: 'object',
               properties: {
                 originalUrl: { type: 'string', description: 'Original destination URL' },
+                clickId: { type: 'string', description: 'ID of the recorded click' },
                 trackingLink: trackingLinkSchema
               }
             }
@@ -250,7 +254,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
       const { token } = request.params as { token: string };
       const body = recordClickSchema.parse(request.body);
 
-      if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
+      if (!/^[a-zA-Z0-9_-]{2,50}$/.test(token)) {
         return reply.status(400).send({
           success: false,
           error: 'Token invalide'
@@ -312,6 +316,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         success: true,
         data: {
           originalUrl: result.trackingLink.originalUrl,
+          clickId: result.click.id,
           trackingLink: result.trackingLink
         }
       });
@@ -355,6 +360,75 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * 4. Confirmer ou signaler l'échec d'une redirection (sendBeacon)
+   * POST /api/tracking-links/:token/redirect-status
+   */
+  fastify.post('/tracking-links/:token/redirect-status', {
+    schema: {
+      description: 'Update the redirect status of a click. Designed for sendBeacon() calls during page unload. No authentication required.',
+      tags: ['tracking-links'],
+      summary: 'Update click redirect status',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
+          }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['clickId', 'status'],
+        properties: {
+          clickId: { type: 'string', description: 'ID of the click to update' },
+          status: { type: 'string', enum: ['confirmed', 'failed'], description: 'Redirect outcome' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Status updated',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true }
+          }
+        },
+        400: {
+          description: 'Invalid request',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Click or tracking link not found',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { token } = request.params as { token: string };
+      const { clickId, status } = request.body as { clickId: string; status: string };
+
+      if (!clickId || !['confirmed', 'failed'].includes(status)) {
+        return reply.status(400).send({ success: false, error: 'Invalid clickId or status' });
+      }
+
+      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
+      if (!trackingLink) {
+        return reply.status(404).send({ success: false, error: 'Tracking link not found' });
+      }
+
+      await trackingLinkService.updateRedirectStatus(clickId, trackingLink.id, status);
+
+      return reply.send({ success: true });
+    } catch (error) {
+      logError(fastify.log, 'Update redirect status error:', error);
+      return reply.status(404).send({ success: false, error: 'Click not found' });
+    }
+  });
+
+  /**
    * 5. Récupérer les statistiques d'un lien de tracking
    * GET /api/tracking-links/:token/stats
    */
@@ -370,8 +444,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -453,7 +527,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
                     }
                   },
                   description: 'Top referrer sources sorted by count'
-                }
+                },
+                confirmedClicks: { type: 'number', description: 'Number of clicks with confirmed redirect' }
               }
             }
           }
@@ -525,6 +600,135 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         });
       }
       logError(fastify.log, 'Get tracking link stats error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur interne du serveur'
+      });
+    }
+  });
+
+  /**
+   * ADMIN: Liste tous les tracking links avec pagination et recherche
+   * GET /api/v1/tracking-links/admin/all
+   */
+  fastify.get<{ Querystring: { limit?: string; offset?: string; search?: string } }>('/tracking-links/admin/all', {
+    preHandler: [fastify.authenticate, requireAnalyticsPermission],
+    schema: {
+      description: 'Admin: List all tracking links with pagination and search',
+      tags: ['tracking-links', 'admin'],
+      summary: 'List all tracking links (admin)',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
+          offset: { type: 'number', minimum: 0, default: 0 },
+          search: { type: 'string', description: 'Search by token, name, or URL' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                total: { type: 'number' }
+              }
+            }
+          }
+        },
+        403: { ...errorResponseSchema },
+        500: { ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 100);
+      const offset = parseInt((request.query as any).offset || '0', 10);
+      const search = (request.query as any).search || undefined;
+
+      const result = await trackingLinkService.getAllTrackingLinks({ limit, offset, search });
+
+      return reply.send({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logError(fastify.log, 'Admin get all tracking links error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur interne du serveur'
+      });
+    }
+  });
+
+  /**
+   * ADMIN: Récupère les clics individuels d'un tracking link
+   * GET /api/v1/tracking-links/admin/:token/clicks
+   */
+  fastify.get<{ Params: { token: string }; Querystring: { limit?: string; offset?: string } }>('/tracking-links/admin/:token/clicks', {
+    preHandler: [fastify.authenticate, requireAnalyticsPermission],
+    schema: {
+      description: 'Admin: Get individual clicks for a tracking link',
+      tags: ['tracking-links', 'admin'],
+      summary: 'Get tracking link clicks (admin)',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', pattern: '^[a-zA-Z0-9_-]{2,50}$' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 50 },
+          offset: { type: 'number', minimum: 0, default: 0 }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                total: { type: 'number' }
+              }
+            }
+          }
+        },
+        404: { ...errorResponseSchema },
+        403: { ...errorResponseSchema },
+        500: { ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { token } = request.params;
+      const limit = Math.min(parseInt((request.query as any).limit || '50', 10), 100);
+      const offset = parseInt((request.query as any).offset || '0', 10);
+
+      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
+      if (!trackingLink) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Tracking link not found'
+        });
+      }
+
+      const result = await trackingLinkService.getTrackingLinkClicks(trackingLink.id, limit, offset);
+
+      return reply.send({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logError(fastify.log, 'Admin get tracking link clicks error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur interne du serveur'

@@ -82,8 +82,18 @@ export class TrackingLinkService {
     conversationId?: string;
     messageId?: string;
     expiresAt?: Date;
+    customToken?: string;
   }): Promise<TrackingLink> {
-    const token = await this.generateUniqueToken();
+    let token: string;
+
+    if (params.customToken) {
+      if (await this.tokenExists(params.customToken)) {
+        throw new Error('Token already exists');
+      }
+      token = params.customToken;
+    } else {
+      token = await this.generateUniqueToken();
+    }
     // Ne stocker que le chemin relatif, pas le domaine complet
     // Cela permet une flexibilité totale (dev, staging, production, custom domains)
     const shortUrl = `/l/${token}`;
@@ -286,6 +296,16 @@ export class TrackingLinkService {
   }
 
   /**
+   * Met à jour le statut de redirection d'un clic
+   */
+  async updateRedirectStatus(clickId: string, trackingLinkId: string, status: string): Promise<void> {
+    await this.prisma.trackingLinkClick.update({
+      where: { id: clickId, trackingLinkId },
+      data: { redirectStatus: status }
+    });
+  }
+
+  /**
    * Récupère les statistiques d'un lien de tracking
    */
   async getTrackingLinkStats(token: string, params?: {
@@ -304,6 +324,7 @@ export class TrackingLinkService {
     clicksBySocialSource: { [source: string]: number };
     clicksByDate: { [date: string]: number };
     topReferrers: { referrer: string; count: number }[];
+    confirmedClicks: number;
   }> {
     const trackingLink = await this.getTrackingLinkByToken(token);
     
@@ -403,10 +424,13 @@ export class TrackingLinkService {
 
     const uniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
 
+    const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
+
     return {
       trackingLink: trackingLink as TrackingLink,
       totalClicks: clicks.length,
       uniqueClicks,
+      confirmedClicks,
       clicksByCountry,
       clicksByDevice,
       clicksByBrowser,
@@ -488,6 +512,66 @@ export class TrackingLinkService {
         token
       }
     });
+  }
+
+  /**
+   * Récupère tous les tracking links (admin) avec pagination et recherche
+   */
+  async getAllTrackingLinks(params: {
+    limit: number;
+    offset: number;
+    search?: string;
+  }): Promise<{ trackingLinks: any[]; total: number }> {
+    const where: any = {};
+
+    if (params.search) {
+      where.OR = [
+        { token: { contains: params.search, mode: 'insensitive' } },
+        { name: { contains: params.search, mode: 'insensitive' } },
+        { originalUrl: { contains: params.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [trackingLinks, total] = await Promise.all([
+      this.prisma.trackingLink.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: params.offset,
+        take: params.limit,
+        include: {
+          creator: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+            }
+          }
+        }
+      }),
+      this.prisma.trackingLink.count({ where })
+    ]);
+
+    return { trackingLinks, total };
+  }
+
+  /**
+   * Récupère les clics individuels d'un tracking link (admin)
+   */
+  async getTrackingLinkClicks(trackingLinkId: string, limit: number, offset: number): Promise<{ clicks: TrackingLinkClick[]; total: number }> {
+    const where = { trackingLinkId };
+
+    const [clicks, total] = await Promise.all([
+      this.prisma.trackingLinkClick.findMany({
+        where,
+        orderBy: { clickedAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.trackingLinkClick.count({ where })
+    ]);
+
+    return { clicks: clicks as TrackingLinkClick[], total };
   }
 
   /**
@@ -627,8 +711,8 @@ export class TrackingLinkService {
     
     // Regex pour détecter les liens de tracking existants (à ignorer)
     // Support n'importe quel domaine avec /l/<token> (flexible pour dev, staging, production)
-    const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9+\-_=]{6})/gi;
-    const mshyShortRegex = /\bm\+([a-zA-Z0-9+\-_=]{6})\b/gi;
+    const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/gi;
+    const mshyShortRegex = /\bm\+([a-zA-Z0-9_-]{2,50})\b/gi;
 
     const trackingLinks: TrackingLink[] = [];
     let processedContent = content;

@@ -83,6 +83,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             type: 'string',
             format: 'date-time',
             description: 'Optional expiration date for the tracking link'
+          },
+          customToken: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Optional custom token (2-50 alphanumeric chars, dashes, underscores)'
           }
         }
       },
@@ -169,7 +174,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         createdBy,
         conversationId: body.conversationId,
         messageId: body.messageId,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
+        customToken: body.customToken
       });
 
       return reply.status(201).send({
@@ -185,6 +191,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           success: false,
           error: 'Données invalides',
           details: error.errors
+        });
+      }
+      if (error instanceof Error && error.message === 'Token already exists') {
+        return reply.status(409).send({
+          success: false,
+          error: 'Ce token existe déjà'
         });
       }
       logError(fastify.log, 'Create tracking link error:', error);
@@ -211,8 +223,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -504,8 +516,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -602,8 +614,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -696,8 +708,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Current unique 6-character alphanumeric tracking token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Current unique alphanumeric tracking token (2-50 chars)'
           }
         }
       },
@@ -721,8 +733,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           },
           newToken: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'New 6-character token to replace current token'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'New token to replace current token (2-50 chars)'
           }
         }
       },
@@ -804,10 +816,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (body.newToken && !/^[a-zA-Z0-9]{6}$/.test(body.newToken)) {
+      if (body.newToken && !/^[a-zA-Z0-9_-]{2,50}$/.test(body.newToken)) {
         return reply.status(400).send({
           success: false,
-          error: 'Le token doit contenir exactement 6 caractères alphanumériques'
+          error: 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores'
         });
       }
 
@@ -878,8 +890,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         properties: {
           token: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9]{6}$',
-            description: 'Token to check (must be exactly 6 alphanumeric characters)'
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Token to check (2-50 alphanumeric characters, dashes, underscores)'
           }
         }
       },
@@ -923,10 +935,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (!/^[a-zA-Z0-9]{6}$/.test(token)) {
+      if (!/^[a-zA-Z0-9_-]{2,50}$/.test(token)) {
         return reply.status(400).send({
           success: false,
-          error: 'Le token doit contenir exactement 6 caractères alphanumériques'
+          error: 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores'
         });
       }
 
