@@ -22,8 +22,10 @@ import {
   Smartphone,
   Tablet,
   X,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 
@@ -306,7 +308,13 @@ export default function AdminTrackingLinksPage() {
                 )}
               </div>
               <div>
-                <Label htmlFor="formName">Nom (optionnel)</Label>
+                <Label htmlFor="formName" className="flex items-center gap-1">
+                  Nom
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                    <TooltipContent>Nom interne pour identifier facilement le lien dans la liste</TooltipContent>
+                  </Tooltip>
+                </Label>
                 <Input
                   id="formName"
                   placeholder="Mon lien"
@@ -316,7 +324,13 @@ export default function AdminTrackingLinksPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="formCampaign">Campagne (optionnel)</Label>
+                <Label htmlFor="formCampaign" className="flex items-center gap-1">
+                  Campagne
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                    <TooltipContent>Nom de la campagne marketing (ex: summer-2026, launch-v2)</TooltipContent>
+                  </Tooltip>
+                </Label>
                 <Input
                   id="formCampaign"
                   placeholder="summer-2026"
@@ -325,7 +339,13 @@ export default function AdminTrackingLinksPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="formSource">Source (optionnel)</Label>
+                <Label htmlFor="formSource" className="flex items-center gap-1">
+                  Source
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                    <TooltipContent>D'ou vient le trafic (ex: tiktok, instagram, newsletter)</TooltipContent>
+                  </Tooltip>
+                </Label>
                 <Input
                   id="formSource"
                   placeholder="tiktok, instagram..."
@@ -334,7 +354,13 @@ export default function AdminTrackingLinksPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="formMedium">Medium (optionnel)</Label>
+                <Label htmlFor="formMedium" className="flex items-center gap-1">
+                  Medium
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                    <TooltipContent>Type de canal utilise (ex: social, email, bio, paid)</TooltipContent>
+                  </Tooltip>
+                </Label>
                 <Input
                   id="formMedium"
                   placeholder="social, email, bio..."
