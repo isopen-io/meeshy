@@ -270,9 +270,10 @@ export default function AdminTrackingLinksPage() {
               Creer un tracking link
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+          <CardContent className="space-y-6">
+            {/* Champs principaux */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-1.5">
                 <Label htmlFor="formUrl">URL destination *</Label>
                 <Input
                   id="formUrl"
@@ -281,12 +282,18 @@ export default function AdminTrackingLinksPage() {
                   onChange={(e) => setFormUrl(e.target.value)}
                 />
               </div>
-              <div>
-                <Label htmlFor="formToken">Token custom (optionnel)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="formToken" className="flex items-center gap-1">
+                  Token custom
+                  <Tooltip>
+                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[260px]">Personnalise le slug du lien (/l/ton-token). Si vide, un token aleatoire sera genere.</TooltipContent>
+                  </Tooltip>
+                </Label>
                 <div className="relative">
                   <Input
                     id="formToken"
-                    placeholder="services, sylorion, trap..."
+                    placeholder="mon-slug"
                     value={formToken}
                     onChange={(e) => setFormToken(e.target.value)}
                     className={
@@ -304,73 +311,80 @@ export default function AdminTrackingLinksPage() {
                   <p className="text-xs text-red-500 mt-1">Token indisponible ou format invalide</p>
                 )}
                 {formToken && tokenAvailable === true && (
-                  <p className="text-xs text-green-500 mt-1">Token disponible → /l/{formToken}</p>
+                  <p className="text-xs text-green-500 mt-1">Disponible → /l/{formToken}</p>
                 )}
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="formName" className="flex items-center gap-1">
                   Nom
                   <Tooltip>
                     <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent>Nom interne pour identifier facilement le lien dans la liste</TooltipContent>
+                    <TooltipContent side="top" className="max-w-[260px]">Label interne pour retrouver ce lien rapidement dans la liste. Non visible par les visiteurs.</TooltipContent>
                   </Tooltip>
                 </Label>
                 <Input
                   id="formName"
-                  placeholder="Mon lien"
+                  placeholder="Promo ete"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   maxLength={32}
                 />
               </div>
-              <div>
-                <Label htmlFor="formCampaign" className="flex items-center gap-1">
-                  Campagne
-                  <Tooltip>
-                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent>Nom de la campagne marketing (ex: summer-2026, launch-v2)</TooltipContent>
-                  </Tooltip>
-                </Label>
-                <Input
-                  id="formCampaign"
-                  placeholder="summer-2026"
-                  value={formCampaign}
-                  onChange={(e) => setFormCampaign(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="formSource" className="flex items-center gap-1">
-                  Source
-                  <Tooltip>
-                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent>D'ou vient le trafic (ex: tiktok, instagram, newsletter)</TooltipContent>
-                  </Tooltip>
-                </Label>
-                <Input
-                  id="formSource"
-                  placeholder="tiktok, instagram..."
-                  value={formSource}
-                  onChange={(e) => setFormSource(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="formMedium" className="flex items-center gap-1">
-                  Medium
-                  <Tooltip>
-                    <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent>Type de canal utilise (ex: social, email, bio, paid)</TooltipContent>
-                  </Tooltip>
-                </Label>
-                <Input
-                  id="formMedium"
-                  placeholder="social, email, bio..."
-                  value={formMedium}
-                  onChange={(e) => setFormMedium(e.target.value)}
-                />
+            </div>
+
+            {/* Parametres UTM */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Parametres UTM</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="formCampaign" className="flex items-center gap-1">
+                    Campagne
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[260px]">Regroupe les clics sous une meme operation marketing. Permet de comparer les performances entre campagnes.</TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input
+                    id="formCampaign"
+                    placeholder="summer-2026"
+                    value={formCampaign}
+                    onChange={(e) => setFormCampaign(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="formSource" className="flex items-center gap-1">
+                    Source
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[260px]">Identifie la plateforme d'origine du visiteur. Sert a savoir quel canal genere le plus de trafic.</TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input
+                    id="formSource"
+                    placeholder="tiktok"
+                    value={formSource}
+                    onChange={(e) => setFormSource(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="formMedium" className="flex items-center gap-1">
+                    Medium
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[260px]">Categorise le type de canal (social, email, bio, paid...). Permet d'analyser quels types de diffusion convertissent le mieux.</TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input
+                    id="formMedium"
+                    placeholder="social"
+                    value={formMedium}
+                    onChange={(e) => setFormMedium(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <Button
                 onClick={handleCreate}
                 disabled={!formUrl || (formToken.length > 0 && formToken.length < 2) || (formToken && tokenAvailable === false) || creating}
