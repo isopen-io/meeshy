@@ -119,7 +119,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
 }
 
 /**
- * Enregistre les routes de base de gestion des messages (GET, POST, mark-read)
+ * Enregistre les routes de base de gestion des messages (GET, POST, mark-read, mark-unread)
  */
 export function registerMessagesRoutes(
   fastify: FastifyInstance,
@@ -910,7 +910,7 @@ export function registerMessagesRoutes(
   }, async (request, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
-      
+
       // Vérifier que l'utilisateur est authentifié
       if (!authRequest.authContext.isAuthenticated) {
         return reply.status(403).send({
@@ -918,7 +918,7 @@ export function registerMessagesRoutes(
           error: 'Authentification requise pour envoyer des messages'
         });
       }
-      
+
       const { id } = request.params;
       const {
         content,
@@ -944,7 +944,7 @@ export function registerMessagesRoutes(
 
       // Vérifier les permissions d'accès et d'écriture
       let canSend = false;
-      
+
       // Règle simple : seuls les utilisateurs faisant partie de la conversation peuvent y écrire
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
@@ -1376,6 +1376,138 @@ export function registerMessagesRoutes(
     } catch (error) {
       logger.error('Error marking conversation as read', error);
       reply.status(500).send({ success: false, error: 'Erreur lors du marquage comme lu' });
+    }
+  });
+
+  /**
+   * POST /conversations/:id/mark-unread
+   * Mark a conversation as unread by moving the read cursor back before the latest message.
+   * This makes the conversation appear with 1 unread message in the conversation list.
+   */
+  fastify.post<{ Params: ConversationParams }>('/conversations/:id/mark-unread', {
+    schema: {
+      description: 'Mark a conversation as unread by setting the read cursor before the latest message, making it appear as 1 unread message.',
+      tags: ['conversations', 'messages'],
+      summary: 'Mark conversation as unread',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                unreadCount: { type: 'number', description: 'Number of unread messages after marking as unread' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Résoudre l'ID de conversation réel
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation not found'
+        });
+      }
+
+      // Vérifier les permissions d'accès
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Unauthorized access to this conversation'
+        });
+      }
+
+      // Find the latest message in the conversation (not sent by the user)
+      const latestMessage = await prisma.message.findFirst({
+        where: {
+          conversationId,
+          isDeleted: false,
+          senderId: { not: userId }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, createdAt: true }
+      });
+
+      if (!latestMessage) {
+        // No messages from other users to mark as unread
+        return reply.send({
+          success: true,
+          data: { unreadCount: 0 }
+        });
+      }
+
+      // Move the read cursor to 1ms before the latest message's createdAt.
+      // This ensures the latest message appears as unread (createdAt > lastReadAt).
+      const lastReadAt = new Date(latestMessage.createdAt.getTime() - 1);
+
+      // Find the message just before the latest (to use as lastReadMessageId)
+      const previousMessage = await prisma.message.findFirst({
+        where: {
+          conversationId,
+          isDeleted: false,
+          createdAt: { lt: latestMessage.createdAt }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true }
+      });
+
+      // Update the cursor: set lastReadAt before the latest message
+      await prisma.conversationReadCursor.upsert({
+        where: {
+          conversation_user_cursor: { userId, conversationId }
+        },
+        create: {
+          userId,
+          conversationId,
+          lastReadMessageId: previousMessage?.id || null,
+          lastReadAt: lastReadAt,
+          unreadCount: 1,
+          version: 0
+        },
+        update: {
+          lastReadMessageId: previousMessage?.id || null,
+          lastReadAt: lastReadAt,
+          unreadCount: 1,
+          version: { increment: 1 }
+        }
+      });
+
+      logger.info(`[MARK-UNREAD] User ${userId} marked conversation ${conversationId} as unread (cursor moved before message ${latestMessage.id})`);
+
+      return reply.send({
+        success: true,
+        data: { unreadCount: 1 }
+      });
+
+    } catch (error) {
+      logger.error('Error marking conversation as unread', error);
+      reply.status(500).send({
+        success: false,
+        error: 'Error marking conversation as unread'
+      });
     }
   });
 

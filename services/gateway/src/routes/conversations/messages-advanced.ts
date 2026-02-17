@@ -763,7 +763,7 @@ export function registerMessagesAdvancedRoutes(
             isActive: true
           }
         });
-        
+
         if (!membership) {
           return reply.status(403).send({
             success: false,
@@ -947,6 +947,326 @@ export function registerMessagesAdvancedRoutes(
       return reply.status(500).send({
         success: false,
         error: 'Error retrieving reactions'
+      });
+    }
+  });
+
+  /**
+   * POST /conversations/:id/messages/:messageId/reactions
+   * Add an emoji reaction to a specific message within a conversation.
+   * Reuses the existing ReactionService for consistency with Socket.IO handlers.
+   */
+  fastify.post<{
+    Params: ConversationParams & { messageId: string };
+    Body: { emoji: string };
+  }>('/conversations/:id/messages/:messageId/reactions', {
+    schema: {
+      description: 'Add an emoji reaction to a message in a conversation. Reuses the same logic as the Socket.IO reaction:add handler. The reaction will be broadcast to all conversation participants via Socket.IO.',
+      tags: ['conversations', 'reactions'],
+      summary: 'Add reaction to message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to react to' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['emoji'],
+        properties: {
+          emoji: { type: 'string', minLength: 1, maxLength: 10, description: 'Emoji character to add as reaction' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                added: { type: 'boolean', description: 'Whether the reaction was added' },
+                emoji: { type: 'string', description: 'The emoji that was added' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id, messageId } = request.params;
+      const { emoji } = request.body;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const isAnonymous = authRequest.authContext.isAnonymous;
+      const sessionToken = authRequest.authContext.sessionToken;
+
+      // Validate emoji
+      if (!emoji) {
+        return reply.status(400).send({
+          success: false,
+          error: 'emoji is required'
+        });
+      }
+
+      // Resolve conversation ID
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation not found'
+        });
+      }
+
+      // Verify access to conversation
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Unauthorized access to this conversation'
+        });
+      }
+
+      // Verify message belongs to the conversation
+      const message = await prisma.message.findFirst({
+        where: {
+          id: messageId,
+          conversationId: conversationId,
+          isDeleted: false
+        },
+        select: { id: true }
+      });
+
+      if (!message) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Message not found in this conversation'
+        });
+      }
+
+      // Use ReactionService to add the reaction
+      const { ReactionService } = await import('../../services/ReactionService.js');
+      const reactionService = new ReactionService(prisma);
+
+      const reaction = await reactionService.addReaction({
+        messageId,
+        emoji,
+        userId: !isAnonymous ? userId : undefined,
+        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+      });
+
+      if (!reaction) {
+        return reply.status(500).send({
+          success: false,
+          error: 'Failed to add reaction'
+        });
+      }
+
+      // Broadcast via Socket.IO to all conversation participants
+      try {
+        const updateEvent = await reactionService.createUpdateEvent(
+          messageId,
+          emoji,
+          'add',
+          !isAnonymous ? userId : undefined,
+          isAnonymous && sessionToken ? sessionToken : undefined
+        );
+
+        if (socketIOHandler) {
+          const socketIOManager = socketIOHandler.getManager?.();
+          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          if (io) {
+            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+          }
+        }
+      } catch (socketError) {
+        logger.warn('[REACTION-REST] Error broadcasting reaction via Socket.IO', socketError);
+        // Do not fail the response if broadcast fails
+      }
+
+      // Invalidate conversation cache
+      await invalidateConversationCacheAsync(conversationId, prisma);
+
+      return reply.send({
+        success: true,
+        data: { added: true, emoji }
+      });
+
+    } catch (error: any) {
+      logger.error('Error adding reaction via REST', error);
+
+      // Handle specific error messages from ReactionService
+      if (error.message === 'Invalid emoji format') {
+        return reply.status(400).send({ success: false, error: 'Invalid emoji format' });
+      }
+      if (error.message === 'Message not found') {
+        return reply.status(404).send({ success: false, error: 'Message not found' });
+      }
+      if (error.message?.includes('not a member') || error.message?.includes('not a participant')) {
+        return reply.status(403).send({ success: false, error: 'Access denied to this conversation' });
+      }
+      if (error.message?.includes('Maximum')) {
+        return reply.status(400).send({ success: false, error: error.message });
+      }
+
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to add reaction'
+      });
+    }
+  });
+
+  /**
+   * DELETE /conversations/:id/messages/:messageId/reactions
+   * Remove an emoji reaction from a specific message within a conversation.
+   * Reuses the existing ReactionService for consistency with Socket.IO handlers.
+   */
+  fastify.delete<{
+    Params: ConversationParams & { messageId: string };
+    Body: { emoji: string };
+  }>('/conversations/:id/messages/:messageId/reactions', {
+    schema: {
+      description: 'Remove an emoji reaction from a message in a conversation. Users can only remove their own reactions. The removal will be broadcast to all conversation participants via Socket.IO.',
+      tags: ['conversations', 'reactions'],
+      summary: 'Remove reaction from message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to remove reaction from' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['emoji'],
+        properties: {
+          emoji: { type: 'string', minLength: 1, maxLength: 10, description: 'Emoji character to remove' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                removed: { type: 'boolean', description: 'Whether the reaction was removed' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id, messageId } = request.params;
+      const { emoji } = request.body;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const isAnonymous = authRequest.authContext.isAnonymous;
+      const sessionToken = authRequest.authContext.sessionToken;
+
+      // Validate emoji
+      if (!emoji) {
+        return reply.status(400).send({
+          success: false,
+          error: 'emoji is required'
+        });
+      }
+
+      // Resolve conversation ID
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation not found'
+        });
+      }
+
+      // Verify access to conversation
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Unauthorized access to this conversation'
+        });
+      }
+
+      // Use ReactionService to remove the reaction
+      const { ReactionService } = await import('../../services/ReactionService.js');
+      const reactionService = new ReactionService(prisma);
+
+      const removed = await reactionService.removeReaction({
+        messageId,
+        emoji,
+        userId: !isAnonymous ? userId : undefined,
+        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+      });
+
+      if (!removed) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Reaction not found'
+        });
+      }
+
+      // Broadcast via Socket.IO to all conversation participants
+      try {
+        const updateEvent = await reactionService.createUpdateEvent(
+          messageId,
+          emoji,
+          'remove',
+          !isAnonymous ? userId : undefined,
+          isAnonymous && sessionToken ? sessionToken : undefined
+        );
+
+        if (socketIOHandler) {
+          const socketIOManager = socketIOHandler.getManager?.();
+          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          if (io) {
+            io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
+          }
+        }
+      } catch (socketError) {
+        logger.warn('[REACTION-REST] Error broadcasting reaction removal via Socket.IO', socketError);
+        // Do not fail the response if broadcast fails
+      }
+
+      // Invalidate conversation cache
+      await invalidateConversationCacheAsync(conversationId, prisma);
+
+      return reply.send({
+        success: true,
+        data: { removed: true }
+      });
+
+    } catch (error: any) {
+      logger.error('Error removing reaction via REST', error);
+
+      if (error.message === 'Invalid emoji format') {
+        return reply.status(400).send({ success: false, error: 'Invalid emoji format' });
+      }
+
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to remove reaction'
       });
     }
   });

@@ -395,26 +395,23 @@ describe('Languages Constants Module', () => {
       expect(getMaxMessageLength('MODO')).toBe(4000);
       expect(getMaxMessageLength('ADMIN')).toBe(4000);
     });
-  });
-      });
 
-      it('should return 4000 for BIGBOSS role', () => {
-        expect(getMaxMessageLength('BIGBOSS')).toBe(4000);
-      });
+    it('should return 4000 for BIGBOSS role', () => {
+      expect(getMaxMessageLength('BIGBOSS')).toBe(4000);
+    });
 
-      it('should return 4000 for AUDIT role', () => {
-        expect(getMaxMessageLength('AUDIT')).toBe(4000);
-      });
+    it('should return 4000 for AUDIT role', () => {
+      expect(getMaxMessageLength('AUDIT')).toBe(4000);
+    });
 
-      it('should return 4000 for ANALYST role', () => {
-        expect(getMaxMessageLength('ANALYST')).toBe(4000);
-      });
+    it('should return 4000 for ANALYST role', () => {
+      expect(getMaxMessageLength('ANALYST')).toBe(4000);
+    });
 
-      it('should handle case insensitivity', () => {
-        expect(getMaxMessageLength('moderator')).toBe(4000);
-        expect(getMaxMessageLength('admin')).toBe(4000);
-        expect(getMaxMessageLength('Admin')).toBe(4000);
-      });
+    it('should handle case insensitivity', () => {
+      expect(getMaxMessageLength('moderator')).toBe(4000);
+      expect(getMaxMessageLength('admin')).toBe(4000);
+      expect(getMaxMessageLength('Admin')).toBe(4000);
     });
   });
 

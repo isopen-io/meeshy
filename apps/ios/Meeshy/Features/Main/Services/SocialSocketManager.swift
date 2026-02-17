@@ -8,6 +8,10 @@ struct SocketPostCreatedData: Decodable {
     let post: APIPost
 }
 
+struct SocketPostUpdatedData: Decodable {
+    let post: APIPost
+}
+
 struct SocketPostDeletedData: Decodable {
     let postId: String
     let authorId: String
@@ -91,12 +95,14 @@ final class SocialSocketManager: ObservableObject {
 
     // Combine publishers for ViewModels to subscribe to
     let postCreated = PassthroughSubject<APIPost, Never>()
+    let postUpdated = PassthroughSubject<APIPost, Never>()
     let postDeleted = PassthroughSubject<String, Never>() // postId
     let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
     let postUnliked = PassthroughSubject<SocketPostUnlikedData, Never>()
     let postReposted = PassthroughSubject<SocketPostRepostedData, Never>()
     let storyCreated = PassthroughSubject<APIPost, Never>()
     let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
+    let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
     let statusCreated = PassthroughSubject<APIPost, Never>()
     let statusDeleted = PassthroughSubject<String, Never>() // statusId
     let statusUpdated = PassthroughSubject<APIPost, Never>()
@@ -193,7 +199,7 @@ final class SocialSocketManager: ObservableObject {
         }
 
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            print("[SocialSocket] Reconnected — re-subscribing to feed")
+            print("[SocialSocket] Reconnected -- re-subscribing to feed")
             self?.subscribeFeed()
         }
 
@@ -206,6 +212,12 @@ final class SocialSocketManager: ObservableObject {
         socket.on("post:created") { [weak self] data, _ in
             self?.decode(SocketPostCreatedData.self, from: data) { payload in
                 self?.postCreated.send(payload.post)
+            }
+        }
+
+        socket.on("post:updated") { [weak self] data, _ in
+            self?.decode(SocketPostUpdatedData.self, from: data) { payload in
+                self?.postUpdated.send(payload.post)
             }
         }
 
@@ -244,6 +256,12 @@ final class SocialSocketManager: ObservableObject {
         socket.on("story:viewed") { [weak self] data, _ in
             self?.decode(SocketStoryViewedData.self, from: data) { payload in
                 self?.storyViewed.send(payload)
+            }
+        }
+
+        socket.on("story:reacted") { [weak self] data, _ in
+            self?.decode(SocketStoryReactedData.self, from: data) { payload in
+                self?.storyReacted.send(payload)
             }
         }
 

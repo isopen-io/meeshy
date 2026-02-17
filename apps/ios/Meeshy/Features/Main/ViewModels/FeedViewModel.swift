@@ -10,6 +10,10 @@ class FeedViewModel: ObservableObject {
     @Published var hasMore = true
     @Published var error: String?
 
+    /// Number of new posts received via Socket.IO while the user is scrolled down.
+    /// Reset to 0 when the user taps the "New posts" banner or pulls to refresh.
+    @Published var newPostsCount: Int = 0
+
     private var nextCursor: String?
     private let api = APIClient.shared
     private let limit = 20
@@ -80,7 +84,7 @@ class FeedViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
             }
         } catch {
-            // Silently fail on load more — user can scroll again
+            // Silently fail on load more -- user can scroll again
         }
 
         isLoadingMore = false
@@ -91,7 +95,16 @@ class FeedViewModel: ObservableObject {
     func refresh() async {
         nextCursor = nil
         hasMore = true
+        newPostsCount = 0
         await loadFeed()
+    }
+
+    // MARK: - New Posts Banner
+
+    /// Call this when the user taps the "New posts" banner to scroll to top
+    /// and reset the counter.
+    func acknowledgeNewPosts() {
+        newPostsCount = 0
     }
 
     // MARK: - Interactions
@@ -168,7 +181,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
+    func likeComment(postId: String, commentId: String, emoji: String = "heart") async {
         let body: [String: String] = ["emoji": emoji]
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
@@ -219,6 +232,7 @@ class FeedViewModel: ObservableObject {
     func subscribeToSocketEvents() {
         socialSocket.connect()
 
+        // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
@@ -226,10 +240,27 @@ class FeedViewModel: ObservableObject {
                 let feedPost = apiPost.toFeedPost()
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
+                    self.newPostsCount += 1
                 }
             }
             .store(in: &cancellables)
 
+        // --- post:updated ---
+        socialSocket.postUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiPost in
+                guard let self else { return }
+                let updatedFeedPost = apiPost.toFeedPost()
+                if let index = self.posts.firstIndex(where: { $0.id == updatedFeedPost.id }) {
+                    // Preserve local-only state (isLiked) across the update
+                    var merged = updatedFeedPost
+                    merged.isLiked = self.posts[index].isLiked
+                    self.posts[index] = merged
+                }
+            }
+            .store(in: &cancellables)
+
+        // --- post:deleted ---
         socialSocket.postDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] postId in
@@ -237,6 +268,7 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // --- post:liked ---
         socialSocket.postLiked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
@@ -245,6 +277,7 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // --- post:unliked ---
         socialSocket.postUnliked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
@@ -253,6 +286,20 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // --- post:reposted ---
+        socialSocket.postReposted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self else { return }
+                let repostFeedPost = data.repost.toFeedPost()
+                if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
+                    self.posts.insert(repostFeedPost, at: 0)
+                    self.newPostsCount += 1
+                }
+            }
+            .store(in: &cancellables)
+
+        // --- comment:added ---
         socialSocket.commentAdded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
@@ -261,6 +308,7 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // --- comment:deleted ---
         socialSocket.commentDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
