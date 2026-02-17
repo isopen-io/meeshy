@@ -814,6 +814,9 @@ struct FeedView: View {
                             },
                             onSendComment: { postId, content, parentId in
                                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
+                            },
+                            onLikeComment: { postId, commentId in
+                                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
                             }
                         )
                         .onAppear {
@@ -1066,6 +1069,7 @@ struct FeedPostCard: View {
     var onShare: ((String) -> Void)? = nil
     var onBookmark: ((String) -> Void)? = nil
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
+    var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
@@ -1116,7 +1120,7 @@ struct FeedPostCard: View {
         )
         .padding(.horizontal, 16)
         .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment)
+            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
     }
 
@@ -1822,6 +1826,7 @@ struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
+    var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
@@ -1852,6 +1857,9 @@ struct CommentsSheetView: View {
                                     onReply: {
                                         replyingTo = comment
                                         isComposerFocused = true
+                                    },
+                                    onLikeComment: {
+                                        onLikeComment?(post.id, comment.id)
                                     }
                                 )
                             }
@@ -2104,6 +2112,7 @@ struct CommentRowView: View {
     let comment: FeedComment
     let accentColor: String
     let onReply: () -> Void
+    var onLikeComment: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
@@ -2148,6 +2157,7 @@ struct CommentRowView: View {
                             isLiked.toggle()
                         }
                         HapticFeedback.light()
+                        onLikeComment?()
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")

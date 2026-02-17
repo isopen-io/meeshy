@@ -137,13 +137,24 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Mark as Unread
-    // BACKEND_NEEDED: No mark-as-unread endpoint exists yet.
-    // For now, set local unreadCount to 1 as a visual indicator.
 
-    func markAsUnread(conversationId: String) {
+    func markAsUnread(conversationId: String) async {
         guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        let previousCount = conversations[index].unreadCount
+
+        // Optimistic update
         if conversations[index].unreadCount == 0 {
             conversations[index].unreadCount = 1
+        }
+
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.post(
+                endpoint: "/conversations/\(conversationId)/mark-unread",
+                body: [String: String]()
+            )
+        } catch {
+            conversations[index].unreadCount = previousCount
+            print("[ConversationListVM] Mark as unread error: \(error)")
         }
     }
 

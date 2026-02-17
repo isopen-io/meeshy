@@ -490,18 +490,15 @@ struct ConversationListView: View {
         } else {
             Button {
                 HapticFeedback.light()
-                // BACKEND_NEEDED: No mark-as-unread endpoint. Local-only for now.
-                conversationViewModel.markAsUnread(conversationId: conversation.id)
+                Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
             } label: {
                 Label("Marquer comme non lu", systemImage: "envelope.badge.fill")
             }
         }
 
         // Add reaction
-        // BACKEND_NEEDED: No REST endpoint for adding reactions to messages.
-        // Reactions are currently handled via WebSocket only. This needs either
-        // a POST /conversations/:id/messages/:messageId/reactions endpoint, or
-        // the iOS app needs to use the WebSocket to send reactions.
+        // REST endpoints now exist: POST/DELETE /conversations/:id/messages/:messageId/reactions
+        // TODO: Wire reaction buttons to call the API (requires knowing the last messageId)
         Menu {
             ForEach(["❤️", "👍", "😂", "😮", "😢", "🔥", "🎉", "💯"], id: \.self) { emoji in
                 Button {
