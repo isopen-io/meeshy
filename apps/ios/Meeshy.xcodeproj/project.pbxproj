@@ -33,9 +33,12 @@
 		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
 		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
 		DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */; };
+		DD22EE33FF44AA55BB6600CC /* SocialSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */; };
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
 		DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */; };
+		DD33EE44FF55AA66BB770012 /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770011 /* ConversationModels.swift */; };
+		DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,10 +71,23 @@
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
+		CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialSocketManager.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiReactionPicker.swift; sourceTree = "<group>"; };
+		DD33EE44FF55AA66BB770011 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModels.swift; sourceTree = "<group>"; };
+		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EE11FF22AA33BB44CC55DD03 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		239EA92B51CC63E846FDE461 /* Components */ = {
@@ -167,6 +183,7 @@
 			isa = PBXGroup;
 			children = (
 				1F52D4DD36D01276DA42A395 /* Models.swift */,
+				DD33EE44FF55AA66BB770011 /* ConversationModels.swift */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */,
 				BB22CC33DD44EE55FF660011 /* StoryModels.swift */,
 			);
@@ -178,6 +195,7 @@
 			children = (
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */,
 				CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */,
+				CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -185,6 +203,7 @@
 		B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */,
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */,
 				BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */,
 				BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */,
@@ -200,6 +219,7 @@
 			buildConfigurationList = 4A720621BA92009C2C297A4D /* Build configuration list for PBXNativeTarget "Meeshy" */;
 			buildPhases = (
 				A0CA3D341BC3E6EC520974FB /* Sources */,
+				EE11FF22AA33BB44CC55DD03 /* Frameworks */,
 				23E401F0C251E533DEC02613 /* Resources */,
 			);
 			buildRules = (
@@ -208,6 +228,7 @@
 			);
 			name = Meeshy;
 			packageProductDependencies = (
+				EE11FF22AA33BB44CC55DD01 /* SocketIO */,
 			);
 			productName = Meeshy;
 			productReference = 5832205F0A09E149C8B976A8 /* Meeshy.app */;
@@ -237,6 +258,9 @@
 			);
 			mainGroup = 4B839730A63FC9359E52BECF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -287,9 +311,12 @@
 				AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
 				DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */,
+				DD22EE33FF44AA55BB6600CC /* SocialSocketManager.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
 				DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */,
+				DD33EE44FF55AA66BB770012 /* ConversationModels.swift in Sources */,
+				DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -479,6 +506,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 16.1.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		EE11FF22AA33BB44CC55DD01 /* SocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
+			productName = SocketIO;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 520FF232375591D2444919CD /* Project object */;
 }

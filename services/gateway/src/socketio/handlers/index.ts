@@ -8,3 +8,4 @@ export { MessageHandler, type MessageHandlerDependencies } from './MessageHandle
 export { StatusHandler, type StatusHandlerDependencies } from './StatusHandler';
 export { ReactionHandler, type ReactionHandlerDependencies } from './ReactionHandler';
 export { ConversationHandler, type ConversationHandlerDependencies } from './ConversationHandler';
+export { SocialEventsHandler, type SocialEventsHandlerDependencies } from './SocialEventsHandler';

@@ -9,6 +9,7 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   NotificationContext,
   NotificationMetadata,
@@ -103,6 +104,13 @@ export class NotificationService {
       case 'member_joined':     return prefs.memberJoinedEnabled;
       case 'message_reply':     return prefs.replyEnabled;
       case 'translation_ready': return true; // toujours activé
+      case 'post_like':         return prefs.postLikeEnabled ?? true;
+      case 'post_comment':      return prefs.postCommentEnabled ?? true;
+      case 'post_repost':       return prefs.postRepostEnabled ?? true;
+      case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
+      case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
+      case 'comment_like':      return prefs.commentLikeEnabled ?? false;
+      case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
       default:                  return true;
     }
   }
@@ -239,11 +247,11 @@ export class NotificationService {
           allRooms: Array.from(this.io.sockets.adapter.rooms.keys()).slice(0, 10),
         });
 
-        this.io.to(params.userId).emit('notification:new', this.formatForSocket(notification));
+        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, this.formatForSocket(notification));
         notificationLogger.info('📤 [SOCKET.IO] Notification émise', {
           userId: params.userId,
           notificationId: notification.id,
-          event: 'notification:new',
+          event: SERVER_EVENTS.NOTIFICATION_NEW,
           socketsInRoom: socketCount,
           warningIfZero: socketCount === 0 ? '⚠️ AUCUN socket dans la room!' : undefined,
         });
@@ -900,6 +908,237 @@ export class NotificationService {
       metadata: {
         action: 'view_details',
         systemType: params.systemType,
+      },
+    });
+  }
+
+  // ==============================================
+  // SOCIAL — POST_LIKE / STORY_REACTION / STATUS_REACTION
+  // ==============================================
+
+  async createPostLikeNotification(params: {
+    actorId: string;
+    postId: string;
+    postAuthorId: string;
+    emoji: string;
+    postType?: 'POST' | 'STORY' | 'STATUS';
+  }): Promise<Notification | null> {
+    // Don't notify yourself
+    if (params.actorId === params.postAuthorId) return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.actorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    // Map postType to the right notification type
+    const type = params.postType === 'STORY'
+      ? 'story_reaction'
+      : params.postType === 'STATUS'
+        ? 'status_reaction'
+        : 'post_like';
+
+    return this.createNotification({
+      userId: params.postAuthorId,
+      type,
+      priority: 'normal',
+      content: `A réagi ${params.emoji} à ton ${params.postType === 'STORY' ? 'story' : params.postType === 'STATUS' ? 'statut' : 'post'}`,
+
+      actor: {
+        id: params.actorId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+      },
+
+      metadata: {
+        action: 'view_message',
+        postId: params.postId,
+        emoji: params.emoji,
+        postType: params.postType || 'POST',
+      },
+    });
+  }
+
+  // ==============================================
+  // SOCIAL — POST_COMMENT
+  // ==============================================
+
+  async createPostCommentNotification(params: {
+    actorId: string;
+    postId: string;
+    postAuthorId: string;
+    commentId: string;
+    commentPreview: string;
+  }): Promise<Notification | null> {
+    if (params.actorId === params.postAuthorId) return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.actorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    return this.createNotification({
+      userId: params.postAuthorId,
+      type: 'post_comment',
+      priority: 'normal',
+      content: this.truncateMessage(params.commentPreview),
+
+      actor: {
+        id: params.actorId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+      },
+
+      metadata: {
+        action: 'view_message',
+        postId: params.postId,
+        commentId: params.commentId,
+        commentPreview: this.truncateMessage(params.commentPreview),
+      },
+    });
+  }
+
+  // ==============================================
+  // SOCIAL — POST_REPOST
+  // ==============================================
+
+  async createPostRepostNotification(params: {
+    actorId: string;
+    originalPostId: string;
+    postAuthorId: string;
+    repostId: string;
+  }): Promise<Notification | null> {
+    if (params.actorId === params.postAuthorId) return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.actorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    return this.createNotification({
+      userId: params.postAuthorId,
+      type: 'post_repost',
+      priority: 'normal',
+      content: 'A reposté ton post',
+
+      actor: {
+        id: params.actorId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+
+      context: {
+        postId: params.originalPostId,
+      },
+
+      metadata: {
+        action: 'view_message',
+        originalPostId: params.originalPostId,
+        repostId: params.repostId,
+      },
+    });
+  }
+
+  // ==============================================
+  // SOCIAL — COMMENT_REPLY
+  // ==============================================
+
+  async createCommentReplyNotification(params: {
+    actorId: string;
+    postId: string;
+    commentAuthorId: string;
+    commentId: string;
+    replyPreview: string;
+  }): Promise<Notification | null> {
+    if (params.actorId === params.commentAuthorId) return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.actorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    return this.createNotification({
+      userId: params.commentAuthorId,
+      type: 'comment_reply',
+      priority: 'normal',
+      content: this.truncateMessage(params.replyPreview),
+
+      actor: {
+        id: params.actorId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+      },
+
+      metadata: {
+        action: 'view_message',
+        postId: params.postId,
+        commentId: params.commentId,
+        commentPreview: this.truncateMessage(params.replyPreview),
+      },
+    });
+  }
+
+  // ==============================================
+  // SOCIAL — COMMENT_LIKE
+  // ==============================================
+
+  async createCommentLikeNotification(params: {
+    actorId: string;
+    postId: string;
+    commentId: string;
+    commentAuthorId: string;
+    emoji: string;
+  }): Promise<Notification | null> {
+    if (params.actorId === params.commentAuthorId) return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.actorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    return this.createNotification({
+      userId: params.commentAuthorId,
+      type: 'comment_like',
+      priority: 'low',
+      content: `A réagi ${params.emoji} à ton commentaire`,
+
+      actor: {
+        id: params.actorId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+      },
+
+      metadata: {
+        action: 'view_message',
+        postId: params.postId,
+        commentId: params.commentId,
+        emoji: params.emoji,
       },
     });
   }

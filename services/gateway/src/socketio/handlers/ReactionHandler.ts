@@ -9,7 +9,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/NotificationService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 
 export interface ReactionHandlerDependencies {
@@ -264,7 +264,7 @@ export class ReactionHandler {
         message.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
-      this.io.to(normalizedConversationId).emit(eventType, updateEvent);
+      this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
     }
   }
 

@@ -11,6 +11,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 
 interface UseVideoCallOptions {
@@ -100,7 +101,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         },
       };
 
-      socket.emit('call:initiate', callData);
+      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData);
       toast.success('Starting call...');
     } catch (error: unknown) {
       cleanupStream(stream);

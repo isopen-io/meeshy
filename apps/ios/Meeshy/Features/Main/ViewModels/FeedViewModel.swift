@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class FeedViewModel: ObservableObject {
@@ -12,6 +13,8 @@ class FeedViewModel: ObservableObject {
     private var nextCursor: String?
     private let api = APIClient.shared
     private let limit = 20
+    private var cancellables = Set<AnyCancellable>()
+    private let socialSocket = SocialSocketManager.shared
 
     // MARK: - Initial Load
 
@@ -125,6 +128,151 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Silently fail
         }
+    }
+
+    func createPost(content: String, type: String = "POST", visibility: String = "PUBLIC") async {
+        let body: [String: String] = ["content": content, "type": type, "visibility": visibility]
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let response: APIResponse<APIPost> = try await api.request(
+                endpoint: "/posts",
+                method: "POST",
+                body: bodyData
+            )
+            if response.success {
+                let feedPost = response.data.toFeedPost()
+                posts.insert(feedPost, at: 0)
+            }
+        } catch {
+            // Silent failure
+        }
+    }
+
+    func sendComment(postId: String, content: String, parentId: String? = nil) async {
+        var body: [String: String] = ["content": content]
+        if let parentId { body["parentId"] = parentId }
+
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                endpoint: "/posts/\(postId)/comments",
+                method: "POST",
+                body: bodyData
+            )
+            // Update local comment count
+            if let index = posts.firstIndex(where: { $0.id == postId }) {
+                posts[index].commentCount += 1
+            }
+        } catch {
+            // Silent failure
+        }
+    }
+
+    func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
+        let body: [String: String] = ["emoji": emoji]
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                endpoint: "/posts/\(postId)/comments/\(commentId)/like",
+                method: "POST",
+                body: bodyData
+            )
+        } catch {
+            // Silent failure
+        }
+    }
+
+    func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
+        var body: [String: Any] = ["isQuote": isQuote]
+        if let content { body["content"] = content }
+
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                endpoint: "/posts/\(postId)/repost",
+                method: "POST",
+                body: bodyData
+            )
+        } catch {
+            // Silent failure
+        }
+    }
+
+    func sharePost(_ postId: String, platform: String? = nil) async {
+        var body: [String: String] = [:]
+        if let platform { body["platform"] = platform }
+
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let _: APIResponse<[String: AnyCodable]> = try await api.request(
+                endpoint: "/posts/\(postId)/share",
+                method: "POST",
+                body: bodyData
+            )
+        } catch {
+            // Silent failure
+        }
+    }
+
+    // MARK: - Socket.IO Real-Time Updates
+
+    func subscribeToSocketEvents() {
+        socialSocket.connect()
+
+        socialSocket.postCreated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiPost in
+                guard let self else { return }
+                let feedPost = apiPost.toFeedPost()
+                if !self.posts.contains(where: { $0.id == feedPost.id }) {
+                    self.posts.insert(feedPost, at: 0)
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] postId in
+                self?.posts.removeAll { $0.id == postId }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postLiked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                self.posts[index].likes = data.likeCount
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postUnliked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                self.posts[index].likes = data.likeCount
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                self.posts[index].commentCount = data.commentCount
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                self.posts[index].commentCount = data.commentCount
+            }
+            .store(in: &cancellables)
+    }
+
+    func unsubscribeFromSocketEvents() {
+        cancellables.removeAll()
+        socialSocket.unsubscribeFeed()
     }
 
     // MARK: - Fallback

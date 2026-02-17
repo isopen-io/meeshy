@@ -24,7 +24,7 @@ import type {
   MessageResponse
 } from '@meeshy/shared/types/messaging';
 import type { Message } from '@meeshy/shared/types/index';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 
@@ -277,7 +277,7 @@ export class MessageHandler {
         stats.status === 'fulfilled' ? stats.value : null
       );
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
 
       if (senderSocket) {
@@ -413,7 +413,7 @@ export class MessageHandler {
 
       for (const member of members) {
         const unreadCount = await readStatusService.getUnreadCount(member.userId, conversationId);
-        this.io.to(`user_${member.userId}`).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        this.io.to(ROOMS.user(member.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
@@ -480,7 +480,7 @@ export class MessageHandler {
       error
     };
     if (callback) callback(errorResponse);
-    socket.emit('error', { message: error });
+    socket.emit(SERVER_EVENTS.ERROR, { message: error });
   }
 
   /**

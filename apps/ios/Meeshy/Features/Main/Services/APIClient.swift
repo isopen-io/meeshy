@@ -21,6 +21,20 @@ struct CursorPagination: Decodable {
     let limit: Int
 }
 
+struct OffsetPagination: Decodable {
+    let total: Int?
+    let hasMore: Bool
+    let limit: Int
+    let offset: Int
+}
+
+struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
+    let success: Bool
+    let data: T
+    let pagination: OffsetPagination?
+    let error: String?
+}
+
 // MARK: - API Errors
 
 enum APIError: Error, LocalizedError {
@@ -156,6 +170,24 @@ final class APIClient {
         if let cursor {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
+
+        return try await request(
+            endpoint: endpoint,
+            queryItems: queryItems
+        )
+    }
+
+    // MARK: - Offset Paginated Request
+
+    func offsetPaginatedRequest<T: Decodable>(
+        endpoint: String,
+        offset: Int = 0,
+        limit: Int = 15
+    ) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        let queryItems = [
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+        ]
 
         return try await request(
             endpoint: endpoint,

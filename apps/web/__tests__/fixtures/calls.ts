@@ -1,3 +1,5 @@
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+
 /**
  * Test Fixtures for Video Calls
  *
@@ -256,7 +258,7 @@ export const mockCallHistory = [
 
 export const mockSocketEvents = {
   callInitiated: {
-    event: 'call:initiated',
+    event: SERVER_EVENTS.CALL_INITIATED,
     data: {
       callId: mockCalls.pending.id,
       conversationId: mockConversations.direct.id,
@@ -300,7 +302,7 @@ export const mockSocketEvents = {
     },
   },
   callEnded: {
-    event: 'call:ended',
+    event: SERVER_EVENTS.CALL_ENDED,
     data: {
       callId: mockCalls.ended.id,
       reason: 'user_hangup' as const,
@@ -309,7 +311,7 @@ export const mockSocketEvents = {
     },
   },
   participantLeft: {
-    event: 'call:participant-left',
+    event: SERVER_EVENTS.CALL_PARTICIPANT_LEFT,
     data: {
       callId: mockCalls.active.id,
       userId: mockUsers.userB.id,
@@ -335,7 +337,7 @@ export const mockSocketEvents = {
     },
   },
   webrtcSignal: {
-    event: 'call:signal',
+    event: SERVER_EVENTS.CALL_SIGNAL,
     data: {
       callId: mockCalls.active.id,
       fromUserId: mockUsers.userA.id,
@@ -348,7 +350,7 @@ export const mockSocketEvents = {
     },
   },
   iceCandidate: {
-    event: 'call:signal',
+    event: SERVER_EVENTS.CALL_SIGNAL,
     data: {
       callId: mockCalls.active.id,
       fromUserId: mockUsers.userA.id,

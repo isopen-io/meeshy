@@ -70,10 +70,52 @@ export function registerFeedRoutes(
         return reply.status(401).send({ success: false, error: 'Authentication required' });
       }
 
-      const statuses = await feedService.getStatuses(authContext.registeredUser.id);
-      return reply.send({ success: true, data: statuses });
+      const query = FeedQuerySchema.safeParse(request.query);
+      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+
+      const result = await feedService.getStatuses(authContext.registeredUser.id, cursor, limit);
+
+      return reply.send({
+        success: true,
+        data: result.items,
+        pagination: {
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
+          limit,
+        },
+      });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses] Error: ${error}`);
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // GET /posts/feed/statuses/discover — Public statuses (platform-wide)
+  fastify.get('/posts/feed/statuses/discover', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+
+      const query = FeedQuerySchema.safeParse(request.query);
+      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+
+      const result = await feedService.getDiscoverStatuses(authContext.registeredUser.id, cursor, limit);
+
+      return reply.send({
+        success: true,
+        data: result.items,
+        pagination: {
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
+          limit,
+        },
+      });
+    } catch (error) {
+      fastify.log.error(`[GET /posts/feed/statuses/discover] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });

@@ -5,6 +5,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Notification } from '@/types/notification';
 
 type NotificationCallback = (notification: Notification) => void;
@@ -132,31 +133,31 @@ class NotificationSocketIOSingleton {
       this.notificationCallbacks.forEach(cb => cb(notification));
     };
 
-    this.socket.on('notification:new', handleNotification);
-    this.socket.on('notification', handleNotification); // Legacy support
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_NEW, handleNotification);
+    this.socket.on(SERVER_EVENTS.NOTIFICATION, handleNotification); // Legacy support
 
     // Écouter l'événement d'authentification
-    this.socket.on('authenticated', (data: any) => {
+    this.socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
       // Silently handle authentication
     });
 
     // Écouter les erreurs
-    this.socket.on('error', (error: any) => {
+    this.socket.on(SERVER_EVENTS.ERROR, (error: any) => {
       // Silently handle errors
     });
 
     // Notification marquée comme lue
-    this.socket.on('notification:read', (data: { notificationId: string }) => {
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_READ, (data: { notificationId: string }) => {
       this.readCallbacks.forEach(cb => cb(data.notificationId));
     });
 
     // Notification supprimée
-    this.socket.on('notification:deleted', (data: { notificationId: string }) => {
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_DELETED, (data: { notificationId: string }) => {
       this.deletedCallbacks.forEach(cb => cb(data.notificationId));
     });
 
     // Mise à jour des compteurs
-    this.socket.on('notification:counts', (counts: any) => {
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_COUNTS, (counts: any) => {
       this.countsCallbacks.forEach(cb => cb(counts));
     });
   }

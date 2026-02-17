@@ -9,7 +9,7 @@ import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 export interface StatusHandlerDependencies {
   prisma: PrismaClient;
@@ -79,7 +79,7 @@ export class StatusHandler {
         isTyping: true
       };
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
     } catch (error) {
       console.error('❌ [TYPING] Erreur handleTypingStart:', error);
@@ -127,7 +127,7 @@ export class StatusHandler {
         isTyping: false
       };
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
     } catch (error) {
       console.error('❌ [TYPING] Erreur handleTypingStop:', error);

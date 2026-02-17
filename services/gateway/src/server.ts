@@ -727,6 +727,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');
+
+        const socialEventsHandler = manager.getSocialEventsHandler();
+        this.server.decorate('socialEvents', socialEventsHandler);
+        logger.info('[GWY] ✅ SocialEventsHandler exposed for routes');
       }
     } catch (error) {
       logger.error('[GWY] ❌ Failed to setup Socket.IO:', error);

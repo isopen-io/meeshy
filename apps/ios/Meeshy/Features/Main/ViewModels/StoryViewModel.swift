@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class StoryViewModel: ObservableObject {
@@ -7,6 +8,8 @@ class StoryViewModel: ObservableObject {
     @Published var isLoading = false
 
     private let api = APIClient.shared
+    private var cancellables = Set<AnyCancellable>()
+    private let socialSocket = SocialSocketManager.shared
 
     // MARK: - Load Stories
 
@@ -87,6 +90,45 @@ class StoryViewModel: ObservableObject {
 
     func hasUnviewedStories(forUserId userId: String) -> Bool {
         storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
+    }
+
+    // MARK: - Socket.IO Real-Time Updates
+
+    func subscribeToSocketEvents() {
+        socialSocket.storyCreated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiPost in
+                guard let self else { return }
+                // Convert to StoryItem and insert into the right group
+                let groups = [apiPost].toStoryGroups()
+                for newGroup in groups {
+                    if let idx = self.storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
+                        // Existing author — append stories
+                        var updated = self.storyGroups[idx].stories
+                        for story in newGroup.stories where !updated.contains(where: { $0.id == story.id }) {
+                            updated.append(story)
+                        }
+                        self.storyGroups[idx] = StoryGroup(
+                            id: self.storyGroups[idx].id,
+                            username: self.storyGroups[idx].username,
+                            avatarColor: self.storyGroups[idx].avatarColor,
+                            stories: updated
+                        )
+                    } else {
+                        // New author — insert at beginning
+                        self.storyGroups.insert(newGroup, at: 0)
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.storyViewed
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                // Story view counts are shown in the story viewer, refresh if needed
+                // For now this is a no-op — the seen-by list is fetched on demand
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Sample Data Fallback

@@ -1,5 +1,30 @@
 import SwiftUI
 
+enum StatusVisibility: String, CaseIterable {
+    case `public` = "PUBLIC"
+    case friends = "FRIENDS"
+    case except = "EXCEPT"
+    case only = "ONLY"
+
+    var label: String {
+        switch self {
+        case .public: return "Public"
+        case .friends: return "Amis"
+        case .except: return "Sauf..."
+        case .only: return "Seulement..."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .public: return "globe"
+        case .friends: return "person.2.fill"
+        case .except: return "person.fill.xmark"
+        case .only: return "person.fill.checkmark"
+        }
+    }
+}
+
 struct StatusComposerView: View {
     @ObservedObject var viewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
@@ -8,6 +33,9 @@ struct StatusComposerView: View {
     @State private var selectedEmoji: String?
     @State private var statusText = ""
     @State private var isPublishing = false
+    @AppStorage("lastStatusVisibility") private var lastVisibility: String = "PUBLIC"
+    @State private var selectedVisibility: StatusVisibility = .public
+    @State private var selectedUserIds: [String] = []
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
@@ -19,6 +47,9 @@ struct StatusComposerView: View {
                 VStack(spacing: 24) {
                     // Emoji Grid
                     emojiGrid
+
+                    // Visibility picker
+                    visibilityPicker
 
                     // Text Field
                     textInput
@@ -166,7 +197,9 @@ struct StatusComposerView: View {
             Task {
                 await viewModel.setStatus(
                     emoji: emoji,
-                    content: statusText.isEmpty ? nil : statusText
+                    content: statusText.isEmpty ? nil : statusText,
+                    visibility: selectedVisibility.rawValue,
+                    visibilityUserIds: (selectedVisibility == .except || selectedVisibility == .only) ? selectedUserIds : nil
                 )
                 isPublishing = false
                 dismiss()
@@ -196,5 +229,45 @@ struct StatusComposerView: View {
         }
         .disabled(selectedEmoji == nil || isPublishing)
         .opacity(selectedEmoji == nil ? 0.5 : 1)
+    }
+
+    // MARK: - Visibility Picker
+
+    private var visibilityPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(StatusVisibility.allCases, id: \.rawValue) { vis in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedVisibility = vis
+                            lastVisibility = vis.rawValue
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: vis.icon)
+                                .font(.system(size: 11))
+                            Text(vis.label)
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(selectedVisibility == vis ? .white : theme.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(selectedVisibility == vis ?
+                                    AnyShapeStyle(MeeshyColors.primaryGradient) :
+                                    AnyShapeStyle(theme.inputBackground))
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .onAppear {
+            if let vis = StatusVisibility(rawValue: lastVisibility) {
+                selectedVisibility = vis
+            }
+        }
     }
 }

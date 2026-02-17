@@ -18,6 +18,7 @@ import type {
   WebRTCSignal,
   CALL_ERROR_CODES,
 } from '@meeshy/shared/types/video-call';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 export interface UseWebRTCP2POptions {
   callId: string;
@@ -84,7 +85,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               sdpMid: candidateInit.sdpMid,
             };
 
-            socket.emit('call:signal', {
+            socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
               callId,
               signal,
             } as CallSignalEvent);
@@ -263,7 +264,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           sdp: offer.sdp || '',
         };
 
-        socket.emit('call:signal', {
+        socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
           callId,
           signal,
         } as CallSignalEvent);
@@ -332,7 +333,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           sdp: answer.sdp || '',
         };
 
-        socket.emit('call:signal', {
+        socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
           callId,
           signal,
         } as CallSignalEvent);
@@ -522,10 +523,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       }
     };
 
-    socket.on('call:signal', handleIncomingSignal);
+    socket.on(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
 
     return () => {
-      socket.off('call:signal', handleIncomingSignal);
+      socket.off(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
     };
   }, [callId, handleOffer, handleAnswer, handleIceCandidate]);
 

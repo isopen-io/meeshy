@@ -13,6 +13,7 @@
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
@@ -242,7 +243,7 @@ describe('useWebRTCP2P', () => {
       expect(mockAddPeerConnection).toHaveBeenCalledWith(mockTargetUserId, mockPeerConnection);
       expect(mockAddTrack).toHaveBeenCalled();
       expect(mockCreateOffer).toHaveBeenCalled();
-      expect(mockEmit).toHaveBeenCalledWith('call:signal', expect.objectContaining({
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_SIGNAL, expect.objectContaining({
         callId: mockCallId,
         signal: expect.objectContaining({
           type: 'offer',
@@ -324,7 +325,7 @@ describe('useWebRTCP2P', () => {
         useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
       );
 
-      expect(mockOn).toHaveBeenCalledWith('call:signal', expect.any(Function));
+      expect(mockOn).toHaveBeenCalledWith(SERVER_EVENTS.CALL_SIGNAL, expect.any(Function));
     });
 
     it('should stop listening on unmount', () => {
@@ -334,7 +335,7 @@ describe('useWebRTCP2P', () => {
 
       unmount();
 
-      expect(mockOff).toHaveBeenCalledWith('call:signal', expect.any(Function));
+      expect(mockOff).toHaveBeenCalledWith(SERVER_EVENTS.CALL_SIGNAL, expect.any(Function));
     });
 
     it('should handle null socket gracefully', () => {

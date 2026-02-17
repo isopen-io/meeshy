@@ -14,6 +14,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {
   ConversationParams,
   EditMessageBody
@@ -469,8 +470,8 @@ export function registerMessagesAdvancedRoutes(
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = `conversation_${conversationId}`;
-          (socketIOManager as any).io.to(room).emit('message:edited', messageResponse);
+          const room = ROOMS.conversation(conversationId);
+          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse);
           logger.info(`Edit - Broadcasted message:edited to room ${room}`);
         }
       } catch (socketError) {
@@ -641,8 +642,8 @@ export function registerMessagesAdvancedRoutes(
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = `conversation_${conversationId}`;
-          (socketIOManager as any).io.to(room).emit('message:deleted', {
+          const room = ROOMS.conversation(conversationId);
+          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
             messageId,
             conversationId
           });

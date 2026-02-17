@@ -13,6 +13,7 @@ import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
+import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -31,7 +32,7 @@ import type {
   TranslatedAudioData,
   TranscriptionReadyEventData
 } from '@meeshy/shared/types/socketio-events';
-import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { MessageRequest, MessageResponse } from '@meeshy/shared/types/messaging';
 import type { Message } from '@meeshy/shared/types/index';
@@ -65,6 +66,7 @@ export class MeeshySocketIOManager {
   private callEventsHandler: CallEventsHandler;
   private callService: CallService;
   private notificationService: NotificationService;
+  private socialEventsHandler: SocialEventsHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
 
   // Mapping des utilisateurs connectés
@@ -131,6 +133,12 @@ export class MeeshySocketIOManager {
       allowEIO3: true
     });
 
+    // Initialiser le SocialEventsHandler pour les broadcasts feed
+    this.socialEventsHandler = new SocialEventsHandler({
+      io: this.io as any,
+      prisma: this.prisma,
+    });
+
   }
 
   /**
@@ -169,6 +177,13 @@ export class MeeshySocketIOManager {
    */
   public getNotificationService(): NotificationService {
     return this.notificationService;
+  }
+
+  /**
+   * Expose SocialEventsHandler for use in routes (broadcast social events)
+   */
+  public getSocialEventsHandler(): SocialEventsHandler {
+    return this.socialEventsHandler;
   }
 
   async initialize(): Promise<void> {
@@ -252,7 +267,7 @@ export class MeeshySocketIOManager {
             };
 
             if (callback) callback(errorResponse);
-            socket.emit('error', { message: 'User not authenticated' });
+            socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
             return;
           }
 
@@ -270,7 +285,7 @@ export class MeeshySocketIOManager {
             };
 
             if (callback) callback(errorResponse);
-            socket.emit('error', { message: validation.error || 'Message invalide' });
+            socket.emit(SERVER_EVENTS.ERROR, { message: validation.error || 'Message invalide' });
             logger.warn(`⚠️ [WEBSOCKET] Message rejeté pour ${userId}: ${validation.error}`);
             return;
           }
@@ -481,7 +496,7 @@ export class MeeshySocketIOManager {
             };
 
             if (callback) callback(errorResponse);
-            socket.emit('error', { message: 'User not authenticated' });
+            socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
             return;
           }
 
@@ -500,7 +515,7 @@ export class MeeshySocketIOManager {
               };
 
               if (callback) callback(errorResponse);
-              socket.emit('error', { message: validation.error || 'Message invalide' });
+              socket.emit(SERVER_EVENTS.ERROR, { message: validation.error || 'Message invalide' });
               logger.warn(`⚠️ [WEBSOCKET] Message avec attachments rejeté pour ${userId}: ${validation.error}`);
               return;
             }
@@ -784,13 +799,13 @@ export class MeeshySocketIOManager {
       // Gestion des rooms conversation: join
       socket.on(CLIENT_EVENTS.CONVERSATION_JOIN, async (data: { conversationId: string }) => {
         const normalizedId = await this.normalizeConversationId(data.conversationId);
-        const room = `conversation_${normalizedId}`;
+        const room = ROOMS.conversation(normalizedId);
         socket.join(room);
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
-          socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, { 
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
             conversationId: normalizedId,
-            userId 
+            userId
           });
           // Pré-charger/rafraîchir les stats - utiliser l'ID original pour Prisma
           this._sendConversationStatsToSocket(socket, data.conversationId).catch(() => {});
@@ -800,7 +815,7 @@ export class MeeshySocketIOManager {
       // Gestion des rooms conversation: leave
       socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data: { conversationId: string }) => {
         const normalizedId = await this.normalizeConversationId(data.conversationId);
-        const room = `conversation_${normalizedId}`;
+        const room = ROOMS.conversation(normalizedId);
         socket.leave(room);
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
@@ -825,6 +840,27 @@ export class MeeshySocketIOManager {
           return { id: user.id, isAnonymous: user.isAnonymous };
         }
       );
+
+      // ===== ÉVÉNEMENTS FEED SOCIAL =====
+      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        const userId = this.socketToUser.get(socket.id);
+        if (userId) {
+          this.socialEventsHandler.handleFeedSubscribe(socket, userId);
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Not authenticated' });
+        }
+      });
+
+      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        const userId = this.socketToUser.get(socket.id);
+        if (userId) {
+          this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Not authenticated' });
+        }
+      });
 
       // Déconnexion
       socket.on('disconnect', () => {
@@ -926,11 +962,13 @@ export class MeeshySocketIOManager {
             this.socketToUser.set(socket.id, user.id);
             this._addUserSocket(user.id, socket.id);
 
-            // IMPORTANT: Rejoindre la room personnelle pour les notifications
+            // IMPORTANT: Rejoindre la room personnelle pour les notifications + feed social
             try {
               if (user.id && typeof user.id === 'string') {
                 socket.join(user.id);
-                logger.info(`[Socket.IO] User ${user.id} joined personal room for notifications`);
+                socket.join(ROOMS.user(user.id));
+                socket.join(ROOMS.feed(user.id));
+                logger.info(`[Socket.IO] User ${user.id} joined personal room + user_ room + feed room`);
               } else {
                 logger.error(`[Socket.IO] Invalid userId for socket.join: ${JSON.stringify(user.id)}`);
               }
@@ -949,7 +987,7 @@ export class MeeshySocketIOManager {
 
             // Rejoindre la room globale si elle existe (conversation "meeshy")
             try {
-              socket.join(`conversation_any`);
+              socket.join('conversation:any');
             } catch {}
 
             // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
@@ -1030,9 +1068,9 @@ export class MeeshySocketIOManager {
             // CORRECTION: Mettre à jour l'état en ligne dans la base de données pour les anonymes et broadcaster
             await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
 
-            // Rejoindre la conversation spécifique du lien de partage
+            // Rejoindre la conversation spécifique du participant anonyme
             try {
-              const conversationRoom = `conversation_${participant.shareLink.id}`;
+              const conversationRoom = ROOMS.conversation(participant.conversationId);
               socket.join(conversationRoom);
             } catch {}
 
@@ -1189,7 +1227,7 @@ export class MeeshySocketIOManager {
 
         // Rejoindre la room globale "meeshy"
         try {
-          socket.join(`conversation_any`);
+          socket.join('conversation:any');
         } catch {}
         
         socket.emit(SERVER_EVENTS.AUTHENTICATED, { success: true, user: { id: user.id, language: user.language } });
@@ -1225,7 +1263,7 @@ export class MeeshySocketIOManager {
 
       // Rejoindre les rooms Socket.IO
       for (const conv of conversations) {
-        socket.join(`conversation_${conv.conversationId}`);
+        socket.join(ROOMS.conversation(conv.conversationId));
       }
 
 
@@ -1244,7 +1282,7 @@ export class MeeshySocketIOManager {
     try {
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        socket.emit('error', { message: 'User not authenticated' });
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
         throw new Error('User not authenticated');
       }
 
@@ -1388,7 +1426,7 @@ export class MeeshySocketIOManager {
         }
       }
 
-      this.io.to(`conversation_${data.conversationId}`).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      this.io.to(ROOMS.conversation(data.conversationId)).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       // S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
       socket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       
@@ -1495,7 +1533,7 @@ export class MeeshySocketIOManager {
       if (conversationIdForBroadcast) {
         // Normaliser l'ID de conversation
         const normalizedId = await this.normalizeConversationId(conversationIdForBroadcast);
-        const roomName = `conversation_${normalizedId}`;
+        const roomName = ROOMS.conversation(normalizedId);
         const roomClients = this.io.sockets.adapter.rooms.get(roomName);
         const clientCount = roomClients ? roomClients.size : 0;
         
@@ -1602,7 +1640,7 @@ export class MeeshySocketIOManager {
 
       // Normaliser l'ID de conversation
       const normalizedId = await this.normalizeConversationId(conversationId);
-      const roomName = `conversation_${normalizedId}`;
+      const roomName = ROOMS.conversation(normalizedId);
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
@@ -1681,7 +1719,7 @@ export class MeeshySocketIOManager {
 
       // Normaliser l'ID de conversation
       const normalizedId = await this.normalizeConversationId(conversationId);
-      const roomName = `conversation_${normalizedId}`;
+      const roomName = ROOMS.conversation(normalizedId);
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
@@ -1931,7 +1969,7 @@ export class MeeshySocketIOManager {
           const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
 
           // Broadcaster uniquement dans la conversation du participant anonyme
-          this.io.to(`conversation_${participant.conversationId}`).emit(SERVER_EVENTS.USER_STATUS, {
+          this.io.to(ROOMS.conversation(participant.conversationId)).emit(SERVER_EVENTS.USER_STATUS, {
             userId: participant.id,
             username: displayName,
             isOnline,
@@ -1964,7 +2002,7 @@ export class MeeshySocketIOManager {
           const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
 
           // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
-          const rooms = user.conversations.map(c => `conversation_${c.conversationId}`);
+          const rooms = user.conversations.map(c => ROOMS.conversation(c.conversationId));
           if (rooms.length > 0) {
             this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
@@ -2070,7 +2108,7 @@ export class MeeshySocketIOManager {
         isTyping: true
       };
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
 
 
       // Émettre vers tous les autres utilisateurs de la conversation (sauf l'émetteur)
@@ -2165,7 +2203,7 @@ export class MeeshySocketIOManager {
         isTyping: false
       };
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
 
 
       // Émettre vers tous les autres utilisateurs de la conversation (sauf l'émetteur)
@@ -2376,7 +2414,7 @@ export class MeeshySocketIOManager {
       }
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       // 1. Broadcast vers tous les clients de la conversation
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
 
@@ -2411,7 +2449,7 @@ export class MeeshySocketIOManager {
             const unreadCount = await readStatusService.getUnreadCount(member.userId, normalizedId);
 
             // Émettre vers le socket personnel de l'utilisateur
-            this.io.to(`user_${member.userId}`).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            this.io.to(ROOMS.user(member.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount
             });
@@ -2570,7 +2608,7 @@ export class MeeshySocketIOManager {
       if (message) {
         const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
 
-        this.io.to(normalizedConversationId).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
         // Créer une notification pour l'auteur du message (si ce n'est pas lui qui réagit)
         // Ne notifier que les utilisateurs authentifiés (pas les anonymes)
@@ -2675,7 +2713,7 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
-        this.io.to(normalizedConversationId).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
+        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
       }
 
     } catch (error: any) {

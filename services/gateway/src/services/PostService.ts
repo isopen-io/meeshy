@@ -87,6 +87,7 @@ export class PostService {
   async createPost(data: {
     type: string;
     visibility: string;
+    visibilityUserIds?: string[];
     content?: string;
     communityId?: string;
     storyEffects?: Record<string, unknown>;
@@ -111,6 +112,7 @@ export class PostService {
         authorId: userId,
         type: data.type as any,
         visibility: data.visibility as any,
+        visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
         originalLanguage,
         communityId: data.communityId,
@@ -153,6 +155,7 @@ export class PostService {
   async updatePost(postId: string, userId: string, data: {
     content?: string;
     visibility?: string;
+    visibilityUserIds?: string[];
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
   }) {
@@ -165,14 +168,19 @@ export class PostService {
       throw new Error('FORBIDDEN');
     }
 
+    const updateData: any = {
+      ...data,
+      visibility: data.visibility as any,
+      storyEffects: (data.storyEffects as any) ?? undefined,
+      isEdited: true,
+    };
+    if (data.visibilityUserIds !== undefined) {
+      updateData.visibilityUserIds = data.visibilityUserIds;
+    }
+
     return this.prisma.post.update({
       where: { id: postId },
-      data: {
-        ...data,
-        visibility: data.visibility as any,
-        storyEffects: (data.storyEffects as any) ?? undefined,
-        isEdited: true,
-      },
+      data: updateData,
       include: postInclude,
     });
   }
@@ -318,6 +326,69 @@ export class PostService {
     } catch {
       // Ignore race conditions
     }
+  }
+
+  async sharePost(postId: string, userId: string, platform?: string) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+    });
+    if (!post) return null;
+
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { shareCount: { increment: 1 } },
+      include: postInclude,
+    });
+  }
+
+  async pinPost(postId: string, userId: string) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+    });
+    if (!post) return null;
+    if (post.authorId !== userId) throw new Error('FORBIDDEN');
+
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: true },
+      include: postInclude,
+    });
+  }
+
+  async unpinPost(postId: string, userId: string) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+    });
+    if (!post) return null;
+    if (post.authorId !== userId) throw new Error('FORBIDDEN');
+
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { isPinned: false },
+      include: postInclude,
+    });
+  }
+
+  async getPostViews(postId: string, userId: string, limit: number = 50, offset: number = 0) {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
+    });
+    if (!post) return null;
+    if (post.authorId !== userId) throw new Error('FORBIDDEN');
+
+    const views = await this.prisma.postView.findMany({
+      where: { postId },
+      include: {
+        user: { select: authorSelect },
+      },
+      orderBy: { viewedAt: 'desc' },
+      take: limit,
+      skip: offset,
+    });
+
+    const total = await this.prisma.postView.count({ where: { postId } });
+
+    return { items: views, total, hasMore: offset + limit < total };
   }
 
   async repostPost(postId: string, userId: string, content?: string, isQuote: boolean = false) {

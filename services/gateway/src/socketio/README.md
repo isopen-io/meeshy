@@ -8,17 +8,18 @@ Architecture modulaire pour la gestion des connexions WebSocket temps réel. Org
 
 ```
 src/socketio/
-├── MeeshySocketIOManager.ts      # Gestionnaire principal (377 lignes)
-├── CallEventsHandler.ts          # Gestion des appels vidéo/audio
-├── handlers/                     # Handlers événements Socket.IO
-│   ├── index.ts                  # Exports centralisés
+├── MeeshySocketIOManager.ts      # Gestionnaire principal
+├── CallEventsHandler.ts          # Gestion des appels video/audio
+├── handlers/
+│   ├── index.ts                  # Exports centralises
 │   ├── AuthHandler.ts            # Authentification (JWT, sessions)
 │   ├── MessageHandler.ts         # Envoi/broadcast messages
-│   ├── ReactionHandler.ts        # Réactions aux messages
+│   ├── ReactionHandler.ts        # Reactions aux messages
 │   ├── StatusHandler.ts          # Typing indicators
-│   └── ConversationHandler.ts    # Join/leave conversations
-└── utils/                        # Utilitaires réutilisables
-    ├── index.ts                  # Exports centralisés
+│   ├── ConversationHandler.ts    # Join/leave conversations
+│   └── SocialEventsHandler.ts    # Posts, stories, statuts, commentaires
+└── utils/
+    ├── index.ts                  # Exports centralises
     └── socket-helpers.ts         # Helpers Socket.IO
 ```
 
@@ -51,7 +52,7 @@ handleDisconnection(socket: Socket): void
 
 **Événements gérés:**
 - `message:send` - Envoi message texte
-- `message:send_with_attachments` - Envoi message avec fichiers
+- `message:send-with-attachments` - Envoi message avec fichiers
 
 **Méthodes principales:**
 ```typescript
@@ -81,7 +82,7 @@ broadcastNewMessage(message, conversationId, socket): Promise<void>
 **Événements gérés:**
 - `reaction:add` - Ajouter réaction
 - `reaction:remove` - Retirer réaction
-- `reaction:request_sync` - Synchroniser réactions
+- `reaction:request-sync` - Synchroniser réactions
 
 **Méthodes principales:**
 ```typescript
@@ -142,13 +143,33 @@ sendConversationStatsToSocket(socket, conversationId): Promise<void>
 ```
 
 **Fonctionnalités:**
-- Gestion des rooms Socket.IO (`conversation_${id}`)
+- Gestion des rooms Socket.IO (`conversation:${id}`) via `ROOMS.conversation(id)`
 - Normalisation des IDs (ObjectId vs identifier)
 - Envoi des statistiques de conversation
 - Émission événements joined/left
 
 **Dépendances:**
 - ConversationStatsService
+
+---
+
+### SocialEventsHandler
+**Responsabilite:** Broadcasting temps reel pour les features sociales (posts, stories, statuts, commentaires)
+
+**Events emis (serveur → clients):**
+- `post:created` / `post:updated` / `post:deleted` - CRUD posts
+- `post:liked` / `post:unliked` / `post:reposted` / `post:bookmarked` - Interactions posts
+- `story:created` / `story:viewed` / `story:reacted` - Stories
+- `status:created` / `status:updated` / `status:deleted` / `status:reacted` - Moods/Statuts
+- `comment:added` / `comment:deleted` / `comment:liked` - Commentaires
+
+**Events ecoutes (client → serveur):**
+- `feed:subscribe` - S'abonner aux updates feed
+- `feed:unsubscribe` - Se desabonner
+
+**Rooms utilisees:**
+- `feed:${userId}` via `ROOMS.feed(userId)` - Room personnelle pour updates des amis
+- `user:${userId}` via `ROOMS.user(userId)` - Notifications personnelles
 
 ---
 
@@ -257,6 +278,40 @@ Broadcast: typing:start (vers conversation room, sauf émetteur)
 
 ---
 
+## Constantes et Conventions
+
+### Source de verite
+Tous les noms d'evenements et rooms sont definis dans `packages/shared/types/socketio-events.ts`:
+- `SERVER_EVENTS` — 52 evenements serveur → client
+- `CLIENT_EVENTS` — 23 evenements client → serveur
+- `ROOMS` — helpers pour construire les noms de rooms
+
+### Convention de nommage
+- **Events:** `entity:action-word` (colons + hyphens, jamais underscores)
+  - Exemples: `message:new`, `reaction:request-sync`, `call:participant-left`
+- **Rooms:** `entity:${id}` (colons, jamais underscores)
+  - Exemples: `conversation:abc123`, `user:xyz789`, `feed:user123`
+
+### Usage dans le code
+```typescript
+import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+
+// Events
+socket.on(CLIENT_EVENTS.MESSAGE_SEND, handler);
+io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
+
+// Rooms
+socket.join(ROOMS.conversation(conversationId));
+io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, data);
+```
+
+### Regles strictes
+- **JAMAIS** de string hardcodee pour un event ou un room
+- **TOUJOURS** utiliser les constantes `SERVER_EVENTS`, `CLIENT_EVENTS`, `ROOMS`
+- Les tests doivent aussi importer les constantes (pas de mock avec valeurs hardcodees)
+
+---
+
 ## Patterns de Conception
 
 ### 1. Dependency Injection
@@ -316,9 +371,12 @@ new SocketIOServer(httpServer, {
 ```
 
 ### Rooms
-- **Conversation:** `conversation_${conversationId}` - Messages et événements
-- **User:** `user_${userId}` - Notifications personnelles
-- **Global:** Broadcast à tous les sockets
+- **Conversation:** `ROOMS.conversation(id)` → `conversation:${id}` - Messages et evenements
+- **User:** `ROOMS.user(id)` → `user:${id}` - Notifications personnelles
+- **Feed:** `ROOMS.feed(id)` → `feed:${id}` - Updates du feed social
+- **Call:** `ROOMS.call(id)` → `call:${id}` - Appels video/audio
+
+> **Convention:** Toujours utiliser les helpers `ROOMS.*()` de `@meeshy/shared/types/socketio-events` — jamais de string hardcodee.
 
 ---
 
@@ -515,5 +573,5 @@ Pour toute question:
 
 ---
 
-**Dernière mise à jour:** 2026-01-18
-**Version:** 2.0.0 (Architecture modulaire)
+**Dernière mise à jour:** 2026-02-17
+**Version:** 3.0.0 (Constantes centralisees + Social)

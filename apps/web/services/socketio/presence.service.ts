@@ -57,7 +57,7 @@ export class PresenceService {
     });
 
     // Unread count updated
-    socket.on('conversation:unread-updated', (data: { conversationId: string; unreadCount: number }) => {
+    socket.on(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, (data: { conversationId: string; unreadCount: number }) => {
       logger.debug('[PresenceService]', 'Unread count updated', {
         conversationId: data.conversationId,
         unreadCount: data.unreadCount

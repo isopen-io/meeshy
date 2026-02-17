@@ -22,6 +22,7 @@ import type {
   CallMediaToggleEvent,
   CallError,
 } from '@meeshy/shared/types/video-call';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
@@ -81,7 +82,7 @@ export function CallManager() {
         // Emit leave event to server
         const socket = meeshySocketIOService.getSocket();
         if (socket) {
-          (socket as any).emit('call:leave', { callId });
+          (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
         }
 
         // Reset local state
@@ -319,7 +320,7 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      (socket as any).emit('call:join', {
+      (socket as any).emit(CLIENT_EVENTS.CALL_JOIN, {
         callId: incomingCall.callId,
         settings: {
           audioEnabled: true,
@@ -371,7 +372,7 @@ export function CallManager() {
     // Emit leave event
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit('call:leave', {
+      (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, {
         callId: incomingCall.callId,
       });
     }
@@ -441,12 +442,12 @@ export function CallManager() {
       });
 
       // Remove any existing listeners first to avoid duplicates
-      (socket as any).off('call:initiated', handleIncomingCall);
-      (socket as any).off('call:participant-joined', handleParticipantJoined);
-      (socket as any).off('call:participant-left', handleParticipantLeft);
-      (socket as any).off('call:ended', handleCallEnded);
-      (socket as any).off('call:media-toggled', handleMediaToggle);
-      (socket as any).off('call:error', handleCallError);
+      (socket as any).off(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
+      (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+      (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+      (socket as any).off(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
+      (socket as any).off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
+      (socket as any).off(SERVER_EVENTS.CALL_ERROR, handleCallError);
 
       // DEBUG: Add catch-all listener to see ALL socket events
       debugListenerRef = (eventName: string, ...args: any[]) => {
@@ -457,12 +458,12 @@ export function CallManager() {
       (socket as any).onAny(debugListenerRef);
 
       // Listen for call events
-      (socket as any).on('call:initiated', handleIncomingCall);
-      (socket as any).on('call:participant-joined', handleParticipantJoined);
-      (socket as any).on('call:participant-left', handleParticipantLeft);
-      (socket as any).on('call:ended', handleCallEnded);
-      (socket as any).on('call:media-toggled', handleMediaToggle);
-      (socket as any).on('call:error', handleCallError);
+      (socket as any).on(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
+      (socket as any).on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+      (socket as any).on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+      (socket as any).on(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
+      (socket as any).on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
+      (socket as any).on(SERVER_EVENTS.CALL_ERROR, handleCallError);
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
@@ -521,12 +522,12 @@ export function CallManager() {
         if (debugListenerRef) {
           (socket as any).offAny(debugListenerRef);
         }
-        (socket as any).off('call:initiated', handleIncomingCall);
-        (socket as any).off('call:participant-joined', handleParticipantJoined);
-        (socket as any).off('call:participant-left', handleParticipantLeft);
-        (socket as any).off('call:ended', handleCallEnded);
-        (socket as any).off('call:media-toggled', handleMediaToggle);
-        (socket as any).off('call:error', handleCallError);
+        (socket as any).off(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
+        (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+        (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+        (socket as any).off(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
+        (socket as any).off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
+        (socket as any).off(SERVER_EVENTS.CALL_ERROR, handleCallError);
       }
     };
   }, [

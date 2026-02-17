@@ -59,6 +59,15 @@ export enum NotificationTypeEnum {
   REACTION = 'reaction',
   REPLY = 'reply',
 
+  // ===== SOCIAL / POST EVENTS =====
+  POST_LIKE = 'post_like',
+  POST_COMMENT = 'post_comment',
+  POST_REPOST = 'post_repost',
+  STORY_REACTION = 'story_reaction',
+  STATUS_REACTION = 'status_reaction',
+  COMMENT_LIKE = 'comment_like',
+  COMMENT_REPLY = 'comment_reply',
+
   // ===== CALL EVENTS =====
   MISSED_CALL = 'missed_call',
   INCOMING_CALL = 'incoming_call',
@@ -179,6 +188,8 @@ export interface NotificationContext {
   readonly callSessionId?: string;
   readonly friendRequestId?: string;
   readonly reactionId?: string;
+  readonly postId?: string;
+  readonly commentId?: string;
 }
 
 /**
@@ -297,6 +308,45 @@ export interface SystemNotificationMetadata extends BaseNotificationMetadata {
 }
 
 /**
+ * Metadata pour post_like / story_reaction / status_reaction
+ */
+export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
+  readonly postId: string;
+  readonly emoji: string;
+  readonly postType?: 'POST' | 'STORY' | 'STATUS';
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour post_comment / comment_reply
+ */
+export interface PostCommentNotificationMetadata extends BaseNotificationMetadata {
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly commentPreview: string;
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour post_repost
+ */
+export interface PostRepostNotificationMetadata extends BaseNotificationMetadata {
+  readonly originalPostId: string;
+  readonly repostId: string;
+  readonly action: 'view_message';
+}
+
+/**
+ * Metadata pour comment_like
+ */
+export interface CommentLikeNotificationMetadata extends BaseNotificationMetadata {
+  readonly postId: string;
+  readonly commentId: string;
+  readonly emoji: string;
+  readonly action: 'view_message';
+}
+
+/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -317,6 +367,10 @@ export type NotificationMetadata =
   | ConversationCreatedNotificationMetadata
   | TranslationNotificationMetadata
   | SystemNotificationMetadata
+  | PostLikeNotificationMetadata
+  | PostCommentNotificationMetadata
+  | PostRepostNotificationMetadata
+  | CommentLikeNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================

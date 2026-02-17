@@ -135,6 +135,7 @@ struct FeedPost: Identifiable {
     var likes: Int
     var isLiked: Bool = false
     var comments: [FeedComment] = []
+    var commentCount: Int = 0
     var repost: RepostContent? = nil
     var repostAuthor: String? = nil
     var media: [FeedMedia] = []  // Support multiple media attachments
@@ -143,7 +144,7 @@ struct FeedPost: Identifiable {
     var mediaUrl: String? { media.first?.url }  // Legacy compatibility
 
     init(id: String = UUID().uuidString, author: String, content: String, timestamp: Date = Date(), likes: Int = 0,
-         comments: [FeedComment] = [], repost: RepostContent? = nil, repostAuthor: String? = nil,
+         comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
          media: [FeedMedia] = [], mediaUrl: String? = nil) {
         self.id = id
         self.author = author
@@ -152,6 +153,7 @@ struct FeedPost: Identifiable {
         self.timestamp = timestamp
         self.likes = likes
         self.comments = comments
+        self.commentCount = commentCount ?? comments.count
         self.repost = repost
         self.repostAuthor = repostAuthor
         // Support both new media array and legacy mediaUrl
@@ -795,6 +797,21 @@ struct FeedView: View {
                                 }
                             }
                             HapticFeedback.light()
+                        },
+                        onLike: { postId in
+                            Task { await viewModel.likePost(postId) }
+                        },
+                        onRepost: { postId in
+                            Task { await viewModel.repostPost(postId) }
+                        },
+                        onShare: { postId in
+                            Task { await viewModel.sharePost(postId) }
+                        },
+                        onBookmark: { postId in
+                            Task { await viewModel.bookmarkPost(postId) }
+                        },
+                        onSendComment: { postId, content, parentId in
+                            Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
                         }
                     )
                     .onAppear {
@@ -823,6 +840,9 @@ struct FeedView: View {
             }
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
+            viewModel.subscribeToSocketEvents()
+            storyViewModel.subscribeToSocketEvents()
+            statusViewModel.subscribeToSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             StoryViewerView(
@@ -876,13 +896,16 @@ struct FeedView: View {
                     Spacer()
 
                     Button {
-                        // TODO: Post content
+                        let text = composerText
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showComposer = false
                             isComposerFocused = false
                             composerText = ""
                         }
                         HapticFeedback.success()
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Task { await viewModel.createPost(content: text) }
+                        }
                     } label: {
                         Text("Publier")
                             .font(.system(size: 15, weight: .bold))
@@ -997,6 +1020,11 @@ struct FeedPostCard: View {
     let post: FeedPost
     var isCommentsExpanded: Bool = false
     var onToggleComments: (() -> Void)? = nil
+    var onLike: ((String) -> Void)? = nil
+    var onRepost: ((String) -> Void)? = nil
+    var onShare: ((String) -> Void)? = nil
+    var onBookmark: ((String) -> Void)? = nil
+    var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
@@ -1047,7 +1075,7 @@ struct FeedPostCard: View {
         )
         .padding(.horizontal, 16)
         .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor)
+            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment)
         }
     }
 
@@ -1519,6 +1547,7 @@ struct FeedPostCard: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     likeAnimating = false
                 }
+                onLike?(post.id)
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: 6) {
@@ -1557,8 +1586,8 @@ struct FeedPostCard: View {
                     Image(systemName: "bubble.right")
                         .font(.system(size: 17))
 
-                    if !post.comments.isEmpty {
-                        Text("\(post.comments.count)")
+                    if post.commentCount > 0 {
+                        Text("\(post.commentCount)")
                             .font(.system(size: 13, weight: .medium))
                     }
                 }
@@ -1569,6 +1598,7 @@ struct FeedPostCard: View {
 
             // Repost
             Button {
+                onRepost?(post.id)
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "arrow.2.squarepath")
@@ -1580,6 +1610,7 @@ struct FeedPostCard: View {
 
             // Bookmark
             Button {
+                onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "bookmark")
@@ -1591,6 +1622,7 @@ struct FeedPostCard: View {
 
             // Share
             Button {
+                onShare?(post.id)
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -1748,6 +1780,7 @@ struct FeedPostCard: View {
 struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
+    var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
@@ -1971,7 +2004,9 @@ struct CommentsSheetView: View {
                 // Send button
                 if !commentText.isEmpty {
                     Button {
-                        // Send comment
+                        let text = commentText
+                        let parentId = replyingTo?.id
+                        onSendComment?(post.id, text, parentId)
                         commentText = ""
                         replyingTo = nil
                         isComposerFocused = false

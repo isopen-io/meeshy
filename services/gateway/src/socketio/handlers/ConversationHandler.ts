@@ -6,7 +6,7 @@
 import type { Socket } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 
 export interface ConversationHandlerDependencies {
@@ -36,7 +36,7 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       socket.join(room);
 
       const userId = this.socketToUser.get(socket.id);
@@ -64,7 +64,7 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const room = `conversation_${normalizedId}`;
+      const room = ROOMS.conversation(normalizedId);
       socket.leave(room);
 
       const userId = this.socketToUser.get(socket.id);
@@ -92,7 +92,7 @@ export class ConversationHandler {
       );
 
       if (stats) {
-        socket.emit(SERVER_EVENTS.CONVERSATION_STATS_UPDATED, {
+        socket.emit(SERVER_EVENTS.CONVERSATION_STATS, {
           conversationId,
           stats
         });

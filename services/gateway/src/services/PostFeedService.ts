@@ -176,29 +176,86 @@ export class PostFeedService {
     return stories;
   }
 
-  async getStatuses(userId: string) {
+  async getStatuses(userId: string, cursor?: string, limit: number = 20) {
     const now = new Date();
+    const cursorData = cursor ? decodeCursor(cursor) : null;
     const friendIds = await this.getFriendIds(userId);
-    const viewerIds = [userId, ...friendIds];
+    const visibilityFilter = this.buildVisibilityFilter(userId, friendIds);
+
+    const whereClause: any = {
+      isDeleted: false,
+      type: 'STATUS',
+      AND: [
+        visibilityFilter,
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      ],
+    };
+
+    if (cursorData) {
+      whereClause.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
 
     const statuses = await this.prisma.post.findMany({
-      where: {
-        isDeleted: false,
-        type: 'STATUS',
-        authorId: { in: viewerIds },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: now } },
-        ],
-      },
+      where: whereClause,
       include: {
         author: { select: authorSelect },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
     });
 
-    return statuses;
+    const hasMore = statuses.length > limit;
+    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const nextCursor = hasMore && items.length > 0
+      ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
+      : null;
+
+    return { items, nextCursor, hasMore };
+  }
+
+  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20) {
+    const now = new Date();
+    const cursorData = cursor ? decodeCursor(cursor) : null;
+
+    const where: any = {
+      isDeleted: false,
+      type: 'STATUS',
+      visibility: 'PUBLIC',
+      AND: [
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      ],
+    };
+
+    if (cursorData) {
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    const statuses = await this.prisma.post.findMany({
+      where,
+      include: {
+        author: { select: authorSelect },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+
+    const hasMore = statuses.length > limit;
+    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const nextCursor = hasMore && items.length > 0
+      ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
+      : null;
+
+    return { items, nextCursor, hasMore };
   }
 
   async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
@@ -310,6 +367,18 @@ export class PostFeedService {
   // ============================================
   // PRIVATE HELPERS
   // ============================================
+
+  private buildVisibilityFilter(viewerId: string, friendIds: string[]) {
+    return {
+      OR: [
+        { authorId: viewerId },
+        { visibility: 'PUBLIC' },
+        { visibility: 'FRIENDS', authorId: { in: friendIds } },
+        { visibility: 'EXCEPT', authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
+        { visibility: 'ONLY', visibilityUserIds: { has: viewerId } },
+      ],
+    };
+  }
 
   private async getFriendIds(userId: string): Promise<string[]> {
     try {

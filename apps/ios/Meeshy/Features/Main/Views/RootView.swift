@@ -4,6 +4,7 @@ struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
+    @StateObject private var conversationViewModel = ConversationListViewModel()
     @State private var showConversation = false
     @State private var showFeed = false
     @State private var showMenu = false
@@ -120,9 +121,11 @@ struct RootView: View {
         }
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
+        .environmentObject(conversationViewModel)
         .task {
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
+            await conversationViewModel.loadConversations()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
             if selectedStoryGroupIndexFromConv < storyViewModel.storyGroups.count {
@@ -152,7 +155,7 @@ struct RootView: View {
         case .status(_, let name, _, _): authorName = name
         }
 
-        if let conversation = SampleData.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
+        if let conversation = conversationViewModel.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
             pendingReplyContext = context
             selectedConversation = conversation
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -512,6 +515,7 @@ struct ThemedFeedOverlay: View {
     @StateObject private var viewModel = FeedViewModel()
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
+    @StateObject private var discoverStatusViewModel = StatusViewModel(mode: .discover)
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
     @State private var showStoryViewer = false
@@ -550,6 +554,11 @@ struct ThemedFeedOverlay: View {
                         showStoryViewer = true
                     }
 
+                    // Discover statuses
+                    StatusBarView(viewModel: discoverStatusViewModel, onAddStatus: {
+                        showStatusComposer = true
+                    })
+
                     // Composer (padding is included in the component)
                     ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
 
@@ -575,6 +584,7 @@ struct ThemedFeedOverlay: View {
                 await viewModel.refresh()
                 await storyViewModel.loadStories()
                 await statusViewModel.loadStatuses()
+                await discoverStatusViewModel.refresh()
             }
         }
         .task {
@@ -583,6 +593,8 @@ struct ThemedFeedOverlay: View {
             }
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
+            await discoverStatusViewModel.loadStatuses()
+            discoverStatusViewModel.subscribeToSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             StoryViewerView(

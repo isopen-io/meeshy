@@ -173,20 +173,57 @@ export class PostCommentService {
     return { success: true };
   }
 
-  async likeComment(commentId: string, userId: string) {
+  async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, isDeleted: false },
     });
     if (!comment) return null;
 
     const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
-    summary['❤️'] = (summary['❤️'] ?? 0) + 1;
+    summary[emoji] = (summary[emoji] ?? 0) + 1;
 
     return this.prisma.postComment.update({
       where: { id: commentId },
       data: {
         likeCount: { increment: 1 },
         reactionSummary: summary as any,
+      },
+      select: {
+        id: true,
+        postId: true,
+        authorId: true,
+        content: true,
+        likeCount: true,
+        reactionSummary: true,
+      },
+    });
+  }
+
+  async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, isDeleted: false },
+    });
+    if (!comment) return null;
+
+    const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
+    if (summary[emoji]) {
+      summary[emoji] = Math.max(0, summary[emoji] - 1);
+      if (summary[emoji] === 0) delete summary[emoji];
+    }
+
+    return this.prisma.postComment.update({
+      where: { id: commentId },
+      data: {
+        likeCount: { decrement: 1 },
+        reactionSummary: summary as any,
+      },
+      select: {
+        id: true,
+        postId: true,
+        authorId: true,
+        content: true,
+        likeCount: true,
+        reactionSummary: true,
       },
     });
   }

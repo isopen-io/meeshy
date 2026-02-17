@@ -89,6 +89,8 @@ struct StatusEntry: Identifiable {
     let audioUrl: String?
     let createdAt: Date
     let expiresAt: Date?
+    var visibility: String?
+    var reactionSummary: [String: Int]?
 
     var timeRemaining: String {
         guard let expires = expiresAt else { return "" }
@@ -194,7 +196,9 @@ extension APIPost {
             content: content,
             audioUrl: audioUrl,
             createdAt: createdAt,
-            expiresAt: nil
+            expiresAt: nil,
+            visibility: visibility,
+            reactionSummary: nil
         )
     }
 }
@@ -235,7 +239,15 @@ struct StatusCreateRequest: Encodable {
     let type = "STATUS"
     let moodEmoji: String
     let content: String?
-    let visibility: String = "PUBLIC"
+    let visibility: String
+    let visibilityUserIds: [String]?
+
+    init(moodEmoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil) {
+        self.moodEmoji = moodEmoji
+        self.content = content
+        self.visibility = visibility
+        self.visibilityUserIds = visibilityUserIds
+    }
 }
 
 // MARK: - Story View Request

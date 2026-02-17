@@ -11,6 +11,7 @@ import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface'
 import { useAuth } from '@/hooks/use-auth';
 import { useCallStore } from '@/stores/call-store';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -61,7 +62,7 @@ export default function CallPage({ params }: CallPageProps) {
         logger.info('[CallPage]', 'Auto-joining call', { callId });
 
         // Emit join event
-        socket.emit('call:join', {
+        socket.emit(CLIENT_EVENTS.CALL_JOIN, {
           callId,
           settings: {
             audioEnabled: true,
@@ -84,7 +85,7 @@ export default function CallPage({ params }: CallPageProps) {
             clearTimeout(timeout);
             setIsJoining(false);
             setInCall(true);
-            socket.off('call:participant-joined', handleParticipantJoined);
+            socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
           }
         };
 
@@ -102,18 +103,18 @@ export default function CallPage({ params }: CallPageProps) {
               participants: event.participants,
             });
             setInCall(true);
-            socket.off('call:initiated', handleCallInitiated);
+            socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
           }
         };
 
-        socket.on('call:participant-joined', handleParticipantJoined);
-        socket.on('call:initiated', handleCallInitiated);
+        socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+        socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
 
         // Cleanup
         return () => {
           clearTimeout(timeout);
-          socket.off('call:participant-joined', handleParticipantJoined);
-          socket.off('call:initiated', handleCallInitiated);
+          socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+          socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to join call';

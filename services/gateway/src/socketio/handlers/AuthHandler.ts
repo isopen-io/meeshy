@@ -7,6 +7,7 @@ import type { Socket } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 
 export interface AuthHandlerDependencies {
@@ -58,7 +59,7 @@ export class AuthHandler {
       }
     } catch (error) {
       console.error('[AUTH] ❌ Erreur authentification automatique:', error);
-      socket.emit('error', { message: 'Authentication failed' });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
     }
   }
 
@@ -73,7 +74,7 @@ export class AuthHandler {
       const { userId, sessionToken, language } = data;
 
       if (!userId && !sessionToken) {
-        socket.emit('error', { message: 'userId or sessionToken required' });
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'userId or sessionToken required' });
         return;
       }
 
@@ -91,7 +92,7 @@ export class AuthHandler {
         });
 
         if (!user) {
-          socket.emit('error', { message: 'User not found' });
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
           return;
         }
 
@@ -103,14 +104,14 @@ export class AuthHandler {
         };
 
         this._registerUser(user.id, socketUser, socket);
-        socket.emit('authenticated', { userId: user.id, isAnonymous: false });
+        socket.emit(SERVER_EVENTS.AUTHENTICATED, { userId: user.id, isAnonymous: false });
 
         // Mettre à jour le statut
         await this.statusService.updateLastSeen(user.id, false);
       }
     } catch (error) {
       console.error('[AUTH] ❌ Erreur authentification manuelle:', error);
-      socket.emit('error', { message: 'Authentication failed' });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
     }
   }
 
@@ -132,7 +133,7 @@ export class AuthHandler {
     });
 
     if (!user) {
-      socket.emit('error', { message: 'User not found' });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
       return;
     }
 
@@ -144,7 +145,7 @@ export class AuthHandler {
     };
 
     this._registerUser(user.id, socketUser, socket);
-    socket.emit('authenticated', { userId: user.id, isAnonymous: false });
+    socket.emit(SERVER_EVENTS.AUTHENTICATED, { userId: user.id, isAnonymous: false });
 
     await this.statusService.updateLastSeen(user.id, false);
   }
@@ -163,7 +164,7 @@ export class AuthHandler {
     });
 
     if (!anonymousUser) {
-      socket.emit('error', { message: 'Anonymous session not found' });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       return;
     }
 
@@ -176,7 +177,7 @@ export class AuthHandler {
     };
 
     this._registerUser(sessionToken, socketUser, socket);
-    socket.emit('authenticated', {
+    socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       userId: anonymousUser.id,
       isAnonymous: true,
       sessionToken: anonymousUser.sessionToken

@@ -31,6 +31,20 @@ export function registerCoreRoutes(
         type: parsed.data.type ?? 'POST',
         visibility: parsed.data.visibility ?? 'PUBLIC',
       }, authContext.registeredUser.id);
+
+      // Broadcast via Socket.IO
+      const socialEvents = (fastify as any).socialEvents;
+      if (socialEvents) {
+        const postType = parsed.data.type ?? 'POST';
+        if (postType === 'STORY') {
+          socialEvents.broadcastStoryCreated(post, authContext.registeredUser.id).catch(() => {});
+        } else if (postType === 'STATUS') {
+          socialEvents.broadcastStatusCreated(post, authContext.registeredUser.id).catch(() => {});
+        } else {
+          socialEvents.broadcastPostCreated(post, authContext.registeredUser.id).catch(() => {});
+        }
+      }
+
       return reply.status(201).send({ success: true, data: post });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
@@ -104,6 +118,16 @@ export function registerCoreRoutes(
       const result = await postService.deletePost(postId, authContext.registeredUser.id);
       if (!result) {
         return reply.status(404).send({ success: false, error: 'Post not found' });
+      }
+
+      // Broadcast deletion via Socket.IO (use correct event based on post type)
+      const socialEvents = (fastify as any).socialEvents;
+      if (socialEvents) {
+        if (result.type === 'STATUS') {
+          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
+        } else {
+          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
+        }
       }
 
       return reply.send({ success: true, data: { deleted: true } });

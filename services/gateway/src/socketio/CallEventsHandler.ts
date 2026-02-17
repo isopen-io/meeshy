@@ -15,6 +15,7 @@ import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -131,12 +132,12 @@ export class CallEventsHandler {
         });
 
         // CRITICAL: Initiator must join the call room to receive participant-joined events
-        socket.join(`call:${callSession.id}`);
+        socket.join(ROOMS.call(callSession.id));
 
         logger.info('✅ Socket: Initiator joined call room', {
           callId: callSession.id,
           userId,
-          room: `call:${callSession.id}`
+          room: ROOMS.call(callSession.id)
         });
 
         // Prepare event data
@@ -208,7 +209,7 @@ export class CallEventsHandler {
         }
 
         // ALSO broadcast to conversation room for backwards compatibility
-        const roomName = `conversation_${data.conversationId}`;
+        const roomName = ROOMS.conversation(data.conversationId);
         io.to(roomName).emit(CALL_EVENTS.INITIATED, initiatedEvent);
 
         logger.info('✅ Socket: Call initiated and broadcasted to all members', {
@@ -287,7 +288,7 @@ export class CallEventsHandler {
         const { callSession, iceServers } = joinResult;
 
         // Join call room
-        socket.join(`call:${data.callId}`);
+        socket.join(ROOMS.call(data.callId));
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
@@ -328,7 +329,7 @@ export class CallEventsHandler {
 
         // Broadcast to all OTHER call participants (exclude the participant who just joined)
         // They already received their confirmation via call:join
-        socket.to(`call:${data.callId}`).emit(
+        socket.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.PARTICIPANT_JOINED,
           joinedEvent
         );
@@ -424,7 +425,7 @@ export class CallEventsHandler {
         };
 
         // Get all sockets in the room for debugging
-        const socketsInRoom = await io.in(`call:${data.callId}`).fetchSockets();
+        const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
 
         logger.info('📤 Broadcasting call:participant-left event', {
           callId: data.callId,
@@ -432,20 +433,20 @@ export class CallEventsHandler {
           userId: participant.userId,
           anonymousId: participant.anonymousId,
           remainingParticipants: callSession.participants.filter(p => !p.leftAt).length,
-          roomName: `call:${data.callId}`,
+          roomName: ROOMS.call(data.callId),
           socketsInRoom: socketsInRoom.length,
           socketIds: socketsInRoom.map(s => s.id),
           leavingSocketId: socket.id
         });
 
         // IMPORTANT: Broadcast BEFORE leaving room to ensure message delivery
-        io.to(`call:${data.callId}`).emit(
+        io.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.PARTICIPANT_LEFT,
           leftEvent
         );
 
         // Leave call room AFTER broadcasting
-        socket.leave(`call:${data.callId}`);
+        socket.leave(ROOMS.call(data.callId));
 
         // If call ended, broadcast to BOTH call room AND conversation room
         if (callSession.status === 'ended') {
@@ -456,13 +457,13 @@ export class CallEventsHandler {
           };
 
           // Broadcast to call room (for active participants)
-          io.to(`call:${data.callId}`).emit(
+          io.to(ROOMS.call(data.callId)).emit(
             CALL_EVENTS.ENDED,
             endedEvent
           );
 
           // Also broadcast to conversation room (for users who declined/weren't in call yet)
-          io.to(`conversation_${callSession.conversationId}`).emit(
+          io.to(ROOMS.conversation(callSession.conversationId)).emit(
             CALL_EVENTS.ENDED,
             endedEvent
           );
@@ -554,13 +555,13 @@ export class CallEventsHandler {
                 mode: callSession.mode
               };
 
-              io.to(`call:${call.id}`).emit(
+              io.to(ROOMS.call(call.id)).emit(
                 CALL_EVENTS.PARTICIPANT_LEFT,
                 leftEvent
               );
 
               // Leave the room
-              socket.leave(`call:${call.id}`);
+              socket.leave(ROOMS.call(call.id));
 
               // If call ended, broadcast ended event
               if (callSession.status === 'ended') {
@@ -570,8 +571,8 @@ export class CallEventsHandler {
                   endedBy: userId
                 };
 
-                io.to(`call:${call.id}`).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(`conversation_${callSession.conversationId}`).emit(CALL_EVENTS.ENDED, endedEvent);
+                io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
+                io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
@@ -696,7 +697,7 @@ export class CallEventsHandler {
 
         // CVE-001: Forward signal only to target participant (not broadcast to entire room)
         // This prevents signal injection to unintended recipients
-        socket.to(`call:${data.callId}`).emit(CALL_EVENTS.SIGNAL, data);
+        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SIGNAL, data);
 
         logger.info('✅ Socket: Signal forwarded', {
           callId: data.callId,
@@ -774,7 +775,7 @@ export class CallEventsHandler {
           enabled: data.enabled
         };
 
-        io.to(`call:${data.callId}`).emit(
+        io.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.MEDIA_TOGGLED,
           toggleEvent
         );
@@ -854,7 +855,7 @@ export class CallEventsHandler {
           enabled: data.enabled
         };
 
-        io.to(`call:${data.callId}`).emit(
+        io.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.MEDIA_TOGGLED,
           toggleEvent
         );
@@ -915,7 +916,7 @@ export class CallEventsHandler {
         };
 
         // Broadcast to conversation room
-        io.to(`conversation_${callSession.conversationId}`).emit(
+        io.to(ROOMS.conversation(callSession.conversationId)).emit(
           CALL_EVENTS.ENDED,
           endedEvent
         );
@@ -977,7 +978,7 @@ export class CallEventsHandler {
               });
 
               // Broadcast to call participants
-              io.to(`call:${participation.callSessionId}`).emit(
+              io.to(ROOMS.call(participation.callSessionId)).emit(
                 CALL_EVENTS.PARTICIPANT_LEFT,
                 {
                   callId: participation.callSessionId,
@@ -1045,7 +1046,7 @@ export class CallEventsHandler {
                 });
 
                 // Still broadcast events even after force cleanup
-                io.to(`call:${participation.callSessionId}`).emit(
+                io.to(ROOMS.call(participation.callSessionId)).emit(
                   CALL_EVENTS.PARTICIPANT_LEFT,
                   {
                     callId: participation.callSessionId,

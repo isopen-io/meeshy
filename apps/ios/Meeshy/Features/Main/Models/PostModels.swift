@@ -148,6 +148,7 @@ extension APIPost {
             timestamp: createdAt,
             likes: likeCount ?? 0,
             comments: feedComments,
+            commentCount: commentCount ?? feedComments.count,
             repost: repost,
             repostAuthor: repostOf != nil ? author.name : nil,
             media: feedMedia

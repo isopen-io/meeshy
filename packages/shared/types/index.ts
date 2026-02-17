@@ -48,6 +48,9 @@ export * from './push-notification.js';
 // Ils ne sont pas dans /shared car ils utilisent des types frontend spécifiques
 // Le backend doit importer NotificationType depuis le webapp si nécessaire
 
+// Export des types posts/stories/statuts
+export * from './post.js';
+
 // Export des types communauté
 export * from './community.js';
 

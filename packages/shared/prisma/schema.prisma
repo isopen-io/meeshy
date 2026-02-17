@@ -1223,6 +1223,9 @@ model UserPreferences {
   /// Paramètres application (thème, langue, UI)
   application Json?
 
+  /// Paramètres sociaux (visibilité par défaut des statuts, etc.)
+  social Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2514,6 +2517,8 @@ enum PostVisibility {
   FRIENDS   // Amis uniquement
   COMMUNITY // Membres de la communauté uniquement
   PRIVATE   // Brouillon / seulement l'auteur
+  EXCEPT    // Amis sauf ceux dans visibilityUserIds
+  ONLY      // Uniquement les utilisateurs dans visibilityUserIds
 }
 
 /// Contenu social unifié (posts permanents, stories éphémères, status/moods)
@@ -2522,6 +2527,7 @@ model Post {
   authorId       String         @db.ObjectId
   type           PostType
   visibility     PostVisibility @default(PUBLIC)
+  visibilityUserIds String[] @default([]) @db.ObjectId
 
   // ============================================
   // CONTENU

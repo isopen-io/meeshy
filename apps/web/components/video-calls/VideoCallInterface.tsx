@@ -18,6 +18,7 @@ import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { ConnectionQualityBadge } from './ConnectionQualityBadge';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -253,7 +254,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         logger.info('[VideoCallInterface]', 'Cleaning up call on unmount/unload - callId: ' + currentCall.id);
         const socket = meeshySocketIOService.getSocket();
         if (socket && socket.connected) {
-          (socket as any).emit('call:leave', { callId: currentCall.id });
+          (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
         }
       }
     };
@@ -280,7 +281,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit('call:toggle-audio', { callId, enabled: newEnabled });
+      (socket as any).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
     }
   };
 
@@ -290,7 +291,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit('call:toggle-video', { callId, enabled: newEnabled });
+      (socket as any).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
     }
   };
 
@@ -343,7 +344,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as any).emit('call:leave', { callId });
+      (socket as any).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     }
 
     // Reset immediately for instant UI feedback
@@ -440,10 +441,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       }, 2000);
     };
 
-    socket.on('call:participant-left', handleParticipantLeft);
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
 
     return () => {
-      socket.off('call:participant-left', handleParticipantLeft);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
     };
   }, [callId]);
 

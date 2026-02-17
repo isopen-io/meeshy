@@ -8,6 +8,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant
@@ -761,7 +762,7 @@ export function registerParticipantsRoutes(
       // Notifier via Socket.IO
       const io = (request.server as any).io;
       if (io) {
-        io.to(conversationId).emit('participant:role-updated', {
+        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
           conversationId,
           userId,
           newRole: role,

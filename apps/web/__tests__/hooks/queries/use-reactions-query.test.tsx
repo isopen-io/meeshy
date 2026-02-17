@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { ReactionAggregation, ReactionUpdateEvent } from '@meeshy/shared/types/reaction';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // Mock Socket.IO service
 let mockSocketConnected = true;
@@ -38,15 +39,6 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       mockOnReactionRemoved(handler);
       return jest.fn(); // Return unsubscribe function
     },
-  },
-}));
-
-// Mock CLIENT_EVENTS
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  CLIENT_EVENTS: {
-    REACTION_REQUEST_SYNC: 'reaction:request_sync',
-    REACTION_ADD: 'reaction:add',
-    REACTION_REMOVE: 'reaction:remove',
   },
 }));
 
@@ -156,7 +148,7 @@ describe('useReactionsQuery', () => {
     it('should return empty state when no initial data', async () => {
       // Mock socket to return empty data
       mockSocketEmit.mockImplementation((event, messageId, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: { reactions: [], userReactions: [] } });
         }
       });
@@ -207,7 +199,7 @@ describe('useReactionsQuery', () => {
 
     it('should fetch reactions via socket when enabled', async () => {
       mockSocketEmit.mockImplementation((event, messageId, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: mockReactionState });
         }
       });
@@ -225,7 +217,7 @@ describe('useReactionsQuery', () => {
       });
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
-        'reaction:request_sync',
+        CLIENT_EVENTS.REACTION_REQUEST_SYNC,
         'msg-1',
         expect.any(Function)
       );
@@ -255,9 +247,9 @@ describe('useReactionsQuery', () => {
   describe('Add Reaction', () => {
     it('should add reaction optimistically', async () => {
       mockSocketEmit.mockImplementation((event, data, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: mockReactionState });
-        } else if (event === 'reaction:add') {
+        } else if (event === CLIENT_EVENTS.REACTION_ADD) {
           callback({ success: true });
         }
       });
@@ -285,7 +277,7 @@ describe('useReactionsQuery', () => {
 
       // Should have added the reaction
       expect(mockSocketEmit).toHaveBeenCalledWith(
-        'reaction:add',
+        CLIENT_EVENTS.REACTION_ADD,
         { messageId: 'msg-1', emoji: '🎉' },
         expect.any(Function)
       );
@@ -315,7 +307,7 @@ describe('useReactionsQuery', () => {
       expect(success).toBe(true);
       // Should not emit add event
       expect(mockSocketEmit).not.toHaveBeenCalledWith(
-        'reaction:add',
+        CLIENT_EVENTS.REACTION_ADD,
         expect.anything(),
         expect.any(Function)
       );
@@ -325,9 +317,9 @@ describe('useReactionsQuery', () => {
   describe('Remove Reaction', () => {
     it('should remove reaction optimistically', async () => {
       mockSocketEmit.mockImplementation((event, data, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: mockReactionState });
-        } else if (event === 'reaction:remove') {
+        } else if (event === CLIENT_EVENTS.REACTION_REMOVE) {
           callback({ success: true });
         }
       });
@@ -353,7 +345,7 @@ describe('useReactionsQuery', () => {
       });
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
-        'reaction:remove',
+        CLIENT_EVENTS.REACTION_REMOVE,
         { messageId: 'msg-1', emoji: '❤️' },
         expect.any(Function)
       );
@@ -363,9 +355,9 @@ describe('useReactionsQuery', () => {
   describe('Toggle Reaction', () => {
     it('should toggle reaction - add when not present', async () => {
       mockSocketEmit.mockImplementation((event, data, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: mockReactionState });
-        } else if (event === 'reaction:add') {
+        } else if (event === CLIENT_EVENTS.REACTION_ADD) {
           callback({ success: true });
         }
       });
@@ -391,7 +383,7 @@ describe('useReactionsQuery', () => {
       });
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
-        'reaction:add',
+        CLIENT_EVENTS.REACTION_ADD,
         expect.objectContaining({ emoji: '🎉' }),
         expect.any(Function)
       );
@@ -399,9 +391,9 @@ describe('useReactionsQuery', () => {
 
     it('should toggle reaction - remove when present', async () => {
       mockSocketEmit.mockImplementation((event, data, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: true, data: mockReactionState });
-        } else if (event === 'reaction:remove') {
+        } else if (event === CLIENT_EVENTS.REACTION_REMOVE) {
           callback({ success: true });
         }
       });
@@ -427,7 +419,7 @@ describe('useReactionsQuery', () => {
       });
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
-        'reaction:remove',
+        CLIENT_EVENTS.REACTION_REMOVE,
         expect.objectContaining({ emoji: '❤️' }),
         expect.any(Function)
       );
@@ -553,7 +545,7 @@ describe('useReactionsQuery', () => {
   describe('Error Handling', () => {
     it('should handle fetch failure gracefully', async () => {
       mockSocketEmit.mockImplementation((event, messageId, callback) => {
-        if (event === 'reaction:request_sync') {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
           callback({ success: false, error: 'Failed to fetch reactions' });
         }
       });

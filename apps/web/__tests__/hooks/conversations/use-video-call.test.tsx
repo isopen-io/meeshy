@@ -12,6 +12,7 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 
 // Mock toast
@@ -203,7 +204,7 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockEmit).toHaveBeenCalledWith('call:initiate', {
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_INITIATE, {
         conversationId: mockDirectConversation.id,
         type: 'video',
         settings: {
@@ -452,7 +453,7 @@ describe('useVideoCall', () => {
       });
 
       // Call should still complete based on original conversation
-      expect(mockEmit).toHaveBeenCalledWith('call:initiate', {
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_INITIATE, {
         conversationId: mockDirectConversation.id,
         type: 'video',
         settings: expect.any(Object),

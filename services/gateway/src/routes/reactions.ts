@@ -16,8 +16,8 @@ import type {
   ReactionRemoveData,
   ReactionUpdateEventData,
   ReactionSyncEventData,
-  SERVER_EVENTS
 } from '@meeshy/shared/types';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import {
   reactionSchema,
   reactionSummarySchema,
@@ -169,8 +169,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         if (message) {
           // Broadcaster l'événement à tous les participants de la conversation
           // Note: La méthode broadcastToConversation sera ajoutée au handler Socket.IO
-          (socketIOHandler as any).io?.to(message.conversationId).emit(
-            'reaction:added',
+          (socketIOHandler as any).io?.to(ROOMS.conversation(message.conversationId)).emit(
+            SERVER_EVENTS.REACTION_ADDED,
             updateEvent
           );
         }
@@ -310,8 +310,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         });
 
         if (message) {
-          (socketIOHandler as any).io?.to(message.conversationId).emit(
-            'reaction:removed',
+          (socketIOHandler as any).io?.to(ROOMS.conversation(message.conversationId)).emit(
+            SERVER_EVENTS.REACTION_REMOVED,
             updateEvent
           );
         }

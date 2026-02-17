@@ -34,7 +34,8 @@ export function decodeCursor(cursor: string): CursorData | null {
 
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE']).default('PUBLIC'),
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).default('PUBLIC'),
+  visibilityUserIds: z.array(z.string()).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
   // Story-specific
@@ -45,14 +46,25 @@ export const CreatePostSchema = z.object({
   audioDuration: z.number().int().positive().optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
-});
+}).refine((data) => {
+  if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
+    return false;
+  }
+  return true;
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE']).optional(),
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  visibilityUserIds: z.array(z.string()).max(500).optional(),
   storyEffects: z.record(z.unknown()).optional(),
   moodEmoji: z.string().max(10).optional(),
-});
+}).refine((data) => {
+  if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
+    return false;
+  }
+  return true;
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
 export const CreateCommentSchema = z.object({
   content: z.string().min(1).max(2000),

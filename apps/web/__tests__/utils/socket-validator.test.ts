@@ -13,6 +13,7 @@ import {
   validateNotificationResponse,
   schemas,
 } from '../../utils/socket-validator';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // Mock xss-protection
 jest.mock('../../utils/xss-protection', () => ({
@@ -308,12 +309,12 @@ describe('socket-validator', () => {
     });
 
     it('should route notification:read event correctly', () => {
-      const result = validateSocketEvent('notification:read', { notificationId: 'notif-123' });
+      const result = validateSocketEvent(SERVER_EVENTS.NOTIFICATION_READ, { notificationId: 'notif-123' });
       expect(result.success).toBe(true);
     });
 
     it('should route notification:deleted event correctly', () => {
-      const result = validateSocketEvent('notification:deleted', { notificationId: 'notif-123' });
+      const result = validateSocketEvent(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: 'notif-123' });
       expect(result.success).toBe(true);
     });
 
@@ -327,7 +328,7 @@ describe('socket-validator', () => {
           byPriority: {},
         },
       };
-      const result = validateSocketEvent('notification:counts', data);
+      const result = validateSocketEvent(SERVER_EVENTS.NOTIFICATION_COUNTS, data);
       expect(result.success).toBe(true);
     });
 
@@ -341,7 +342,7 @@ describe('socket-validator', () => {
   describe('createValidatedHandler', () => {
     it('should call handler with validated data', () => {
       const handler = jest.fn();
-      const validatedHandler = createValidatedHandler('notification:read', handler);
+      const validatedHandler = createValidatedHandler(SERVER_EVENTS.NOTIFICATION_READ, handler);
 
       validatedHandler({ notificationId: 'notif-123' });
 
@@ -350,7 +351,7 @@ describe('socket-validator', () => {
 
     it('should not call handler for invalid data', () => {
       const handler = jest.fn();
-      const validatedHandler = createValidatedHandler('notification:read', handler);
+      const validatedHandler = createValidatedHandler(SERVER_EVENTS.NOTIFICATION_READ, handler);
 
       validatedHandler({ notificationId: '' });
 
@@ -359,7 +360,7 @@ describe('socket-validator', () => {
 
     it('should log error for invalid data', () => {
       const handler = jest.fn();
-      const validatedHandler = createValidatedHandler('notification:read', handler);
+      const validatedHandler = createValidatedHandler(SERVER_EVENTS.NOTIFICATION_READ, handler);
 
       validatedHandler({});
 

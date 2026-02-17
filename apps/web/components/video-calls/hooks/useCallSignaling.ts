@@ -17,6 +17,7 @@ import type {
   CallEndedEvent,
   CallMediaToggleEvent,
 } from '@meeshy/shared/types/video-call';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 export interface UseCallSignalingOptions {
   callId: string;
@@ -86,7 +87,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       from: userId,
     };
 
-    socket.emit('call:signal', {
+    socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
       callId,
       signal: fullSignal,
     } as CallSignalEvent);
@@ -107,7 +108,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       return;
     }
 
-    socket.emit('call:join', {
+    socket.emit(CLIENT_EVENTS.CALL_JOIN, {
       callId,
       settings: settings || { audioEnabled: true, videoEnabled: true },
     });
@@ -125,7 +126,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       return;
     }
 
-    socket.emit('call:leave', { callId });
+    socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     logger.info('[useCallSignaling]', 'Leave call emitted', { callId });
   }, [callId]);
 
@@ -136,7 +137,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    socket.emit('call:toggle-audio', { callId, enabled });
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled });
     logger.debug('[useCallSignaling]', 'Toggle audio emitted', { enabled });
   }, [callId]);
 
@@ -147,7 +148,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    socket.emit('call:toggle-video', { callId, enabled });
+    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
     logger.debug('[useCallSignaling]', 'Toggle video emitted', { enabled });
   }, [callId]);
 
@@ -197,24 +198,24 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     };
 
     // Register listeners
-    socket.on('call:signal', handleSignal);
-    socket.on('call:initiated', handleCallInitiated);
-    socket.on('call:participant-joined', handleParticipantJoined);
-    socket.on('call:participant-left', handleParticipantLeft);
-    socket.on('call:ended', handleCallEnded);
-    socket.on('call:media-toggled', handleMediaToggle);
-    socket.on('call:error', handleError);
+    socket.on(SERVER_EVENTS.CALL_SIGNAL, handleSignal);
+    socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+    socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+    socket.on(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
+    socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
+    socket.on(SERVER_EVENTS.CALL_ERROR, handleError);
 
     logger.info('[useCallSignaling]', 'Socket listeners registered', { callId });
 
     return () => {
-      socket.off('call:signal', handleSignal);
-      socket.off('call:initiated', handleCallInitiated);
-      socket.off('call:participant-joined', handleParticipantJoined);
-      socket.off('call:participant-left', handleParticipantLeft);
-      socket.off('call:ended', handleCallEnded);
-      socket.off('call:media-toggled', handleMediaToggle);
-      socket.off('call:error', handleError);
+      socket.off(SERVER_EVENTS.CALL_SIGNAL, handleSignal);
+      socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+      socket.off(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
+      socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
+      socket.off(SERVER_EVENTS.CALL_ERROR, handleError);
 
       logger.debug('[useCallSignaling]', 'Socket listeners cleaned up', { callId });
     };

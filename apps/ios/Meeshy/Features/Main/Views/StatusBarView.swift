@@ -21,6 +21,16 @@ struct StatusBarView: View {
                 // Other statuses
                 ForEach(viewModel.statuses.filter { $0.id != viewModel.myStatus?.id }) { status in
                     statusPill(status)
+                        .onAppear {
+                            Task { await viewModel.loadMoreIfNeeded(currentStatus: status) }
+                        }
+                }
+
+                // Loading indicator
+                if viewModel.isLoadingMore {
+                    ProgressView()
+                        .tint(Color(hex: "4ECDC4"))
+                        .frame(width: 30)
                 }
             }
             .padding(.horizontal, 16)

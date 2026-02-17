@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events.js';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events.js';
 
 interface MessageParams {
   messageId: string;
@@ -205,7 +205,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           const socketIOHandler = fastify.socketIOHandler;
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
-            const room = `conversation_${conversationId}`;
+            const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
               userId,
@@ -280,7 +280,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           const socketIOHandler = fastify.socketIOHandler;
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
-            const room = `conversation_${conversationId}`;
+            const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
               userId,

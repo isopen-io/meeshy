@@ -3,6 +3,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { AttachmentService } from '../services/attachments/index.js';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 interface MessageParams {
   messageId: string;
@@ -339,8 +340,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = `conversation_${message.conversationId}`;
-          (socketIOManager as any).io.to(room).emit('message:edited', {
+          const room = ROOMS.conversation(message.conversationId);
+          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
             ...updatedMessage,
             conversationId: message.conversationId
           });
@@ -483,8 +484,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = `conversation_${message.conversationId}`;
-          (socketIOManager as any).io.to(room).emit('message:deleted', {
+          const room = ROOMS.conversation(message.conversationId);
+          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
             messageId,
             conversationId: message.conversationId
           });
@@ -580,8 +581,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         try {
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
-            const room = `conversation_${message.conversationId}`;
-            (socketIOManager as any).io.to(room).emit('read-status:updated', {
+            const room = ROOMS.conversation(message.conversationId);
+            (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId: message.conversationId,
               userId,
               type: 'read',
@@ -985,8 +986,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = `conversation_${attachment.message.conversationId}`;
-          (socketIOManager as any).io.to(room).emit('attachment-status:updated', {
+          const room = ROOMS.conversation(attachment.message.conversationId);
+          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,

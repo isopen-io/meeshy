@@ -10,6 +10,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { EventEmitter } from 'events';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const prisma = new PrismaClient();
 
@@ -56,7 +57,7 @@ class MockSocketIOManager extends EventEmitter {
       return;
     }
 
-    const roomName = `conversation_${conversationId}`;
+    const roomName = ROOMS.conversation(conversationId);
 
     // Préparer les données
     const audioTranslationData = {
@@ -69,7 +70,7 @@ class MockSocketIOManager extends EventEmitter {
     };
 
     // Diffuser dans la room de conversation
-    this.io.to(roomName).emit('AUDIO_TRANSLATION_READY', audioTranslationData);
+    this.io.to(roomName).emit(SERVER_EVENTS.AUDIO_TRANSLATION_READY, audioTranslationData);
   }
 }
 
@@ -188,7 +189,7 @@ describe('Audio Translation WebSocket Notifications', () => {
       ]);
 
       // Rejoindre la room de conversation
-      const roomName = `conversation_${testConversationId}`;
+      const roomName = ROOMS.conversation(testConversationId);
       client1.emit('join', roomName);
       client2.emit('join', roomName);
 
@@ -198,11 +199,11 @@ describe('Audio Translation WebSocket Notifications', () => {
       const client1Events: any[] = [];
       const client2Events: any[] = [];
 
-      client1.on('AUDIO_TRANSLATION_READY', (data) => {
+      client1.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         client1Events.push(data);
       });
 
-      client2.on('AUDIO_TRANSLATION_READY', (data) => {
+      client2.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         client2Events.push(data);
       });
 
@@ -273,7 +274,7 @@ describe('Audio Translation WebSocket Notifications', () => {
       ]);
 
       // Seul clientInRoom rejoint la room
-      const roomName = `conversation_${testConversationId}`;
+      const roomName = ROOMS.conversation(testConversationId);
       clientInRoom.emit('join', roomName);
 
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -282,11 +283,11 @@ describe('Audio Translation WebSocket Notifications', () => {
       const eventsInRoom: any[] = [];
       const eventsOutRoom: any[] = [];
 
-      clientInRoom.on('AUDIO_TRANSLATION_READY', (data) => {
+      clientInRoom.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         eventsInRoom.push(data);
       });
 
-      clientOutRoom.on('AUDIO_TRANSLATION_READY', (data) => {
+      clientOutRoom.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         eventsOutRoom.push(data);
       });
 
@@ -324,12 +325,12 @@ describe('Audio Translation WebSocket Notifications', () => {
 
       await new Promise<void>((resolve) => client.on('connect', () => resolve()));
 
-      const roomName = `conversation_${testConversationId}`;
+      const roomName = ROOMS.conversation(testConversationId);
       client.emit('join', roomName);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const receivedEvents: any[] = [];
-      client.on('AUDIO_TRANSLATION_READY', (data) => {
+      client.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         receivedEvents.push(data);
       });
 
@@ -391,12 +392,12 @@ describe('Audio Translation WebSocket Notifications', () => {
 
       await new Promise<void>((resolve) => client.on('connect', () => resolve()));
 
-      const roomName = `conversation_${testConversationId}`;
+      const roomName = ROOMS.conversation(testConversationId);
       client.emit('join', roomName);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const receivedEvents: any[] = [];
-      client.on('AUDIO_TRANSLATION_READY', (data) => {
+      client.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         receivedEvents.push(data);
       });
 
@@ -481,12 +482,12 @@ describe('Audio Translation WebSocket Notifications', () => {
 
       await new Promise<void>((resolve) => client.on('connect', () => resolve()));
 
-      const roomName = `conversation_${testConversationId}`;
+      const roomName = ROOMS.conversation(testConversationId);
       client.emit('join', roomName);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const receivedEvents: any[] = [];
-      client.on('AUDIO_TRANSLATION_READY', (data) => {
+      client.on(SERVER_EVENTS.AUDIO_TRANSLATION_READY, (data) => {
         receivedEvents.push(data);
       });
 

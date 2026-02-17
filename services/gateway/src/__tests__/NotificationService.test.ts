@@ -14,6 +14,7 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { Server as SocketIOServer } from 'socket.io';
 import type { Notification, NotificationType } from '@meeshy/shared/types/notification';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // Mock Prisma
 const mockPrisma = {
@@ -357,7 +358,7 @@ describe('NotificationService - Structure Groupée', () => {
       // Vérifier l'émission Socket.IO
       expect(mockIO.to).toHaveBeenCalledWith('user_recipient');
       expect(mockIO.emit).toHaveBeenCalledWith(
-        'notification:new',
+        SERVER_EVENTS.NOTIFICATION_NEW,
         expect.objectContaining({
           id: 'notif_socket',
           actor: expect.any(Object),

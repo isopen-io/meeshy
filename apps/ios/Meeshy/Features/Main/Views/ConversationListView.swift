@@ -58,6 +58,7 @@ struct ConversationListView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
+    @EnvironmentObject var conversationViewModel: ConversationListViewModel
 
     // Status bubble overlay state
     @State private var showStatusBubble = false
@@ -95,7 +96,7 @@ struct ConversationListView: View {
     }
 
     private var filtered: [Conversation] {
-        SampleData.conversations.filter { c in
+        conversationViewModel.conversations.filter { c in
             let categoryMatch: Bool
             switch selectedCategory {
             case .all: categoryMatch = c.isActive
@@ -352,6 +353,9 @@ struct ConversationListView: View {
                 isScrollingDown = false
             }
         }
+        .task {
+            await conversationViewModel.loadConversations()
+        }
         // Show search bar when filtered list is empty
         .onChange(of: filtered.isEmpty) { isEmpty in
             if isEmpty && hideSearchBar {
@@ -387,13 +391,13 @@ struct ConversationListView: View {
                     isPresented: $showStatusBubble,
                     onReply: {
                         // Find conversation for this user and navigate
-                        if let conv = SampleData.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
+                        if let conv = conversationViewModel.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
                             onSelect(conv)
                         }
                     },
                     onShare: {
                         // Find conversation for this user and navigate (share context)
-                        if let conv = SampleData.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
+                        if let conv = conversationViewModel.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
                             onSelect(conv)
                         }
                     },

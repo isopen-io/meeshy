@@ -26,6 +26,7 @@
 
 import { EventEmitter } from 'events';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { TranslationModel, MessagePriority } from '@meeshy/shared/types';
 
 // Types de données de traduction
@@ -384,7 +385,7 @@ class AdvancedTranslationService extends EventEmitter {
       const socket = meeshySocketIOService.getSocket();
       if (socket && socket.connected) {
         // Émettre l'événement de demande de traduction
-        socket.emit('request_translation', {
+        socket.emit(CLIENT_EVENTS.REQUEST_TRANSLATION, {
           messageId: request.messageId,
           targetLanguage: request.targetLanguages[0] // Premier langue cible
         });

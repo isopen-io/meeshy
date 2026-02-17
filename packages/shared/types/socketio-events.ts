@@ -19,7 +19,39 @@ import type {
   CallError
 } from './video-call.js';
 
+// Import pour les événements sociaux (posts, stories, statuts, commentaires)
+import type {
+  PostCreatedEventData,
+  PostUpdatedEventData,
+  PostDeletedEventData,
+  PostLikedEventData,
+  PostUnlikedEventData,
+  PostRepostedEventData,
+  PostBookmarkedEventData,
+  StoryCreatedEventData,
+  StoryViewedEventData,
+  StoryReactedEventData,
+  StatusCreatedEventData,
+  StatusUpdatedEventData,
+  StatusDeletedEventData,
+  StatusReactedEventData,
+  CommentAddedEventData,
+  CommentDeletedEventData,
+  CommentLikedEventData,
+} from './post.js';
+
+// ===== ROOM HELPERS =====
+// Convention: entity:${id} (colons, jamais underscores)
+
+export const ROOMS = {
+  conversation: (id: string) => `conversation:${id}`,
+  user: (id: string) => `user:${id}`,
+  feed: (id: string) => `feed:${id}`,
+  call: (id: string) => `call:${id}`,
+} as const;
+
 // ===== CONSTANTES D'ÉVÉNEMENTS =====
+// Convention: entity:action-word (colons + hyphens, jamais underscores)
 
 // Événements du serveur vers le client
 export const SERVER_EVENTS = {
@@ -27,21 +59,25 @@ export const SERVER_EVENTS = {
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
   MESSAGE_TRANSLATION: 'message:translation',
-  MESSAGE_TRANSLATED: 'message_translated',
+  MESSAGE_TRANSLATED: 'message:translated',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
   CONVERSATION_JOINED: 'conversation:joined',
   CONVERSATION_LEFT: 'conversation:left',
   AUTHENTICATED: 'authenticated',
-  MESSAGE_SENT: 'message_sent',
+  MESSAGE_SENT: 'message:sent',
   ERROR: 'error',
-  TRANSLATION_RECEIVED: 'translation_received',
-  TRANSLATION_ERROR: 'translation_error',
+  TRANSLATION_RECEIVED: 'translation:received',
+  TRANSLATION_ERROR: 'translation:error',
   NOTIFICATION: 'notification',
-  SYSTEM_MESSAGE: 'system_message',
+  NOTIFICATION_NEW: 'notification:new',
+  NOTIFICATION_READ: 'notification:read',
+  NOTIFICATION_DELETED: 'notification:deleted',
+  NOTIFICATION_COUNTS: 'notification:counts',
+  SYSTEM_MESSAGE: 'system:message',
   CONVERSATION_STATS: 'conversation:stats',
-  CONVERSATION_ONLINE_STATS: 'conversation:online_stats',
+  CONVERSATION_ONLINE_STATS: 'conversation:online-stats',
   CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
@@ -55,6 +91,8 @@ export const SERVER_EVENTS = {
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
   READ_STATUS_UPDATED: 'read-status:updated',
+  PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+  ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
    * UNE seule traduction quand une seule langue est demandée
    */
@@ -70,7 +108,32 @@ export const SERVER_EVENTS = {
   /**
    * Transcription originale prête (avant traductions)
    */
-  TRANSCRIPTION_READY: 'audio:transcription-ready'
+  TRANSCRIPTION_READY: 'audio:transcription-ready',
+
+  // --- Social / Posts ---
+  POST_CREATED: 'post:created',
+  POST_UPDATED: 'post:updated',
+  POST_DELETED: 'post:deleted',
+  POST_LIKED: 'post:liked',
+  POST_UNLIKED: 'post:unliked',
+  POST_REPOSTED: 'post:reposted',
+  POST_BOOKMARKED: 'post:bookmarked',
+
+  // --- Stories ---
+  STORY_CREATED: 'story:created',
+  STORY_VIEWED: 'story:viewed',
+  STORY_REACTED: 'story:reacted',
+
+  // --- Moods/Statuses ---
+  STATUS_CREATED: 'status:created',
+  STATUS_UPDATED: 'status:updated',
+  STATUS_DELETED: 'status:deleted',
+  STATUS_REACTED: 'status:reacted',
+
+  // --- Comments ---
+  COMMENT_ADDED: 'comment:added',
+  COMMENT_DELETED: 'comment:deleted',
+  COMMENT_LIKED: 'comment:liked',
 } as const;
 
 // Événements du client vers le serveur
@@ -85,17 +148,21 @@ export const CLIENT_EVENTS = {
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
   AUTHENTICATE: 'authenticate',
-  REQUEST_TRANSLATION: 'request_translation',
+  REQUEST_TRANSLATION: 'translation:request',
   REACTION_ADD: 'reaction:add',
   REACTION_REMOVE: 'reaction:remove',
-  REACTION_REQUEST_SYNC: 'reaction:request_sync',
+  REACTION_REQUEST_SYNC: 'reaction:request-sync',
   CALL_INITIATE: 'call:initiate',
   CALL_JOIN: 'call:join',
   CALL_LEAVE: 'call:leave',
   CALL_SIGNAL: 'call:signal',
   CALL_TOGGLE_AUDIO: 'call:toggle-audio',
   CALL_TOGGLE_VIDEO: 'call:toggle-video',
-  CALL_END: 'call:end'
+  CALL_END: 'call:end',
+
+  // --- Feed subscription ---
+  FEED_SUBSCRIBE: 'feed:subscribe',
+  FEED_UNSUBSCRIBE: 'feed:unsubscribe',
 } as const;
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
@@ -375,6 +442,31 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+
+  // Social / Posts
+  [SERVER_EVENTS.POST_CREATED]: (data: PostCreatedEventData) => void;
+  [SERVER_EVENTS.POST_UPDATED]: (data: PostUpdatedEventData) => void;
+  [SERVER_EVENTS.POST_DELETED]: (data: PostDeletedEventData) => void;
+  [SERVER_EVENTS.POST_LIKED]: (data: PostLikedEventData) => void;
+  [SERVER_EVENTS.POST_UNLIKED]: (data: PostUnlikedEventData) => void;
+  [SERVER_EVENTS.POST_REPOSTED]: (data: PostRepostedEventData) => void;
+  [SERVER_EVENTS.POST_BOOKMARKED]: (data: PostBookmarkedEventData) => void;
+
+  // Stories
+  [SERVER_EVENTS.STORY_CREATED]: (data: StoryCreatedEventData) => void;
+  [SERVER_EVENTS.STORY_VIEWED]: (data: StoryViewedEventData) => void;
+  [SERVER_EVENTS.STORY_REACTED]: (data: StoryReactedEventData) => void;
+
+  // Moods/Statuses
+  [SERVER_EVENTS.STATUS_CREATED]: (data: StatusCreatedEventData) => void;
+  [SERVER_EVENTS.STATUS_UPDATED]: (data: StatusUpdatedEventData) => void;
+  [SERVER_EVENTS.STATUS_DELETED]: (data: StatusDeletedEventData) => void;
+  [SERVER_EVENTS.STATUS_REACTED]: (data: StatusReactedEventData) => void;
+
+  // Comments
+  [SERVER_EVENTS.COMMENT_ADDED]: (data: CommentAddedEventData) => void;
+  [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
+  [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
 }
 
 /**
@@ -498,6 +590,10 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }) => void;
   [CLIENT_EVENTS.CALL_END]: (data: { callId: string }) => void;
+
+  // Feed subscription
+  [CLIENT_EVENTS.FEED_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.FEED_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
 
 // ===== TYPES DE BASE =====

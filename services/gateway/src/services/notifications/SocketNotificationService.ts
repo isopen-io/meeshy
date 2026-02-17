@@ -8,6 +8,7 @@
  */
 
 import type { Server as SocketIOServer } from 'socket.io';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '../../utils/logger';
 import type { NotificationEventData } from './types';
 
@@ -45,7 +46,7 @@ export class SocketNotificationService {
 
       // Émettre la notification à tous les sockets de l'utilisateur
       userSockets.forEach(socketId => {
-        this.io!.to(socketId).emit('notification', notification);
+        this.io!.to(socketId).emit(SERVER_EVENTS.NOTIFICATION, notification);
         logger.debug('📢 Notification emitted to socket', {
           socketId,
           notificationId: notification.id,
