@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
+import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationMinimalSchema,
@@ -113,6 +114,11 @@ export function registerSearchRoutes(
         take: 50 // Limiter le nombre de résultats
       });
 
+      // Compute unread counts for all matched conversations
+      const readStatusService = new MessageReadStatusService(prisma);
+      const conversationIds = conversations.map(c => c.id);
+      const unreadCountMap = await readStatusService.getUnreadCountsForConversations(userId, conversationIds);
+
       // Transformer les conversations pour garantir qu'un titre existe toujours
       const conversationsWithTitle = conversations.map((conversation) => {
         const displayTitle = conversation.title && conversation.title.trim() !== ''
@@ -128,8 +134,7 @@ export function registerSearchRoutes(
               userId
             );
 
-        // Calculer le unreadCount pour l'utilisateur
-        const unreadCount = conversation.messages[0] ? 0 : 0; // TODO: Implémenter le vrai compteur
+        const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
         return {
           ...conversation,

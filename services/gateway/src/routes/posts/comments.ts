@@ -91,8 +91,8 @@ export function registerCommentRoutes(
       }
 
       // Broadcast comment added via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
-      const post = await (fastify as any).prisma?.post?.findUnique({
+      const socialEvents = fastify.socialEvents;
+      const post = await fastify.prisma?.post?.findUnique({
         where: { id: postId },
         select: { authorId: true, commentCount: true },
       });
@@ -105,11 +105,11 @@ export function registerCommentRoutes(
       }
 
       // Notify post author (or parent comment author for replies)
-      const notifService = (fastify as any).notificationService;
+      const notifService = fastify.notificationService;
       if (notifService) {
         if (parsed.data.parentId) {
           // Reply to a comment — notify the parent comment author
-          const parentComment = await (fastify as any).prisma?.postComment?.findUnique({
+          const parentComment = await fastify.prisma?.postComment?.findUnique({
             where: { id: parsed.data.parentId },
             select: { authorId: true },
           });
@@ -164,7 +164,7 @@ export function registerCommentRoutes(
       }
 
       // Broadcast comment liked via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
         socialEvents.broadcastCommentLiked({
           postId: request.params.postId,
@@ -176,7 +176,7 @@ export function registerCommentRoutes(
       }
 
       // Notify comment author
-      const notifService = (fastify as any).notificationService;
+      const notifService = fastify.notificationService;
       if (notifService && result.authorId) {
         notifService.createCommentLikeNotification({
           actorId: authContext.registeredUser.id,
@@ -238,9 +238,9 @@ export function registerCommentRoutes(
       }
 
       // Broadcast comment deleted via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents) {
-        const post = await (fastify as any).prisma?.post?.findUnique({
+        const post = await fastify.prisma?.post?.findUnique({
           where: { id: postId },
           select: { authorId: true, commentCount: true },
         });

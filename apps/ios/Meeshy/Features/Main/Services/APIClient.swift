@@ -205,6 +205,16 @@ final class APIClient {
         return try await request(endpoint: endpoint, method: "POST", body: data)
     }
 
+    // MARK: - PUT with Encodable body
+
+    func put<T: Decodable, U: Encodable>(
+        endpoint: String,
+        body: U
+    ) async throws -> APIResponse<T> {
+        let data = try JSONEncoder().encode(body)
+        return try await request(endpoint: endpoint, method: "PUT", body: data)
+    }
+
     // MARK: - DELETE
 
     func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {

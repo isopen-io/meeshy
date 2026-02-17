@@ -67,7 +67,7 @@ export interface Post {
   readonly moodEmoji?: string | null;
   readonly audioUrl?: string | null;
   readonly audioDuration?: number | null;
-  readonly storyEffects?: Record<string, unknown> | null;
+  readonly storyEffects?: unknown;
   readonly reactions?: readonly PostReaction[] | null;
   readonly reactionSummary?: Record<string, number> | null;
   readonly reactionCount?: number;

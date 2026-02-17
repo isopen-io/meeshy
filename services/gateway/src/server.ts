@@ -48,6 +48,7 @@ import { registerContentRoutes } from './routes/admin/content';
 import { anonymousUsersAdminRoutes } from './routes/admin/anonymous-users';
 import { systemRankingsRoutes } from './routes/admin/system-rankings';
 import { broadcastRoutes } from './routes/admin/broadcasts';
+import { adminPostRoutes } from './routes/admin/posts';
 import { userRoutes } from './routes/users';
 // TODO: Migrer user-features vers UserPreferences + ConsentService
 // import userFeaturesRoutes from './routes/user-features';
@@ -903,6 +904,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register admin broadcasts routes (at /api/admin/broadcasts)
     await this.server.register(broadcastRoutes, { prefix: `${API_PREFIX}/admin/broadcasts` });
+
+    // Register admin post moderation routes (at /api/admin/posts)
+    await this.server.register(adminPostRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });

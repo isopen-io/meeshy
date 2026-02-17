@@ -7,12 +7,16 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TranslationService } from '../services/TranslationService';
+import { SocialEventsHandler } from '../socketio/handlers/SocialEventsHandler';
+import { NotificationService } from '../services/notifications/NotificationService';
 import { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
     prisma: PrismaClient;
     translationService: TranslationService;
+    socialEvents: SocialEventsHandler;
+    notificationService: NotificationService;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { CreatePostSchema, UpdatePostSchema, PostParams } from './types';
@@ -33,15 +34,16 @@ export function registerCoreRoutes(
       }, authContext.registeredUser.id);
 
       // Broadcast via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
+        const broadcastPost = post as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(post, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(post, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         } else {
-          socialEvents.broadcastPostCreated(post, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         }
       }
 
@@ -121,7 +123,7 @@ export function registerCoreRoutes(
       }
 
       // Broadcast deletion via Socket.IO (use correct event based on post type)
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         if (result.type === 'STATUS') {
           socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});

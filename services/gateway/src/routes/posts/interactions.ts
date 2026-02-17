@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
@@ -31,7 +32,7 @@ export function registerInteractionRoutes(
       }
 
       // Broadcast like via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
         socialEvents.broadcastPostLiked({
           postId,
@@ -43,7 +44,7 @@ export function registerInteractionRoutes(
       }
 
       // Create notification for post author
-      const notifService = (fastify as any).notificationService;
+      const notifService = fastify.notificationService;
       if (notifService && post.authorId) {
         notifService.createPostLikeNotification({
           actorId: authContext.registeredUser.id,
@@ -78,7 +79,7 @@ export function registerInteractionRoutes(
       }
 
       // Broadcast unlike via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
         socialEvents.broadcastPostUnliked({
           postId,
@@ -149,7 +150,7 @@ export function registerInteractionRoutes(
       await postService.recordView(postId, authContext.registeredUser.id, duration);
 
       // If this is a story, broadcast the view to the story author
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         // Fetch post to check type and get author + viewCount
         const post = await postService.getPostById(postId);
@@ -302,16 +303,16 @@ export function registerInteractionRoutes(
       }
 
       // Broadcast repost via Socket.IO
-      const socialEvents = (fastify as any).socialEvents;
+      const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
-          repost,
+          repost: repost as unknown as Post,
         }, authContext.registeredUser.id).catch(() => {});
       }
 
       // Notify original post author
-      const notifService = (fastify as any).notificationService;
+      const notifService = fastify.notificationService;
       if (notifService && repost.repostOfId) {
         const original = await postService.getPostById(postId);
         if (original?.authorId) {

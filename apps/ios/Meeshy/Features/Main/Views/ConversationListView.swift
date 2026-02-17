@@ -455,7 +455,7 @@ struct ConversationListView: View {
         // Pin/Unpin
         Button {
             HapticFeedback.medium()
-            // TODO: Toggle pin state
+            Task { await conversationViewModel.togglePin(for: conversation.id) }
         } label: {
             Label(conversation.isPinned ? "Désépingler" : "Épingler", systemImage: conversation.isPinned ? "pin.slash.fill" : "pin.fill")
         }
@@ -463,15 +463,16 @@ struct ConversationListView: View {
         // Mute/Unmute
         Button {
             HapticFeedback.light()
-            // TODO: Toggle mute state
+            Task { await conversationViewModel.toggleMute(for: conversation.id) }
         } label: {
             Label(conversation.isMuted ? "Réactiver les notifications" : "Mettre en silence", systemImage: conversation.isMuted ? "bell.fill" : "bell.slash.fill")
         }
 
         // Lock/Unlock
+        // BACKEND_NEEDED: No lock/unlock endpoint exists. Requires a new conversation
+        // preference field (isLocked) and biometric/PIN verification on the client.
         Button {
             HapticFeedback.medium()
-            // TODO: Toggle lock state
         } label: {
             Label("Verrouiller", systemImage: "lock.fill")
         }
@@ -482,25 +483,29 @@ struct ConversationListView: View {
         if conversation.unreadCount > 0 {
             Button {
                 HapticFeedback.light()
-                // TODO: Mark as read
+                Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
             } label: {
                 Label("Marquer comme lu", systemImage: "envelope.open.fill")
             }
         } else {
             Button {
                 HapticFeedback.light()
-                // TODO: Mark as unread
+                // BACKEND_NEEDED: No mark-as-unread endpoint. Local-only for now.
+                conversationViewModel.markAsUnread(conversationId: conversation.id)
             } label: {
                 Label("Marquer comme non lu", systemImage: "envelope.badge.fill")
             }
         }
 
         // Add reaction
+        // BACKEND_NEEDED: No REST endpoint for adding reactions to messages.
+        // Reactions are currently handled via WebSocket only. This needs either
+        // a POST /conversations/:id/messages/:messageId/reactions endpoint, or
+        // the iOS app needs to use the WebSocket to send reactions.
         Menu {
             ForEach(["❤️", "👍", "😂", "😮", "😢", "🔥", "🎉", "💯"], id: \.self) { emoji in
                 Button {
                     HapticFeedback.light()
-                    // TODO: Add reaction to last message
                 } label: {
                     Text(emoji)
                 }
@@ -512,11 +517,13 @@ struct ConversationListView: View {
         Divider()
 
         // Move to section
+        // BACKEND_NEEDED: Section/category mapping between iOS sectionId and backend
+        // categoryId is not yet aligned. Local-only for now.
         Menu {
             ForEach(ConversationSection.allSections.filter { $0.id != "pinned" }) { section in
                 Button {
                     HapticFeedback.light()
-                    // TODO: Move to section
+                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: section.id)
                 } label: {
                     Label(section.name, systemImage: section.icon)
                 }
@@ -528,7 +535,7 @@ struct ConversationListView: View {
         // Archive
         Button {
             HapticFeedback.medium()
-            // TODO: Archive conversation
+            Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
         } label: {
             Label("Archiver", systemImage: "archivebox.fill")
         }
@@ -536,9 +543,10 @@ struct ConversationListView: View {
         Divider()
 
         // Block (destructive style)
+        // BACKEND_NEEDED: No block user/conversation endpoint exists yet.
+        // Requires a new blocking system with user-level block list.
         Button(role: .destructive) {
             HapticFeedback.heavy()
-            // TODO: Block conversation/user
         } label: {
             Label("Bloquer", systemImage: "hand.raised.fill")
         }
@@ -546,7 +554,7 @@ struct ConversationListView: View {
         // Delete (destructive)
         Button(role: .destructive) {
             HapticFeedback.heavy()
-            // TODO: Delete conversation
+            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
         } label: {
             Label("Supprimer", systemImage: "trash.fill")
         }
@@ -591,18 +599,13 @@ struct ConversationListView: View {
         guard sectionId != "pinned" else { return false }
         guard let dragging = draggingConversation else { return false }
 
-        // In a real app, this would update the conversation's sectionId in the data store
-        // For now, we just show feedback
+        conversationViewModel.moveToSection(conversationId: dragging.id, sectionId: sectionId)
         HapticFeedback.success()
 
-        // Reset drag state
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             draggingConversation = nil
             dropTargetSection = nil
         }
-
-        // Log the action (would be saved to backend in real app)
-        print("📦 Moved conversation '\(dragging.name)' to section '\(sectionId)'")
 
         return true
     }
