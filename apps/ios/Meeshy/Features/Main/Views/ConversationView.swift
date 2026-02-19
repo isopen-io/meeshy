@@ -334,25 +334,17 @@ struct ConversationView: View {
 
     // MARK: - Conversation Background
     private var conversationBackground: some View {
-        ZStack {
-            theme.backgroundGradient
-
-            // Accent colored orbs with floating animation
-            Circle()
-                .fill(Color(hex: accentColor).opacity(theme.mode.isDark ? 0.12 : 0.08))
-                .frame(width: 400, height: 400)
-                .blur(radius: 100)
-                .offset(x: 100, y: -150)
-                .floating(range: 25, duration: 6.0)
-
-            Circle()
-                .fill(Color(hex: secondaryColor).opacity(theme.mode.isDark ? 0.10 : 0.06))
-                .frame(width: 300, height: 300)
-                .blur(radius: 80)
-                .offset(x: -100, y: 300)
-                .floating(range: 20, duration: 5.0)
-        }
-        .ignoresSafeArea()
+        ConversationAnimatedBackground(
+            config: ConversationBackgroundConfig(
+                conversationType: conversation?.type ?? .direct,
+                isEncrypted: conversation?.encryptionMode != nil,
+                isE2EEncrypted: conversation?.encryptionMode == "e2ee",
+                memberCount: conversation?.memberCount ?? 2,
+                accentHex: accentColor,
+                secondaryHex: secondaryColor,
+                isDarkMode: theme.mode.isDark
+            )
+        )
     }
 
     // MARK: - Options Ladder
@@ -1166,36 +1158,14 @@ struct ThemedAvatarButton: View {
             }
             action()
         }) {
-            ZStack {
-                // Story ring
-                if hasStoryRing {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: "FF6B6B"), Color(hex: "F8B500"), Color(hex: "4ECDC4"), Color(hex: "9B59B6")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2.5
-                        )
-                        .frame(width: 46, height: 46)
-                }
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: color), Color(hex: secondaryColor)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
-
-                Text(String(name.prefix(1)))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-            }
+            MeeshyAvatar(
+                name: name,
+                size: .medium,
+                accentColor: color,
+                secondaryColor: secondaryColor,
+                storyState: hasStoryRing ? .unread : .none
+            )
+            .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
         }
     }

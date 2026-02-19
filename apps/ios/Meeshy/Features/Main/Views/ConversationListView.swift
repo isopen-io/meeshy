@@ -1163,67 +1163,39 @@ struct ThemedConversationRow: View {
         return statusViewModel.statusForUser(userId: userId)
     }
 
+    private var avatarStoryState: StoryRingState {
+        if hasUnviewedStoryRing { return .unread }
+        if hasStoryRing { return .read }
+        return .none
+    }
+
     private var avatarView: some View {
         ZStack {
-            // Avatar body — tap opens stories
             Button {
                 onAvatarTap?()
             } label: {
-                ZStack {
-                    // Ring: story gradient or default ring
-                    if hasStoryRing {
-                        Circle()
-                            .stroke(
-                                hasUnviewedStoryRing ?
-                                LinearGradient(
-                                    colors: [Color(hex: "FF6B6B"), Color(hex: "F8B500"), Color(hex: "4ECDC4"), Color(hex: "9B59B6")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ) :
-                                LinearGradient(
-                                    colors: [Color.gray.opacity(0.5), Color.gray.opacity(0.3)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2.5
-                            )
-                            .frame(width: 56, height: 56)
-                    } else if conversation.type == .direct || conversation.unreadCount > 0 {
-                        Circle()
-                            .stroke(
-                                AngularGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: conversation.colorPalette.secondary), Color(hex: accentColor)],
-                                    center: .center
-                                ),
-                                lineWidth: 2.5
-                            )
-                            .frame(width: 56, height: 56)
-                            .pulse(intensity: 0.03)
+                MeeshyAvatar(
+                    name: conversation.name,
+                    size: .large,
+                    accentColor: accentColor,
+                    secondaryColor: conversation.colorPalette.secondary,
+                    storyState: avatarStoryState,
+                    moodEmoji: moodStatus?.moodEmoji,
+                    onMoodTap: onMoodBadgeTap,
+                    showOnlineIndicator: conversation.type == .direct && moodStatus == nil,
+                    onOnlineTap: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            showLastSeenTooltip = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showLastSeenTooltip = false
+                            }
+                        }
                     }
-
-                    // Gradient circle background
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(hex: accentColor),
-                                    Color(hex: conversation.colorPalette.secondary)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 52, height: 52)
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
-
-                    // Initial
-                    Text(String(conversation.name.prefix(1)))
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                )
             }
             .buttonStyle(PlainButtonStyle())
-            // Long press context menu — stories, profile, info
             .contextMenu {
                 if hasStoryRing {
                     Button {
@@ -1235,7 +1207,6 @@ struct ThemedConversationRow: View {
 
                 Button {
                     HapticFeedback.light()
-                    // TODO: Navigate to profile
                 } label: {
                     Label("Voir le profil", systemImage: "person.fill")
                 }
@@ -1243,47 +1214,9 @@ struct ThemedConversationRow: View {
                 if conversation.type == .direct {
                     Button {
                         HapticFeedback.light()
-                        // TODO: Show user info
                     } label: {
                         Label("Infos utilisateur", systemImage: "info.circle.fill")
                     }
-                }
-            }
-            // Mood badge / online dot — positioned at bottom-trailing via overlay (no .offset!)
-            .overlay(alignment: .bottomTrailing) {
-                if let status = moodStatus {
-                    // Mood badge — GeometryReader captures REAL screen position at tap time
-                    GeometryReader { geo in
-                        Text(status.moodEmoji)
-                            .font(.system(size: 14))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .contentShape(Circle())
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                let f = geo.frame(in: .global)
-                                onMoodBadgeTap?(CGPoint(x: f.midX, y: f.midY))
-                            }
-                    }
-                    .frame(width: 24, height: 24)
-                    .pulse(intensity: 0.15)
-                } else if conversation.type == .direct {
-                    // Online dot (tap → last seen tooltip)
-                    Circle()
-                        .fill(Color(hex: "2ECC71"))
-                        .frame(width: 14, height: 14)
-                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
-                        .onTapGesture {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                showLastSeenTooltip = true
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    showLastSeenTooltip = false
-                                }
-                            }
-                        }
-                        .pulse(intensity: 0.15)
                 }
             }
 

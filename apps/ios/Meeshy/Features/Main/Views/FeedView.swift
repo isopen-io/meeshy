@@ -964,22 +964,11 @@ struct FeedPostCard: View {
     private var authorHeader: some View {
         HStack(spacing: 12) {
             // Avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-
-                Text(String(post.author.prefix(1)))
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
+            MeeshyAvatar(
+                name: post.author,
+                size: .medium,
+                accentColor: accentColor
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 // Author name with repost indicator

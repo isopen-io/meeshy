@@ -637,20 +637,12 @@ struct ThemedFeedComposer: View {
             // Main composer card
             HStack(alignment: .top, spacing: 12) {
                 // Avatar
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String((authManager.currentUser?.username ?? "M").prefix(1)).uppercased())
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                MeeshyAvatar(
+                    name: authManager.currentUser?.username ?? "M",
+                    size: .custom(40),
+                    accentColor: "FF6B6B",
+                    secondaryColor: "4ECDC4"
+                )
 
                 // Multi-line text input
                 ZStack(alignment: .topLeading) {

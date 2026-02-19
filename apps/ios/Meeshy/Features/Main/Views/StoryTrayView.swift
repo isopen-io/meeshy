@@ -6,7 +6,6 @@ struct StoryTrayView: View {
     var onViewStory: (Int) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var ringRotation: Double = 0
     @State private var addButtonGlow = false
 
     var body: some View {
@@ -18,30 +17,6 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 108)
-        .onAppear {
-            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                ringRotation = 360
-            }
-        }
-    }
-
-    // MARK: - Animated Ring Gradient
-
-    private var animatedRingGradient: AngularGradient {
-        AngularGradient(
-            gradient: Gradient(colors: [
-                Color(hex: "FF2E63"),
-                Color(hex: "FF6B6B"),
-                Color(hex: "F27121"),
-                Color(hex: "E94057"),
-                Color(hex: "A855F7"),
-                Color(hex: "08D9D6"),
-                Color(hex: "FF2E63")
-            ]),
-            center: .center,
-            startAngle: .degrees(ringRotation),
-            endAngle: .degrees(ringRotation + 360)
-        )
     }
 
     // MARK: - Story Scroll View
@@ -120,43 +95,12 @@ struct StoryTrayView: View {
     private func storyRing(group: StoryGroup, index: Int) -> some View {
         VStack(spacing: 5) {
             ZStack {
-                if group.hasUnviewed {
-                    // Ambient glow behind unviewed stories
-                    Circle()
-                        .fill(Color(hex: group.avatarColor).opacity(0.2))
-                        .frame(width: 80, height: 80)
-                        .blur(radius: 10)
-
-                    // Animated rotating gradient ring
-                    Circle()
-                        .stroke(animatedRingGradient, lineWidth: 3)
-                        .frame(width: 68, height: 68)
-                } else {
-                    // Subtle viewed ring
-                    Circle()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1.5)
-                        .frame(width: 68, height: 68)
-                }
-
-                // Avatar circle
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(hex: group.avatarColor),
-                                Color(hex: group.avatarColor).opacity(0.6)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 58, height: 58)
-                    .overlay(
-                        Text(String(group.username.prefix(1)).uppercased())
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    )
-                    .shadow(color: Color(hex: group.avatarColor).opacity(0.25), radius: 6, y: 3)
+                MeeshyAvatar(
+                    name: group.username,
+                    size: .xlarge,
+                    accentColor: group.avatarColor,
+                    storyState: group.hasUnviewed ? .unread : .read
+                )
 
                 // Story count dots (multiple stories indicator)
                 if group.stories.count > 1 {

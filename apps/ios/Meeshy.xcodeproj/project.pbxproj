@@ -35,6 +35,8 @@
 		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
 		AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF02 /* CachedAsyncImage.swift */; };
+		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
+		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 /* End PBXBuildFile section */
@@ -47,6 +49,7 @@
 		5832205F0A09E149C8B976A8 /* Meeshy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Meeshy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AF92F095894B8DD05EB0BFD /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
+		EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAnimatedBackground.swift; sourceTree = "<group>"; };
 		67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
 		694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMenu.swift; sourceTree = "<group>"; };
 		6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
@@ -71,6 +74,7 @@
 		EE44FF55AA66BB77CC880033 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF02 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
+		AA66BB77CC880001FF03 /* MeeshyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAvatar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +95,7 @@
 			children = (
 				97D79006802F73CC53F1D675 /* AnimatedLogoView.swift */,
 				AA66BB77CC880001FF02 /* CachedAsyncImage.swift */,
+				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
 				FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
@@ -145,6 +150,7 @@
 		937EE8EE8FCFAC22BCD07F51 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */,
 				C83758F8E8BD422CF1E9551E /* ConversationListView.swift */,
 				60EE19EAAF10B595D04E99F8 /* ConversationView.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
@@ -265,6 +271,7 @@
 			files = (
 				333071447886052AD4A3F397 /* AnimatedLogoView.swift in Sources */,
 				7E64E0171BA4A124BDF96621 /* ChatBubble.swift in Sources */,
+				EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */,
 				F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */,
 				2E46EEA2DA493728930C87D8 /* ConversationView.swift in Sources */,
 				D22635DE1CE583B57963A2C3 /* DesignSystem.swift in Sources */,
@@ -290,6 +297,7 @@
 				EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */,
 				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,
 				AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */,
+				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
