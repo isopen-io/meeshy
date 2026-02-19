@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import CoreLocation
+import MeeshySDK
 
 struct ConversationView: View {
     let conversation: Conversation?
@@ -9,9 +10,9 @@ struct ConversationView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
+    @StateObject private var viewModel: ConversationViewModel
     @StateObject private var locationManager = LocationManager()
     @State private var messageText = ""
-    @State private var messages: [ChatMessage] = []
     @State private var showOptions = false
     @State private var showAttachOptions = false
     @State private var actionAlert: String? = nil
@@ -32,6 +33,11 @@ struct ConversationView: View {
     @State private var showStoryViewerFromHeader = false
     @State private var storyGroupIndexForHeader = 0
 
+    // Scroll state
+    @State private var isNearBottom: Bool = true
+    @State private var unreadBadgeCount: Int = 0
+    @State private var scrollToBottomTrigger: Int = 0
+
     private var headerHasStoryRing: Bool {
         guard let userId = conversation?.participantUserId else { return false }
         return storyViewModel.hasStories(forUserId: userId)
@@ -45,8 +51,11 @@ struct ConversationView: View {
         conversation?.colorPalette.secondary ?? "4ECDC4"
     }
 
-    private var sampleMessages: [Message] {
-        SampleData.sampleMessages(conversationId: conversation?.id ?? "sample", contactColor: accentColor)
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, onBack: @escaping () -> Void) {
+        self.conversation = conversation
+        self.replyContext = replyContext
+        self.onBack = onBack
+        _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? ""))
     }
 
     // Dynamic height for bottom spacer based on composer state
@@ -70,9 +79,22 @@ struct ConversationView: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 10) {
+                        // Loading indicator at very top (only visible during active load)
+                        if viewModel.isLoadingOlder {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .tint(Color(hex: accentColor))
+                                Text("Chargement...")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(height: 36)
+                            .transition(.opacity)
+                        }
+
                         Color.clear.frame(height: 70)
 
-                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, msg in
+                        ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
                             ThemedMessageBubble(message: msg, contactColor: accentColor)
                                 .id(msg.id)
                                 .transition(
@@ -81,8 +103,36 @@ struct ConversationView: View {
                                         removal: .opacity
                                     )
                                 )
-                                .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.03), value: messages.count)
+                                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+                                .onAppear {
+                                    // Only prefetch on manual scroll (not programmatic)
+                                    guard !viewModel.isProgrammaticScroll else { return }
+                                    let total = viewModel.messages.count
+                                    let midpoint = total / 2
+                                    let urgentPoint = total / 5 // top 20%
+                                    // Anticipatory prefetch at midpoint
+                                    if index <= midpoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
+                                        viewModel.prefetchOlderIfNeeded()
+                                    }
+                                    // Urgent load when very close to top (fast scrolling)
+                                    if index <= urgentPoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
+                                        Task { await viewModel.loadOlderMessages() }
+                                    }
+                                }
                         }
+
+                        // Near-bottom detector — sits right after messages
+                        Color.clear
+                            .frame(height: 1)
+                            .id("near_bottom_anchor")
+                            .onAppear {
+                                isNearBottom = true
+                                unreadBadgeCount = 0
+                                viewModel.lastUnreadMessage = nil
+                            }
+                            .onDisappear {
+                                isNearBottom = false
+                            }
 
                         // Dynamic bottom spacer based on composer state
                         Color.clear
@@ -91,26 +141,57 @@ struct ConversationView: View {
                     }
                     .padding(.horizontal, 16)
                 }
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        if let last = messages.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                // Initial load complete → scroll to bottom with natural animation
+                .onChange(of: viewModel.isLoadingInitial) { isLoading in
+                    if !isLoading, let last = viewModel.messages.last {
+                        viewModel.markProgrammaticScroll()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            withAnimation(.easeOut(duration: 0.4)) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
-                .onChange(of: messages.count) { _ in
-                    if let last = messages.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                // New message appended → scroll only if near bottom or own message
+                .onChange(of: viewModel.newMessageAppended) { _ in
+                    guard let lastMsg = viewModel.messages.last else { return }
+                    if isNearBottom || lastMsg.isMe {
+                        viewModel.markProgrammaticScroll()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            proxy.scrollTo(lastMsg.id, anchor: .bottom)
+                        }
+                    } else {
+                        unreadBadgeCount += 1
                     }
                 }
+                // Older messages prepended → restore scroll position to anchor
+                .onChange(of: viewModel.isLoadingOlder) { isLoading in
+                    if !isLoading, let anchorId = viewModel.scrollAnchorId {
+                        // Use tiny delay to let SwiftUI layout the prepended items
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            proxy.scrollTo(anchorId, anchor: .top)
+                            viewModel.scrollAnchorId = nil
+                        }
+                    }
+                }
+                // Composer state changes — scroll only if near bottom
                 .onChange(of: pendingAttachments.count) { _ in
-                    if let last = messages.last {
+                    if isNearBottom, let last = viewModel.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
                 .onChange(of: isRecording) { _ in
-                    if let last = messages.last {
+                    if isNearBottom, let last = viewModel.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
+                // Triggered by the scroll-to-bottom button
+                .onChange(of: scrollToBottomTrigger) { _ in
+                    if let last = viewModel.messages.last {
+                        viewModel.markProgrammaticScroll()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -187,6 +268,25 @@ struct ConversationView: View {
                     .zIndex(99)
             }
 
+            // Scroll-to-bottom button — visible whenever not at bottom
+            if !isNearBottom {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        scrollToBottomButton
+                            .padding(.trailing, 16)
+                            .padding(.bottom, composerHeight + 8)
+                    }
+                }
+                .zIndex(60)
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.8).combined(with: .opacity),
+                    removal: .scale(scale: 0.6).combined(with: .opacity)
+                ))
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
+            }
+
             // Composer
             VStack {
                 Spacer()
@@ -201,8 +301,12 @@ struct ConversationView: View {
         .offset(x: dragOffset)
         .scaleEffect(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.05) : 1.0)
         .opacity(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.3) : 1.0)
+        .task {
+            await viewModel.loadMessages()
+            // Connect message socket
+            MessageSocketManager.shared.connect()
+        }
         .onAppear {
-            messages = sampleMessages
             // Pre-populate reply reference from story/status reply
             if let context = replyContext {
                 pendingReplyReference = context.toReplyReference
@@ -326,6 +430,184 @@ struct ConversationView: View {
         .padding(.bottom, 78)
         .zIndex(showAttachOptions ? 150 : -1)
         .allowsHitTesting(showAttachOptions)
+    }
+
+    // MARK: - Scroll to Bottom Button
+
+    private var hasTypingIndicator: Bool {
+        !viewModel.typingUsernames.isEmpty
+    }
+
+    /// Unread message attachment (for rich preview in button)
+    private var unreadAttachment: MessageAttachment? {
+        viewModel.lastUnreadMessage?.attachments.first
+    }
+
+    /// True when there are unread messages to show in the button
+    private var hasUnreadContent: Bool {
+        unreadBadgeCount > 0 || hasTypingIndicator
+    }
+
+    private var scrollToBottomButton: some View {
+        Button {
+            HapticFeedback.light()
+            scrollToBottomTrigger += 1
+            unreadBadgeCount = 0
+            viewModel.lastUnreadMessage = nil
+        } label: {
+            Group {
+                if hasUnreadContent {
+                    // Rich button with preview
+                    unreadPreviewContent
+                } else {
+                    // Simple chevron-only pill
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(12)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: hasUnreadContent ? 16 : 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: accentColor).opacity(0.95),
+                                Color(hex: secondaryColor).opacity(0.9)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
+            )
+        }
+    }
+
+    private var unreadPreviewContent: some View {
+        HStack(spacing: 10) {
+            // Left: rich preview (image thumbnail or audio play)
+            if let attachment = unreadAttachment {
+                unreadAttachmentPreview(attachment)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                // Typing indicator (top priority)
+                if hasTypingIndicator {
+                    HStack(spacing: 4) {
+                        typingDotsView
+                        Text(typingLabel)
+                            .font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                }
+
+                // Last unread message text preview
+                if let msg = viewModel.lastUnreadMessage, !msg.content.isEmpty {
+                    Text(msg.content)
+                        .font(.system(size: 12, weight: .regular))
+                        .lineLimit(1)
+                } else if unreadAttachment != nil, !hasTypingIndicator {
+                    Text(unreadAttachmentTypeLabel)
+                        .font(.system(size: 12, weight: .regular))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // Right: chevron + unread count
+            VStack(spacing: 2) {
+                if unreadBadgeCount > 0 {
+                    Text("\(unreadBadgeCount)")
+                        .font(.system(size: 10, weight: .heavy))
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.white.opacity(0.3)))
+                }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 240)
+    }
+
+    @ViewBuilder
+    private func unreadAttachmentPreview(_ attachment: MessageAttachment) -> some View {
+        switch attachment.type {
+        case .image, .video:
+            // Thumbnail
+            if let thumbUrl = attachment.thumbnailUrl ?? (attachment.type == .image ? attachment.fileUrl : nil),
+               let url = URL(string: thumbUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 36, height: 36)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    default:
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Image(systemName: attachment.type == .video ? "video.fill" : "photo.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.6))
+                            )
+                    }
+                }
+            }
+        case .audio:
+            // Play button
+            Image(systemName: "play.fill")
+                .font(.system(size: 14, weight: .bold))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.white.opacity(0.25)))
+        default:
+            EmptyView()
+        }
+    }
+
+    private var unreadAttachmentTypeLabel: String {
+        guard let att = unreadAttachment else { return "" }
+        switch att.type {
+        case .image: return "Photo"
+        case .video: return "Video"
+        case .audio: return "Audio"
+        case .file: return "Fichier"
+        case .location: return "Position"
+        }
+    }
+
+    private var typingLabel: String {
+        let names = viewModel.typingUsernames
+        switch names.count {
+        case 1: return "\(names[0]) ecrit..."
+        case 2: return "\(names[0]) et \(names[1])..."
+        default: return "\(names.count) personnes..."
+        }
+    }
+
+    @State private var typingDotPhase: Int = 0
+
+    private var typingDotsView: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 4, height: 4)
+                    .opacity(typingDotPhase == i ? 1.0 : 0.4)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: false)) {
+                typingDotPhase = (typingDotPhase + 1) % 3
+            }
+        }
     }
 
     // MARK: - Themed Composer
@@ -691,33 +973,35 @@ struct ConversationView: View {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
 
-        let conversationId = conversation?.id ?? "temp"
+        let replyId = pendingReplyReference != nil ? nil : nil as String? // TODO: wire reply ID
+        let content = text
 
-        // Send all attachments in one message with text
-        if !pendingAttachments.isEmpty {
-            let newMsg = Message(
-                conversationId: conversationId,
-                content: text,
-                messageType: pendingAttachments.first?.type == .audio ? .audio : .text,
-                createdAt: Date(),
-                attachments: pendingAttachments,
-                isMe: true
-            )
-            messages.append(newMsg)
-        } else {
-            // Text only
-            let newMsg = Message(
-                conversationId: conversationId,
-                content: text,
-                createdAt: Date(),
-                isMe: true
-            )
-            messages.append(newMsg)
-        }
-
+        // Clear UI state immediately
+        let attachments = pendingAttachments
         pendingAttachments.removeAll()
         messageText = ""
+        pendingReplyReference = nil
         HapticFeedback.light()
+
+        // If we have local-only attachments (not uploaded), fall back to local append
+        if !attachments.isEmpty {
+            let conversationId = conversation?.id ?? "temp"
+            let newMsg = Message(
+                conversationId: conversationId,
+                content: content,
+                messageType: attachments.first?.type == .audio ? .audio : .text,
+                createdAt: Date(),
+                attachments: attachments,
+                isMe: true
+            )
+            viewModel.messages.append(newMsg)
+            return
+        }
+
+        // Send text via API
+        Task {
+            await viewModel.sendMessage(content: content, replyToId: replyId)
+        }
     }
 
     private func formatRecordingTime(_ time: TimeInterval) -> String {
@@ -809,11 +1093,12 @@ struct ConversationView: View {
 
     private func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let conversationId = conversation?.id ?? "temp"
-        let newMsg = Message(conversationId: conversationId, content: messageText, createdAt: Date(), isMe: true)
-        messages.append(newMsg)
+        let text = messageText
         messageText = ""
         HapticFeedback.light()
+        Task {
+            await viewModel.sendMessage(content: text)
+        }
     }
 }
 

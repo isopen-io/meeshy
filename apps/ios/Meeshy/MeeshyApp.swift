@@ -1,15 +1,23 @@
 import SwiftUI
+import MeeshySDK
 
 @main
 struct MeeshyApp: App {
+    @StateObject private var authManager = AuthManager.shared
     @State private var showSplash = true
+    @State private var hasCheckedSession = false
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                RootView()
-                    .opacity(showSplash ? 0 : 1)
-                    .scaleEffect(showSplash ? 0.96 : 1)
+                Group {
+                    if authManager.isAuthenticated {
+                        RootView()
+                    } else if hasCheckedSession {
+                        LoginView()
+                    }
+                }
+                .opacity(showSplash ? 0 : 1)
 
                 if showSplash {
                     SplashScreen(onFinish: {
@@ -20,6 +28,11 @@ struct MeeshyApp: App {
                     .transition(.opacity.combined(with: .scale(scale: 1.1)))
                     .zIndex(1)
                 }
+            }
+            .environmentObject(authManager)
+            .task {
+                await authManager.checkExistingSession()
+                hasCheckedSession = true
             }
         }
     }

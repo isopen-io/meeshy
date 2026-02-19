@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
@@ -616,6 +617,7 @@ struct ThemedFeedComposer: View {
     @Binding var text: String
     @FocusState var isFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var showAttachmentMenu = false
 
     // Attachment options (without mic - mic is the toggle button when expanded)
@@ -645,7 +647,7 @@ struct ThemedFeedComposer: View {
                     )
                     .frame(width: 40, height: 40)
                     .overlay(
-                        Text("M")
+                        Text(String((authManager.currentUser?.username ?? "M").prefix(1)).uppercased())
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                     )

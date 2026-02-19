@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel

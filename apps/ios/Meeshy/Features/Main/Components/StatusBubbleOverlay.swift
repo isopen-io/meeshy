@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 struct StatusBubbleOverlay: View {
     let status: StatusEntry

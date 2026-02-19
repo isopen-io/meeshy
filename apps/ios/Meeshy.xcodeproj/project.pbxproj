@@ -14,7 +14,6 @@
 		475968E0CE4126EF67ABACC2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF92F095894B8DD05EB0BFD /* Theme.swift */; };
 		4C9760B519E90994F76DC90A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13A020468B6C8367F8121928 /* Assets.xcassets */; };
 		4DC22D80309C97D00C3EE9A9 /* TextAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */; };
-		58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F52D4DD36D01276DA42A395 /* Models.swift */; };
 		63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
@@ -22,28 +21,26 @@
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
 		D22635DE1CE583B57963A2C3 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4041235D6D9700A3BADC3E86 /* DesignSystem.swift */; };
 		F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83758F8E8BD422CF1E9551E /* ConversationListView.swift */; };
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */; };
-		C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */; };
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */; };
-		AA11BB22CC33DD44EE55FF01 /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660011 /* StoryModels.swift */; };
 		AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */; };
 		AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */; };
 		AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */; };
 		AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */; };
 		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
 		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
-		DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */; };
-		DD22EE33FF44AA55BB6600CC /* SocialSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */; };
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
 		DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */; };
-		DD33EE44FF55AA66BB770012 /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770011 /* ConversationModels.swift */; };
 		DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */; };
+		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
+		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
+		AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF02 /* CachedAsyncImage.swift */; };
+		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
+		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		1F52D4DD36D01276DA42A395 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		31BB909122D8D9361EC72DF1 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4041235D6D9700A3BADC3E86 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		467B3BA1305D0EA5CEFF3EEE /* Meeshy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Meeshy.entitlements; sourceTree = "<group>"; };
@@ -60,23 +57,20 @@
 		C83758F8E8BD422CF1E9551E /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		F43EF5D9C483AFF0375F778C /* TextAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAnalyzer.swift; sourceTree = "<group>"; };
 		FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableFloatingButton.swift; sourceTree = "<group>"; };
-		B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
 		F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModel.swift; sourceTree = "<group>"; };
-		BB22CC33DD44EE55FF660011 /* StoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryModels.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModel.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTrayView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
-		CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
-		CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialSocketManager.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiReactionPicker.swift; sourceTree = "<group>"; };
-		DD33EE44FF55AA66BB770011 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModels.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
+		EE44FF55AA66BB77CC880033 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
+		AA66BB77CC880001FF02 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,6 +78,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AABB001100220033 /* MeeshySDK in Frameworks */,
+				AABB001100220044 /* MeeshyUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				97D79006802F73CC53F1D675 /* AnimatedLogoView.swift */,
+				AA66BB77CC880001FF02 /* CachedAsyncImage.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
 				FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
@@ -118,8 +115,6 @@
 			isa = PBXGroup;
 			children = (
 				239EA92B51CC63E846FDE461 /* Components */,
-				F2299A4649663A9E3837B193 /* Models */,
-				A7B8C9D0E1F2A3B4C5D6E7F8 /* Services */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
@@ -153,6 +148,7 @@
 				C83758F8E8BD422CF1E9551E /* ConversationListView.swift */,
 				60EE19EAAF10B595D04E99F8 /* ConversationView.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
+				EE44FF55AA66BB77CC880033 /* LoginView.swift */,
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
 				BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */,
@@ -179,31 +175,11 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		F2299A4649663A9E3837B193 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				1F52D4DD36D01276DA42A395 /* Models.swift */,
-				DD33EE44FF55AA66BB770011 /* ConversationModels.swift */,
-				D4E5F6A7B8C9D0E1F2A3B4C5 /* PostModels.swift */,
-				BB22CC33DD44EE55FF660011 /* StoryModels.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		A7B8C9D0E1F2A3B4C5D6E7F8 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				B2C3D4E5F6A7B8C9D0E1F2A3 /* APIClient.swift */,
-				CC11DD22EE33FF44AA550088 /* AudioPlayerManager.swift */,
-				CC11DD22EE33FF44AA5500CC /* SocialSocketManager.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
 		B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
 				DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */,
+				FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */,
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */,
 				BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */,
 				BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */,
@@ -228,7 +204,8 @@
 			);
 			name = Meeshy;
 			packageProductDependencies = (
-				EE11FF22AA33BB44CC55DD01 /* SocketIO */,
+				AABB001100220066 /* MeeshySDK */,
+				AABB001100220077 /* MeeshyUI */,
 			);
 			productName = Meeshy;
 			productReference = 5832205F0A09E149C8B976A8 /* Meeshy.app */;
@@ -259,7 +236,7 @@
 			mainGroup = 4B839730A63FC9359E52BECF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
+				AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -295,28 +272,24 @@
 				6E75FBB8A88317499B405448 /* FeedView.swift in Sources */,
 				470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */,
 				72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */,
-				58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */,
 				63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */,
 				CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */,
 				4DC22D80309C97D00C3EE9A9 /* TextAnalyzer.swift in Sources */,
 				475968E0CE4126EF67ABACC2 /* Theme.swift in Sources */,
-				A1B2C3D4E5F6A7B8C9D0E1F2 /* APIClient.swift in Sources */,
-				C3D4E5F6A7B8C9D0E1F2A3B4 /* PostModels.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */,
-				AA11BB22CC33DD44EE55FF01 /* StoryModels.swift in Sources */,
 				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
-				DD22EE33FF44AA55BB660088 /* AudioPlayerManager.swift in Sources */,
-				DD22EE33FF44AA55BB6600CC /* SocialSocketManager.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
 				DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */,
-				DD33EE44FF55AA66BB770012 /* ConversationModels.swift in Sources */,
 				DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */,
+				EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */,
+				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,
+				AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,22 +480,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 16.1.1;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../packages/MeeshySDK;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		EE11FF22AA33BB44CC55DD01 /* SocketIO */ = {
+		AABB001100220066 /* MeeshySDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = EE11FF22AA33BB44CC55DD02 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
-			productName = SocketIO;
+			productName = MeeshySDK;
+		};
+		AABB001100220077 /* MeeshyUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeeshyUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

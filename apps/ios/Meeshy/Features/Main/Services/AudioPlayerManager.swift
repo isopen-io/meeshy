@@ -10,14 +10,14 @@ class AudioPlayerManager: ObservableObject {
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
-    private var downloadTask: URLSessionDataTask?
+    private var loadTask: Task<Void, Never>?
 
     // MARK: - Play from URL string
 
     func play(urlString: String) {
         stop()
 
-        guard let url = URL(string: urlString) else { return }
+        guard !urlString.isEmpty else { return }
 
         // Configure audio session
         do {
@@ -27,14 +27,16 @@ class AudioPlayerManager: ObservableObject {
             // Silent failure
         }
 
-        // Download and play
-        downloadTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let data = data, error == nil else { return }
-            Task { @MainActor [weak self] in
-                self?.playData(data)
+        // Download via cache and play
+        loadTask = Task {
+            do {
+                let data = try await MediaCacheManager.shared.data(for: urlString)
+                guard !Task.isCancelled else { return }
+                playData(data)
+            } catch {
+                // Silent failure
             }
         }
-        downloadTask?.resume()
     }
 
     private func playData(_ data: Data) {
@@ -59,8 +61,8 @@ class AudioPlayerManager: ObservableObject {
         timer = nil
         isPlaying = false
         progress = 0
-        downloadTask?.cancel()
-        downloadTask = nil
+        loadTask?.cancel()
+        loadTask = nil
     }
 
     func togglePlayPause() {

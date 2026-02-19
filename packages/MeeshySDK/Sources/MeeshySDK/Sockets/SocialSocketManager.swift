@@ -4,114 +4,114 @@ import Combine
 
 // MARK: - Socket.IO Event Data Models
 
-struct SocketPostCreatedData: Decodable {
-    let post: APIPost
+public struct SocketPostCreatedData: Decodable {
+    public let post: APIPost
 }
 
-struct SocketPostUpdatedData: Decodable {
-    let post: APIPost
+public struct SocketPostUpdatedData: Decodable {
+    public let post: APIPost
 }
 
-struct SocketPostDeletedData: Decodable {
-    let postId: String
-    let authorId: String
+public struct SocketPostDeletedData: Decodable {
+    public let postId: String
+    public let authorId: String
 }
 
-struct SocketPostLikedData: Decodable {
-    let postId: String
-    let userId: String
-    let emoji: String
-    let likeCount: Int
-    let reactionSummary: [String: Int]
+public struct SocketPostLikedData: Decodable {
+    public let postId: String
+    public let userId: String
+    public let emoji: String
+    public let likeCount: Int
+    public let reactionSummary: [String: Int]
 }
 
-struct SocketPostUnlikedData: Decodable {
-    let postId: String
-    let userId: String
-    let likeCount: Int
-    let reactionSummary: [String: Int]
+public struct SocketPostUnlikedData: Decodable {
+    public let postId: String
+    public let userId: String
+    public let likeCount: Int
+    public let reactionSummary: [String: Int]
 }
 
-struct SocketPostRepostedData: Decodable {
-    let originalPostId: String
-    let repost: APIPost
+public struct SocketPostRepostedData: Decodable {
+    public let originalPostId: String
+    public let repost: APIPost
 }
 
-struct SocketStoryCreatedData: Decodable {
-    let story: APIPost
+public struct SocketStoryCreatedData: Decodable {
+    public let story: APIPost
 }
 
-struct SocketStoryViewedData: Decodable {
-    let storyId: String
-    let viewerId: String
-    let viewerUsername: String
-    let viewCount: Int
+public struct SocketStoryViewedData: Decodable {
+    public let storyId: String
+    public let viewerId: String
+    public let viewerUsername: String
+    public let viewCount: Int
 }
 
-struct SocketStoryReactedData: Decodable {
-    let storyId: String
-    let userId: String
-    let emoji: String
+public struct SocketStoryReactedData: Decodable {
+    public let storyId: String
+    public let userId: String
+    public let emoji: String
 }
 
-struct SocketStatusCreatedData: Decodable {
-    let status: APIPost
+public struct SocketStatusCreatedData: Decodable {
+    public let status: APIPost
 }
 
-struct SocketStatusDeletedData: Decodable {
-    let statusId: String
-    let authorId: String
+public struct SocketStatusDeletedData: Decodable {
+    public let statusId: String
+    public let authorId: String
 }
 
-struct SocketStatusReactedData: Decodable {
-    let statusId: String
-    let userId: String
-    let emoji: String
+public struct SocketStatusReactedData: Decodable {
+    public let statusId: String
+    public let userId: String
+    public let emoji: String
 }
 
-struct SocketCommentAddedData: Decodable {
-    let postId: String
-    let comment: APIPostComment
-    let commentCount: Int
+public struct SocketCommentAddedData: Decodable {
+    public let postId: String
+    public let comment: APIPostComment
+    public let commentCount: Int
 }
 
-struct SocketCommentDeletedData: Decodable {
-    let postId: String
-    let commentId: String
-    let commentCount: Int
+public struct SocketCommentDeletedData: Decodable {
+    public let postId: String
+    public let commentId: String
+    public let commentCount: Int
 }
 
-struct SocketCommentLikedData: Decodable {
-    let postId: String
-    let commentId: String
-    let userId: String
-    let likeCount: Int
+public struct SocketCommentLikedData: Decodable {
+    public let postId: String
+    public let commentId: String
+    public let userId: String
+    public let likeCount: Int
 }
 
 // MARK: - Social Socket Manager
 
-final class SocialSocketManager: ObservableObject {
-    static let shared = SocialSocketManager()
+public final class SocialSocketManager: ObservableObject {
+    public static let shared = SocialSocketManager()
 
     // Combine publishers for ViewModels to subscribe to
-    let postCreated = PassthroughSubject<APIPost, Never>()
-    let postUpdated = PassthroughSubject<APIPost, Never>()
-    let postDeleted = PassthroughSubject<String, Never>() // postId
-    let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
-    let postUnliked = PassthroughSubject<SocketPostUnlikedData, Never>()
-    let postReposted = PassthroughSubject<SocketPostRepostedData, Never>()
-    let storyCreated = PassthroughSubject<APIPost, Never>()
-    let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
-    let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
-    let statusCreated = PassthroughSubject<APIPost, Never>()
-    let statusDeleted = PassthroughSubject<String, Never>() // statusId
-    let statusUpdated = PassthroughSubject<APIPost, Never>()
-    let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
-    let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
-    let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
-    let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
+    public let postCreated = PassthroughSubject<APIPost, Never>()
+    public let postUpdated = PassthroughSubject<APIPost, Never>()
+    public let postDeleted = PassthroughSubject<String, Never>()
+    public let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
+    public let postUnliked = PassthroughSubject<SocketPostUnlikedData, Never>()
+    public let postReposted = PassthroughSubject<SocketPostRepostedData, Never>()
+    public let storyCreated = PassthroughSubject<APIPost, Never>()
+    public let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
+    public let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
+    public let statusCreated = PassthroughSubject<APIPost, Never>()
+    public let statusDeleted = PassthroughSubject<String, Never>()
+    public let statusUpdated = PassthroughSubject<APIPost, Never>()
+    public let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
+    public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
+    public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
+    public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
 
-    @Published var isConnected = false
+    @Published public var isConnected = false
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
@@ -132,7 +132,7 @@ final class SocialSocketManager: ObservableObject {
 
     // MARK: - Connection
 
-    func connect() {
+    public func connect() {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
@@ -157,7 +157,7 @@ final class SocialSocketManager: ObservableObject {
         socket?.connect()
     }
 
-    func disconnect() {
+    public func disconnect() {
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -166,11 +166,11 @@ final class SocialSocketManager: ObservableObject {
 
     // MARK: - Client Events
 
-    func subscribeFeed() {
+    public func subscribeFeed() {
         socket?.emit("feed:subscribe")
     }
 
-    func unsubscribeFeed() {
+    public func unsubscribeFeed() {
         socket?.emit("feed:unsubscribe")
     }
 

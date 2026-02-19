@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Scroll Offset Preference Key
 struct ScrollOffsetPreferenceKey: PreferenceKey {
@@ -851,7 +852,7 @@ struct ConversationPreviewView: View {
 
     // Sample messages for preview
     private var previewMessages: [Message] {
-        SampleData.sampleMessages(conversationId: conversation.id, contactColor: accentColor)
+        SampleData.messages(conversationId: conversation.id)
             .suffix(6)
             .reversed()
             .map { $0 }

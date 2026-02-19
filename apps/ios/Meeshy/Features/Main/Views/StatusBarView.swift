@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 struct StatusBarView: View {
     @ObservedObject var viewModel: StatusViewModel

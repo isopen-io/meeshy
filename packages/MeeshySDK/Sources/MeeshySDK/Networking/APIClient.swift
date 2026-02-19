@@ -2,42 +2,42 @@ import Foundation
 
 // MARK: - API Response Types
 
-struct APIResponse<T: Decodable>: Decodable {
-    let success: Bool
-    let data: T
-    let error: String?
+public struct APIResponse<T: Decodable>: Decodable {
+    public let success: Bool
+    public let data: T
+    public let error: String?
 }
 
-struct PaginatedAPIResponse<T: Decodable>: Decodable {
-    let success: Bool
-    let data: T
-    let pagination: CursorPagination?
-    let error: String?
+public struct PaginatedAPIResponse<T: Decodable>: Decodable {
+    public let success: Bool
+    public let data: T
+    public let pagination: CursorPagination?
+    public let error: String?
 }
 
-struct CursorPagination: Decodable {
-    let nextCursor: String?
-    let hasMore: Bool
-    let limit: Int
+public struct CursorPagination: Decodable {
+    public let nextCursor: String?
+    public let hasMore: Bool
+    public let limit: Int
 }
 
-struct OffsetPagination: Decodable {
-    let total: Int?
-    let hasMore: Bool
-    let limit: Int
-    let offset: Int
+public struct OffsetPagination: Decodable {
+    public let total: Int?
+    public let hasMore: Bool
+    public let limit: Int
+    public let offset: Int
 }
 
-struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
-    let success: Bool
-    let data: T
-    let pagination: OffsetPagination?
-    let error: String?
+public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
+    public let success: Bool
+    public let data: T
+    public let pagination: OffsetPagination?
+    public let error: String?
 }
 
 // MARK: - API Errors
 
-enum APIError: Error, LocalizedError {
+public enum APIError: Error, LocalizedError {
     case invalidURL
     case noData
     case decodingError(Error)
@@ -45,7 +45,7 @@ enum APIError: Error, LocalizedError {
     case networkError(Error)
     case unauthorized
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid URL"
         case .noData: return "No data received"
@@ -59,26 +59,18 @@ enum APIError: Error, LocalizedError {
 
 // MARK: - API Client
 
-final class APIClient {
-    static let shared = APIClient()
+public final class APIClient {
+    public static let shared = APIClient()
 
-    static let remoteBaseURL = "https://gate.meeshy.me/api/v1"
-    static let localBaseURL = "http://localhost:3000/api/v1"
-
-    var baseURL: String {
-        UserDefaults.standard.string(forKey: "meeshy_api_base_url") ?? Self.remoteBaseURL
-    }
-
-    /// Switch between remote and local gateway
-    func setUseLocalGateway(_ local: Bool) {
-        UserDefaults.standard.set(local ? Self.localBaseURL : Self.remoteBaseURL, forKey: "meeshy_api_base_url")
+    public var baseURL: String {
+        MeeshyConfig.shared.apiBaseURL
     }
 
     private let session: URLSession
     private let decoder: JSONDecoder
 
     // Auth token — set after login
-    var authToken: String? {
+    public var authToken: String? {
         get { UserDefaults.standard.string(forKey: "meeshy_auth_token") }
         set { UserDefaults.standard.set(newValue, forKey: "meeshy_auth_token") }
     }
@@ -93,11 +85,9 @@ final class APIClient {
         self.decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            // Try ISO 8601 with fractional seconds first
             let iso = ISO8601DateFormatter()
             iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             if let date = iso.date(from: dateStr) { return date }
-            // Fallback without fractional seconds
             iso.formatOptions = [.withInternetDateTime]
             if let date = iso.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
@@ -106,7 +96,7 @@ final class APIClient {
 
     // MARK: - Generic Request
 
-    func request<T: Decodable>(
+    public func request<T: Decodable>(
         endpoint: String,
         method: String = "GET",
         body: Data? = nil,
@@ -167,7 +157,7 @@ final class APIClient {
 
     // MARK: - Paginated Request (cursor-based)
 
-    func paginatedRequest<T: Decodable>(
+    public func paginatedRequest<T: Decodable>(
         endpoint: String,
         cursor: String? = nil,
         limit: Int = 20
@@ -176,16 +166,12 @@ final class APIClient {
         if let cursor {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
-
-        return try await request(
-            endpoint: endpoint,
-            queryItems: queryItems
-        )
+        return try await request(endpoint: endpoint, queryItems: queryItems)
     }
 
     // MARK: - Offset Paginated Request
 
-    func offsetPaginatedRequest<T: Decodable>(
+    public func offsetPaginatedRequest<T: Decodable>(
         endpoint: String,
         offset: Int = 0,
         limit: Int = 15
@@ -194,16 +180,12 @@ final class APIClient {
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "offset", value: "\(offset)"),
         ]
-
-        return try await request(
-            endpoint: endpoint,
-            queryItems: queryItems
-        )
+        return try await request(endpoint: endpoint, queryItems: queryItems)
     }
 
     // MARK: - POST with Encodable body
 
-    func post<T: Decodable, U: Encodable>(
+    public func post<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
@@ -213,7 +195,7 @@ final class APIClient {
 
     // MARK: - PUT with Encodable body
 
-    func put<T: Decodable, U: Encodable>(
+    public func put<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
@@ -223,7 +205,7 @@ final class APIClient {
 
     // MARK: - DELETE
 
-    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
+    public func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
         return try await request(endpoint: endpoint, method: "DELETE")
     }
 }
