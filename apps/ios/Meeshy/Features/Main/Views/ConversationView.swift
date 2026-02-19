@@ -95,7 +95,9 @@ struct ConversationView: View {
                         Color.clear.frame(height: 70)
 
                         ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
-                            ThemedMessageBubble(message: msg, contactColor: accentColor)
+                            let nextMsg = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
+                            let isLastInGroup = nextMsg == nil || nextMsg?.senderId != msg.senderId
+                            ThemedMessageBubble(message: msg, contactColor: accentColor, showAvatar: isLastInGroup)
                                 .id(msg.id)
                                 .transition(
                                     .asymmetric(
@@ -1160,7 +1162,7 @@ struct ThemedAvatarButton: View {
         }) {
             MeeshyAvatar(
                 name: name,
-                size: .medium,
+                mode: .conversationHeader,
                 accentColor: color,
                 secondaryColor: secondaryColor,
                 storyState: hasStoryRing ? .unread : .none
@@ -1221,7 +1223,9 @@ struct ThemedComposerButton: View {
 struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
+    var showAvatar: Bool = true
 
+    @State private var showProfileAlert = false
     @ObservedObject private var theme = ThemeManager.shared
     private let myColors = ["FF6B6B", "E91E63"]
 
@@ -1248,8 +1252,28 @@ struct ThemedMessageBubble: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 8) {
             if message.isMe { Spacer(minLength: 50) }
+
+            // Sender avatar (non-me messages only, last in group)
+            if !message.isMe {
+                if showAvatar {
+                    MeeshyAvatar(
+                        name: message.senderName ?? "?",
+                        mode: .messageBubble,
+                        accentColor: message.senderColor ?? contactColor,
+                        avatarURL: message.senderAvatarURL,
+                        onViewProfile: { showProfileAlert = true },
+                        contextMenuItems: [
+                            AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                showProfileAlert = true
+                            }
+                        ]
+                    )
+                } else {
+                    Color.clear.frame(width: 32, height: 32)
+                }
+            }
 
             VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
                 // Reply reference
@@ -1287,6 +1311,11 @@ struct ThemedMessageBubble: View {
             }
 
             if !message.isMe { Spacer(minLength: 50) }
+        }
+        .alert("Navigation", isPresented: $showProfileAlert) {
+            Button("OK") {}
+        } message: {
+            Text("Naviguer vers le profil de \(message.senderName ?? "?")")
         }
     }
 

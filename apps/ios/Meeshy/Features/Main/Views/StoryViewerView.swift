@@ -33,6 +33,7 @@ struct StoryViewerView: View {
 
     @State private var showFullEmojiPicker = false
     @State private var showTextEmojiPicker = false
+    @State private var showProfileAlert = false
     @State private var emojiToInject = ""
     @StateObject private var keyboard = KeyboardObserver()
 
@@ -614,27 +615,27 @@ struct StoryViewerView: View {
     private var storyHeader: some View {
         HStack(spacing: 12) {
             if let group = currentGroup {
-                // Simple avatar — no ring needed, we're already inside the story
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: group.avatarColor), Color(hex: group.avatarColor).opacity(0.65)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text(String(group.username.prefix(1)).uppercased())
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    )
-                    .shadow(color: Color(hex: group.avatarColor).opacity(0.3), radius: 4, y: 2)
+                // Avatar with tap/longpress interactions
+                MeeshyAvatar(
+                    name: group.username,
+                    mode: .custom(32),
+                    accentColor: group.avatarColor,
+                    onViewProfile: { showProfileAlert = true },
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                            showProfileAlert = true
+                        }
+                    ]
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.username)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            showProfileAlert = true
+                        }
 
                     if let story = currentStory {
                         HStack(spacing: 4) {
@@ -667,6 +668,11 @@ struct StoryViewerView: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(Color.white.opacity(0.2)))
             }
+        }
+        .alert("Navigation", isPresented: $showProfileAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers le profil de \(currentGroup?.username ?? "")")
         }
     }
 

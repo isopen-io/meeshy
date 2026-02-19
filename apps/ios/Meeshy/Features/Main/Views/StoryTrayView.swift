@@ -7,6 +7,7 @@ struct StoryTrayView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var addButtonGlow = false
+    @State private var profileAlertName: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +18,14 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 108)
+        .alert("Navigation", isPresented: Binding(
+            get: { profileAlertName != nil },
+            set: { if !$0 { profileAlertName = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        }
     }
 
     // MARK: - Story Scroll View
@@ -97,9 +106,17 @@ struct StoryTrayView: View {
             ZStack {
                 MeeshyAvatar(
                     name: group.username,
-                    size: .xlarge,
+                    mode: .storyTray,
                     accentColor: group.avatarColor,
-                    storyState: group.hasUnviewed ? .unread : .read
+                    storyState: group.hasUnviewed ? .unread : .read,
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                            onViewStory(index)
+                        },
+                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                            profileAlertName = group.username
+                        }
+                    ]
                 )
 
                 // Story count dots (multiple stories indicator)

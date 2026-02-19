@@ -1,13 +1,81 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Avatar Size
+// MARK: - Avatar Mode
+
+enum AvatarMode {
+    case conversationList    // 52pt — ring, mood, online, all interactions
+    case storyTray           // 58pt — ring animé, tap
+    case conversationHeader  // 44pt — pas de story ring, tap
+    case messageBubble       // 32pt — ring si applicable, tap
+    case callNotification(CGFloat) // Custom — aucune interaction
+    case custom(CGFloat)     // Taille libre
+
+    var size: CGFloat {
+        switch self {
+        case .conversationList: return 52
+        case .storyTray: return 58
+        case .conversationHeader: return 44
+        case .messageBubble: return 32
+        case .callNotification(let v): return v
+        case .custom(let v): return v
+        }
+    }
+
+    var showsStoryRing: Bool {
+        switch self {
+        case .conversationList, .storyTray, .messageBubble, .custom: return true
+        case .conversationHeader, .callNotification: return false
+        }
+    }
+
+    var showsMoodBadge: Bool {
+        switch self {
+        case .conversationList, .conversationHeader, .messageBubble: return true
+        default: return false
+        }
+    }
+
+    var showsOnlineDot: Bool {
+        switch self {
+        case .callNotification: return false
+        default: return true
+        }
+    }
+
+    var isTappable: Bool {
+        switch self {
+        case .callNotification: return false
+        default: return true
+        }
+    }
+
+    var shadowRadius: CGFloat {
+        switch self {
+        case .messageBubble: return 4
+        default: return 8
+        }
+    }
+
+    var shadowY: CGFloat {
+        switch self {
+        case .messageBubble: return 2
+        default: return 4
+        }
+    }
+
+    // Derived sizing
+    var ringSize: CGFloat { size + 6 }
+    var initialFont: CGFloat { size * 0.38 }
+    var ringWidth: CGFloat { size <= 32 ? 1.5 : 2.5 }
+    var badgeSize: CGFloat { size * 0.42 }
+    var onlineDotSize: CGFloat { size * 0.26 }
+}
+
+// MARK: - Legacy AvatarSize (backward compat)
 
 enum AvatarSize {
-    case small      // 32pt — message bubbles, story viewer header
-    case medium     // 44pt — conv header, feed posts, composer
-    case large      // 52pt — conversation list rows
-    case xlarge     // 58pt — story tray
+    case small, medium, large, xlarge
     case custom(CGFloat)
 
     var value: CGFloat {
@@ -30,9 +98,17 @@ enum AvatarSize {
 // MARK: - Story Ring State
 
 enum StoryRingState {
-    case none
-    case unread
-    case read
+    case none, unread, read
+}
+
+// MARK: - Avatar Context Menu Item
+
+struct AvatarContextMenuItem: Identifiable {
+    let id = UUID()
+    let label: String
+    let icon: String
+    var role: ButtonRole? = nil
+    let action: () -> Void
 }
 
 // MARK: - MeeshyAvatar
@@ -40,7 +116,7 @@ enum StoryRingState {
 struct MeeshyAvatar: View {
     // Required
     let name: String
-    let size: AvatarSize
+    let mode: AvatarMode
 
     // Colors
     var accentColor: String = ""
@@ -52,14 +128,64 @@ struct MeeshyAvatar: View {
 
     // Mood
     var moodEmoji: String? = nil
-    var onMoodTap: ((CGPoint) -> Void)? = nil
 
     // Online
     var showOnlineIndicator: Bool = false
+
+    // Smart tap callbacks (default behavior)
+    // Priority: onTap (explicit override) > onViewStory (if story unread) > onViewProfile
+    var onTap: (() -> Void)? = nil
+    var onViewProfile: (() -> Void)? = nil
+    var onViewStory: (() -> Void)? = nil
+
+    // Badge callbacks
+    var onMoodTap: ((CGPoint) -> Void)? = nil
     var onOnlineTap: (() -> Void)? = nil
+
+    // Context menu (long press) — available on ALL tappable modes
+    var contextMenuItems: [AvatarContextMenuItem]? = nil
+
+    // Legacy init support (size: AvatarSize)
+    init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, showOnlineIndicator: Bool = false, onOnlineTap: (() -> Void)? = nil) {
+        self.name = name
+        switch size {
+        case .small: self.mode = .messageBubble
+        case .medium: self.mode = .conversationHeader
+        case .large: self.mode = .conversationList
+        case .xlarge: self.mode = .storyTray
+        case .custom(let v): self.mode = .custom(v)
+        }
+        self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
+        self.avatarURL = avatarURL
+        self.storyState = storyState
+        self.moodEmoji = moodEmoji
+        self.onMoodTap = onMoodTap
+        self.showOnlineIndicator = showOnlineIndicator
+        self.onOnlineTap = onOnlineTap
+    }
+
+    // Primary init (mode: AvatarMode)
+    init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, showOnlineIndicator: Bool = false, onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil, onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
+        self.name = name
+        self.mode = mode
+        self.accentColor = accentColor
+        self.secondaryColor = secondaryColor
+        self.avatarURL = avatarURL
+        self.storyState = storyState
+        self.moodEmoji = moodEmoji
+        self.showOnlineIndicator = showOnlineIndicator
+        self.onTap = onTap
+        self.onViewProfile = onViewProfile
+        self.onViewStory = onViewStory
+        self.onMoodTap = onMoodTap
+        self.onOnlineTap = onOnlineTap
+        self.contextMenuItems = contextMenuItems
+    }
 
     // Private
     @State private var ringRotation: Double = 0
+    @State private var tapScale: CGFloat = 1.0
 
     private var resolvedAccent: String {
         accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor
@@ -69,24 +195,70 @@ struct MeeshyAvatar: View {
         secondaryColor ?? resolvedAccent
     }
 
-    /// When no secondaryColor is provided, use accent with lower opacity for gradient
     private var secondaryGradientColor: Color {
         secondaryColor != nil ? Color(hex: resolvedSecondary) : Color(hex: resolvedAccent).opacity(0.6)
     }
 
-    var body: some View {
-        ZStack {
-            // Story ring
-            storyRing
+    /// Effective story state — modes that don't show rings force .none
+    private var effectiveStoryState: StoryRingState {
+        mode.showsStoryRing ? storyState : .none
+    }
 
-            // Avatar body
+    /// Effective mood emoji — only shown in modes that support it
+    private var effectiveMoodEmoji: String? {
+        mode.showsMoodBadge ? moodEmoji : nil
+    }
+
+    /// Effective online indicator
+    private var effectiveOnline: Bool {
+        mode.showsOnlineDot && showOnlineIndicator
+    }
+
+    /// Whether this avatar has any tap handler configured
+    private var hasTapHandler: Bool {
+        mode.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
+    }
+
+    /// Whether this avatar has context menu items
+    private var hasContextMenu: Bool {
+        mode.isTappable && !(contextMenuItems ?? []).isEmpty
+    }
+
+    // MARK: - Tap Logic
+
+    private func handleTap() {
+        HapticFeedback.light()
+
+        // 1. Explicit override — onTap takes full control
+        if let onTap {
+            onTap()
+            return
+        }
+
+        // 2. Story unread + handler available → open story
+        if storyState == .unread, let onViewStory {
+            onViewStory()
+            return
+        }
+
+        // 3. Default → view profile
+        if let onViewProfile {
+            onViewProfile()
+            return
+        }
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        let visual = ZStack {
+            storyRing
             avatarBody
 
-            // Story count / unread glow
-            if storyState == .unread {
+            if effectiveStoryState == .unread {
                 Circle()
                     .fill(Color(hex: resolvedAccent).opacity(0.2))
-                    .frame(width: size.value + 20, height: size.value + 20)
+                    .frame(width: mode.size + 20, height: mode.size + 20)
                     .blur(radius: 10)
                     .allowsHitTesting(false)
             }
@@ -94,12 +266,45 @@ struct MeeshyAvatar: View {
         .overlay(alignment: .bottomTrailing) {
             badge
         }
+        .scaleEffect(tapScale)
         .onAppear {
-            if storyState == .unread {
+            if effectiveStoryState == .unread {
                 withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
                     ringRotation = 360
                 }
             }
+        }
+
+        // Layer 1: Apply tap gesture if any handler exists
+        let tappable = Group {
+            if hasTapHandler {
+                visual
+                    .contentShape(Circle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
+                        }
+                        handleTap()
+                    }
+            } else {
+                visual
+            }
+        }
+
+        // Layer 2: Apply context menu if items exist
+        if hasContextMenu {
+            tappable.contextMenu {
+                ForEach(contextMenuItems!) { item in
+                    Button(role: item.role) {
+                        item.action()
+                    } label: {
+                        Label(item.label, systemImage: item.icon)
+                    }
+                }
+            }
+        } else {
+            tappable
         }
     }
 
@@ -111,10 +316,10 @@ struct MeeshyAvatar: View {
             CachedAvatarImage(
                 urlString: url,
                 name: name,
-                size: size.value,
+                size: mode.size,
                 accentColor: resolvedAccent
             )
-            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: 8, y: 4)
+            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: mode.shadowRadius, y: mode.shadowY)
         } else {
             ZStack {
                 Circle()
@@ -125,13 +330,13 @@ struct MeeshyAvatar: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: size.value, height: size.value)
+                    .frame(width: mode.size, height: mode.size)
 
                 Text(initials)
-                    .font(.system(size: size.initialFont, weight: .bold, design: .rounded))
+                    .font(.system(size: mode.initialFont, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
-            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: 8, y: 4)
+            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: mode.shadowRadius, y: mode.shadowY)
         }
     }
 
@@ -139,7 +344,7 @@ struct MeeshyAvatar: View {
 
     @ViewBuilder
     private var storyRing: some View {
-        switch storyState {
+        switch effectiveStoryState {
         case .unread:
             Circle()
                 .stroke(
@@ -157,17 +362,17 @@ struct MeeshyAvatar: View {
                         startAngle: .degrees(ringRotation),
                         endAngle: .degrees(ringRotation + 360)
                     ),
-                    lineWidth: size.ringWidth
+                    lineWidth: mode.ringWidth
                 )
-                .frame(width: size.ringSize, height: size.ringSize)
+                .frame(width: mode.ringSize, height: mode.ringSize)
 
         case .read:
             Circle()
                 .stroke(
                     Color(hex: resolvedAccent).opacity(0.3),
-                    lineWidth: size.ringWidth
+                    lineWidth: mode.ringWidth
                 )
-                .frame(width: size.ringSize, height: size.ringSize)
+                .frame(width: mode.ringSize, height: mode.ringSize)
 
         case .none:
             EmptyView()
@@ -178,9 +383,9 @@ struct MeeshyAvatar: View {
 
     @ViewBuilder
     private var badge: some View {
-        if let emoji = moodEmoji, !emoji.isEmpty {
+        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
             moodBadge(emoji: emoji)
-        } else if showOnlineIndicator {
+        } else if effectiveOnline {
             onlineDot
         }
     }
@@ -188,7 +393,7 @@ struct MeeshyAvatar: View {
     private func moodBadge(emoji: String) -> some View {
         GeometryReader { geo in
             Text(emoji)
-                .font(.system(size: size.badgeSize * 0.65))
+                .font(.system(size: mode.badgeSize * 0.65))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Circle())
                 .onTapGesture {
@@ -197,7 +402,7 @@ struct MeeshyAvatar: View {
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
                 }
         }
-        .frame(width: size.badgeSize, height: size.badgeSize)
+        .frame(width: mode.badgeSize, height: mode.badgeSize)
         .pulse(intensity: 0.15)
     }
 
@@ -206,7 +411,7 @@ struct MeeshyAvatar: View {
     private var onlineDot: some View {
         Circle()
             .fill(Color(hex: "2ECC71"))
-            .frame(width: size.onlineDotSize, height: size.onlineDotSize)
+            .frame(width: mode.onlineDotSize, height: mode.onlineDotSize)
             .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
             .onTapGesture {
                 HapticFeedback.light()
@@ -227,4 +432,3 @@ struct MeeshyAvatar: View {
         return parts.isEmpty ? String(name.prefix(1)).uppercased() : parts
     }
 }
-

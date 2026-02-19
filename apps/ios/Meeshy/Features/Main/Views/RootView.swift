@@ -619,6 +619,7 @@ struct ThemedFeedComposer: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showAttachmentMenu = false
+    @State private var showProfileAlert = false
 
     // Attachment options (without mic - mic is the toggle button when expanded)
     private let attachmentOptions: [(icon: String, color: String)] = [
@@ -638,10 +639,16 @@ struct ThemedFeedComposer: View {
             HStack(alignment: .top, spacing: 12) {
                 // Avatar
                 MeeshyAvatar(
-                    name: authManager.currentUser?.username ?? "M",
-                    size: .custom(40),
+                    name: getUserDisplayName(authManager.currentUser, fallback: "M"),
+                    mode: .custom(40),
                     accentColor: "FF6B6B",
-                    secondaryColor: "4ECDC4"
+                    secondaryColor: "4ECDC4",
+                    onViewProfile: { showProfileAlert = true },
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Mon profil", icon: "person.fill") {
+                            showProfileAlert = true
+                        }
+                    ]
                 )
 
                 // Multi-line text input
@@ -797,6 +804,11 @@ struct ThemedFeedComposer: View {
                     showAttachmentMenu = false
                 }
             }
+        }
+        .alert("Navigation", isPresented: $showProfileAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers mon profil")
         }
     }
 }

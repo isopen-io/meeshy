@@ -75,6 +75,7 @@ struct ConversationListView: View {
     @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
+    @State private var profileAlertName: String? = nil
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
@@ -200,8 +201,11 @@ struct ConversationListView: View {
             conversation: conversation,
             availableWidth: rowWidth,
             isDragging: draggingConversation?.id == conversation.id,
-            onAvatarTap: {
-                handleAvatarTap(conversation)
+            onViewStory: {
+                handleStoryView(conversation)
+            },
+            onViewProfile: {
+                handleProfileView(conversation)
             },
             onMoodBadgeTap: { anchor in
                 handleMoodBadgeTap(conversation, at: anchor)
@@ -415,29 +419,35 @@ struct ConversationListView: View {
                 .zIndex(200)
             }
         }
+        .alert("Navigation", isPresented: Binding(
+            get: { profileAlertName != nil },
+            set: { if !$0 { profileAlertName = nil } }
+        )) {
+            Button("OK") { profileAlertName = nil }
+        } message: {
+            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        }
     }
 
-    // MARK: - Handle Avatar Tap (opens stories)
-    private func handleAvatarTap(_ conversation: Conversation) {
+    // MARK: - Handle Story View
+    private func handleStoryView(_ conversation: Conversation) {
         guard conversation.type == .direct else { return }
 
-        // 1. Check for stories by participantUserId
         if let userId = conversation.participantUserId,
            let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-            HapticFeedback.light()
-            onStoryViewRequest?(groupIndex, false)  // fromTray = false → single group
+            onStoryViewRequest?(groupIndex, false)
             return
         }
 
-        // 2. Fallback: match by conversation name == group username
         if let groupIndex = storyViewModel.storyGroups.firstIndex(where: { $0.username == conversation.name }) {
-            HapticFeedback.light()
-            onStoryViewRequest?(groupIndex, false)  // fromTray = false → single group
+            onStoryViewRequest?(groupIndex, false)
             return
         }
+    }
 
-        // 3. No stories — just haptic
-        HapticFeedback.light()
+    // MARK: - Handle Profile View
+    private func handleProfileView(_ conversation: Conversation) {
+        profileAlertName = conversation.name
     }
 
     // MARK: - Handle Mood Badge Tap (opens status bubble)
@@ -1011,7 +1021,8 @@ struct ThemedConversationRow: View {
     let conversation: Conversation
     var availableWidth: CGFloat = 200 // Default width for tags calculation
     var isDragging: Bool = false
-    var onAvatarTap: (() -> Void)? = nil
+    var onViewStory: (() -> Void)? = nil
+    var onViewProfile: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -1169,56 +1180,49 @@ struct ThemedConversationRow: View {
         return .none
     }
 
+    private var avatarContextMenuItems: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if hasStoryRing {
+            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                onViewStory?()
+            })
+        }
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+            onViewProfile?()
+        })
+        if conversation.type == .direct {
+            items.append(AvatarContextMenuItem(label: "Infos utilisateur", icon: "info.circle.fill") {
+                onViewProfile?()
+            })
+        }
+        return items
+    }
+
     private var avatarView: some View {
         ZStack {
-            Button {
-                onAvatarTap?()
-            } label: {
-                MeeshyAvatar(
-                    name: conversation.name,
-                    size: .large,
-                    accentColor: accentColor,
-                    secondaryColor: conversation.colorPalette.secondary,
-                    storyState: avatarStoryState,
-                    moodEmoji: moodStatus?.moodEmoji,
-                    onMoodTap: onMoodBadgeTap,
-                    showOnlineIndicator: conversation.type == .direct && moodStatus == nil,
-                    onOnlineTap: {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            showLastSeenTooltip = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                showLastSeenTooltip = false
-                            }
+            MeeshyAvatar(
+                name: conversation.name,
+                mode: .conversationList,
+                accentColor: accentColor,
+                secondaryColor: conversation.colorPalette.secondary,
+                storyState: avatarStoryState,
+                moodEmoji: moodStatus?.moodEmoji,
+                showOnlineIndicator: conversation.type == .direct && moodStatus == nil,
+                onViewProfile: onViewProfile,
+                onViewStory: onViewStory,
+                onMoodTap: onMoodBadgeTap,
+                onOnlineTap: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showLastSeenTooltip = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showLastSeenTooltip = false
                         }
                     }
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .contextMenu {
-                if hasStoryRing {
-                    Button {
-                        onAvatarTap?()
-                    } label: {
-                        Label("Voir les stories", systemImage: "play.circle.fill")
-                    }
-                }
-
-                Button {
-                    HapticFeedback.light()
-                } label: {
-                    Label("Voir le profil", systemImage: "person.fill")
-                }
-
-                if conversation.type == .direct {
-                    Button {
-                        HapticFeedback.light()
-                    } label: {
-                        Label("Infos utilisateur", systemImage: "info.circle.fill")
-                    }
-                }
-            }
+                },
+                contextMenuItems: avatarContextMenuItems
+            )
 
             // Last seen tooltip
             if showLastSeenTooltip, let text = conversation.lastSeenText {

@@ -910,6 +910,7 @@ struct FeedPostCard: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
     @State private var showCommentsSheet = false
+    @State private var profileAlertName: String?
 
     private var accentColor: String { post.authorColor }
 
@@ -958,6 +959,14 @@ struct FeedPostCard: View {
         .sheet(isPresented: $showCommentsSheet) {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
+        .alert("Navigation", isPresented: Binding(
+            get: { profileAlertName != nil },
+            set: { if !$0 { profileAlertName = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        }
     }
 
     // MARK: - Author Header
@@ -966,8 +975,14 @@ struct FeedPostCard: View {
             // Avatar
             MeeshyAvatar(
                 name: post.author,
-                size: .medium,
-                accentColor: accentColor
+                mode: .custom(44),
+                accentColor: accentColor,
+                onViewProfile: { profileAlertName = post.author },
+                contextMenuItems: [
+                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        profileAlertName = post.author
+                    }
+                ]
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -1570,14 +1585,17 @@ struct FeedPostCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 10) {
                 // Avatar
-                Circle()
-                    .fill(Color(hex: comment.authorColor))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text(String(comment.author.prefix(1)))
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                MeeshyAvatar(
+                    name: comment.author,
+                    mode: .messageBubble,
+                    accentColor: comment.authorColor,
+                    onViewProfile: { profileAlertName = comment.author },
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                            profileAlertName = comment.author
+                        }
+                    ]
+                )
 
                 VStack(alignment: .leading, spacing: 4) {
                     // Author name
@@ -1659,6 +1677,7 @@ struct CommentsSheetView: View {
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
     @State private var commentBounce: Bool = false
+    @State private var profileAlertName: String?
 
     var body: some View {
         NavigationStack {
@@ -1720,6 +1739,14 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
+        .alert("Navigation", isPresented: Binding(
+            get: { profileAlertName != nil },
+            set: { if !$0 { profileAlertName = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        }
     }
 
     // MARK: - Post Preview
@@ -1727,14 +1754,17 @@ struct CommentsSheetView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Author
             HStack(spacing: 10) {
-                Circle()
-                    .fill(Color(hex: post.authorColor))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(post.author.prefix(1)))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                MeeshyAvatar(
+                    name: post.author,
+                    mode: .custom(40),
+                    accentColor: post.authorColor,
+                    onViewProfile: { profileAlertName = post.author },
+                    contextMenuItems: [
+                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                            profileAlertName = post.author
+                        }
+                    ]
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
@@ -1941,18 +1971,22 @@ struct CommentRowView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
+    @State private var showProfileAlert = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             // Avatar
-            Circle()
-                .fill(Color(hex: comment.authorColor))
-                .frame(width: 36, height: 36)
-                .overlay(
-                    Text(String(comment.author.prefix(1)))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            MeeshyAvatar(
+                name: comment.author,
+                mode: .custom(36),
+                accentColor: comment.authorColor,
+                onViewProfile: { showProfileAlert = true },
+                contextMenuItems: [
+                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        showProfileAlert = true
+                    }
+                ]
+            )
 
             VStack(alignment: .leading, spacing: 6) {
                 // Author and time
@@ -1960,6 +1994,10 @@ struct CommentRowView: View {
                     Text(comment.author)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            showProfileAlert = true
+                        }
 
                     Text("\u{00B7}")
                         .foregroundColor(theme.textMuted)
@@ -2029,6 +2067,11 @@ struct CommentRowView: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+        .alert("Navigation", isPresented: $showProfileAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Naviguer vers le profil de \(comment.author)")
+        }
     }
 
     private func timeAgo(from date: Date) -> String {

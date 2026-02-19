@@ -36,6 +36,7 @@
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
 		AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF02 /* CachedAsyncImage.swift */; };
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
+		AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF04 /* UserDisplayName.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
@@ -75,6 +76,7 @@
 		FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF02 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF03 /* MeeshyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAvatar.swift; sourceTree = "<group>"; };
+		AA66BB77CC880001FF04 /* UserDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDisplayName.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,6 +98,7 @@
 				97D79006802F73CC53F1D675 /* AnimatedLogoView.swift */,
 				AA66BB77CC880001FF02 /* CachedAsyncImage.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
+				AA66BB77CC880001FF04 /* UserDisplayName.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
 				FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
@@ -298,6 +301,7 @@
 				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,
 				AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
+				AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
