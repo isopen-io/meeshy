@@ -31,6 +31,7 @@
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
 		DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */; };
+		EE88FF99AA00BB11CC220001 /* EmojiPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */; };
 		DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */; };
 		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
@@ -72,6 +73,7 @@
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500BB /* EmojiReactionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiReactionPicker.swift; sourceTree = "<group>"; };
+		EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 		EE44FF55AA66BB77CC880033 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 				EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */,
 				C83758F8E8BD422CF1E9551E /* ConversationListView.swift */,
 				60EE19EAAF10B595D04E99F8 /* ConversationView.swift */,
+				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
 				EE44FF55AA66BB77CC880033 /* LoginView.swift */,
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
@@ -307,6 +310,7 @@
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
 				DD22EE33FF44AA55BB6600BB /* EmojiReactionPicker.swift in Sources */,
+				EE88FF99AA00BB11CC220001 /* EmojiPickerSheet.swift in Sources */,
 				DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */,
 				EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */,
 				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,

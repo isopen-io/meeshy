@@ -187,6 +187,43 @@ class ConversationViewModel: ObservableObject {
         isSending = false
     }
 
+    // MARK: - Toggle Reaction
+
+    func toggleReaction(messageId: String, emoji: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+
+        let userId = currentUserId
+        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.userId == userId }
+
+        if alreadyReacted {
+            // Optimistic remove
+            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.userId == userId }
+            // API call
+            Task {
+                let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
+                let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
+                    endpoint: "/reactions/\(messageId)/\(encoded)",
+                    method: "DELETE"
+                )
+            }
+        } else {
+            // Optimistic add
+            let reaction = Reaction(messageId: messageId, userId: userId, emoji: emoji)
+            messages[idx].reactions.append(reaction)
+            // API call
+            Task {
+                struct AddReactionBody: Encodable {
+                    let messageId: String
+                    let emoji: String
+                }
+                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                    endpoint: "/reactions",
+                    body: AddReactionBody(messageId: messageId, emoji: emoji)
+                )
+            }
+        }
+    }
+
     // MARK: - Socket Subscriptions
 
     private func subscribeToSocket() {

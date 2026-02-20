@@ -42,6 +42,10 @@ struct ConversationView: View {
     @State private var showStoryViewerFromHeader = false
     @State private var storyGroupIndexForHeader = 0
 
+    // Reaction bar state
+    @State private var quickReactionMessageId: String? = nil
+    @State private var showEmojiPickerSheet = false
+
     // Scroll state
     @State private var isNearBottom: Bool = true
     @State private var unreadBadgeCount: Int = 0
@@ -213,20 +217,153 @@ struct ConversationView: View {
         let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
         let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
         let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId ?? "")
-        ThemedMessageBubble(
-            message: msg,
-            contactColor: accentColor,
-            showAvatar: !isDirect && isLastInGroup,
-            presenceState: bubblePresence
-        )
-            .id(msg.id)
-            .transition(
-                .asymmetric(
-                    insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
-                    removal: .opacity
-                )
+
+        VStack(spacing: 0) {
+            // Quick reaction bar + action menu (above the bubble)
+            if quickReactionMessageId == msg.id {
+                quickReactionBar(for: msg.id)
+                    .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
+                    .padding(.bottom, 6)
+            }
+
+            ThemedMessageBubble(
+                message: msg,
+                contactColor: accentColor,
+                showAvatar: !isDirect && isLastInGroup,
+                presenceState: bubblePresence,
+                onAddReaction: { messageId in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        quickReactionMessageId = messageId
+                    }
+                    HapticFeedback.medium()
+                }
             )
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+            .onLongPressGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    quickReactionMessageId = msg.id
+                }
+                HapticFeedback.medium()
+            }
+        }
+        .id(msg.id)
+        .transition(
+            .asymmetric(
+                insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
+                removal: .opacity
+            )
+        )
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+    }
+
+    // MARK: - Quick Reaction Bar + Actions
+
+    private let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
+
+    private func quickReactionBar(for messageId: String) -> some View {
+        VStack(spacing: 8) {
+            // Emoji strip
+            HStack(spacing: 6) {
+                ForEach(quickEmojis, id: \.self) { emoji in
+                    Button {
+                        viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            quickReactionMessageId = nil
+                        }
+                    } label: {
+                        Text(emoji)
+                            .font(.system(size: 24))
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(EmojiScaleButtonStyle())
+                }
+
+                // (+) button for full picker
+                Button {
+                    showEmojiPickerSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Color(hex: accentColor))
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(Color(hex: accentColor).opacity(0.15))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
+                    )
+                    .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 12, y: 4)
+            )
+
+            // Action buttons row
+            HStack(spacing: 8) {
+                messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
+                    // TODO: wire reply
+                    actionAlert = "Repondre"
+                    closeReactionBar()
+                }
+                messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
+                    if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                        UIPasteboard.general.string = msg.content
+                    }
+                    closeReactionBar()
+                }
+                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
+                    // TODO: wire forward
+                    actionAlert = "Transferer"
+                    closeReactionBar()
+                }
+                messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
+                    // TODO: wire delete
+                    actionAlert = "Supprimer"
+                    closeReactionBar()
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+            )
+        }
+    }
+
+    private func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Color(hex: color))
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 60, height: 44)
+        }
+    }
+
+    private func closeReactionBar() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            quickReactionMessageId = nil
+        }
     }
 
     // Dynamic height for bottom spacer based on composer state
@@ -426,7 +563,7 @@ struct ConversationView: View {
             // Options ladder
             optionsLadder
 
-            // Dismiss overlay
+            // Dismiss overlay (options menu)
             if showOptions {
                 Color.clear
                     .contentShape(Rectangle())
@@ -436,6 +573,16 @@ struct ConversationView: View {
                         }
                     }
                     .zIndex(99)
+            }
+
+            // Dismiss overlay (reaction bar)
+            if quickReactionMessageId != nil {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        closeReactionBar()
+                    }
+                    .zIndex(10)
             }
 
             // Scroll-to-bottom button — visible whenever not at bottom
@@ -499,6 +646,19 @@ struct ConversationView: View {
             Button("OK") { actionAlert = nil }
         } message: {
             Text(actionAlert ?? "")
+        }
+        .sheet(isPresented: $showEmojiPickerSheet) {
+            EmojiPickerSheet(
+                quickReactions: quickEmojis,
+                onSelect: { emoji in
+                    if let messageId = quickReactionMessageId {
+                        viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                    }
+                    showEmojiPickerSheet = false
+                    closeReactionBar()
+                }
+            )
+            .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
     }
 
@@ -1506,6 +1666,7 @@ struct ThemedMessageBubble: View {
     let contactColor: String
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
+    var onAddReaction: ((String) -> Void)? = nil
 
     @State private var showProfileAlert = false
     @ObservedObject private var theme = ThemeManager.shared
@@ -1782,7 +1943,7 @@ struct ThemedMessageBubble: View {
         return HStack(spacing: 5) {
             // Add reaction button
             Button(action: {
-                // TODO: ouvrir emoji picker pour ce message
+                onAddReaction?(message.id)
             }) {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 12, weight: .medium))
