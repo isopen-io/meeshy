@@ -191,6 +191,9 @@ struct ConversationListView: View {
         ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
             conversationRow(for: conversation)
                 .staggeredAppear(index: index, baseDelay: 0.04)
+                .onAppear {
+                    triggerLoadMoreIfNeeded(conversation: conversation)
+                }
         }
     }
 
@@ -226,6 +229,15 @@ struct ConversationListView: View {
             draggingConversation = conversation
             HapticFeedback.medium()
             return NSItemProvider(object: conversation.id as NSString)
+        }
+    }
+
+    private func triggerLoadMoreIfNeeded(conversation: Conversation) {
+        let all = conversationViewModel.conversations
+        guard let idx = all.firstIndex(where: { $0.id == conversation.id }) else { return }
+        let threshold = max(0, all.count - 5)
+        if idx >= threshold {
+            Task { await conversationViewModel.loadMore() }
         }
     }
 
@@ -265,7 +277,19 @@ struct ConversationListView: View {
 
                     // Sectioned conversation list
                     sectionsContent
-                        .padding(.bottom, 280)
+
+                    // Loading more indicator
+                    if conversationViewModel.isLoadingMore {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .tint(Color(hex: "08D9D6"))
+                            Spacer()
+                        }
+                        .padding(.vertical, 16)
+                    }
+
+                    Color.clear.frame(height: 280)
                         .onChange(of: draggingConversation) { newValue in
                             if newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
