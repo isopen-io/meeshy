@@ -84,19 +84,6 @@ struct ConversationView: View {
         return ConversationSection.allSections.first { $0.id == sectionId }
     }
 
-    private var conversationTypeLabel: String {
-        switch conversation?.type {
-        case .direct: return "Direct"
-        case .group: return "Groupe"
-        case .public: return "Public"
-        case .global: return "Global"
-        case .community: return "Communauté"
-        case .channel: return "Channel"
-        case .bot: return "Bot"
-        case .none: return ""
-        }
-    }
-
     private var topActiveMembers: [ConversationActiveMember] {
         var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
         for msg in viewModel.messages where !msg.isMe {
@@ -715,80 +702,36 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Options Ladder (config button, unfolds below header band)
-    private var optionsLadder: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Spacer()
-                VStack(spacing: 10) {
-                    ThemedActionButton(icon: "gearshape.fill", color: accentColor, size: 36) {
-                        actionAlert = "Configuration conversation"
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-                    }
-                    .menuAnimation(showMenu: showOptions, delay: 0.06)
-                }
-            }
-            .padding(.trailing, 16)
-        }
-        .padding(.top, 58)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .zIndex(showOptions && !isTyping ? 200 : -1)
-        .allowsHitTesting(showOptions && !isTyping)
-    }
-
-    // MARK: - Conversation Header Band (thin strip — back arrow inside, full width)
+    // MARK: - Conversation Header Band (back + name/mood + search + avatars, tags below)
     private var conversationHeaderBand: some View {
-        HStack(spacing: 8) {
-            // Back arrow inside the band
-            Button {
-                HapticFeedback.light()
-                onBack()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
+        VStack(alignment: .leading, spacing: 4) {
+            // Top row: back arrow + name + mood + search + avatar(s)
+            HStack(spacing: 8) {
+                // Back arrow
+                Button {
+                    HapticFeedback.light()
+                    onBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 28, height: 28)
-            }
+                        .frame(width: 28, height: 28)
+                }
 
-            // Center: category + type badges, name
-            VStack(alignment: .leading, spacing: 2) {
+                // Conversation name (tap → config) + mood emoji
                 HStack(spacing: 4) {
-                    if let section = conversationSection {
-                        HStack(spacing: 2) {
-                            Image(systemName: section.icon)
-                                .font(.system(size: 8, weight: .bold))
-                            Text(section.name)
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color(hex: section.color).opacity(0.2)))
-                    }
-
-                    if !conversationTypeLabel.isEmpty {
-                        Text(conversationTypeLabel)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(hex: accentColor))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.2)))
-                    }
-
-                    if let conv = conversation {
-                        ForEach(conv.tags.prefix(2)) { tag in
-                            Text(tag.name)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color(hex: tag.color).opacity(0.12)))
-                        }
+                    Button {
+                        actionAlert = "Configuration conversation"
+                    } label: {
+                        Text(conversation?.name ?? "Conversation")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
                     }
 
                     if let mood = headerMoodEmoji {
@@ -797,100 +740,136 @@ struct ConversationView: View {
                     }
                 }
 
+                Spacer(minLength: 4)
+
+                // Search button
                 Button {
-                    actionAlert = "Configuration conversation"
+                    actionAlert = "Rechercher dans la conversation"
                 } label: {
-                    Text(conversation?.name ?? "Conversation")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle().fill(Color(hex: accentColor).opacity(0.15))
+                        )
+                }
+
+                // Participant avatar(s) — tap opens profile
+                if isDirect, let userId = conversation?.participantUserId {
+                    MeeshyAvatar(
+                        name: conversation?.name ?? "?",
+                        mode: .custom(36),
+                        accentColor: accentColor,
+                        avatarURL: conversation?.participantAvatarURL,
+                        storyState: memberStoryState(for: userId),
+                        presenceState: presenceManager.presenceState(for: userId),
+                        onTap: {
+                            HapticFeedback.light()
+                            actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                        },
+                        onViewStory: {
+                            if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                                storyGroupIndexForHeader = groupIndex
+                                showStoryViewerFromHeader = true
+                            }
+                        },
+                        contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
+                    )
+                } else if !topActiveMembers.isEmpty {
+                    HStack(spacing: -6) {
+                        ForEach(topActiveMembers) { member in
+                            MeeshyAvatar(
+                                name: member.name,
+                                mode: .custom(24),
+                                accentColor: member.color,
+                                avatarURL: member.avatarURL,
+                                storyState: memberStoryState(for: member.id),
+                                presenceState: presenceManager.presenceState(for: member.id),
+                                onTap: {
+                                    HapticFeedback.light()
+                                    actionAlert = "Profil de \(member.name)"
+                                },
+                                onViewStory: {
+                                    if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
+                                        storyGroupIndexForHeader = groupIndex
+                                        showStoryViewerFromHeader = true
+                                    }
+                                },
+                                contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
+                            )
+                        }
+                    }
+                } else if let conv = conversation, conv.memberCount > 2 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 9))
+                        Text("\(conv.memberCount)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white.opacity(0.5))
                 }
             }
 
-            Spacer(minLength: 4)
-
-            // Search button
-            Button {
-                actionAlert = "Rechercher dans la conversation"
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle().fill(Color(hex: accentColor).opacity(0.15))
-                    )
-            }
-
-            // Participant avatar(s) — tap opens profile
-            if isDirect, let userId = conversation?.participantUserId {
-                MeeshyAvatar(
-                    name: conversation?.name ?? "?",
-                    mode: .custom(36),
-                    accentColor: accentColor,
-                    avatarURL: conversation?.participantAvatarURL,
-                    storyState: memberStoryState(for: userId),
-                    presenceState: presenceManager.presenceState(for: userId),
-                    onTap: {
-                        HapticFeedback.light()
-                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                    },
-                    onViewStory: {
-                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                            storyGroupIndexForHeader = groupIndex
-                            showStoryViewerFromHeader = true
+            // Tags row: category + colored tags — horizontally scrollable
+            if conversationSection != nil || !(conversation?.tags.isEmpty ?? true) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        if let section = conversationSection {
+                            HStack(spacing: 3) {
+                                Image(systemName: section.icon)
+                                    .font(.system(size: 8, weight: .bold))
+                                Text(section.name)
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: section.color))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: section.color).opacity(0.2))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
+                                    )
+                            )
                         }
-                    },
-                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
-                )
-            } else if !topActiveMembers.isEmpty {
-                HStack(spacing: -6) {
-                    ForEach(topActiveMembers) { member in
-                        MeeshyAvatar(
-                            name: member.name,
-                            mode: .custom(24),
-                            accentColor: member.color,
-                            avatarURL: member.avatarURL,
-                            storyState: memberStoryState(for: member.id),
-                            presenceState: presenceManager.presenceState(for: member.id),
-                            onTap: {
-                                HapticFeedback.light()
-                                actionAlert = "Profil de \(member.name)"
-                            },
-                            onViewStory: {
-                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
-                                    storyGroupIndexForHeader = groupIndex
-                                    showStoryViewerFromHeader = true
-                                }
-                            },
-                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
-                        )
+
+                        if let conv = conversation {
+                            ForEach(conv.tags) { tag in
+                                Text(tag.name)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(hex: tag.color))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color(hex: tag.color).opacity(0.12))
+                                            .overlay(
+                                                Capsule()
+                                                    .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
+                                            )
+                                    )
+                            }
+                        }
                     }
                 }
-            } else if let conv = conversation, conv.memberCount > 2 {
-                HStack(spacing: 3) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 9))
-                    Text("\(conv.memberCount)")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .foregroundColor(.white.opacity(0.5))
+                .padding(.leading, 36)
             }
         }
         .padding(.leading, 10)
         .padding(.trailing, 12)
-        .padding(.vertical, 4)
-        .frame(height: 48)
+        .padding(.vertical, 6)
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: 22)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 22)
                         .stroke(
                             LinearGradient(
                                 colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
