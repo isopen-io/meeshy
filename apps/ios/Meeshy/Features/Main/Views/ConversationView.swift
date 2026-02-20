@@ -493,18 +493,16 @@ struct ConversationView: View {
                 }
             }
 
-            // Floating controls — 3 states: typing (compact), expanded (band), collapsed (avatar trigger)
+            // Floating controls — morphing header (avatar expands into band)
             VStack {
                 if isTyping {
-                    // Compact header while keyboard is active — back + avatar only
+                    // Compact header while keyboard is active
                     HStack(spacing: 8) {
                         ThemedBackButton(color: accentColor) {
                             HapticFeedback.light()
                             onBack()
                         }
-
                         Spacer()
-
                         ThemedAvatarButton(
                             name: conversation?.name ?? "?",
                             color: accentColor,
@@ -515,7 +513,7 @@ struct ConversationView: View {
                             presenceState: headerPresenceState
                         ) {
                             isTyping = false
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 showOptions = true
                             }
                         }
@@ -523,77 +521,105 @@ struct ConversationView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .transition(.opacity)
-                } else if showOptions {
-                    // Header band takes full width — back arrow + info + avatar(s) all inside
-                    conversationHeaderBand
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
-                        .padding(.horizontal, 8)
-                        .padding(.top, 8)
                 } else {
-                    // Collapsed: back button + spacer + avatar trigger
-                    HStack(spacing: 8) {
-                        ThemedBackButton(color: accentColor) {
-                            HapticFeedback.light()
-                            onBack()
-                        }
-
-                        Spacer()
-
-                        ThemedAvatarButton(
-                            name: conversation?.name ?? "?",
-                            color: accentColor,
-                            secondaryColor: secondaryColor,
-                            isExpanded: false,
-                            hasStoryRing: headerHasStoryRing,
-                            avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                            presenceState: headerPresenceState
-                        ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showOptions = true
+                    // Morphing container — back + expanding content + avatar
+                    VStack(alignment: .leading, spacing: showOptions ? 4 : 0) {
+                        HStack(spacing: 8) {
+                            // Back button — own circle collapses when band opens
+                            ThemedBackButton(color: accentColor, compactMode: showOptions) {
+                                HapticFeedback.light()
+                                onBack()
                             }
-                        }
-                        .contextMenu {
-                            if headerHasStoryRing {
-                                Button {
-                                    if let userId = conversation?.participantUserId,
-                                       let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                                        storyGroupIndexForHeader = groupIndex
-                                        showStoryViewerFromHeader = true
+
+                            // Band content — slides in from avatar side
+                            if showOptions {
+                                HStack(spacing: 4) {
+                                    Button {
+                                        actionAlert = "Configuration conversation"
+                                    } label: {
+                                        Text(conversation?.name ?? "Conversation")
+                                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
                                     }
-                                } label: {
-                                    Label("Voir les stories", systemImage: "play.circle.fill")
+                                    if let mood = headerMoodEmoji {
+                                        Text(mood)
+                                            .font(.system(size: 14))
+                                    }
                                 }
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+
+                                Spacer(minLength: 4)
+
+                                // Search
+                                Button {
+                                    actionAlert = "Rechercher dans la conversation"
+                                } label: {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 28, height: 28)
+                                        .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                                }
+                                .transition(.opacity)
+                            } else {
+                                Spacer()
                             }
-                            Button {
-                                actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                            } label: {
-                                Label("Voir le profil", systemImage: "person.fill")
-                            }
-                            Button {
-                                actionAlert = "Infos de la conversation"
-                            } label: {
-                                Label("Infos conversation", systemImage: "info.circle.fill")
-                            }
+
+                            // Avatar — always anchored right, morphs behavior
+                            headerAvatarView
+                        }
+
+                        // Tags row — only when expanded
+                        if showOptions {
+                            headerTagsRow
+                                .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, showOptions ? 10 : 0)
+                    .padding(.vertical, showOptions ? 6 : 0)
+                    .background(
+                        Group {
+                            if showOptions {
+                                RoundedRectangle(cornerRadius: 22)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 22)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                    .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                                    .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
+                            }
+                        }
+                    )
+                    .padding(.horizontal, showOptions ? 8 : 16)
                     .padding(.top, 8)
                 }
 
                 Spacer()
             }
             .zIndex(100)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
 
-            // Dismiss overlay (header band) — hidden when typing
+            // Dismiss tap zone (collapse band when tapping conversation area)
             if showOptions && !isTyping {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             showOptions = false
                         }
                     }
@@ -702,185 +728,152 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Conversation Header Band (back + name/mood + search + avatars, tags below)
-    private var conversationHeaderBand: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Top row: back arrow + name + mood + search + avatar(s)
-            HStack(spacing: 8) {
-                // Back arrow
-                Button {
-                    HapticFeedback.light()
-                    onBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 28, height: 28)
-                }
-
-                // Conversation name (tap → config) + mood emoji
-                HStack(spacing: 4) {
-                    Button {
-                        actionAlert = "Configuration conversation"
-                    } label: {
-                        Text(conversation?.name ?? "Conversation")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                    }
-
-                    if let mood = headerMoodEmoji {
-                        Text(mood)
-                            .font(.system(size: 14))
-                    }
-                }
-
-                Spacer(minLength: 4)
-
-                // Search button
-                Button {
-                    actionAlert = "Rechercher dans la conversation"
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle().fill(Color(hex: accentColor).opacity(0.15))
-                        )
-                }
-
-                // Participant avatar(s) — tap opens profile
-                if isDirect, let userId = conversation?.participantUserId {
-                    MeeshyAvatar(
-                        name: conversation?.name ?? "?",
-                        mode: .custom(36),
-                        accentColor: accentColor,
-                        avatarURL: conversation?.participantAvatarURL,
-                        storyState: memberStoryState(for: userId),
-                        presenceState: presenceManager.presenceState(for: userId),
-                        onTap: {
-                            HapticFeedback.light()
-                            actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                        },
-                        onViewStory: {
-                            if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                                storyGroupIndexForHeader = groupIndex
-                                showStoryViewerFromHeader = true
-                            }
-                        },
-                        contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
-                    )
-                } else if !topActiveMembers.isEmpty {
-                    HStack(spacing: -6) {
-                        ForEach(topActiveMembers) { member in
-                            MeeshyAvatar(
-                                name: member.name,
-                                mode: .custom(24),
-                                accentColor: member.color,
-                                avatarURL: member.avatarURL,
-                                storyState: memberStoryState(for: member.id),
-                                presenceState: presenceManager.presenceState(for: member.id),
-                                onTap: {
-                                    HapticFeedback.light()
-                                    actionAlert = "Profil de \(member.name)"
-                                },
-                                onViewStory: {
-                                    if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
-                                        storyGroupIndexForHeader = groupIndex
-                                        showStoryViewerFromHeader = true
-                                    }
-                                },
-                                contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
-                            )
+    // MARK: - Header Avatar (morphs from trigger to participant display)
+    @ViewBuilder
+    private var headerAvatarView: some View {
+        if showOptions {
+            // Expanded: participant avatar(s) with profile tap
+            if isDirect, let userId = conversation?.participantUserId {
+                MeeshyAvatar(
+                    name: conversation?.name ?? "?",
+                    mode: .custom(36),
+                    accentColor: accentColor,
+                    avatarURL: conversation?.participantAvatarURL,
+                    storyState: memberStoryState(for: userId),
+                    presenceState: presenceManager.presenceState(for: userId),
+                    onTap: {
+                        HapticFeedback.light()
+                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                    },
+                    onViewStory: {
+                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                            storyGroupIndexForHeader = groupIndex
+                            showStoryViewerFromHeader = true
                         }
+                    },
+                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
+                )
+            } else if !topActiveMembers.isEmpty {
+                HStack(spacing: -6) {
+                    ForEach(topActiveMembers) { member in
+                        MeeshyAvatar(
+                            name: member.name,
+                            mode: .custom(24),
+                            accentColor: member.color,
+                            avatarURL: member.avatarURL,
+                            storyState: memberStoryState(for: member.id),
+                            presenceState: presenceManager.presenceState(for: member.id),
+                            onTap: {
+                                HapticFeedback.light()
+                                actionAlert = "Profil de \(member.name)"
+                            },
+                            onViewStory: {
+                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
+                                    storyGroupIndexForHeader = groupIndex
+                                    showStoryViewerFromHeader = true
+                                }
+                            },
+                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
+                        )
                     }
-                } else if let conv = conversation, conv.memberCount > 2 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 9))
-                        Text("\(conv.memberCount)")
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                    .foregroundColor(.white.opacity(0.5))
+                }
+            } else if let conv = conversation, conv.memberCount > 2 {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 9))
+                    Text("\(conv.memberCount)")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(.white.opacity(0.5))
+            }
+        } else {
+            // Collapsed: avatar trigger — tap morphs into band
+            ThemedAvatarButton(
+                name: conversation?.name ?? "?",
+                color: accentColor,
+                secondaryColor: secondaryColor,
+                isExpanded: false,
+                hasStoryRing: headerHasStoryRing,
+                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                presenceState: headerPresenceState
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showOptions = true
                 }
             }
-
-            // Tags row: category + colored tags — horizontally scrollable
-            if conversationSection != nil || !(conversation?.tags.isEmpty ?? true) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 5) {
-                        if let section = conversationSection {
-                            HStack(spacing: 3) {
-                                Image(systemName: section.icon)
-                                    .font(.system(size: 8, weight: .bold))
-                                Text(section.name)
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundColor(Color(hex: section.color))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(Color(hex: section.color).opacity(0.2))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
-                                    )
-                            )
+            .contextMenu {
+                if headerHasStoryRing {
+                    Button {
+                        if let userId = conversation?.participantUserId,
+                           let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                            storyGroupIndexForHeader = groupIndex
+                            showStoryViewerFromHeader = true
                         }
-
-                        if let conv = conversation {
-                            ForEach(conv.tags) { tag in
-                                Text(tag.name)
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(Color(hex: tag.color))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color(hex: tag.color).opacity(0.12))
-                                            .overlay(
-                                                Capsule()
-                                                    .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
-                                            )
-                                    )
-                            }
-                        }
+                    } label: {
+                        Label("Voir les stories", systemImage: "play.circle.fill")
                     }
                 }
-                .padding(.leading, 36)
+                Button {
+                    actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                } label: {
+                    Label("Voir le profil", systemImage: "person.fill")
+                }
+                Button {
+                    actionAlert = "Infos de la conversation"
+                } label: {
+                    Label("Infos conversation", systemImage: "info.circle.fill")
+                }
             }
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1
+    }
+
+    // MARK: - Header Tags Row (category + colored tags, horizontally scrollable)
+    @ViewBuilder
+    private var headerTagsRow: some View {
+        if conversationSection != nil || !(conversation?.tags.isEmpty ?? true) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 5) {
+                    if let section = conversationSection {
+                        HStack(spacing: 3) {
+                            Image(systemName: section.icon)
+                                .font(.system(size: 8, weight: .bold))
+                            Text(section.name)
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(Color(hex: section.color))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: section.color).opacity(0.2))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
+                                )
                         )
-                )
-        )
-        .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                    }
+
+                    if let conv = conversation {
+                        ForEach(conv.tags) { tag in
+                            Text(tag.name)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(hex: tag.color))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: tag.color).opacity(0.12))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
+                                        )
+                                )
+                        }
+                    }
+                }
+            }
+            .padding(.leading, 28)
+        }
     }
 
     // Helper: story state for a member
