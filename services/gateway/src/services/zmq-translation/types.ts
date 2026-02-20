@@ -80,7 +80,7 @@ export type TranslationEvent =
 // AUDIO PROCESSING TYPES
 // ═══════════════════════════════════════════════════════════════
 
-export const AUDIO_BASE64_SIZE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+export const AUDIO_BASE64_SIZE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
 
 export interface BinaryFrameInfo {
   audio?: number;

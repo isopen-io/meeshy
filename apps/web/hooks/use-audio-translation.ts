@@ -100,24 +100,12 @@ export function useAudioTranslation({
   // Convertir initialTranslations JSON en array pour l'UI
   const initialTranslatedAudios = useMemo(() => {
     if (!initialTranslations || Object.keys(initialTranslations).length === 0) {
-      console.log('🎵 [useAudioTranslation] Aucune traduction initiale');
       return [];
     }
 
-    // Utiliser la fonction officielle de conversion depuis @meeshy/shared/types
-    const result = Object.entries(initialTranslations as AttachmentTranslations).map(([lang, translation]): SocketIOTranslatedAudio => {
+    return Object.entries(initialTranslations as AttachmentTranslations).map(([lang, translation]): SocketIOTranslatedAudio => {
       return toSocketIOTranslation(attachmentId, lang, translation);
     });
-
-    console.log('🎵 [useAudioTranslation] Traductions initiales depuis BD:',
-      result.map(t => ({
-        language: t.targetLanguage,
-        url: t.url || '⚠️ VIDE',
-        hasUrl: !!t.url
-      }))
-    );
-
-    return result;
   }, [initialTranslations, attachmentId]);
 
   const [translatedAudios, setTranslatedAudios] = useState<readonly SocketIOTranslatedAudio[]>(initialTranslatedAudios);
@@ -144,17 +132,6 @@ export function useAudioTranslation({
     const unsubscribe = meeshySocketIOService.onTranscription((data) => {
       if (data.attachmentId !== attachmentId) return;
 
-      console.log('🔔 [useAudioTranslation] 📝 TRANSCRIPTION reçue via WebSocket (Phase 1):', {
-        attachmentId: data.attachmentId,
-        text: data.transcription.text,
-        language: data.transcription.language,
-        confidence: data.transcription.confidence,
-        hasSegments: !!data.transcription.segments,
-        segmentsCount: data.transcription.segments?.length || 0,
-        speakerCount: data.transcription.speakerCount,
-        senderVoiceIdentified: data.transcription.senderVoiceIdentified
-      });
-
       setTranscription({
         text: data.transcription.text,
         language: data.transcription.language,
@@ -166,8 +143,6 @@ export function useAudioTranslation({
         senderSpeakerId: data.transcription.senderSpeakerId,
         speakerAnalysis: data.transcription.speakerAnalysis,
       });
-
-      console.log('✅ [useAudioTranslation] Transcription mise à jour avec segments et speakers (affichage immédiat)');
     });
 
     return () => {
@@ -176,23 +151,14 @@ export function useAudioTranslation({
   }, [messageId, attachmentId]);
 
   // S'abonner aux traductions audio via Socket.IO (DEPRECATED - conservé pour rétrocompatibilité)
-  // NOTE: Les nouveaux événements sont onAudioTranslationsProgressive et onAudioTranslationsCompleted
   useEffect(() => {
     if (!messageId || !attachmentId) return;
 
     const unsubscribe = meeshySocketIOService.onAudioTranslation((data: AudioTranslationEventData) => {
       if (data.attachmentId !== attachmentId) return;
 
-      console.log('🔔 [useAudioTranslation] Traduction audio reçue via WebSocket (DEPRECATED):', {
-        attachmentId: data.attachmentId,
-        language: data.language,
-        hasUrl: !!data.translatedAudio?.url
-      });
-
-      // Conversion type-safe via fonction dédiée
       const uiAudio = convertSocketAudioToUI(data.translatedAudio);
 
-      // Ajouter ou mettre à jour la traduction dans la liste
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
         if (existingIndex >= 0) {
@@ -203,8 +169,6 @@ export function useAudioTranslation({
           return [...prev, uiAudio];
         }
       });
-
-      console.log('✅ [useAudioTranslation] Traduction audio ajoutée:', data.language);
     });
 
     return () => {
@@ -219,75 +183,35 @@ export function useAudioTranslation({
     const unsubscribeProgressive = meeshySocketIOService.onAudioTranslationsProgressive((data: AudioTranslationEventData) => {
       if (data.attachmentId !== attachmentId) return;
 
-      console.log('🔔 [useAudioTranslation] 🌍 TRADUCTION PROGRESSIVE reçue via WebSocket:', {
-        attachmentId: data.attachmentId,
-        language: data.language,
-        hasUrl: !!data.translatedAudio?.url
-      });
-
-      // Conversion type-safe via fonction dédiée
       const uiAudio = convertSocketAudioToUI(data.translatedAudio);
 
-      // Ajouter ou mettre à jour la traduction dans la liste
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
         if (existingIndex >= 0) {
-          // Mettre à jour la traduction existante
           const updated = [...prev];
           updated[existingIndex] = uiAudio;
           return updated;
         } else {
-          // Ajouter la nouvelle traduction
           return [...prev, uiAudio];
         }
       });
-
-      console.log('✅ [useAudioTranslation] Traduction progressive ajoutée:', data.language);
     });
 
     const unsubscribeCompleted = meeshySocketIOService.onAudioTranslationsCompleted((data: AudioTranslationEventData) => {
-      // Log pour debug - affiche TOUS les événements reçus
-      console.log('🔔 [useAudioTranslation] ✅ ÉVÉNEMENT REÇU audio:translations-completed:', {
-        receivedAttachmentId: data.attachmentId,
-        expectedAttachmentId: attachmentId,
-        match: data.attachmentId === attachmentId,
-        language: data.language,
-        hasUrl: !!data.translatedAudio?.url,
-        url: data.translatedAudio?.url || 'N/A'
-      });
+      if (data.attachmentId !== attachmentId) return;
 
-      if (data.attachmentId !== attachmentId) {
-        console.log('⏭️ [useAudioTranslation] Événement ignoré - attachmentId ne correspond pas');
-        return;
-      }
-
-      console.log('✅ [useAudioTranslation] Événement ACCEPTÉ - mise à jour des traductions...');
-
-      // Conversion type-safe via fonction dédiée
       const uiAudio = convertSocketAudioToUI(data.translatedAudio);
 
-      // Ajouter ou mettre à jour la dernière traduction
       setTranslatedAudios((prev) => {
         const existingIndex = prev.findIndex(t => t.targetLanguage === data.language);
-        console.log('📝 [useAudioTranslation] setTranslatedAudios appelé:', {
-          prevCount: prev.length,
-          existingIndex,
-          language: data.language,
-          newUrl: uiAudio.url
-        });
         if (existingIndex >= 0) {
           const updated = [...prev];
           updated[existingIndex] = uiAudio;
-          console.log('📝 [useAudioTranslation] Traduction mise à jour:', updated.length, 'traductions');
           return updated;
         } else {
-          const newList = [...prev, uiAudio];
-          console.log('📝 [useAudioTranslation] Traduction ajoutée:', newList.length, 'traductions');
-          return newList;
+          return [...prev, uiAudio];
         }
       });
-
-      console.log('✅ [useAudioTranslation] Toutes les traductions terminées !');
     });
 
     return () => {
@@ -321,65 +245,39 @@ export function useAudioTranslation({
   // Calculer l'URL audio actuelle
   const currentAudioUrl = (() => {
     if (selectedLanguage === 'original') {
-      console.log('🎵 [useAudioTranslation] Langue originale sélectionnée, URL:', attachmentFileUrl);
       return attachmentFileUrl;
     }
     const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
-    const url = translatedAudio?.url || attachmentFileUrl;
-
-    console.log('🎵 [useAudioTranslation] Langue traduite sélectionnée:', {
-      selectedLanguage,
-      foundTranslation: !!translatedAudio,
-      translatedAudioUrl: translatedAudio?.url || '⚠️ VIDE',
-      fallbackToOriginal: !translatedAudio?.url,
-      finalUrl: url
-    });
-
-    return url;
+    return translatedAudio?.url || attachmentFileUrl;
   })();
 
   // Calculer la durée actuelle selon la langue sélectionnée (rerender-derived-state)
-  // Utilisé par useAudioPlayback pour ajuster la barre de progression
   const currentAudioDuration = useMemo(() => {
     if (selectedLanguage === 'original') {
-      return undefined; // Laisse useAudioPlayback utiliser attachmentDuration
+      return undefined;
     }
 
     const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
     if (translatedAudio?.durationMs) {
-      const durationSeconds = translatedAudio.durationMs / 1000;
-      console.log('🎵 [useAudioTranslation] Durée audio traduit:', {
-        language: selectedLanguage,
-        durationMs: translatedAudio.durationMs,
-        durationSeconds
-      });
-      return durationSeconds;
+      return translatedAudio.durationMs / 1000;
     }
 
-    return undefined; // Fallback vers attachmentDuration
+    return undefined;
   }, [selectedLanguage, translatedAudios]);
 
   // Calculer la transcription actuelle selon la langue sélectionnée
   const currentTranscription = useMemo(() => {
     if (selectedLanguage === 'original') {
-      console.log('🎵 [useAudioTranslation] Transcription originale sélectionnée');
       return transcription;
     }
 
     const translatedAudio = translatedAudios.find(t => t.targetLanguage === selectedLanguage);
     if (translatedAudio && translatedAudio.segments && translatedAudio.segments.length > 0) {
-      console.log('🎵 [useAudioTranslation] Transcription traduite sélectionnée:', {
-        language: selectedLanguage,
-        text: translatedAudio.translatedText.substring(0, 50) + '...',
-        segmentsCount: translatedAudio.segments.length
-      });
-
       return {
         text: translatedAudio.translatedText,
         language: selectedLanguage,
         confidence: 1.0,
         segments: translatedAudio.segments as any[],
-        // Inclure les informations de diarisation de la transcription originale
         speakerCount: transcription?.speakerCount,
         primarySpeakerId: transcription?.primarySpeakerId,
         senderVoiceIdentified: transcription?.senderVoiceIdentified,
@@ -388,7 +286,6 @@ export function useAudioTranslation({
       };
     }
 
-    console.log('🎵 [useAudioTranslation] Pas de transcription pour langue traduite, fallback vers original');
     return transcription;
   }, [selectedLanguage, translatedAudios, transcription]);
 
@@ -511,7 +408,7 @@ export function useAudioTranslation({
     selectedLanguage,
     setSelectedLanguage,
     currentAudioUrl,
-    currentAudioDuration, // Durée en secondes de l'audio actuellement sélectionné
+    currentAudioDuration,
     requestTranscription,
     requestTranslation,
   };
