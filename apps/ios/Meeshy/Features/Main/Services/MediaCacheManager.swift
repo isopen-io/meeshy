@@ -39,6 +39,7 @@ actor MediaCacheManager {
 
     /// Fetch data for a URL, returning from cache if available, otherwise downloading.
     func data(for urlString: String) async throws -> Data {
+        let resolved = resolveURL(urlString)
         let key = cacheKey(for: urlString)
 
         // 1. Memory cache
@@ -62,7 +63,6 @@ actor MediaCacheManager {
         }
 
         let task = Task<Data, Error> {
-            let resolved = self.resolveURL(urlString)
             guard let url = URL(string: resolved) else {
                 throw URLError(.badURL)
             }
@@ -190,7 +190,7 @@ actor MediaCacheManager {
 
     // MARK: - URL Resolution
 
-    nonisolated private func resolveURL(_ urlString: String) -> String {
+    private func resolveURL(_ urlString: String) -> String {
         guard urlString.hasPrefix("/") else { return urlString }
         return MeeshyConfig.shared.serverOrigin + urlString
     }
