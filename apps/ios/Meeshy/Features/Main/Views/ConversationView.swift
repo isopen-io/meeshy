@@ -506,9 +506,37 @@ struct ConversationView: View {
                 }
             }
 
-            // Floating controls
+            // Floating controls — 3 states: typing (compact), expanded (band), collapsed (avatar trigger)
             VStack {
-                if showOptions {
+                if isTyping {
+                    // Compact header while keyboard is active — back + avatar only
+                    HStack(spacing: 8) {
+                        ThemedBackButton(color: accentColor) {
+                            HapticFeedback.light()
+                            onBack()
+                        }
+
+                        Spacer()
+
+                        ThemedAvatarButton(
+                            name: conversation?.name ?? "?",
+                            color: accentColor,
+                            secondaryColor: secondaryColor,
+                            isExpanded: false,
+                            hasStoryRing: headerHasStoryRing,
+                            avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                            presenceState: headerPresenceState
+                        ) {
+                            isTyping = false
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showOptions = true
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .transition(.opacity)
+                } else if showOptions {
                     // Header band takes full width — back arrow + info + avatar(s) all inside
                     conversationHeaderBand
                         .transition(.asymmetric(
@@ -571,12 +599,13 @@ struct ConversationView: View {
                 Spacer()
             }
             .zIndex(100)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
 
             // Options ladder — unfolds downward below header band
             optionsLadder
 
-            // Dismiss overlay (options menu)
-            if showOptions {
+            // Dismiss overlay (options menu) — hidden when typing
+            if showOptions && !isTyping {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -689,43 +718,25 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Options Ladder (unfolds downward from settings button)
+    // MARK: - Options Ladder (config button, unfolds below header band)
     private var optionsLadder: some View {
         VStack(spacing: 12) {
             HStack {
                 Spacer()
                 VStack(spacing: 10) {
-                    ThemedActionButton(icon: "video.fill", color: "4ECDC4") {
-                        actionAlert = "Appel vidéo"
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-                    }
-                    .menuAnimation(showMenu: showOptions, delay: 0.06)
-
-                    ThemedActionButton(icon: "phone.fill", color: "F8B500") {
-                        actionAlert = "Appel vocal"
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-                    }
-                    .menuAnimation(showMenu: showOptions, delay: 0.10)
-
-                    ThemedActionButton(icon: "magnifyingglass", color: "FF6B6B") {
-                        actionAlert = "Rechercher dans la conversation"
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-                    }
-                    .menuAnimation(showMenu: showOptions, delay: 0.14)
-
-                    ThemedActionButton(icon: "gearshape.fill", color: accentColor) {
+                    ThemedActionButton(icon: "gearshape.fill", color: accentColor, size: 36) {
                         actionAlert = "Configuration conversation"
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
                     }
-                    .menuAnimation(showMenu: showOptions, delay: 0.18)
+                    .menuAnimation(showMenu: showOptions, delay: 0.06)
                 }
             }
             .padding(.trailing, 16)
         }
         .padding(.top, 58)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .zIndex(showOptions ? 200 : -1)
-        .allowsHitTesting(showOptions)
+        .zIndex(showOptions && !isTyping ? 200 : -1)
+        .allowsHitTesting(showOptions && !isTyping)
     }
 
     // MARK: - Conversation Header Band (thin strip — back arrow inside, full width)
@@ -789,15 +800,37 @@ struct ConversationView: View {
                     }
                 }
 
-                Text(conversation?.name ?? "Conversation")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                Button {
+                    actionAlert = "Configuration conversation"
+                } label: {
+                    Text(conversation?.name ?? "Conversation")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 4)
 
-            // Right: participant avatar(s) — tap to collapse band
+            // Search button
+            Button {
+                actionAlert = "Rechercher dans la conversation"
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(Color(hex: accentColor).opacity(0.15))
+                    )
+            }
+
+            // Participant avatar(s) — tap opens profile
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
@@ -807,9 +840,8 @@ struct ConversationView: View {
                     storyState: memberStoryState(for: userId),
                     presenceState: presenceManager.presenceState(for: userId),
                     onTap: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showOptions = false
-                        }
+                        HapticFeedback.light()
+                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
                     },
                     onViewStory: {
                         if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
@@ -841,12 +873,6 @@ struct ConversationView: View {
                             },
                             contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
                         )
-                    }
-                }
-                // Tap overlapping avatars to collapse
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showOptions = false
                     }
                 }
             } else if let conv = conversation, conv.memberCount > 2 {
@@ -1936,123 +1962,34 @@ struct ThemedMessageBubble: View {
     private func attachmentView(_ attachment: MessageAttachment) -> some View {
         switch attachment.type {
         case .image:
-            // Image placeholder
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 200, height: 150)
-                .overlay(
-                    Image(systemName: "photo.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.white.opacity(0.7))
-                )
+            ImageViewerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor
+            )
 
         case .video:
-            // Video placeholder
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 200, height: 150)
-                .overlay(
-                    VStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.3))
-                                .frame(width: 50, height: 50)
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white)
-                        }
-                        if let duration = attachment.durationFormatted {
-                            Text(duration)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color.black.opacity(0.5)))
-                        }
-                    }
-                )
+            VideoPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor
+            )
 
         case .audio:
-            // Audio message with stylized waveform
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(Color.white.opacity(0.3))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                    )
-
-                // Stylized waveform with deterministic heights
-                HStack(spacing: 2) {
-                    ForEach(0..<20, id: \.self) { i in
-                        let height = waveformHeight(for: i)
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.9), Color.white.opacity(0.5)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .frame(width: 3, height: height)
-                    }
-                }
-
-                if let duration = attachment.durationFormatted {
-                    Text(duration)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            .frame(width: 200)
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor
+            )
 
         case .file:
-            // File attachment
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: "doc.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(attachment.originalName.isEmpty ? "Document" : attachment.originalName)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .frame(width: 220)
+            DocumentViewerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor
+            )
 
         case .location:
-            // Location placeholder
             RoundedRectangle(cornerRadius: 12)
                 .fill(
                     LinearGradient(
@@ -2145,16 +2082,6 @@ struct ThemedMessageBubble: View {
                 )
             }
         }
-    }
-
-    // MARK: - Waveform Height Generator (deterministic per bar index)
-    private func waveformHeight(for index: Int) -> CGFloat {
-        // Creates a natural-looking waveform pattern using sine waves
-        let base: CGFloat = 10
-        let amplitude: CGFloat = 14
-        let phase1 = sin(Double(index) * 0.8) * 0.7
-        let phase2 = sin(Double(index) * 1.6 + 1.0) * 0.3
-        return base + amplitude * CGFloat(abs(phase1 + phase2))
     }
 
     // MARK: - Bubble Background
