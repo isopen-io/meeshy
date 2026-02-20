@@ -52,6 +52,8 @@ extension APIConversation {
             case "community": return .community
             case "channel": return .channel
             case "public": return .public
+            case "global": return .global
+            case "bot": return .bot
             default: return .direct
             }
         }()
