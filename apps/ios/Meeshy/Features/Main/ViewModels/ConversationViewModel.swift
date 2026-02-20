@@ -34,8 +34,6 @@ class ConversationViewModel: ObservableObject {
     let conversationId: String
     private let limit = 50
     private var cancellables = Set<AnyCancellable>()
-    /// Prevents duplicate concurrent prefetch requests
-    private var isPrefetching = false
 
     private var currentUserId: String {
         AuthManager.shared.currentUser?.id ?? ""
@@ -101,7 +99,6 @@ class ConversationViewModel: ObservableObject {
         guard let oldestId = messages.first?.id else { return }
 
         isLoadingOlder = true
-        isPrefetching = false
         // Save anchor BEFORE prepend so the view can restore scroll position
         scrollAnchorId = oldestId
 
@@ -129,14 +126,6 @@ class ConversationViewModel: ObservableObject {
         }
 
         isLoadingOlder = false
-    }
-
-    // MARK: - Prefetch (anticipatory load — non-blocking, parallel to scroll)
-
-    func prefetchOlderIfNeeded() {
-        guard hasOlderMessages, !isLoadingOlder, !isPrefetching, !isProgrammaticScroll else { return }
-        isPrefetching = true
-        Task { await loadOlderMessages() }
     }
 
     // MARK: - Send Message

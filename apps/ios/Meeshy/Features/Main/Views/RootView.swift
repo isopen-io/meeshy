@@ -368,7 +368,11 @@ extension View {
             .scaleEffect(showMenu ? 1 : 0.3)
             .opacity(showMenu ? 1 : 0)
             .rotationEffect(.degrees(showMenu ? 0 : -30))
-            .animation(.spring(response: 0.4, dampingFraction: 0.65).delay(delay), value: showMenu)
+            .animation(
+                .spring(response: showMenu ? 0.4 : 0.25, dampingFraction: 0.65)
+                    .delay(showMenu ? delay : 0),
+                value: showMenu
+            )
     }
 }
 

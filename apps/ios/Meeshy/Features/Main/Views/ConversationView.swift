@@ -3,6 +3,14 @@ import PhotosUI
 import CoreLocation
 import MeeshySDK
 
+// MARK: - Active Member (for conversation detail header)
+private struct ConversationActiveMember: Identifiable {
+    let id: String
+    let name: String
+    let color: String
+    let avatarURL: String?
+}
+
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
@@ -61,11 +69,124 @@ struct ConversationView: View {
         return presenceManager.presenceState(for: userId)
     }
 
+    private var conversationSection: ConversationSection? {
+        guard let sectionId = conversation?.sectionId else { return nil }
+        return ConversationSection.allSections.first { $0.id == sectionId }
+    }
+
+    private var conversationTypeLabel: String {
+        switch conversation?.type {
+        case .direct: return "Direct"
+        case .group: return "Groupe"
+        case .public: return "Public"
+        case .global: return "Global"
+        case .community: return "Communauté"
+        case .channel: return "Channel"
+        case .bot: return "Bot"
+        case .none: return ""
+        }
+    }
+
+    private var topActiveMembers: [ConversationActiveMember] {
+        var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
+        for msg in viewModel.messages where !msg.isMe {
+            guard let id = msg.senderId else { continue }
+            if var existing = counts[id] {
+                existing.count += 1
+                counts[id] = existing
+            } else {
+                counts[id] = (
+                    name: msg.senderName ?? "?",
+                    color: msg.senderColor ?? accentColor,
+                    avatarURL: msg.senderAvatarURL,
+                    count: 1
+                )
+            }
+        }
+        return counts
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(3)
+            .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
+    }
+
     init(conversation: Conversation?, replyContext: ReplyContext? = nil, onBack: @escaping () -> Void) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.onBack = onBack
         _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? ""))
+    }
+
+    // MARK: - Date Sections
+
+    /// Show a date separator before a message if >1h gap from previous, or if it's the first message
+    private func shouldShowDateSection(at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        let current = viewModel.messages[index].createdAt
+        let previous = viewModel.messages[index - 1].createdAt
+        return current.timeIntervalSince(previous) > 3600
+    }
+
+    /// Format date for section header, locale-aware (supports i18n)
+    private func formatDateSection(for date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+
+        // Time component: "14h" or "14h30"
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let timeStr = minute == 0 ? "\(hour)h" : String(format: "%dh%02d", hour, minute)
+
+        if calendar.isDateInToday(date) {
+            let todayLabel = String(localized: "date.today", defaultValue: "Aujourd'hui")
+            return "\(todayLabel) \(timeStr)"
+        }
+
+        if calendar.isDateInYesterday(date) {
+            let yesterdayLabel = String(localized: "date.yesterday", defaultValue: "Hier")
+            return "\(yesterdayLabel) \(timeStr)"
+        }
+
+        // Within last 7 days: weekday + time (e.g. "Mardi 18h42")
+        if let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now),
+           date > sevenDaysAgo {
+            let formatter = DateFormatter()
+            formatter.locale = Locale.current
+            formatter.dateFormat = "EEEE"
+            let weekday = formatter.string(from: date).capitalized
+            return "\(weekday) \(timeStr)"
+        }
+
+        // Same year: weekday + day + abbreviated month (e.g. "Jeudi 12 Janv.")
+        if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+            let formatter = DateFormatter()
+            formatter.locale = Locale.current
+            formatter.dateFormat = "EEEE d MMM"
+            return formatter.string(from: date).capitalized
+        }
+
+        // Different year: weekday + day + month + year (e.g. "Mercredi 28 Dec. 2025")
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = "EEEE d MMM yyyy"
+        return formatter.string(from: date).capitalized
+    }
+
+    /// Visual date separator: thin lines + centered label
+    private func dateSectionView(for date: Date) -> some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(height: 0.5)
+            Text(formatDateSection(for: date))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            Rectangle()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(height: 0.5)
+        }
+        .padding(.vertical, 8)
     }
 
     // MARK: - Extracted message row (avoids type-checker timeout)
@@ -89,18 +210,6 @@ struct ConversationView: View {
                 )
             )
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
-            .onAppear {
-                guard !viewModel.isProgrammaticScroll else { return }
-                let total = viewModel.messages.count
-                let midpoint = total / 2
-                let urgentPoint = total / 5
-                if index <= midpoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
-                    viewModel.prefetchOlderIfNeeded()
-                }
-                if index <= urgentPoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
-                    Task { await viewModel.loadOlderMessages() }
-                }
-            }
     }
 
     // Dynamic height for bottom spacer based on composer state
@@ -124,22 +233,33 @@ struct ConversationView: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 10) {
-                        // Loading indicator at very top (only visible during active load)
-                        if viewModel.isLoadingOlder {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .tint(Color(hex: accentColor))
-                                Text("Chargement...")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
+                        // Top trigger: loads older messages when scrolled to top
+                        if viewModel.hasOlderMessages {
+                            if viewModel.isLoadingOlder {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .tint(Color(hex: accentColor))
+                                    Text(String(localized: "loading", defaultValue: "Chargement..."))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(height: 36)
+                                .transition(.opacity)
+                            } else {
+                                Color.clear.frame(height: 1)
+                                    .onAppear {
+                                        guard !viewModel.isProgrammaticScroll else { return }
+                                        Task { await viewModel.loadOlderMessages() }
+                                    }
                             }
-                            .frame(height: 36)
-                            .transition(.opacity)
                         }
 
                         Color.clear.frame(height: 70)
 
                         ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
+                            if shouldShowDateSection(at: index) {
+                                dateSectionView(for: msg.createdAt)
+                            }
                             messageRow(index: index, msg: msg)
                         }
 
@@ -371,38 +491,183 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Options Ladder
+    // MARK: - Options Ladder + Detail Band
     private var optionsLadder: some View {
-        VStack(spacing: 10) {
-            ThemedActionButton(icon: "person.fill", color: "9B59B6") {
-                actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-            }
-            .menuAnimation(showMenu: showOptions, delay: 0.0)
+        VStack(spacing: 12) {
+            // Conversation detail band
+            conversationDetailBand
+                .scaleEffect(showOptions ? 1 : 0.95, anchor: .top)
+                .opacity(showOptions ? 1 : 0)
+                .offset(y: showOptions ? 0 : -15)
+                .animation(
+                    .spring(response: showOptions ? 0.35 : 0.25, dampingFraction: 0.8)
+                        .delay(showOptions ? 0.02 : 0),
+                    value: showOptions
+                )
 
-            ThemedActionButton(icon: "video.fill", color: "4ECDC4") {
-                actionAlert = "Appel vidéo"
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-            }
-            .menuAnimation(showMenu: showOptions, delay: 0.04)
+            // Action buttons (right-aligned)
+            HStack {
+                Spacer()
+                VStack(spacing: 10) {
+                    ThemedActionButton(icon: "person.fill", color: "9B59B6") {
+                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    }
+                    .menuAnimation(showMenu: showOptions, delay: 0.06)
 
-            ThemedActionButton(icon: "phone.fill", color: "F8B500") {
-                actionAlert = "Appel vocal"
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-            }
-            .menuAnimation(showMenu: showOptions, delay: 0.08)
+                    ThemedActionButton(icon: "video.fill", color: "4ECDC4") {
+                        actionAlert = "Appel vidéo"
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    }
+                    .menuAnimation(showMenu: showOptions, delay: 0.10)
 
-            ThemedActionButton(icon: "magnifyingglass", color: "FF6B6B") {
-                actionAlert = "Rechercher dans la conversation"
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    ThemedActionButton(icon: "phone.fill", color: "F8B500") {
+                        actionAlert = "Appel vocal"
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    }
+                    .menuAnimation(showMenu: showOptions, delay: 0.14)
+
+                    ThemedActionButton(icon: "magnifyingglass", color: "FF6B6B") {
+                        actionAlert = "Rechercher dans la conversation"
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    }
+                    .menuAnimation(showMenu: showOptions, delay: 0.18)
+                }
             }
-            .menuAnimation(showMenu: showOptions, delay: 0.12)
+            .padding(.trailing, 16)
         }
         .padding(.top, 58)
-        .padding(.trailing, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .zIndex(showOptions ? 200 : -1)
         .allowsHitTesting(showOptions)
+    }
+
+    // MARK: - Conversation Detail Band
+    private var conversationDetailBand: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Category + type + tags row
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    // Section/category badge
+                    if let section = conversationSection {
+                        HStack(spacing: 4) {
+                            Image(systemName: section.icon)
+                                .font(.system(size: 10, weight: .bold))
+                            Text(section.name)
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundColor(Color(hex: section.color))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: section.color).opacity(0.2))
+                                .overlay(Capsule().stroke(Color(hex: section.color).opacity(0.3), lineWidth: 1))
+                        )
+                    }
+
+                    // Conversation type
+                    if !conversationTypeLabel.isEmpty {
+                        Text(conversationTypeLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color(hex: accentColor))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.15)))
+                    }
+
+                    // Tags (from UserConversationPreferences — string-based with hash colors)
+                    if let conv = conversation {
+                        ForEach(conv.tags.prefix(3)) { tag in
+                            Text(tag.name)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: tag.color))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color(hex: tag.color).opacity(0.12)))
+                        }
+                        if conv.tags.count > 3 {
+                            Text("+\(conv.tags.count - 3)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white.opacity(0.5))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color.white.opacity(0.1)))
+                        }
+                    }
+                }
+            }
+
+            // Conversation name
+            Text(conversation?.name ?? "Conversation")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+
+            // Description
+            if let desc = conversation?.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+                    .lineLimit(2)
+            }
+
+            // Member count for non-direct conversations
+            if let conv = conversation, conv.memberCount > 2 {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 10))
+                    Text("\(conv.memberCount) membres")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.5))
+            }
+
+            // Top 3 active members
+            if !topActiveMembers.isEmpty {
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(height: 1)
+                    .padding(.vertical, 2)
+
+                HStack(spacing: 14) {
+                    ForEach(topActiveMembers) { member in
+                        HStack(spacing: 6) {
+                            MeeshyAvatar(
+                                name: member.name,
+                                mode: .custom(24),
+                                accentColor: member.color,
+                                avatarURL: member.avatarURL,
+                                presenceState: presenceManager.presenceState(for: member.id)
+                            )
+                            Text(member.name.components(separatedBy: " ").first ?? member.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.85))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: Color(hex: accentColor).opacity(0.25), radius: 12, y: 4)
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Attach Options Ladder
@@ -1309,7 +1574,7 @@ struct ThemedMessageBubble: View {
                     replyPreview(reply)
                 }
 
-                // Main bubble
+                // Main bubble avec réactions par-dessus
                 VStack(alignment: .leading, spacing: 8) {
                     // Attachments
                     ForEach(message.attachments) { attachment in
@@ -1331,10 +1596,11 @@ struct ThemedMessageBubble: View {
                     radius: 6,
                     y: 3
                 )
-
-                // Reactions
-                if !reactionSummaries.isEmpty {
-                    reactionsView
+                .overlay(alignment: .bottomLeading) {
+                    // Réactions par-dessus le message, angle bas-gauche
+                    reactionsOverlay
+                        .padding(.leading, 8)
+                        .padding(.bottom, 6)
                 }
             }
 
@@ -1518,29 +1784,58 @@ struct ThemedMessageBubble: View {
         }
     }
 
-    // MARK: - Reactions View
-    private var reactionsView: some View {
+    // MARK: - Reactions Overlay (par-dessus le message, angle bas-gauche)
+    private var reactionsOverlay: some View {
         HStack(spacing: 4) {
+            // Bouton ajouter réaction (smiley face)
+            Button(action: {
+                // TODO: ouvrir emoji picker pour ce message
+            }) {
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(width: 26, height: 26)
+            .background(
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+            )
+
+            // Emojis de réaction
             ForEach(reactionSummaries, id: \.emoji) { reaction in
-                HStack(spacing: 4) {
+                ZStack(alignment: .topTrailing) {
+                    // Cercle emoji
                     Text(reaction.emoji)
-                        .font(.system(size: 14))
-                    Text("\(reaction.count)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(reaction.includesMe ? Color(hex: bubbleColor) : theme.textMuted)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(reaction.includesMe ?
-                              Color(hex: bubbleColor).opacity(theme.mode.isDark ? 0.2 : 0.15) :
-                              theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05))
-                        .overlay(
-                            Capsule()
-                                .stroke(reaction.includesMe ? Color(hex: bubbleColor).opacity(0.5) : Color.clear, lineWidth: 1)
+                        .font(.system(size: 15))
+                        .frame(width: 26, height: 26)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                         )
-                )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    reaction.includesMe ? Color(hex: contactColor) : Color.clear,
+                                    lineWidth: 2.5
+                                )
+                        )
+
+                    // Badge compteur — uniquement si > 1
+                    if reaction.count > 1 {
+                        Text("\(reaction.count)")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 14, minHeight: 14)
+                            .background(
+                                Circle()
+                                    .fill(reaction.includesMe ? Color(hex: contactColor) : Color.gray.opacity(0.8))
+                                    .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
+                            )
+                            .offset(x: 5, y: -5)
+                    }
+                }
             }
         }
     }

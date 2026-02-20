@@ -25,17 +25,27 @@ struct APIConversationMember: Decodable {
     let user: APIConversationUser?
 }
 
+struct APIConversationPreferences: Decodable {
+    let isPinned: Bool?
+    let isMuted: Bool?
+    let isArchived: Bool?
+    let isDeletedForUser: Bool?
+}
+
 struct APIConversation: Decodable {
     let id: String
     let type: String
-    let name: String?
-    let description: String?
+    let title: String?           // API returns "title" (not "name")
+    let identifier: String?
     let avatar: String?
+    let banner: String?
     let isActive: Bool?
-    let memberCount: Int?
+    let communityId: String?
     let members: [APIConversationMember]?
     let lastMessage: APIConversationLastMessage?
-    let updatedAt: Date?
+    let lastMessageAt: Date?
+    let unreadCount: Int?
+    let userPreferences: [APIConversationPreferences]?
     let createdAt: Date
 }
 
@@ -60,8 +70,9 @@ extension APIConversation {
             }
         }()
 
+        // Title resolution: API title > other user name (DM) > fallback
         let displayName: String = {
-            if let n = name, !n.isEmpty { return n }
+            if let t = title, !t.isEmpty { return t }
             if convType == .direct, let user = otherUser { return user.name }
             return "Conversation"
         }()
@@ -69,20 +80,26 @@ extension APIConversation {
         // Resolve avatar URL: for DMs use other user's avatar, for groups use conversation avatar
         let participantAvatar: String? = otherUser?.avatar ?? otherUser?.avatarUrl
 
+        // Extract user preferences (first element if present)
+        let prefs = userPreferences?.first
+
         return Conversation(
             id: id,
-            identifier: id,
+            identifier: identifier ?? id,
             type: convType,
             title: displayName,
-            description: description,
             avatar: convType != .direct ? avatar : nil,
+            banner: banner,
+            communityId: communityId,
             isActive: isActive ?? true,
-            memberCount: memberCount ?? members?.count ?? 2,
-            lastMessageAt: updatedAt ?? lastMessage?.createdAt ?? createdAt,
+            memberCount: members?.count ?? 2,
+            lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             createdAt: createdAt,
-            updatedAt: updatedAt ?? createdAt,
-            unreadCount: 0,
+            updatedAt: lastMessageAt ?? createdAt,
+            unreadCount: unreadCount ?? 0,
             lastMessagePreview: lastMessage?.content,
+            isPinned: prefs?.isPinned ?? false,
+            isMuted: prefs?.isMuted ?? false,
             participantUserId: otherMember?.userId,
             participantAvatarURL: participantAvatar
         )
