@@ -6,6 +6,7 @@ struct StoryTrayView: View {
     var onViewStory: (Int) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var presenceManager = PresenceManager.shared
     @State private var addButtonGlow = false
     @State private var profileAlertName: String?
 
@@ -109,6 +110,7 @@ struct StoryTrayView: View {
                     mode: .storyTray,
                     accentColor: group.avatarColor,
                     storyState: group.hasUnviewed ? .unread : .read,
+                    presenceState: presenceManager.presenceState(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                             onViewStory(index)

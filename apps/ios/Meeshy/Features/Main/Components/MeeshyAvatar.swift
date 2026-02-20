@@ -129,8 +129,8 @@ struct MeeshyAvatar: View {
     // Mood
     var moodEmoji: String? = nil
 
-    // Online
-    var showOnlineIndicator: Bool = false
+    // Presence
+    var presenceState: PresenceState = .offline
 
     // Smart tap callbacks (default behavior)
     // Priority: onTap (explicit override) > onViewStory (if story unread) > onViewProfile
@@ -146,7 +146,7 @@ struct MeeshyAvatar: View {
     var contextMenuItems: [AvatarContextMenuItem]? = nil
 
     // Legacy init support (size: AvatarSize)
-    init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, showOnlineIndicator: Bool = false, onOnlineTap: (() -> Void)? = nil) {
+    init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline, onOnlineTap: (() -> Void)? = nil) {
         self.name = name
         switch size {
         case .small: self.mode = .messageBubble
@@ -161,12 +161,12 @@ struct MeeshyAvatar: View {
         self.storyState = storyState
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
-        self.showOnlineIndicator = showOnlineIndicator
+        self.presenceState = presenceState
         self.onOnlineTap = onOnlineTap
     }
 
     // Primary init (mode: AvatarMode)
-    init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, showOnlineIndicator: Bool = false, onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil, onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
+    init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil, avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil, presenceState: PresenceState = .offline, onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil, onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil, onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name
         self.mode = mode
         self.accentColor = accentColor
@@ -174,7 +174,7 @@ struct MeeshyAvatar: View {
         self.avatarURL = avatarURL
         self.storyState = storyState
         self.moodEmoji = moodEmoji
-        self.showOnlineIndicator = showOnlineIndicator
+        self.presenceState = presenceState
         self.onTap = onTap
         self.onViewProfile = onViewProfile
         self.onViewStory = onViewStory
@@ -209,9 +209,9 @@ struct MeeshyAvatar: View {
         mode.showsMoodBadge ? moodEmoji : nil
     }
 
-    /// Effective online indicator
-    private var effectiveOnline: Bool {
-        mode.showsOnlineDot && showOnlineIndicator
+    /// Effective presence — modes that don't show the dot force .offline
+    private var effectivePresence: PresenceState {
+        mode.showsOnlineDot ? presenceState : .offline
     }
 
     /// Whether this avatar has any tap handler configured
@@ -385,7 +385,7 @@ struct MeeshyAvatar: View {
     private var badge: some View {
         if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
             moodBadge(emoji: emoji)
-        } else if effectiveOnline {
+        } else if effectivePresence != .offline {
             onlineDot
         }
     }
@@ -408,16 +408,30 @@ struct MeeshyAvatar: View {
 
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var dotColor: Color {
+        switch effectivePresence {
+        case .online: return Color(hex: "2ECC71")
+        case .away: return Color(hex: "F39C12")
+        case .offline: return .clear
+        }
+    }
+
+    @ViewBuilder
     private var onlineDot: some View {
-        Circle()
-            .fill(Color(hex: "2ECC71"))
+        let dot = Circle()
+            .fill(dotColor)
             .frame(width: mode.onlineDotSize, height: mode.onlineDotSize)
             .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
             .onTapGesture {
                 HapticFeedback.light()
                 onOnlineTap?()
             }
-            .pulse(intensity: 0.15)
+
+        if effectivePresence == .online {
+            dot.pulse(intensity: 0.15)
+        } else {
+            dot
+        }
     }
 
     // MARK: - Helpers

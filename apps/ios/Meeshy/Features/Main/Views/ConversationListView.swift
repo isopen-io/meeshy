@@ -1026,6 +1026,7 @@ struct ThemedConversationRow: View {
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
 
@@ -1207,7 +1208,7 @@ struct ThemedConversationRow: View {
                 secondaryColor: conversation.colorPalette.secondary,
                 storyState: avatarStoryState,
                 moodEmoji: moodStatus?.moodEmoji,
-                showOnlineIndicator: conversation.type == .direct && moodStatus == nil,
+                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceManager.presenceState(for: conversation.participantUserId ?? "") : .offline,
                 onViewProfile: onViewProfile,
                 onViewStory: onViewStory,
                 onMoodTap: onMoodBadgeTap,

@@ -9,6 +9,7 @@ struct ConversationView: View {
     let onBack: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @StateObject private var viewModel: ConversationViewModel
     @StateObject private var locationManager = LocationManager()
@@ -51,11 +52,55 @@ struct ConversationView: View {
         conversation?.colorPalette.secondary ?? "4ECDC4"
     }
 
+    private var isDirect: Bool {
+        conversation?.type == .direct
+    }
+
+    private var headerPresenceState: PresenceState {
+        guard isDirect, let userId = conversation?.participantUserId else { return .offline }
+        return presenceManager.presenceState(for: userId)
+    }
+
     init(conversation: Conversation?, replyContext: ReplyContext? = nil, onBack: @escaping () -> Void) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.onBack = onBack
         _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? ""))
+    }
+
+    // MARK: - Extracted message row (avoids type-checker timeout)
+
+    @ViewBuilder
+    private func messageRow(index: Int, msg: Message) -> some View {
+        let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
+        let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
+        let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId ?? "")
+        ThemedMessageBubble(
+            message: msg,
+            contactColor: accentColor,
+            showAvatar: !isDirect && isLastInGroup,
+            presenceState: bubblePresence
+        )
+            .id(msg.id)
+            .transition(
+                .asymmetric(
+                    insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
+                    removal: .opacity
+                )
+            )
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+            .onAppear {
+                guard !viewModel.isProgrammaticScroll else { return }
+                let total = viewModel.messages.count
+                let midpoint = total / 2
+                let urgentPoint = total / 5
+                if index <= midpoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
+                    viewModel.prefetchOlderIfNeeded()
+                }
+                if index <= urgentPoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
+                    Task { await viewModel.loadOlderMessages() }
+                }
+            }
     }
 
     // Dynamic height for bottom spacer based on composer state
@@ -95,32 +140,7 @@ struct ConversationView: View {
                         Color.clear.frame(height: 70)
 
                         ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
-                            let nextMsg = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
-                            let isLastInGroup = nextMsg == nil || nextMsg?.senderId != msg.senderId
-                            ThemedMessageBubble(message: msg, contactColor: accentColor, showAvatar: isLastInGroup)
-                                .id(msg.id)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
-                                        removal: .opacity
-                                    )
-                                )
-                                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
-                                .onAppear {
-                                    // Only prefetch on manual scroll (not programmatic)
-                                    guard !viewModel.isProgrammaticScroll else { return }
-                                    let total = viewModel.messages.count
-                                    let midpoint = total / 2
-                                    let urgentPoint = total / 5 // top 20%
-                                    // Anticipatory prefetch at midpoint
-                                    if index <= midpoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
-                                        viewModel.prefetchOlderIfNeeded()
-                                    }
-                                    // Urgent load when very close to top (fast scrolling)
-                                    if index <= urgentPoint && viewModel.hasOlderMessages && !viewModel.isLoadingOlder {
-                                        Task { await viewModel.loadOlderMessages() }
-                                    }
-                                }
+                            messageRow(index: index, msg: msg)
                         }
 
                         // Near-bottom detector — sits right after messages
@@ -215,7 +235,8 @@ struct ConversationView: View {
                         color: accentColor,
                         secondaryColor: secondaryColor,
                         isExpanded: showOptions,
-                        hasStoryRing: headerHasStoryRing
+                        hasStoryRing: headerHasStoryRing,
+                        presenceState: headerPresenceState
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showOptions.toggle()
@@ -1149,6 +1170,7 @@ struct ThemedAvatarButton: View {
     let secondaryColor: String
     let isExpanded: Bool
     var hasStoryRing: Bool = false
+    var presenceState: PresenceState = .offline
     let action: () -> Void
     @State private var isPressed = false
 
@@ -1165,7 +1187,8 @@ struct ThemedAvatarButton: View {
                 mode: .conversationHeader,
                 accentColor: color,
                 secondaryColor: secondaryColor,
-                storyState: hasStoryRing ? .unread : .none
+                storyState: hasStoryRing ? .unread : .none,
+                presenceState: presenceState
             )
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
@@ -1224,6 +1247,7 @@ struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
     var showAvatar: Bool = true
+    var presenceState: PresenceState = .offline
 
     @State private var showProfileAlert = false
     @ObservedObject private var theme = ThemeManager.shared
@@ -1263,6 +1287,7 @@ struct ThemedMessageBubble: View {
                         mode: .messageBubble,
                         accentColor: message.senderColor ?? contactColor,
                         avatarURL: message.senderAvatarURL,
+                        presenceState: presenceState,
                         onViewProfile: { showProfileAlert = true },
                         contextMenuItems: [
                             AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {

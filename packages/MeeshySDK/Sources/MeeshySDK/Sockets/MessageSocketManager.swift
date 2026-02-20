@@ -46,6 +46,18 @@ public struct UnreadUpdateEvent: Decodable {
     }
 }
 
+public struct UserStatusEvent: Decodable {
+    public let userId: String
+    public let username: String
+    public let isOnline: Bool
+    public let lastActiveAt: Date?
+
+    public init(userId: String, username: String, isOnline: Bool, lastActiveAt: Date? = nil) {
+        self.userId = userId; self.username = username
+        self.isOnline = isOnline; self.lastActiveAt = lastActiveAt
+    }
+}
+
 // MARK: - Message Socket Manager
 
 public final class MessageSocketManager: ObservableObject {
@@ -60,6 +72,7 @@ public final class MessageSocketManager: ObservableObject {
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
     public let typingStopped = PassthroughSubject<TypingEvent, Never>()
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
+    public let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
 
     @Published public var isConnected = false
 
@@ -186,6 +199,14 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("conversation:unread-updated") { [weak self] data, _ in
             self?.decode(UnreadUpdateEvent.self, from: data) { event in
                 self?.unreadUpdated.send(event)
+            }
+        }
+
+        // --- User status events ---
+
+        socket.on("user:status") { [weak self] data, _ in
+            self?.decode(UserStatusEvent.self, from: data) { event in
+                self?.userStatusChanged.send(event)
             }
         }
     }

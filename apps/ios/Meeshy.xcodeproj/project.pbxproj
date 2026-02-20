@@ -38,6 +38,7 @@
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
 		AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF04 /* UserDisplayName.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
+		AABB00110022FF01 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00110022EE01 /* PresenceManager.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 /* End PBXBuildFile section */
@@ -77,6 +78,7 @@
 		AA66BB77CC880001FF02 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF03 /* MeeshyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAvatar.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF04 /* UserDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDisplayName.swift; sourceTree = "<group>"; };
+		AABB00110022EE01 /* PresenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,10 +125,19 @@
 			isa = PBXGroup;
 			children = (
 				239EA92B51CC63E846FDE461 /* Components */,
+				AABB00110022DD01 /* Services */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
 			path = Main;
+			sourceTree = "<group>";
+		};
+		AABB00110022DD01 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AABB00110022EE01 /* PresenceManager.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		437B1D92F1A225C5E1B044C2 /* Meeshy */ = {
@@ -302,6 +313,7 @@
 				AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
 				AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */,
+				AABB00110022FF01 /* PresenceManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
