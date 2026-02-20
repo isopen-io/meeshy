@@ -40,12 +40,7 @@ actor MediaCacheManager {
     /// Fetch data for a URL, returning from cache if available, otherwise downloading.
     func data(for urlString: String) async throws -> Data {
         let resolved = resolveURL(urlString)
-        let key = cacheKey(for: urlString)
-        if resolved != urlString {
-            print("[MediaCache] RESOLVED: \(urlString) -> \(resolved)")
-        } else {
-            print("[MediaCache] NO-RESOLVE: \(urlString) (origin=\(MeeshyConfig.shared.serverOrigin))")
-        }
+        let key = cacheKey(for: resolved)
 
         // 1. Memory cache
         if let cached = memoryCache.object(forKey: key as NSString) {
@@ -196,8 +191,16 @@ actor MediaCacheManager {
     // MARK: - URL Resolution
 
     private func resolveURL(_ urlString: String) -> String {
-        guard urlString.hasPrefix("/") else { return urlString }
-        return MeeshyConfig.shared.serverOrigin + urlString
+        // Already absolute
+        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
+            return urlString
+        }
+        // Relative with leading slash
+        if urlString.hasPrefix("/") {
+            return MeeshyConfig.shared.serverOrigin + urlString
+        }
+        // Relative path without leading slash (legacy: "2025/12/...")
+        return MeeshyConfig.shared.serverOrigin + "/" + urlString
     }
 
     // MARK: - Helpers

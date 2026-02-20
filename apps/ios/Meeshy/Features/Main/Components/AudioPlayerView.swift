@@ -26,6 +26,9 @@ class AudioPlaybackManager: ObservableObject {
         guard !urlString.isEmpty else { return }
         isLoading = true
 
+        // Resolve relative URLs before entering the actor
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -33,7 +36,7 @@ class AudioPlaybackManager: ObservableObject {
 
         loadTask = Task {
             do {
-                let data = try await MediaCacheManager.shared.data(for: urlString)
+                let data = try await MediaCacheManager.shared.data(for: resolved)
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {

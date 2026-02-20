@@ -45,8 +45,16 @@ struct CachedAsyncImage<Placeholder: View>: View {
         isLoading = true
         hasFailed = false
 
+        // Resolve relative URLs before entering the actor
+        let resolved: String
+        if let url = MeeshyConfig.resolveMediaURL(urlString) {
+            resolved = url.absoluteString
+        } else {
+            resolved = urlString
+        }
+
         do {
-            let loaded = try await MediaCacheManager.shared.image(for: urlString)
+            let loaded = try await MediaCacheManager.shared.image(for: resolved)
             withAnimation(.easeIn(duration: 0.15)) {
                 self.image = loaded
             }
@@ -117,7 +125,8 @@ struct CachedAvatarImage: View {
     private func loadAvatar() async {
         guard let urlString, !urlString.isEmpty else { return }
         if image != nil { return }
-        image = try? await MediaCacheManager.shared.image(for: urlString)
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        image = try? await MediaCacheManager.shared.image(for: resolved)
     }
 }
 
@@ -150,7 +159,8 @@ struct CachedBannerImage: View {
         .task(id: urlString) {
             guard let urlString, !urlString.isEmpty else { return }
             if image != nil { return }
-            image = try? await MediaCacheManager.shared.image(for: urlString)
+            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+            image = try? await MediaCacheManager.shared.image(for: resolved)
         }
     }
 }

@@ -28,9 +28,15 @@ public final class MeeshyConfig {
     /// Resolve a potentially relative media URL (e.g. "/api/v1/attachments/file/...")
     /// into an absolute URL by prepending the server origin.
     public static func resolveMediaURL(_ urlString: String) -> URL? {
-        let resolved = urlString.hasPrefix("/")
-            ? shared.serverOrigin + urlString
-            : urlString
+        let resolved: String
+        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
+            resolved = urlString
+        } else if urlString.hasPrefix("/") {
+            resolved = shared.serverOrigin + urlString
+        } else {
+            // Legacy paths without leading slash (e.g. "2025/12/...")
+            resolved = shared.serverOrigin + "/" + urlString
+        }
         return URL(string: resolved)
     }
 
