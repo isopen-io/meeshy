@@ -2679,6 +2679,10 @@ export const refreshTokenRequestSchema = {
       type: 'string',
       minLength: 1,
       description: 'Current JWT token to refresh'
+    },
+    sessionToken: {
+      type: 'string',
+      description: 'Session token for trusted device refresh when JWT is expired'
     }
   }
 } as const;

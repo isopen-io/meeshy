@@ -83,6 +83,12 @@ final class APIClient {
         set { UserDefaults.standard.set(newValue, forKey: "meeshy_auth_token") }
     }
 
+    // Session token — persisted for trusted device refresh (365 days)
+    var sessionToken: String? {
+        get { UserDefaults.standard.string(forKey: "meeshy_session_token") }
+        set { UserDefaults.standard.set(newValue, forKey: "meeshy_session_token") }
+    }
+
     private init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -132,6 +138,10 @@ final class APIClient {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        if let session = sessionToken {
+            urlRequest.setValue(session, forHTTPHeaderField: "x-session-token")
+        }
+
         if let body {
             urlRequest.httpBody = body
         }
@@ -144,9 +154,28 @@ final class APIClient {
             }
 
             if httpResponse.statusCode == 401 {
-                Task { @MainActor in
-                    AuthManager.shared.handleUnauthorized()
+                if let currentToken = authToken {
+                    do {
+                        let refreshed = try await refreshAuthToken(currentToken: currentToken)
+                        authToken = refreshed.token
+                        urlRequest.setValue("Bearer \(refreshed.token)", forHTTPHeaderField: "Authorization")
+                        let (retryData, retryResponse) = try await self.session.data(for: urlRequest)
+                        guard let retryHttp = retryResponse as? HTTPURLResponse else { throw APIError.noData }
+                        if retryHttp.statusCode == 401 {
+                            Task { @MainActor in AuthManager.shared.handleUnauthorized() }
+                            throw APIError.unauthorized
+                        }
+                        guard (200...299).contains(retryHttp.statusCode) else {
+                            let errorMsg = try? decoder.decode(APIResponse<String>.self, from: retryData).error
+                            throw APIError.serverError(retryHttp.statusCode, errorMsg)
+                        }
+                        return try decoder.decode(T.self, from: retryData)
+                    } catch {
+                        Task { @MainActor in AuthManager.shared.handleUnauthorized() }
+                        throw APIError.unauthorized
+                    }
                 }
+                Task { @MainActor in AuthManager.shared.handleUnauthorized() }
                 throw APIError.unauthorized
             }
 
@@ -225,5 +254,36 @@ final class APIClient {
 
     func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
         return try await request(endpoint: endpoint, method: "DELETE")
+    }
+
+    // MARK: - Token Refresh (direct URLRequest, bypasses request() to avoid recursion)
+
+    func refreshAuthToken(currentToken: String) async throws -> RefreshTokenData {
+        guard let url = URL(string: "\(baseURL)/auth/refresh") else {
+            throw APIError.invalidURL
+        }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let session = sessionToken {
+            urlRequest.setValue(session, forHTTPHeaderField: "x-session-token")
+        }
+
+        struct RefreshBody: Encodable {
+            let token: String
+            let sessionToken: String?
+        }
+
+        let body = RefreshBody(token: currentToken, sessionToken: sessionToken)
+        urlRequest.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw APIError.unauthorized
+        }
+
+        return try decoder.decode(APIResponse<RefreshTokenData>.self, from: data).data
     }
 }

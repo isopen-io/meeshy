@@ -1,4 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import {
   userSchema,
   sessionSchema,
@@ -154,9 +156,29 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const validatedData = validateSchema(AuthSchemas.refreshToken, request.body, 'refresh');
-      const { token } = validatedData;
+      const { token, sessionToken } = validatedData;
 
-      const decoded = authService.verifyToken(token);
+      let decoded = authService.verifyToken(token);
+
+      if (!decoded && sessionToken) {
+        const jwtPayload = jwt.decode(token) as { userId?: string } | null;
+        if (jwtPayload?.userId) {
+          const hashedSession = crypto.createHash('sha256').update(sessionToken).digest('hex');
+          const session = await context.prisma.userSession.findFirst({
+            where: {
+              sessionToken: hashedSession,
+              userId: jwtPayload.userId,
+              isValid: true,
+              isTrusted: true,
+              expiresAt: { gt: new Date() }
+            }
+          });
+          if (session) {
+            decoded = jwtPayload as any;
+            logger.info('Token refresh via trusted session', { userId: jwtPayload.userId });
+          }
+        }
+      }
 
       if (!decoded) {
         return reply.status(401).send({

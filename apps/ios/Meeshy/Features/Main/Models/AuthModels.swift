@@ -37,6 +37,13 @@ struct MeeshyUser: Codable, Identifiable {
     let createdAt: String?
 }
 
+// MARK: - Refresh Token Response
+
+struct RefreshTokenData: Decodable {
+    let token: String
+    let expiresIn: Int
+}
+
 // MARK: - /auth/me Response
 
 struct MeResponseData: Decodable {

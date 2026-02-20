@@ -311,6 +311,7 @@ export const AuthSchemas = {
   // Refresh token
   refreshToken: z.object({
     token: z.string().min(1),
+    sessionToken: z.string().optional(),
   }),
 
   // Verify email
