@@ -171,22 +171,39 @@ struct ConversationView: View {
         return formatter.string(from: date).capitalized
     }
 
-    /// Visual date separator: thin lines + centered label
+    /// Visual date separator: rounded pill with theme-aware colors
     private func dateSectionView(for date: Date) -> some View {
-        HStack(spacing: 10) {
-            Rectangle()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(height: 0.5)
+        HStack {
+            Spacer()
             Text(formatDateSection(for: date))
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(
+                    theme.mode.isDark
+                        ? Color(hex: accentColor).opacity(0.85)
+                        : Color(hex: accentColor)
+                )
                 .lineLimit(1)
                 .fixedSize()
-            Rectangle()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(height: 0.5)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(
+                            theme.mode.isDark
+                                ? Color(hex: accentColor).opacity(0.12)
+                                : Color(hex: accentColor).opacity(0.08)
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    Color(hex: accentColor).opacity(theme.mode.isDark ? 0.2 : 0.15),
+                                    lineWidth: 0.5
+                                )
+                        )
+                )
+            Spacer()
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 
     // MARK: - Extracted message row (avoids type-checker timeout)
@@ -340,14 +357,23 @@ struct ConversationView: View {
 
             // Floating controls
             VStack {
-                HStack {
-                    // Back button
-                    ThemedBackButton(color: accentColor) {
+                HStack(spacing: 8) {
+                    // Back button — circle collapses when header band deploys
+                    ThemedBackButton(color: accentColor, compactMode: showOptions) {
                         HapticFeedback.light()
                         onBack()
                     }
 
-                    Spacer()
+                    // Header detail band — unfolds from avatar towards left
+                    if showOptions {
+                        conversationHeaderBand
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                    } else {
+                        Spacer()
+                    }
 
                     // Avatar button with story ring — tap toggles options menu
                     ThemedAvatarButton(
@@ -491,20 +517,9 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Options Ladder + Detail Band
+    // MARK: - Options Ladder
     private var optionsLadder: some View {
         VStack(spacing: 12) {
-            // Conversation detail band
-            conversationDetailBand
-                .scaleEffect(showOptions ? 1 : 0.95, anchor: .top)
-                .opacity(showOptions ? 1 : 0)
-                .offset(y: showOptions ? 0 : -15)
-                .animation(
-                    .spring(response: showOptions ? 0.35 : 0.25, dampingFraction: 0.8)
-                        .delay(showOptions ? 0.02 : 0),
-                    value: showOptions
-                )
-
             // Action buttons (right-aligned)
             HStack {
                 Spacer()
@@ -542,132 +557,100 @@ struct ConversationView: View {
         .allowsHitTesting(showOptions)
     }
 
-    // MARK: - Conversation Detail Band
-    private var conversationDetailBand: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Category + type + tags row
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    // Section/category badge
-                    if let section = conversationSection {
-                        HStack(spacing: 4) {
-                            Image(systemName: section.icon)
-                                .font(.system(size: 10, weight: .bold))
-                            Text(section.name)
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: section.color).opacity(0.2))
-                                .overlay(Capsule().stroke(Color(hex: section.color).opacity(0.3), lineWidth: 1))
-                        )
-                    }
-
-                    // Conversation type
+    // MARK: - Conversation Header Band (compact strip)
+    private var conversationHeaderBand: some View {
+        HStack(spacing: 8) {
+            // Left: type + section badges, then name
+            VStack(alignment: .leading, spacing: 2) {
+                // Top row: type badge + section/tags
+                HStack(spacing: 4) {
                     if !conversationTypeLabel.isEmpty {
                         Text(conversationTypeLabel)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(Color(hex: accentColor))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.15)))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.2)))
                     }
 
-                    // Tags (from UserConversationPreferences — string-based with hash colors)
-                    if let conv = conversation {
-                        ForEach(conv.tags.prefix(3)) { tag in
-                            Text(tag.name)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color(hex: tag.color).opacity(0.12)))
+                    if let section = conversationSection {
+                        HStack(spacing: 2) {
+                            Image(systemName: section.icon)
+                                .font(.system(size: 8, weight: .bold))
+                            Text(section.name)
+                                .font(.system(size: 9, weight: .bold))
                         }
-                        if conv.tags.count > 3 {
-                            Text("+\(conv.tags.count - 3)")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white.opacity(0.5))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color.white.opacity(0.1)))
+                        .foregroundColor(Color(hex: section.color))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color(hex: section.color).opacity(0.2)))
+                    }
+
+                    // First 2 tags inline
+                    if let conv = conversation {
+                        ForEach(conv.tags.prefix(2)) { tag in
+                            Text(tag.name)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(hex: tag.color))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color(hex: tag.color).opacity(0.12)))
                         }
                     }
                 }
+
+                // Conversation name
+                Text(conversation?.name ?? "Conversation")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
             }
 
-            // Conversation name
-            Text(conversation?.name ?? "Conversation")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .lineLimit(1)
+            Spacer(minLength: 4)
 
-            // Description
-            if let desc = conversation?.description, !desc.isEmpty {
-                Text(desc)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
-                    .lineLimit(2)
-            }
-
-            // Member count for non-direct conversations
-            if let conv = conversation, conv.memberCount > 2 {
-                HStack(spacing: 4) {
+            // Right: overlapping active member avatars
+            if !topActiveMembers.isEmpty {
+                HStack(spacing: -6) {
+                    ForEach(topActiveMembers) { member in
+                        MeeshyAvatar(
+                            name: member.name,
+                            mode: .custom(22),
+                            accentColor: member.color,
+                            avatarURL: member.avatarURL,
+                            presenceState: presenceManager.presenceState(for: member.id)
+                        )
+                    }
+                }
+            } else if let conv = conversation, conv.memberCount > 2 {
+                // Fallback: member count
+                HStack(spacing: 3) {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 10))
-                    Text("\(conv.memberCount) membres")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 9))
+                    Text("\(conv.memberCount)")
+                        .font(.system(size: 10, weight: .bold))
                 }
                 .foregroundColor(.white.opacity(0.5))
             }
-
-            // Top 3 active members
-            if !topActiveMembers.isEmpty {
-                Rectangle()
-                    .fill(Color.white.opacity(0.1))
-                    .frame(height: 1)
-                    .padding(.vertical, 2)
-
-                HStack(spacing: 14) {
-                    ForEach(topActiveMembers) { member in
-                        HStack(spacing: 6) {
-                            MeeshyAvatar(
-                                name: member.name,
-                                mode: .custom(24),
-                                accentColor: member.color,
-                                avatarURL: member.avatarURL,
-                                presenceState: presenceManager.presenceState(for: member.id)
-                            )
-                            Text(member.name.components(separatedBy: " ").first ?? member.name)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineLimit(1)
-                        }
-                    }
-                }
-            }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(height: 44)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            Capsule()
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    Capsule()
                         .stroke(
                             LinearGradient(
                                 colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                startPoint: .leading,
+                                endPoint: .trailing
                             ),
                             lineWidth: 1
                         )
                 )
         )
-        .shadow(color: Color(hex: accentColor).opacity(0.25), radius: 12, y: 4)
-        .padding(.horizontal, 16)
+        .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
     }
 
     // MARK: - Attach Options Ladder
@@ -1386,6 +1369,7 @@ struct ConversationView: View {
 // MARK: - Themed Back Button
 struct ThemedBackButton: View {
     let color: String
+    var compactMode: Bool = false
     let action: () -> Void
     @State private var isPressed = false
 
@@ -1398,6 +1382,7 @@ struct ThemedBackButton: View {
             action()
         }) {
             ZStack {
+                // Circle background — collapses in compact mode
                 Circle()
                     .fill(.ultraThinMaterial)
                     .frame(width: 40, height: 40)
@@ -1413,7 +1398,10 @@ struct ThemedBackButton: View {
                             )
                     )
                     .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
+                    .opacity(compactMode ? 0 : 1)
+                    .scaleEffect(compactMode ? 0.4 : 1)
 
+                // Chevron — always visible
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
@@ -1424,7 +1412,9 @@ struct ThemedBackButton: View {
                         )
                     )
             }
+            .frame(width: compactMode ? 24 : 40, height: 40)
             .scaleEffect(isPressed ? 0.9 : 1)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
         }
     }
 }
@@ -1527,10 +1517,9 @@ struct ThemedMessageBubble: View {
 
     // Computed reaction summaries for display
     private var reactionSummaries: [ReactionSummary] {
-        // Group reactions by emoji and count them
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
         for reaction in message.reactions {
-            let currentUserId = "" // Would be current user's ID
             let isMe = reaction.userId == currentUserId
             if var existing = emojiCounts[reaction.emoji] {
                 existing.count += 1
@@ -1597,15 +1586,16 @@ struct ThemedMessageBubble: View {
                     y: 3
                 )
                 .overlay(alignment: .bottomLeading) {
-                    // Réactions par-dessus le message, angle bas-gauche
+                    // Réactions chevauchant la bordure basse (80-90% hors du cadre)
                     reactionsOverlay
                         .padding(.leading, 8)
-                        .padding(.bottom, 6)
+                        .offset(y: 20)
                 }
             }
 
             if !message.isMe { Spacer(minLength: 50) }
         }
+        .padding(.bottom, 16) // Espace pour les réactions qui dépassent sous la bulle
         .alert("Navigation", isPresented: $showProfileAlert) {
             Button("OK") {}
         } message: {
@@ -1784,58 +1774,73 @@ struct ThemedMessageBubble: View {
         }
     }
 
-    // MARK: - Reactions Overlay (par-dessus le message, angle bas-gauche)
+    // MARK: - Reactions Overlay (themed, accent-aware)
     private var reactionsOverlay: some View {
-        HStack(spacing: 4) {
-            // Bouton ajouter réaction (smiley face)
+        let isDark = theme.mode.isDark
+        let accent = Color(hex: contactColor)
+
+        return HStack(spacing: 5) {
+            // Add reaction button
             Button(action: {
                 // TODO: ouvrir emoji picker pour ce message
             }) {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
             }
-            .frame(width: 26, height: 26)
+            .frame(width: 28, height: 28)
             .background(
                 Circle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
+                    .overlay(
+                        Circle()
+                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                    )
+                    .shadow(color: accent.opacity(0.1), radius: 4, y: 2)
             )
 
-            // Emojis de réaction
+            // Emoji reactions
             ForEach(reactionSummaries, id: \.emoji) { reaction in
-                ZStack(alignment: .topTrailing) {
-                    // Cercle emoji
+                HStack(spacing: 3) {
                     Text(reaction.emoji)
-                        .font(.system(size: 15))
-                        .frame(width: 26, height: 26)
-                        .background(
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    reaction.includesMe ? Color(hex: contactColor) : Color.clear,
-                                    lineWidth: 2.5
-                                )
-                        )
-
-                    // Badge compteur — uniquement si > 1
+                        .font(.system(size: 14))
                     if reaction.count > 1 {
                         Text("\(reaction.count)")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 14, minHeight: 14)
-                            .background(
-                                Circle()
-                                    .fill(reaction.includesMe ? Color(hex: contactColor) : Color.gray.opacity(0.8))
-                                    .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(
+                                reaction.includesMe
+                                    ? (isDark ? .white : .white)
+                                    : (isDark ? .white.opacity(0.7) : accent)
                             )
-                            .offset(x: 5, y: -5)
                     }
                 }
+                .padding(.horizontal, reaction.count > 1 ? 8 : 6)
+                .frame(height: 28)
+                .background(
+                    Capsule()
+                        .fill(
+                            reaction.includesMe
+                                ? (isDark
+                                    ? accent.opacity(0.35)
+                                    : accent.opacity(0.2))
+                                : (isDark
+                                    ? Color.white.opacity(0.08)
+                                    : Color.black.opacity(0.04))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    reaction.includesMe
+                                        ? accent.opacity(isDark ? 0.6 : 0.4)
+                                        : accent.opacity(isDark ? 0.15 : 0.1),
+                                    lineWidth: reaction.includesMe ? 1.5 : 0.5
+                                )
+                        )
+                        .shadow(
+                            color: reaction.includesMe ? accent.opacity(0.25) : .clear,
+                            radius: 4, y: 2
+                        )
+                )
             }
         }
     }
