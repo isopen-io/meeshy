@@ -6,8 +6,12 @@ struct APIConversationUser: Decodable {
     let id: String
     let username: String
     let displayName: String?
+    let firstName: String?
+    let lastName: String?
     let avatar: String?
     let avatarUrl: String?
+    let isOnline: Bool?
+    let lastActiveAt: Date?
 
     var name: String { displayName ?? username }
 }

@@ -36,6 +36,12 @@
 		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
 		AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF02 /* CachedAsyncImage.swift */; };
+		CC1000000000002F10 /* MediaPlayerContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000001F10 /* MediaPlayerContext.swift */; };
+		CC1100000000002F11 /* MediaTranscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1100000000001F11 /* MediaTranscriptionView.swift */; };
+		CC1200000000002F12 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1200000000001F12 /* AudioPlayerView.swift */; };
+		CC1300000000002F13 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1300000000001F13 /* VideoPlayerView.swift */; };
+		CC1400000000002F14 /* ImageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1400000000001F14 /* ImageViewerView.swift */; };
+		CC1500000000002F15 /* DocumentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1500000000001F15 /* DocumentViewerView.swift */; };
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
 		AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF04 /* UserDisplayName.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
@@ -81,6 +87,12 @@
 		AA66BB77CC880001FF03 /* MeeshyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAvatar.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF04 /* UserDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDisplayName.swift; sourceTree = "<group>"; };
 		AABB00110022EE01 /* PresenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManager.swift; sourceTree = "<group>"; };
+		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
+		CC1100000000001F11 /* MediaTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTranscriptionView.swift; sourceTree = "<group>"; };
+		CC1200000000001F12 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
+		CC1300000000001F13 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		CC1400000000001F14 /* ImageViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewerView.swift; sourceTree = "<group>"; };
+		CC1500000000001F15 /* DocumentViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentViewerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +113,12 @@
 			children = (
 				97D79006802F73CC53F1D675 /* AnimatedLogoView.swift */,
 				AA66BB77CC880001FF02 /* CachedAsyncImage.swift */,
+						CC1000000000001F10 /* MediaPlayerContext.swift */,
+						CC1100000000001F11 /* MediaTranscriptionView.swift */,
+						CC1200000000001F12 /* AudioPlayerView.swift */,
+						CC1300000000001F13 /* VideoPlayerView.swift */,
+						CC1400000000001F14 /* ImageViewerView.swift */,
+						CC1500000000001F15 /* DocumentViewerView.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
 				AA66BB77CC880001FF04 /* UserDisplayName.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
@@ -127,11 +145,19 @@
 			isa = PBXGroup;
 			children = (
 				239EA92B51CC63E846FDE461 /* Components */,
+				DD00AA11BB22CC33EE44FF01 /* Models */,
 				AABB00110022DD01 /* Services */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
 			path = Main;
+			sourceTree = "<group>";
+		};
+		DD00AA11BB22CC33EE44FF01 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		AABB00110022DD01 /* Services */ = {
@@ -315,6 +341,12 @@
 				EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */,
 				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,
 				AA66BB77CC880002FF02 /* CachedAsyncImage.swift in Sources */,
+						CC1000000000002F10 /* MediaPlayerContext.swift in Sources */,
+						CC1100000000002F11 /* MediaTranscriptionView.swift in Sources */,
+						CC1200000000002F12 /* AudioPlayerView.swift in Sources */,
+						CC1300000000002F13 /* VideoPlayerView.swift in Sources */,
+						CC1400000000002F14 /* ImageViewerView.swift in Sources */,
+						CC1500000000002F15 /* DocumentViewerView.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
 				AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,

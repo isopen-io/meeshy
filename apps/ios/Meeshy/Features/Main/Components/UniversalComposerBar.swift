@@ -219,6 +219,26 @@ struct UniversalComposerBar: View {
     enum Style { case dark, light }
     var style: Style = .dark
 
+    // MARK: - Mode (adapts behavior per usage context)
+
+    /// The mode determines placeholder, max length, available actions, etc.
+    /// When set, it overrides manual `placeholder`, `maxLength`, `showVoice`, etc.
+    var mode: ComposerMode? = nil
+
+    /// When true, the composer starts as a minimized floating button.
+    /// Tapping it expands to full bar + keyboard + (+) menu.
+    /// Swipe-down collapses it back.
+    var startMinimized: Bool = false
+
+    /// Called when the composer expands from minimized state
+    var onExpand: (() -> Void)? = nil
+
+    /// Called when the composer collapses back to minimized state
+    var onCollapse: (() -> Void)? = nil
+
+    /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
+    var onClipboardContent: ((ClipboardContent) -> Void)? = nil
+
     // MARK: - Configuration
 
     var placeholder: String = "Message..."
@@ -305,6 +325,11 @@ struct UniversalComposerBar: View {
     // Attachments
     @State private var attachments: [ComposerAttachment] = []
 
+    // Minimized / expanded state
+    @State private var isMinimized: Bool = false
+    @State private var dragOffsetY: CGFloat = 0
+    @State private var clipboardContent: ClipboardContent? = nil
+
     // Location
     @StateObject private var locationHelper = ComposerLocationHelper()
 
@@ -314,6 +339,14 @@ struct UniversalComposerBar: View {
     @State private var typeWave: Bool = false
 
     @ObservedObject private var theme = ThemeManager.shared
+
+    // MARK: - Mode-resolved properties
+
+    private var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
+    private var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
+    private var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
+    private var resolvedShowAttachment: Bool { mode?.showAttachment ?? showAttachment }
+    private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
 
     // MARK: - Computed
 
@@ -344,7 +377,134 @@ struct UniversalComposerBar: View {
     // MARK: - Body
 
     var body: some View {
+        Group {
+            if isMinimized {
+                minimizedFloatingButton
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            } else {
+                expandedComposer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .offset(y: dragOffsetY)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if value.translation.height > 0 {
+                                    dragOffsetY = value.translation.height * 0.5
+                                }
+                            }
+                            .onEnded { value in
+                                if value.translation.height > 80 {
+                                    // Swipe down: collapse keyboard / minimize
+                                    isFocused = false
+                                    if startMinimized {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            isMinimized = true
+                                            dragOffsetY = 0
+                                        }
+                                        onCollapse?()
+                                    } else {
+                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                            dragOffsetY = 0
+                                        }
+                                    }
+                                } else {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        dragOffsetY = 0
+                                    }
+                                }
+                            }
+                    )
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        .onAppear {
+            isMinimized = startMinimized
+        }
+    }
+
+    // MARK: - Minimized Floating Button
+
+    private var minimizedFloatingButton: some View {
+        HStack(spacing: 12) {
+            // Mic button
+            if resolvedShowVoice {
+                Button {
+                    HapticFeedback.medium()
+                    expandAndStartRecording()
+                } label: {
+                    VStack(spacing: 3) {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle().stroke(
+                                        LinearGradient(
+                                            colors: [Color(hex: "FF6B6B").opacity(0.5), Color(hex: "FF2E63").opacity(0.3)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        ), lineWidth: 1
+                                    )
+                                )
+                                .shadow(color: Color(hex: "FF6B6B").opacity(0.2), radius: 6, y: 2)
+
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color(hex: "FF6B6B"), Color(hex: "FF2E63")],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        Text("Vocal")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
+                    }
+                }
+            }
+
+            // Write button
+            Button {
+                HapticFeedback.medium()
+                expandComposer()
+            } label: {
+                VStack(spacing: 3) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 50, height: 50)
+                            .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 3)
+
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    Text("Écrire")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
+                }
+            }
+        }
+        .padding(.trailing, 16)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    // MARK: - Expanded Composer
+
+    private var expandedComposer: some View {
         VStack(spacing: 0) {
+            // Clipboard content preview (for pasted text > 2000 chars)
+            if let clip = clipboardContent {
+                clipboardContentPreview(clip)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Attachments preview (above the composer, like web MessageComposer)
             if !allAttachments.isEmpty {
                 attachmentsPreview
@@ -353,6 +513,11 @@ struct UniversalComposerBar: View {
 
             // Main composer
             VStack(spacing: 0) {
+                // Swipe handle indicator
+                if startMinimized {
+                    swipeHandle
+                }
+
                 // Top toolbar (sentiment, language, recording indicator, char counter)
                 topToolbar
                     .padding(.horizontal, 8)
@@ -367,12 +532,12 @@ struct UniversalComposerBar: View {
                         if isRecording {
                             stopRecordingButton
                                 .transition(.scale.combined(with: .opacity))
-                        } else {
+                        } else if resolvedShowAttachment {
                             attachButton
                         }
                     }
                     .overlay(alignment: .bottom) {
-                        if showAttachOptions && showAttachment && !isRecording {
+                        if showAttachOptions && resolvedShowAttachment && !isRecording {
                             attachmentLadder
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
@@ -467,6 +632,14 @@ struct UniversalComposerBar: View {
                     typeWave = false
                 }
             }
+            // Close attach options when typing starts
+            if !newValue.isEmpty && showAttachOptions {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachOptions = false
+                }
+            }
+            // Clipboard content: auto-create when pasting 2000+ chars
+            handleClipboardCheck(newValue)
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
             LanguagePickerSheet(analyzer: textAnalyzer)
@@ -805,7 +978,7 @@ struct UniversalComposerBar: View {
     private var textInputField: some View {
         HStack(spacing: 0) {
             // Mic button inside field (left) — hidden when focused
-            if showVoice && !isFocused {
+            if resolvedShowVoice && !isFocused {
                 Button {
                     onAnyInteraction?()
                     HapticFeedback.light()
@@ -823,21 +996,21 @@ struct UniversalComposerBar: View {
             // Text input
             ZStack(alignment: .leading) {
                 if text.isEmpty {
-                    Text(placeholder)
+                    Text(resolvedPlaceholder)
                         .foregroundColor(.white.opacity(0.4))
-                        .padding(.leading, (showVoice && !isFocused) ? 2 : 16)
+                        .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
                 }
 
                 TextField("", text: $text, axis: .vertical)
                     .focused($isFocused)
                     .foregroundColor(.white)
-                    .padding(.leading, (showVoice && !isFocused) ? 2 : 16)
+                    .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
                     .padding(.trailing, 16)
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
                     .font(.system(size: 16))
                     .onChange(of: text) { newValue in
-                        if let maxLen = maxLength, newValue.count > maxLen {
+                        if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
                         }
                     }
@@ -1111,5 +1284,120 @@ struct UniversalComposerBar: View {
         if bytes < 1024 { return "\(bytes) B" }
         if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
         return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+    }
+
+    // ========================================================================
+    // MARK: - Minimize / Expand Logic
+    // ========================================================================
+
+    private func expandComposer() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isMinimized = false
+        }
+        // Show keyboard + open attach menu after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isFocused = true
+            if resolvedShowAttachment {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAttachOptions = true
+                }
+            }
+        }
+        onExpand?()
+    }
+
+    private func expandAndStartRecording() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isMinimized = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            startRecording()
+        }
+        onExpand?()
+    }
+
+    // ========================================================================
+    // MARK: - Swipe Handle
+    // ========================================================================
+
+    private var swipeHandle: some View {
+        HStack {
+            Spacer()
+            RoundedRectangle(cornerRadius: 2)
+                .fill(style == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.12))
+                .frame(width: 36, height: 4)
+            Spacer()
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 2)
+    }
+
+    // ========================================================================
+    // MARK: - Clipboard Content Handling
+    // ========================================================================
+
+    private func handleClipboardCheck(_ newText: String) {
+        // Detect if a paste of 2000+ chars just happened
+        let delta = newText.count - (text.count - (newText.count - text.count))
+        if newText.count > 2000 && delta > 500 {
+            // Likely a paste — create clipboard content
+            let clip = ClipboardContent(text: newText)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                clipboardContent = clip
+            }
+            // Clear the text field since it's now an attachment
+            DispatchQueue.main.async {
+                text = ""
+            }
+            onClipboardContent?(clip)
+            HapticFeedback.medium()
+        }
+    }
+
+    private func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.plaintext.fill")
+                .font(.system(size: 18))
+                .foregroundColor(Color(hex: "9B59B6"))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Contenu du presse-papier")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(style == .dark ? .white : theme.textPrimary)
+
+                Text(clip.truncatedPreview)
+                    .font(.system(size: 10))
+                    .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
+                    .lineLimit(2)
+
+                Text("\(clip.charCount) caractères")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Color(hex: "9B59B6"))
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    clipboardContent = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "FF6B6B"))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(hex: "9B59B6").opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
     }
 }

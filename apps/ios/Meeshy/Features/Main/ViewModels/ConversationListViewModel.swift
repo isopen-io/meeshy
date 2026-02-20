@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 import MeeshySDK
 
 @MainActor
@@ -12,6 +13,26 @@ class ConversationListViewModel: ObservableObject {
     private let api = APIClient.shared
     private let limit = 15
     private var currentOffset = 0
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        observeSocketReconnect()
+    }
+
+    // Re-seed presence when Socket.IO reconnects (online → offline → online)
+    private func observeSocketReconnect() {
+        MessageSocketManager.shared.$isConnected
+            .removeDuplicates()
+            .dropFirst()
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    await self?.loadConversations()
+                }
+            }
+            .store(in: &cancellables)
+    }
 
     // MARK: - Load Conversations
 

@@ -19,6 +19,7 @@ struct ConversationView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
+    @EnvironmentObject var statusViewModel: StatusViewModel
     @StateObject private var viewModel: ConversationViewModel
     @StateObject private var locationManager = LocationManager()
     @State private var messageText = ""
@@ -71,6 +72,11 @@ struct ConversationView: View {
     private var headerPresenceState: PresenceState {
         guard isDirect, let userId = conversation?.participantUserId else { return .offline }
         return presenceManager.presenceState(for: userId)
+    }
+
+    private var headerMoodEmoji: String? {
+        guard isDirect, let userId = conversation?.participantUserId else { return nil }
+        return statusViewModel.statusForUser(userId: userId)?.moodEmoji
     }
 
     private var conversationSection: ConversationSection? {
@@ -417,6 +423,14 @@ struct ConversationView: View {
                             messageRow(index: index, msg: msg)
                         }
 
+                        // Typing indicator — shown inline after last message
+                        if !viewModel.typingUsernames.isEmpty {
+                            inlineTypingIndicator
+                                .id("typing_indicator")
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.count)
+                        }
+
                         // Near-bottom detector — sits right after messages
                         Color.clear
                             .frame(height: 1)
@@ -494,73 +508,71 @@ struct ConversationView: View {
 
             // Floating controls
             VStack {
-                HStack(spacing: 8) {
-                    // Back button — circle collapses when header band deploys
-                    ThemedBackButton(color: accentColor, compactMode: showOptions) {
-                        HapticFeedback.light()
-                        onBack()
-                    }
-
-                    // Header detail band — unfolds from avatar towards left
-                    if showOptions {
-                        conversationHeaderBand
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                    } else {
-                        Spacer()
-                    }
-
-                    // Avatar button with story ring — tap toggles options menu
-                    ThemedAvatarButton(
-                        name: conversation?.name ?? "?",
-                        color: accentColor,
-                        secondaryColor: secondaryColor,
-                        isExpanded: showOptions,
-                        hasStoryRing: headerHasStoryRing,
-                        avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                        presenceState: headerPresenceState
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showOptions.toggle()
+                if showOptions {
+                    // Header band takes full width — back arrow + info + avatar(s) all inside
+                    conversationHeaderBand
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+                        .padding(.horizontal, 8)
+                        .padding(.top, 8)
+                } else {
+                    // Collapsed: back button + spacer + avatar trigger
+                    HStack(spacing: 8) {
+                        ThemedBackButton(color: accentColor) {
+                            HapticFeedback.light()
+                            onBack()
                         }
-                    }
-                    .contextMenu {
-                        // Long press: view stories, profile, info
-                        if headerHasStoryRing {
-                            Button {
-                                if let userId = conversation?.participantUserId,
-                                   let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                                    storyGroupIndexForHeader = groupIndex
-                                    showStoryViewerFromHeader = true
-                                }
-                            } label: {
-                                Label("Voir les stories", systemImage: "play.circle.fill")
+
+                        Spacer()
+
+                        ThemedAvatarButton(
+                            name: conversation?.name ?? "?",
+                            color: accentColor,
+                            secondaryColor: secondaryColor,
+                            isExpanded: false,
+                            hasStoryRing: headerHasStoryRing,
+                            avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                            presenceState: headerPresenceState
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showOptions = true
                             }
                         }
-
-                        Button {
-                            actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                        } label: {
-                            Label("Voir le profil", systemImage: "person.fill")
-                        }
-
-                        Button {
-                            actionAlert = "Infos de la conversation"
-                        } label: {
-                            Label("Infos conversation", systemImage: "info.circle.fill")
+                        .contextMenu {
+                            if headerHasStoryRing {
+                                Button {
+                                    if let userId = conversation?.participantUserId,
+                                       let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                                        storyGroupIndexForHeader = groupIndex
+                                        showStoryViewerFromHeader = true
+                                    }
+                                } label: {
+                                    Label("Voir les stories", systemImage: "play.circle.fill")
+                                }
+                            }
+                            Button {
+                                actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                            } label: {
+                                Label("Voir le profil", systemImage: "person.fill")
+                            }
+                            Button {
+                                actionAlert = "Infos de la conversation"
+                            } label: {
+                                Label("Infos conversation", systemImage: "info.circle.fill")
+                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
 
                 Spacer()
             }
             .zIndex(100)
 
-            // Options ladder
+            // Options ladder — unfolds downward below header band
             optionsLadder
 
             // Dismiss overlay (options menu)
@@ -677,33 +689,32 @@ struct ConversationView: View {
         )
     }
 
-    // MARK: - Options Ladder
+    // MARK: - Options Ladder (unfolds downward from settings button)
     private var optionsLadder: some View {
         VStack(spacing: 12) {
-            // Action buttons (right-aligned)
             HStack {
                 Spacer()
                 VStack(spacing: 10) {
-                    ThemedActionButton(icon: "person.fill", color: "9B59B6") {
-                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
-                    }
-                    .menuAnimation(showMenu: showOptions, delay: 0.06)
-
                     ThemedActionButton(icon: "video.fill", color: "4ECDC4") {
                         actionAlert = "Appel vidéo"
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
                     }
-                    .menuAnimation(showMenu: showOptions, delay: 0.10)
+                    .menuAnimation(showMenu: showOptions, delay: 0.06)
 
                     ThemedActionButton(icon: "phone.fill", color: "F8B500") {
                         actionAlert = "Appel vocal"
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
                     }
-                    .menuAnimation(showMenu: showOptions, delay: 0.14)
+                    .menuAnimation(showMenu: showOptions, delay: 0.10)
 
                     ThemedActionButton(icon: "magnifyingglass", color: "FF6B6B") {
                         actionAlert = "Rechercher dans la conversation"
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
+                    }
+                    .menuAnimation(showMenu: showOptions, delay: 0.14)
+
+                    ThemedActionButton(icon: "gearshape.fill", color: accentColor) {
+                        actionAlert = "Configuration conversation"
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showOptions = false }
                     }
                     .menuAnimation(showMenu: showOptions, delay: 0.18)
@@ -717,22 +728,28 @@ struct ConversationView: View {
         .allowsHitTesting(showOptions)
     }
 
-    // MARK: - Conversation Header Band (compact strip)
+    // MARK: - Conversation Header Band (thin strip — back arrow inside, full width)
     private var conversationHeaderBand: some View {
         HStack(spacing: 8) {
-            // Left: type + section badges, then name
-            VStack(alignment: .leading, spacing: 2) {
-                // Top row: type badge + section/tags
-                HStack(spacing: 4) {
-                    if !conversationTypeLabel.isEmpty {
-                        Text(conversationTypeLabel)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(hex: accentColor))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.2)))
-                    }
+            // Back arrow inside the band
+            Button {
+                HapticFeedback.light()
+                onBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 28, height: 28)
+            }
 
+            // Center: category + type badges, name
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
                     if let section = conversationSection {
                         HStack(spacing: 2) {
                             Image(systemName: section.icon)
@@ -746,7 +763,15 @@ struct ConversationView: View {
                         .background(Capsule().fill(Color(hex: section.color).opacity(0.2)))
                     }
 
-                    // First 2 tags inline
+                    if !conversationTypeLabel.isEmpty {
+                        Text(conversationTypeLabel)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: accentColor))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(hex: accentColor).opacity(0.2)))
+                    }
+
                     if let conv = conversation {
                         ForEach(conv.tags.prefix(2)) { tag in
                             Text(tag.name)
@@ -757,9 +782,13 @@ struct ConversationView: View {
                                 .background(Capsule().fill(Color(hex: tag.color).opacity(0.12)))
                         }
                     }
+
+                    if let mood = headerMoodEmoji {
+                        Text(mood)
+                            .font(.system(size: 14))
+                    }
                 }
 
-                // Conversation name
                 Text(conversation?.name ?? "Conversation")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
@@ -768,21 +797,59 @@ struct ConversationView: View {
 
             Spacer(minLength: 4)
 
-            // Right: overlapping active member avatars
-            if !topActiveMembers.isEmpty {
+            // Right: participant avatar(s) — tap to collapse band
+            if isDirect, let userId = conversation?.participantUserId {
+                MeeshyAvatar(
+                    name: conversation?.name ?? "?",
+                    mode: .custom(36),
+                    accentColor: accentColor,
+                    avatarURL: conversation?.participantAvatarURL,
+                    storyState: memberStoryState(for: userId),
+                    presenceState: presenceManager.presenceState(for: userId),
+                    onTap: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showOptions = false
+                        }
+                    },
+                    onViewStory: {
+                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                            storyGroupIndexForHeader = groupIndex
+                            showStoryViewerFromHeader = true
+                        }
+                    },
+                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
+                )
+            } else if !topActiveMembers.isEmpty {
                 HStack(spacing: -6) {
                     ForEach(topActiveMembers) { member in
                         MeeshyAvatar(
                             name: member.name,
-                            mode: .custom(22),
+                            mode: .custom(24),
                             accentColor: member.color,
                             avatarURL: member.avatarURL,
-                            presenceState: presenceManager.presenceState(for: member.id)
+                            storyState: memberStoryState(for: member.id),
+                            presenceState: presenceManager.presenceState(for: member.id),
+                            onTap: {
+                                HapticFeedback.light()
+                                actionAlert = "Profil de \(member.name)"
+                            },
+                            onViewStory: {
+                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
+                                    storyGroupIndexForHeader = groupIndex
+                                    showStoryViewerFromHeader = true
+                                }
+                            },
+                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
                         )
                     }
                 }
+                // Tap overlapping avatars to collapse
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showOptions = false
+                    }
+                }
             } else if let conv = conversation, conv.memberCount > 2 {
-                // Fallback: member count
                 HStack(spacing: 3) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 9))
@@ -792,9 +859,10 @@ struct ConversationView: View {
                 .foregroundColor(.white.opacity(0.5))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(height: 44)
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
+        .frame(height: 48)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -811,6 +879,33 @@ struct ConversationView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+    }
+
+    // Helper: story state for a member
+    private func memberStoryState(for userId: String) -> StoryRingState {
+        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
+        if storyViewModel.hasStories(forUserId: userId) { return .read }
+        return .none
+    }
+
+    // Helper: context menu items for participant avatars in header band
+    private func headerAvatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if storyViewModel.hasStories(forUserId: userId) {
+            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                    storyGroupIndexForHeader = groupIndex
+                    showStoryViewerFromHeader = true
+                }
+            })
+        }
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+            actionAlert = "Profil de \(name)"
+        })
+        items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
+            actionAlert = "Message à \(name)"
+        })
+        return items
     }
 
     // MARK: - Attach Options Ladder
@@ -1034,6 +1129,49 @@ struct ConversationView: View {
         }
     }
 
+    // MARK: - Inline Typing Indicator (shown after last message)
+    @State private var inlineTypingDotPhase: Int = 0
+
+    private var inlineTypingIndicator: some View {
+        let isDark = theme.mode.isDark
+        let accent = Color(hex: accentColor)
+
+        return HStack(spacing: 8) {
+            // Animated dots bubble
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(accent.opacity(inlineTypingDotPhase == i ? 1.0 : 0.35))
+                        .frame(width: 6, height: 6)
+                        .scaleEffect(inlineTypingDotPhase == i ? 1.2 : 1.0)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
+                    .overlay(
+                        Capsule()
+                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                    )
+            )
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: false)) {
+                    inlineTypingDotPhase = (inlineTypingDotPhase + 1) % 3
+                }
+            }
+
+            // Typing label
+            Text(typingLabel)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isDark ? accent.opacity(0.7) : accent.opacity(0.6))
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
     // MARK: - Themed Composer
     private var themedComposer: some View {
         VStack(spacing: 8) {
@@ -1207,6 +1345,7 @@ struct ConversationView: View {
         }
         .onChange(of: messageText) { newText in
             textAnalyzer.analyze(text: newText)
+            viewModel.onTextChanged(newText)
         }
         .onChange(of: isTyping) { focused in
             // Bounce animation on focus
@@ -1405,6 +1544,7 @@ struct ConversationView: View {
         pendingAttachments.removeAll()
         messageText = ""
         pendingReplyReference = nil
+        viewModel.stopTypingEmission()
         HapticFeedback.light()
 
         // If we have local-only attachments (not uploaded), fall back to local append
@@ -1519,6 +1659,7 @@ struct ConversationView: View {
         guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let text = messageText
         messageText = ""
+        viewModel.stopTypingEmission()
         HapticFeedback.light()
         Task {
             await viewModel.sendMessage(content: text)

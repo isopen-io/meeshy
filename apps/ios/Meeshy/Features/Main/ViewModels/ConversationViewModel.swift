@@ -2,6 +2,50 @@ import Foundation
 import Combine
 import MeeshySDK
 
+// MARK: - Real-time Translation/Transcription/Audio Types
+
+struct MessageTranslation: Identifiable {
+    let id: String
+    let messageId: String
+    let sourceLanguage: String
+    let targetLanguage: String
+    let translatedContent: String
+    let translationModel: String
+    let confidenceScore: Double?
+}
+
+struct MessageTranscriptionSegment: Identifiable {
+    let id = UUID()
+    let text: String
+    let startTime: Double?
+    let endTime: Double?
+    let speakerId: String?
+}
+
+struct MessageTranscription {
+    let attachmentId: String
+    let text: String
+    let language: String
+    let confidence: Double?
+    let durationMs: Int?
+    let segments: [MessageTranscriptionSegment]
+    let speakerCount: Int?
+}
+
+struct MessageTranslatedAudio: Identifiable {
+    let id: String
+    let attachmentId: String
+    let targetLanguage: String
+    let url: String
+    let transcription: String
+    let durationMs: Int
+    let format: String
+    let cloned: Bool
+    let quality: Double
+    let ttsModel: String
+    let segments: [MessageTranscriptionSegment]
+}
+
 @MainActor
 class ConversationViewModel: ObservableObject {
 
@@ -22,6 +66,11 @@ class ConversationViewModel: ObservableObject {
     /// Users currently typing in this conversation
     @Published var typingUsernames: [String] = []
 
+    /// Real-time translation/transcription/audio data keyed by messageId
+    @Published var messageTranslations: [String: [MessageTranslation]] = [:]
+    @Published var messageTranscriptions: [String: MessageTranscription] = [:]
+    @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
+
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
@@ -39,11 +88,77 @@ class ConversationViewModel: ObservableObject {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
+    // Typing emission state
+    private var typingTimer: Timer?
+    private var isEmittingTyping = false
+    private static let typingDebounceInterval: TimeInterval = 3.0
+    private static let typingSafetyTimeout: TimeInterval = 15.0
+
+    // Safety timers for stuck typing indicators
+    private var typingSafetyTimers: [String: Timer] = [:]
+
     // MARK: - Init
 
     init(conversationId: String) {
         self.conversationId = conversationId
         subscribeToSocket()
+        joinRoom()
+    }
+
+    deinit {
+        leaveRoom()
+        // Direct cleanup — can't call @MainActor methods from deinit
+        typingTimer?.invalidate()
+        if isEmittingTyping {
+            MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
+        }
+        typingSafetyTimers.values.forEach { $0.invalidate() }
+    }
+
+    // MARK: - Room Management
+
+    private func joinRoom() {
+        MessageSocketManager.shared.joinConversation(conversationId)
+    }
+
+    private nonisolated func leaveRoom() {
+        MessageSocketManager.shared.leaveConversation(conversationId)
+    }
+
+    // MARK: - Typing Emission
+
+    func onTextChanged(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            startTypingEmission()
+        } else {
+            stopTypingEmission()
+        }
+    }
+
+    private func startTypingEmission() {
+        typingTimer?.invalidate()
+
+        if !isEmittingTyping {
+            isEmittingTyping = true
+            MessageSocketManager.shared.emitTypingStart(conversationId: conversationId)
+        }
+
+        // Auto-stop after debounce interval of no typing
+        typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingDebounceInterval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.stopTypingEmission()
+            }
+        }
+    }
+
+    func stopTypingEmission() {
+        typingTimer?.invalidate()
+        typingTimer = nil
+
+        guard isEmittingTyping else { return }
+        isEmittingTyping = false
+        MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
     }
 
     // MARK: - Programmatic Scroll Guard
@@ -133,6 +248,9 @@ class ConversationViewModel: ObservableObject {
     func sendMessage(content: String, replyToId: String? = nil, attachmentIds: [String]? = nil) async {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
+
+        // Stop typing emission on send
+        stopTypingEmission()
 
         isSending = true
 
@@ -224,6 +342,23 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Typing Safety Timeout
+
+    private func resetTypingSafetyTimer(for username: String) {
+        typingSafetyTimers[username]?.invalidate()
+        typingSafetyTimers[username] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.typingUsernames.removeAll { $0 == username }
+                self?.typingSafetyTimers.removeValue(forKey: username)
+            }
+        }
+    }
+
+    private func clearTypingSafetyTimer(for username: String) {
+        typingSafetyTimers[username]?.invalidate()
+        typingSafetyTimers.removeValue(forKey: username)
+    }
+
     // MARK: - Socket Subscriptions
 
     private func subscribeToSocket() {
@@ -245,6 +380,13 @@ class ConversationViewModel: ObservableObject {
                 self.messages.append(msg)
                 self.lastUnreadMessage = msg
                 self.newMessageAppended += 1
+
+                // Clear typing for the sender (they just sent a message)
+                if let sender = apiMsg.sender {
+                    let senderName = sender.displayName ?? sender.username
+                    self.typingUsernames.removeAll { $0 == senderName }
+                    self.clearTypingSafetyTimer(for: senderName)
+                }
             }
             .store(in: &cancellables)
 
@@ -274,14 +416,20 @@ class ConversationViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Reactions added
+        // Reactions added (with deduplication)
         socketManager.reactionAdded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
                 if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
-                    let reaction = Reaction(messageId: event.messageId, userId: event.userId, emoji: event.emoji)
-                    self.messages[idx].reactions.append(reaction)
+                    // Deduplicate: don't add if same user+emoji already exists
+                    let exists = self.messages[idx].reactions.contains {
+                        $0.emoji == event.emoji && $0.userId == event.userId
+                    }
+                    if !exists {
+                        let reaction = Reaction(messageId: event.messageId, userId: event.userId, emoji: event.emoji)
+                        self.messages[idx].reactions.append(reaction)
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -299,7 +447,7 @@ class ConversationViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Typing started
+        // Typing started (with safety timeout)
         socketManager.typingStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
@@ -307,6 +455,10 @@ class ConversationViewModel: ObservableObject {
                 guard let self else { return }
                 if event.userId != userId, !self.typingUsernames.contains(event.username) {
                     self.typingUsernames.append(event.username)
+                }
+                // Reset safety timer (even if already in list — they're still typing)
+                if event.userId != userId {
+                    self.resetTypingSafetyTimer(for: event.username)
                 }
             }
             .store(in: &cancellables)
@@ -318,7 +470,116 @@ class ConversationViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 self.typingUsernames.removeAll { $0 == event.username }
+                self.clearTypingSafetyTimer(for: event.username)
             }
+            .store(in: &cancellables)
+
+        // Translation received
+        socketManager.translationReceived
+            .filter { [weak self] event in
+                self?.messages.contains { $0.id == event.messageId } ?? false
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let msgId = event.messageId
+                let newTranslations = event.translations.map { t in
+                    MessageTranslation(
+                        id: t.id,
+                        messageId: t.messageId,
+                        sourceLanguage: t.sourceLanguage,
+                        targetLanguage: t.targetLanguage,
+                        translatedContent: t.translatedContent,
+                        translationModel: t.translationModel,
+                        confidenceScore: t.confidenceScore
+                    )
+                }
+                var existing = self.messageTranslations[msgId] ?? []
+                for translation in newTranslations {
+                    if let idx = existing.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
+                        existing[idx] = translation
+                    } else {
+                        existing.append(translation)
+                    }
+                }
+                self.messageTranslations[msgId] = existing
+            }
+            .store(in: &cancellables)
+
+        // Transcription ready
+        socketManager.transcriptionReady
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let segments = (event.transcription.segments ?? []).map { s in
+                    MessageTranscriptionSegment(
+                        text: s.text,
+                        startTime: s.startTime,
+                        endTime: s.endTime,
+                        speakerId: s.speakerId
+                    )
+                }
+                self.messageTranscriptions[event.messageId] = MessageTranscription(
+                    attachmentId: event.attachmentId,
+                    text: event.transcription.text,
+                    language: event.transcription.language,
+                    confidence: event.transcription.confidence,
+                    durationMs: event.transcription.durationMs,
+                    segments: segments,
+                    speakerCount: event.transcription.speakerCount
+                )
+            }
+            .store(in: &cancellables)
+
+        // Audio translation (all 3 events use same handler)
+        let audioHandler: (AudioTranslationEvent) -> Void = { [weak self] event in
+            guard let self else { return }
+            guard event.conversationId == convId else { return }
+            let msgId = event.messageId
+            let segments = (event.translatedAudio.segments ?? []).map { s in
+                MessageTranscriptionSegment(
+                    text: s.text,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
+                    speakerId: s.speakerId
+                )
+            }
+            let audio = MessageTranslatedAudio(
+                id: event.translatedAudio.id,
+                attachmentId: event.attachmentId,
+                targetLanguage: event.translatedAudio.targetLanguage,
+                url: event.translatedAudio.url,
+                transcription: event.translatedAudio.transcription,
+                durationMs: event.translatedAudio.durationMs,
+                format: event.translatedAudio.format,
+                cloned: event.translatedAudio.cloned,
+                quality: event.translatedAudio.quality,
+                ttsModel: event.translatedAudio.ttsModel,
+                segments: segments
+            )
+            var existing = self.messageTranslatedAudios[msgId] ?? []
+            if let idx = existing.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
+                existing[idx] = audio
+            } else {
+                existing.append(audio)
+            }
+            self.messageTranslatedAudios[msgId] = existing
+        }
+
+        socketManager.audioTranslationReady
+            .receive(on: DispatchQueue.main)
+            .sink(receiveValue: audioHandler)
+            .store(in: &cancellables)
+
+        socketManager.audioTranslationProgressive
+            .receive(on: DispatchQueue.main)
+            .sink(receiveValue: audioHandler)
+            .store(in: &cancellables)
+
+        socketManager.audioTranslationCompleted
+            .receive(on: DispatchQueue.main)
+            .sink(receiveValue: audioHandler)
             .store(in: &cancellables)
     }
 }

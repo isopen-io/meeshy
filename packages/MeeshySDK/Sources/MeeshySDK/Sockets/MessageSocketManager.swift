@@ -58,27 +58,112 @@ public struct UserStatusEvent: Decodable {
     }
 }
 
+// MARK: - Translation Event Data
+
+public struct TranslationData: Decodable {
+    public let id: String
+    public let messageId: String
+    public let sourceLanguage: String
+    public let targetLanguage: String
+    public let translatedContent: String
+    public let translationModel: String
+    public let confidenceScore: Double?
+}
+
+public struct TranslationEvent: Decodable {
+    public let messageId: String
+    public let translations: [TranslationData]
+}
+
+// MARK: - Transcription Event Data
+
+public struct TranscriptionSegment: Decodable {
+    public let text: String
+    public let startTime: Double?
+    public let endTime: Double?
+    public let speakerId: String?
+    public let voiceSimilarityScore: Double?
+}
+
+public struct TranscriptionData: Decodable {
+    public let id: String?
+    public let text: String
+    public let language: String
+    public let confidence: Double?
+    public let durationMs: Int?
+    public let segments: [TranscriptionSegment]?
+    public let speakerCount: Int?
+}
+
+public struct TranscriptionReadyEvent: Decodable {
+    public let messageId: String
+    public let attachmentId: String
+    public let conversationId: String
+    public let transcription: TranscriptionData
+    public let processingTimeMs: Int?
+}
+
+// MARK: - Audio Translation Event Data
+
+public struct TranslatedAudioInfo: Decodable {
+    public let id: String
+    public let targetLanguage: String
+    public let url: String
+    public let transcription: String
+    public let durationMs: Int
+    public let format: String
+    public let cloned: Bool
+    public let quality: Double
+    public let ttsModel: String
+    public let segments: [TranscriptionSegment]?
+}
+
+public struct AudioTranslationEvent: Decodable {
+    public let messageId: String
+    public let attachmentId: String
+    public let conversationId: String
+    public let language: String
+    public let translatedAudio: TranslatedAudioInfo
+    public let processingTimeMs: Int?
+}
+
 // MARK: - Message Socket Manager
 
 public final class MessageSocketManager: ObservableObject {
     public static let shared = MessageSocketManager()
 
-    // Combine publishers
+    // Combine publishers — messages
     public let messageReceived = PassthroughSubject<APIMessage, Never>()
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+
+    // Combine publishers — reactions
     public let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
     public let reactionRemoved = PassthroughSubject<ReactionUpdateEvent, Never>()
+
+    // Combine publishers — typing
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
     public let typingStopped = PassthroughSubject<TypingEvent, Never>()
+
+    // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     public let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+
+    // Combine publishers — translation
+    public let translationReceived = PassthroughSubject<TranslationEvent, Never>()
+
+    // Combine publishers — transcription & audio
+    public let transcriptionReady = PassthroughSubject<TranscriptionReadyEvent, Never>()
+    public let audioTranslationReady = PassthroughSubject<AudioTranslationEvent, Never>()
+    public let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
+    public let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
 
     @Published public var isConnected = false
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
+    private var joinedConversations: Set<String> = []
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -121,10 +206,37 @@ public final class MessageSocketManager: ObservableObject {
     }
 
     public func disconnect() {
+        joinedConversations.removeAll()
         socket?.disconnect()
         socket = nil
         manager = nil
         isConnected = false
+    }
+
+    // MARK: - Room Management
+
+    public func joinConversation(_ conversationId: String) {
+        guard !joinedConversations.contains(conversationId) else { return }
+        socket?.emit("conversation:join", ["conversationId": conversationId])
+        joinedConversations.insert(conversationId)
+        print("[MessageSocket] Joined conversation:\(conversationId)")
+    }
+
+    public func leaveConversation(_ conversationId: String) {
+        guard joinedConversations.contains(conversationId) else { return }
+        socket?.emit("conversation:leave", ["conversationId": conversationId])
+        joinedConversations.remove(conversationId)
+        print("[MessageSocket] Left conversation:\(conversationId)")
+    }
+
+    // MARK: - Typing Emission
+
+    public func emitTypingStart(conversationId: String) {
+        socket?.emit("typing:start", ["conversationId": conversationId])
+    }
+
+    public func emitTypingStop(conversationId: String) {
+        socket?.emit("typing:stop", ["conversationId": conversationId])
     }
 
     // MARK: - Event Handlers
@@ -133,7 +245,12 @@ public final class MessageSocketManager: ObservableObject {
         guard let socket else { return }
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.isConnected = true }
+            guard let self else { return }
+            DispatchQueue.main.async { self.isConnected = true }
+            // Re-join conversations on reconnect
+            for convId in self.joinedConversations {
+                self.socket?.emit("conversation:join", ["conversationId": convId])
+            }
             print("[MessageSocket] Connected")
         }
 
@@ -207,6 +324,48 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("user:status") { [weak self] data, _ in
             self?.decode(UserStatusEvent.self, from: data) { event in
                 self?.userStatusChanged.send(event)
+            }
+        }
+
+        // --- Translation events ---
+
+        socket.on("message:translation") { [weak self] data, _ in
+            self?.decode(TranslationEvent.self, from: data) { event in
+                self?.translationReceived.send(event)
+            }
+        }
+
+        socket.on("message:translated") { [weak self] data, _ in
+            self?.decode(TranslationEvent.self, from: data) { event in
+                self?.translationReceived.send(event)
+            }
+        }
+
+        // --- Transcription events ---
+
+        socket.on("audio:transcription-ready") { [weak self] data, _ in
+            self?.decode(TranscriptionReadyEvent.self, from: data) { event in
+                self?.transcriptionReady.send(event)
+            }
+        }
+
+        // --- Audio translation events ---
+
+        socket.on("audio:translation-ready") { [weak self] data, _ in
+            self?.decode(AudioTranslationEvent.self, from: data) { event in
+                self?.audioTranslationReady.send(event)
+            }
+        }
+
+        socket.on("audio:translations-progressive") { [weak self] data, _ in
+            self?.decode(AudioTranslationEvent.self, from: data) { event in
+                self?.audioTranslationProgressive.send(event)
+            }
+        }
+
+        socket.on("audio:translations-completed") { [weak self] data, _ in
+            self?.decode(AudioTranslationEvent.self, from: data) { event in
+                self?.audioTranslationCompleted.send(event)
             }
         }
     }
