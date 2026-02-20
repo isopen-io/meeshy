@@ -109,6 +109,7 @@ struct StoryTrayView: View {
                     name: group.username,
                     mode: .storyTray,
                     accentColor: group.avatarColor,
+                    avatarURL: group.avatarURL,
                     storyState: group.hasUnviewed ? .unread : .read,
                     presenceState: presenceManager.presenceState(for: group.id),
                     contextMenuItems: [

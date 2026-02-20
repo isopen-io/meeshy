@@ -236,6 +236,7 @@ struct ConversationView: View {
                         secondaryColor: secondaryColor,
                         isExpanded: showOptions,
                         hasStoryRing: headerHasStoryRing,
+                        avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                         presenceState: headerPresenceState
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -1170,6 +1171,7 @@ struct ThemedAvatarButton: View {
     let secondaryColor: String
     let isExpanded: Bool
     var hasStoryRing: Bool = false
+    var avatarURL: String? = nil
     var presenceState: PresenceState = .offline
     let action: () -> Void
     @State private var isPressed = false
@@ -1187,6 +1189,7 @@ struct ThemedAvatarButton: View {
                 mode: .conversationHeader,
                 accentColor: color,
                 secondaryColor: secondaryColor,
+                avatarURL: avatarURL,
                 storyState: hasStoryRing ? .unread : .none,
                 presenceState: presenceState
             )

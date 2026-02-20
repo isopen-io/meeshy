@@ -1206,6 +1206,7 @@ struct ThemedConversationRow: View {
                 mode: .conversationList,
                 accentColor: accentColor,
                 secondaryColor: conversation.colorPalette.secondary,
+                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: avatarStoryState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceManager.presenceState(for: conversation.participantUserId ?? "") : .offline,
