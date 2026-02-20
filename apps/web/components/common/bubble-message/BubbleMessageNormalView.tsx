@@ -201,6 +201,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               token={token || undefined}
               messageReactionsHook={messageReactionsHook}
               onImageClick={onImageClick}
+              onAddReactionClick={handleReactionClick}
             />
 
             {/* Message Content (text bubble with reactions) */}
@@ -215,6 +216,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               conversationId={conversationId}
               messageReactionsHook={messageReactionsHook}
               onNavigateToMessage={onNavigateToMessage}
+              onAddReactionClick={handleReactionClick}
               t={tBubble}
             />
 

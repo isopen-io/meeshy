@@ -34,6 +34,8 @@ interface MessageContentProps {
   conversationId?: string;
   messageReactionsHook: UseReactionsQueryReturn;
   onNavigateToMessage?: (messageId: string) => void;
+  onAddReactionClick?: () => void;
+  conversationColor?: string;
   t: (key: string) => string;
 }
 
@@ -48,6 +50,8 @@ export const MessageContent = memo(function MessageContent({
   conversationId,
   messageReactionsHook,
   onNavigateToMessage,
+  onAddReactionClick,
+  conversationColor,
   t,
 }: MessageContentProps) {
   if (!message.content || !message.content.trim()) {
@@ -108,16 +112,15 @@ export const MessageContent = memo(function MessageContent({
         </CardContent>
       </Card>
 
-      {/* Réactions - Superposées en bas de la bulle */}
+      {/* Réactions - Par-dessus le message, angle bas-gauche */}
       <div
         className={cn(
           "absolute z-[99999] transition-transform duration-200",
-          "group-hover/message:-translate-y-4",
-          isOwnMessage ? "right-0" : "left-0"
+          "left-1"
         )}
         style={{
           pointerEvents: 'auto',
-          bottom: '-14px'
+          bottom: '2px'
         }}
       >
         <MessageReactions
@@ -126,8 +129,10 @@ export const MessageContent = memo(function MessageContent({
           currentUserId={currentUserId || ''}
           currentAnonymousUserId={currentAnonymousUserId}
           isAnonymous={isAnonymous}
-          showAddButton={false}
+          showAddButton={true}
+          onAddReactionClick={onAddReactionClick}
           externalReactionsHook={messageReactionsHook}
+          conversationColor={conversationColor}
         />
       </div>
     </div>
