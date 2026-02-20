@@ -614,17 +614,7 @@ struct ConversationView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
 
-            // Dismiss tap zone (collapse band when tapping conversation area)
-            if showOptions && !isTyping {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            showOptions = false
-                        }
-                    }
-                    .zIndex(99)
-            }
+            // (dismiss: avatar tap toggles band — no full-screen overlay needed)
 
             // Dismiss overlay (reaction bar)
             if quickReactionMessageId != nil {
@@ -732,18 +722,20 @@ struct ConversationView: View {
     @ViewBuilder
     private var headerAvatarView: some View {
         if showOptions {
-            // Expanded: participant avatar(s) with profile tap
+            // Expanded: participant avatar(s) — tap collapses band
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
-                    mode: .custom(36),
+                    mode: .custom(44),
                     accentColor: accentColor,
                     avatarURL: conversation?.participantAvatarURL,
                     storyState: memberStoryState(for: userId),
                     presenceState: presenceManager.presenceState(for: userId),
                     onTap: {
                         HapticFeedback.light()
-                        actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showOptions = false
+                        }
                     },
                     onViewStory: {
                         if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
@@ -758,14 +750,16 @@ struct ConversationView: View {
                     ForEach(topActiveMembers) { member in
                         MeeshyAvatar(
                             name: member.name,
-                            mode: .custom(24),
+                            mode: .custom(28),
                             accentColor: member.color,
                             avatarURL: member.avatarURL,
                             storyState: memberStoryState(for: member.id),
                             presenceState: presenceManager.presenceState(for: member.id),
                             onTap: {
                                 HapticFeedback.light()
-                                actionAlert = "Profil de \(member.name)"
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    showOptions = false
+                                }
                             },
                             onViewStory: {
                                 if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
@@ -778,13 +772,20 @@ struct ConversationView: View {
                     }
                 }
             } else if let conv = conversation, conv.memberCount > 2 {
-                HStack(spacing: 3) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 9))
-                    Text("\(conv.memberCount)")
-                        .font(.system(size: 10, weight: .bold))
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showOptions = false
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 9))
+                        Text("\(conv.memberCount)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white.opacity(0.5))
                 }
-                .foregroundColor(.white.opacity(0.5))
             }
         } else {
             // Collapsed: avatar trigger — tap morphs into band
