@@ -34,6 +34,8 @@ struct APIConversationPreferences: Decodable {
     let isMuted: Bool?
     let isArchived: Bool?
     let isDeletedForUser: Bool?
+    let tags: [String]?
+    let categoryId: String?
 }
 
 struct APIConversation: Decodable {
@@ -87,6 +89,12 @@ extension APIConversation {
         // Extract user preferences (first element if present)
         let prefs = userPreferences?.first
 
+        // Map string tags to ConversationTag with auto-assigned colors
+        let convTags: [ConversationTag] = (prefs?.tags ?? []).enumerated().map { index, tagName in
+            let color = ConversationTag.colors[index % ConversationTag.colors.count]
+            return ConversationTag(name: tagName, color: color)
+        }
+
         return Conversation(
             id: id,
             identifier: identifier ?? id,
@@ -102,7 +110,9 @@ extension APIConversation {
             updatedAt: lastMessageAt ?? createdAt,
             unreadCount: unreadCount ?? 0,
             lastMessagePreview: lastMessage?.content,
+            tags: convTags,
             isPinned: prefs?.isPinned ?? false,
+            sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,
             participantUserId: otherMember?.userId,
             participantAvatarURL: participantAvatar

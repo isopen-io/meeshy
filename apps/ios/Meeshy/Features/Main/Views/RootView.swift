@@ -460,10 +460,13 @@ struct ThemedActionButton: View {
     let icon: String
     let color: String
     var badge: Int = 0
+    var size: CGFloat = 46
     let action: () -> Void
 
     @State private var isPressed = false
     @State private var isGlowing = false
+
+    private var iconSize: CGFloat { round(size * 0.39) }
 
     var body: some View {
         Button(action: {
@@ -483,7 +486,7 @@ struct ThemedActionButton: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 46, height: 46)
+                    .frame(width: size, height: size)
                     .shadow(
                         color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
                         radius: isGlowing ? 14 : 10,
@@ -491,7 +494,7 @@ struct ThemedActionButton: View {
                     )
 
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: iconSize, weight: .semibold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
@@ -502,7 +505,7 @@ struct ThemedActionButton: View {
                         .foregroundColor(Color(hex: color))
                         .frame(width: 16, height: 16)
                         .background(Circle().fill(Color.white))
-                        .offset(x: 15, y: -15)
+                        .offset(x: size * 0.33, y: -size * 0.33)
                         .pulse(intensity: 0.08)
                 }
             }

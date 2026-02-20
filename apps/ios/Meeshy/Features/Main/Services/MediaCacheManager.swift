@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import MeeshySDK
 
 /// Unified media cache with two tiers: NSCache (memory) + FileManager (disk).
 /// Supports images, audio, video, and any binary data keyed by URL string.
@@ -38,7 +39,13 @@ actor MediaCacheManager {
 
     /// Fetch data for a URL, returning from cache if available, otherwise downloading.
     func data(for urlString: String) async throws -> Data {
+        let resolved = resolveURL(urlString)
         let key = cacheKey(for: urlString)
+        if resolved != urlString {
+            print("[MediaCache] RESOLVED: \(urlString) -> \(resolved)")
+        } else {
+            print("[MediaCache] NO-RESOLVE: \(urlString) (origin=\(MeeshyConfig.shared.serverOrigin))")
+        }
 
         // 1. Memory cache
         if let cached = memoryCache.object(forKey: key as NSString) {
@@ -61,7 +68,7 @@ actor MediaCacheManager {
         }
 
         let task = Task<Data, Error> {
-            guard let url = URL(string: urlString) else {
+            guard let url = URL(string: resolved) else {
                 throw URLError(.badURL)
             }
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -184,6 +191,13 @@ actor MediaCacheManager {
                 totalSize -= file.size
             }
         }
+    }
+
+    // MARK: - URL Resolution
+
+    private func resolveURL(_ urlString: String) -> String {
+        guard urlString.hasPrefix("/") else { return urlString }
+        return MeeshyConfig.shared.serverOrigin + urlString
     }
 
     // MARK: - Helpers

@@ -1,6 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
+import MeeshySDK
 
 // MARK: - Socket.IO Event Data Models
 

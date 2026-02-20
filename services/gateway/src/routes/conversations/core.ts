@@ -244,6 +244,7 @@ export function registerCoreRoutes(
           banner: true,
           avatar: true,
           communityId: true,
+          memberCount: true,
           members: {
             take: 5, // Optimized: reduced from 10 to 5 for better performance
             where: {
@@ -258,7 +259,7 @@ export function registerCoreRoutes(
               isActive: true
             }
           },
-          // User preferences (isPinned, isMuted, isArchived)
+          // User preferences (isPinned, isMuted, isArchived, tags, categoryId)
           userPreferences: {
             where: { userId: userId },
             take: 1,
@@ -266,7 +267,9 @@ export function registerCoreRoutes(
               isPinned: true,
               isMuted: true,
               isArchived: true,
-              isDeletedForUser: true
+              isDeletedForUser: true,
+              tags: true,
+              categoryId: true
             }
           },
           messages: {
@@ -519,7 +522,15 @@ export function registerCoreRoutes(
           },
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
-            take: 1
+            take: 1,
+            select: {
+              isPinned: true,
+              isMuted: true,
+              isArchived: true,
+              isDeletedForUser: true,
+              tags: true,
+              categoryId: true
+            }
           }
         }
       });

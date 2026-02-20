@@ -224,7 +224,7 @@ struct DocumentFullSheet: View {
         NavigationView {
             Group {
                 if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
-                   let url = URL(string: urlStr) {
+                   let url = MeeshyConfig.resolveMediaURL(urlStr) {
                     DocumentWebView(url: url)
                 } else {
                     noPreviewView
@@ -242,7 +242,7 @@ struct DocumentFullSheet: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
-                       let url = URL(string: urlStr) {
+                       let url = MeeshyConfig.resolveMediaURL(urlStr) {
                         ShareLink(item: url) {
                             Image(systemName: "square.and.arrow.up")
                                 .foregroundColor(Color(hex: accentColor))

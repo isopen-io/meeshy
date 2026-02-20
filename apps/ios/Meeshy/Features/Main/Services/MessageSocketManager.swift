@@ -1,16 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
-
-// MARK: - Socket Config (shared URL logic)
-
-enum SocketConfig {
-    static var baseURL: URL? {
-        let base = APIClient.shared.baseURL
-            .replacingOccurrences(of: "/api/v1", with: "")
-        return URL(string: base)
-    }
-}
+import MeeshySDK
 
 // MARK: - Message Socket Event Data
 

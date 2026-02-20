@@ -31,7 +31,7 @@ struct ImageViewerView: View {
         let urlStr = attachment.fileUrl.isEmpty
             ? (attachment.thumbnailUrl ?? "")
             : attachment.fileUrl
-        return urlStr.isEmpty ? nil : URL(string: urlStr)
+        return urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr)
     }
 
     private var maxWidth: CGFloat {

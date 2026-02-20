@@ -1,0 +1,179 @@
+# Meeshy - CLAUDE.md
+
+## Project Overview
+Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
+
+## Architecture
+
+```
+apps/web (Next.js 15)        apps/ios (SwiftUI)
+         ↓ WebSocket/HTTP              ↓ REST/WebSocket
+services/gateway (Fastify 5 + Socket.IO + ZMQ)
+         ↓ ZeroMQ (PUSH/SUB)
+services/translator (FastAPI + PyTorch + Whisper + TTS)
+         ↓
+MongoDB 8 (Prisma) + Redis 8
+```
+
+### Monorepo Structure
+```
+apps/web/          → Next.js 15 frontend (port 3100)
+apps/ios/          → SwiftUI iOS app
+services/gateway/  → Fastify 5 API + WebSocket (port 3000)
+services/translator/ → FastAPI ML service (port 8000)
+packages/shared/   → TypeScript types, Prisma schema, encryption
+packages/MeeshySDK/ → Swift SDK for iOS
+infrastructure/    → Docker, Traefik, env configs
+scripts/           → Deployment & maintenance scripts
+tests/             → E2E tests (Playwright)
+docs/              → Architecture & feature documentation
+```
+
+### Build System
+- **Package Manager**: pnpm 9+ (primary), bun 1.1+ (optional)
+- **Orchestrator**: Turborepo with remote caching
+- **Workspaces**: `apps/*`, `services/*`, `packages/*`
+
+## Development Philosophy
+
+### TDD is Non-Negotiable
+Every line of production code must be written in response to a failing test. RED-GREEN-REFACTOR in small, known-good increments:
+1. **RED**: Write failing test first (NO production code without failing test)
+2. **GREEN**: Write MINIMUM code to pass test
+3. **REFACTOR**: Assess improvement opportunities (only if adds value)
+
+Each increment leaves the codebase in a working state.
+
+### Testing Principles
+- Test **behavior**, not implementation
+- Test through public API exclusively
+- Use factory functions for test data (no `let`/`beforeEach` mutation)
+- 100% coverage through business behavior
+- No 1:1 mapping between test files and implementation files
+- Use real schemas/types in tests, never redefine them
+
+### TypeScript Guidelines
+- **Strict mode always** across all TypeScript services
+- No `any` types - ever (use `unknown` if type truly unknown)
+- No type assertions without justification
+- Prefer `type` over `interface` for data structures
+- Reserve `interface` for behavior contracts only
+- Define schemas first (Zod), derive types from them at trust boundaries
+
+### Code Style
+- **Immutable data only** - no mutation
+- Pure functions wherever possible
+- No nested if/else - use early returns or composition
+- No comments - code should be self-documenting
+- Prefer options objects over positional parameters
+- Use array methods (`map`, `filter`, `reduce`) over loops
+
+### Preferred Tools
+- **Language**: TypeScript strict mode (JS services), Swift (iOS), Python (translator)
+- **Testing**: Jest/Vitest + React Testing Library (web), pytest (Python), XCTest (iOS)
+- **Validation**: Zod (TypeScript), Pydantic (Python)
+- **State**: Zustand (web), SwiftUI @Published (iOS)
+
+## Critical Rules
+
+### Event Naming Convention
+Socket.IO events use `entity:action-word` format with **hyphens** (NOT underscores):
+```
+message:send-with-attachments   (client → server)
+message:new                     (server → client)
+reaction:added                  (server → client)
+```
+Source of truth: `packages/shared/types/socketio-events.ts`
+
+### Docker Environment Variables
+**NEVER quote YAML env var values** in docker-compose files:
+```yaml
+# CORRECT
+NEXT_PUBLIC_API_URL=https://gate.meeshy.me
+
+# WRONG - causes double-quoting syntax errors in JS
+NEXT_PUBLIC_API_URL="https://gate.meeshy.me"
+```
+
+### Database
+- **MongoDB 8** with replica set (NOT PostgreSQL - copilot-instructions.md is outdated)
+- **Prisma ORM** - Schema at `packages/shared/prisma/schema.prisma`
+- IDs are MongoDB ObjectIds (24-char hex strings)
+
+### Authentication
+- **Registered users**: JWT via `Authorization: Bearer {token}`
+- **Anonymous users**: Session token via `X-Session-Token` header (NO encryption)
+- Roles: BIGBOSS > ADMIN > MODERATOR > AUDIT > ANALYST > USER
+
+### Type Safety
+- All shared types in `packages/shared/types/` - single source of truth
+- Use `@meeshy/shared` imports across services
+- Prisma schema generates DB types; manual types extend them
+- NO `any` in shared package - use `unknown` with validation
+
+## Development Environment
+
+### Local Services (tmux "meeshy")
+- Window 0: translator (FastAPI, port 8000)
+- Window 1: gateway (Fastify, port 3000)
+- Window 2: web (Next.js, port 3100)
+- Window 3: web_v2
+
+### Docker Environments
+| Environment | Compose File | SSL | Domains |
+|-------------|-------------|-----|---------|
+| dev | docker-compose.dev.yml | HTTP | localhost:3100/3000/8000 |
+| local | docker-compose.local.yml | mkcert | *.meeshy.local |
+| prod | docker-compose.prod.yml | Let's Encrypt | meeshy.me |
+
+### Production
+- Server: `root@meeshy.me` at `/opt/meeshy/production/`
+- Production docker-compose.yml differs from repo (different container/image names)
+- Container names: `meeshy-frontend`, `meeshy-gateway`, `meeshy-translator`
+- Healthcheck ~30s before Traefik routes traffic
+
+### iOS Build
+Always use `./apps/ios/meeshy.sh`:
+```bash
+./apps/ios/meeshy.sh build   # Build only (non-blocking)
+./apps/ios/meeshy.sh run     # Build+install+launch+logs (BLOCKS)
+```
+
+### Test Credentials
+- Username: `atabeth` / Password: `pD5p1ir9uxLUf2X2FpNE`
+
+### Redis Rate Limit Reset
+```bash
+docker exec meeshy-local-redis redis-cli DEL "ratelimit:auth:login:ip:{ip}:{prefix}"
+```
+
+## Key Patterns
+
+### API Response Format (all services)
+```typescript
+{ success: boolean, data?: T, error?: { code, message }, pagination?: PaginationMeta }
+```
+
+### ZMQ Communication (Gateway ↔ Translator)
+- Gateway PUSH → Translator PULL (port 5555)
+- Translator PUB → Gateway SUB (port 5558)
+- Multipart frames: Frame 1 = JSON metadata, Frames 2+ = binary data
+- `binaryFrames[0]` is first binary (NOT index [1])
+
+### Audio Pipeline
+- Audio translation ONLY via WebSocket `message:send-with-attachments`
+- REST does NOT trigger audio pipeline
+- 3 stages: Transcription (Whisper) → Translation (NLLB) → TTS (Chatterbox)
+
+### Async EventEmitter Hazard
+- `emit()` does NOT await Promises
+- Always wrap async Socket.IO/EventEmitter listeners in try/catch
+
+## Subdirectory CLAUDE.md Files
+Each major directory has its own CLAUDE.md with domain-specific conventions:
+- `apps/web/CLAUDE.md` - Next.js frontend patterns
+- `apps/ios/CLAUDE.md` - SwiftUI iOS patterns
+- `services/gateway/CLAUDE.md` - Fastify API patterns
+- `services/translator/CLAUDE.md` - FastAPI ML patterns
+- `packages/shared/CLAUDE.md` - Shared types & schema
+- `infrastructure/CLAUDE.md` - Docker & deployment
