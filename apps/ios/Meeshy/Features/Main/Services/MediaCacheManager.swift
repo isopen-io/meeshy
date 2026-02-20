@@ -41,6 +41,11 @@ actor MediaCacheManager {
     func data(for urlString: String) async throws -> Data {
         let resolved = resolveURL(urlString)
         let key = cacheKey(for: urlString)
+        if resolved != urlString {
+            print("[MediaCache] RESOLVED: \(urlString) -> \(resolved)")
+        } else {
+            print("[MediaCache] NO-RESOLVE: \(urlString) (origin=\(MeeshyConfig.shared.serverOrigin))")
+        }
 
         // 1. Memory cache
         if let cached = memoryCache.object(forKey: key as NSString) {
