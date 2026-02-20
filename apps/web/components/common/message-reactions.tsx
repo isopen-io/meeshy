@@ -7,7 +7,6 @@ import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useI18n } from '@/hooks/use-i18n';
 import type { ReactionAggregation } from '@meeshy/shared/types/reaction';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Smile } from 'lucide-react';
 
 interface MessageReactionsProps {
   messageId: string;
@@ -21,7 +20,6 @@ interface MessageReactionsProps {
   onAddReactionClick?: () => void;
   // Hook externe optionnel pour partager l'état entre composants
   externalReactionsHook?: ReturnType<typeof useReactionsQuery>;
-  conversationColor?: string;
 }
 
 /**
@@ -48,7 +46,6 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
   showAddButton = true,
   onAddReactionClick,
   externalReactionsHook,
-  conversationColor = '#3B82F6',
 }) => {
   const { t } = useI18n('reactions');
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
@@ -217,7 +214,7 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
           }
         } : { scale: 1 }}
         className={cn(
-          'flex flex-nowrap items-center gap-1',
+          'flex flex-nowrap items-end gap-1 md:gap-0.5',
           'py-1 px-0.5',
           'overflow-visible',
           'relative z-[99999]',
@@ -229,49 +226,6 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
         }}
       >
         <AnimatePresence mode="popLayout">
-          {showAddButton && (
-            <motion.button
-              key="add-reaction"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 0.5 }}
-              exit={{ scale: 0, opacity: 0 }}
-              whileHover={{ scale: 1.15, opacity: 1 }}
-              whileTap={{ scale: 0.9 }}
-              transition={{
-                type: 'spring',
-                stiffness: 500,
-                damping: 30,
-              }}
-              onClick={onAddReactionClick}
-              onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onAddReactionClick?.();
-                }
-              }}
-              style={{
-                width: '22px',
-                height: '22px',
-                minWidth: '22px',
-                minHeight: '22px',
-              }}
-              className={cn(
-                'flex items-center justify-center',
-                'rounded-full',
-                'bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm',
-                'border border-gray-200/50 dark:border-gray-600/50',
-                'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300',
-                'shadow-sm hover:shadow-md',
-                'transition-all duration-200',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
-                'p-0'
-              )}
-              aria-label={t('add')}
-            >
-              <Smile className="h-3 w-3" strokeWidth={2} />
-            </motion.button>
-          )}
-
           {visibleReactions.map((reaction) => {
             const hasUserReacted = userReactions.includes(reaction.emoji);
             const isNewEmoji = !isInitialLoad && animatingEmojis.has(reaction.emoji);
@@ -313,34 +267,30 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                     aria-pressed={hasUserReacted}
                     aria-label={hasUserReacted ? t('removeReaction', { emoji: reaction.emoji }) : t('addReactionEmoji', { emoji: reaction.emoji })}
                     style={{
-                      width: '22px',
-                      height: '22px',
-                      minWidth: '22px',
-                      minHeight: '22px',
-                      ...(hasUserReacted ? {
-                        borderColor: conversationColor,
-                        boxShadow: `0 0 0 1.5px ${conversationColor}40`,
-                      } : {})
+                      width: '20px',
+                      height: '20px',
+                      minWidth: '20px',
+                      minHeight: '20px'
                     }}
                     className={cn(
                       'relative flex flex-col items-center justify-center',
                       'rounded-full',
-                      'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm',
-                      'border-2 shadow-md',
+                      'bg-white dark:bg-gray-800',
+                      'border shadow-md',
                       'transition-[border-color,box-shadow] duration-200',
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       'hover:shadow-lg hover:scale-110',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                       'p-0',
                       hasUserReacted
-                        ? ''
-                        : 'border-gray-200/80 dark:border-gray-600/80 hover:border-gray-400'
+                        ? 'border-primary ring-1 ring-primary/30 shadow-primary/20'
+                        : 'border-gray-300 dark:border-gray-600 hover:border-primary/60'
                     )}
                   >
                     {/* Emoji */}
                     <motion.span
                       className="leading-none"
-                      style={{ fontSize: '13px' }}
+                      style={{ fontSize: '11px' }}
                       key={`emoji-${reaction.emoji}`}
                       animate={
                         animatingEmojis.has(reaction.emoji)
@@ -360,50 +310,44 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
                       {reaction.emoji}
                     </motion.span>
                     
-                    {/* Badge compteur - visible uniquement si > 1 */}
-                    {reaction.count > 1 && (
-                      <motion.span
-                        key={`count-${reaction.emoji}-${reaction.count}`}
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={
-                          animatingEmojis.has(reaction.emoji)
-                            ? {
-                                scale: 1.2,
-                                opacity: 1,
-                              }
-                            : { scale: 1, opacity: 1 }
-                        }
-                        transition={{
-                          type: 'spring',
-                          stiffness: 600,
-                          damping: 20,
-                        }}
-                        style={{
-                          minWidth: '12px',
-                          height: '12px',
-                          fontSize: '7px',
-                          ...(hasUserReacted ? {
-                            backgroundColor: conversationColor,
-                            borderColor: conversationColor,
-                          } : {})
-                        }}
-                        className={cn(
-                          'absolute -top-1 -right-1',
-                          'flex items-center justify-center',
-                          'px-0.5',
-                          'rounded-full font-bold',
-                          'shadow-sm border',
-                          animatingEmojis.has(reaction.emoji)
-                            ? 'ring-1 ring-offset-0.5'
-                            : '',
-                          hasUserReacted
-                            ? 'text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600'
-                        )}
-                      >
-                        {reaction.count}
-                      </motion.span>
-                    )}
+                    {/* Badge avec le nombre - au-dessus de l'emoji */}
+                    <motion.span
+                      key={`count-${reaction.emoji}-${reaction.count}`}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={
+                        animatingEmojis.has(reaction.emoji)
+                          ? {
+                              scale: 1.2,
+                              opacity: 1,
+                            }
+                          : { scale: 1, opacity: 1 }
+                      }
+                      transition={{
+                        type: 'spring',
+                        stiffness: 600,
+                        damping: 20,
+                      }}
+                      style={{
+                        minWidth: '10px',
+                        height: '10px',
+                        fontSize: '6px'
+                      }}
+                      className={cn(
+                        'absolute -top-0.5 -right-0.5',
+                        'flex items-center justify-center',
+                        'px-0.5',
+                        'rounded-full font-bold',
+                        'shadow-sm border',
+                        animatingEmojis.has(reaction.emoji)
+                          ? 'ring-1 ring-primary/50 ring-offset-0.5'
+                          : '',
+                        hasUserReacted
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600'
+                      )}
+                    >
+                      {reaction.count}
+                    </motion.span>
                   </motion.button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
@@ -426,6 +370,62 @@ export const MessageReactions: React.FC<MessageReactionsProps> = React.memo(({
             );
           })}
 
+          {showAddButton && (
+            <motion.button
+              key="add-reaction"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{
+                type: 'spring',
+                stiffness: 500,
+                damping: 30,
+              }}
+              onClick={onAddReactionClick}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onAddReactionClick?.();
+                }
+              }}
+              style={{
+                width: '16px',
+                height: '16px',
+                minWidth: '16px',
+                minHeight: '16px'
+              }}
+              className={cn(
+                'flex items-center justify-center',
+                'rounded-full',
+                'bg-secondary/50 border border-border',
+                'text-muted-foreground hover:text-foreground',
+                'hover:bg-secondary hover:border-primary/50',
+                'hover:shadow-sm active:shadow-none',
+                'transition-[background-color,border-color,box-shadow] duration-200',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                'p-0'
+              )}
+              aria-label={t('add')}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="8"
+                height="8"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </motion.button>
+          )}
         </AnimatePresence>
       </motion.div>
     </TooltipProvider>

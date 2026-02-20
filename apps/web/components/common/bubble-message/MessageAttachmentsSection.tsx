@@ -24,8 +24,6 @@ interface MessageAttachmentsSectionProps {
   token?: string;
   messageReactionsHook: UseReactionsQueryReturn;
   onImageClick?: (attachmentId: string) => void;
-  onAddReactionClick?: () => void;
-  conversationColor?: string;
 }
 
 export const MessageAttachmentsSection = memo(function MessageAttachmentsSection({
@@ -38,8 +36,6 @@ export const MessageAttachmentsSection = memo(function MessageAttachmentsSection
   token,
   messageReactionsHook,
   onImageClick,
-  onAddReactionClick,
-  conversationColor,
 }: MessageAttachmentsSectionProps) {
   const [deletedAttachmentIds, setDeletedAttachmentIds] = useState<string[]>([]);
 
@@ -77,15 +73,16 @@ export const MessageAttachmentsSection = memo(function MessageAttachmentsSection
           isOwnMessage={isOwnMessage}
         />
 
-        {/* Réactions superposées - par-dessus l'image, angle bas-gauche */}
+        {/* Réactions superposées */}
         <div
           className={cn(
             "absolute z-[99999] transition-transform duration-200",
-            "left-1"
+            "group-hover/message:-translate-y-4",
+            isOwnMessage ? "right-0" : "left-0"
           )}
           style={{
             pointerEvents: 'auto',
-            bottom: '4px'
+            bottom: '-14px'
           }}
         >
           <MessageReactions
@@ -94,10 +91,8 @@ export const MessageAttachmentsSection = memo(function MessageAttachmentsSection
             currentUserId={currentUserId || ''}
             currentAnonymousUserId={currentAnonymousUserId}
             isAnonymous={isAnonymous}
-            showAddButton={true}
-            onAddReactionClick={onAddReactionClick}
+            showAddButton={false}
             externalReactionsHook={messageReactionsHook}
-            conversationColor={conversationColor}
           />
         </div>
       </div>
