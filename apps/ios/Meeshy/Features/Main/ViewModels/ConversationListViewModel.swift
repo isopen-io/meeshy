@@ -29,6 +29,7 @@ class ConversationListViewModel: ObservableObject {
 
             if response.success {
                 let userId = currentUserId
+                PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                 conversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset = conversations.count
@@ -56,6 +57,7 @@ class ConversationListViewModel: ObservableObject {
 
             if response.success {
                 let userId = currentUserId
+                PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                 let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 let existingIds = Set(conversations.map(\.id))
                 let deduplicated = newConversations.filter { !existingIds.contains($0.id) }

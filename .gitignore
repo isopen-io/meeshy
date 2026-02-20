@@ -74,6 +74,9 @@ next-env.d.ts
 
 # TensorFlow.js models (will be downloaded)
 */**/models/
+# Exception: Swift source models (code, not ML)
+!packages/MeeshySDK/Sources/MeeshySDK/Models/
+!apps/ios/Meeshy/Features/Main/Models/
 # Exception: pyannote diarization models (~31MB, bundled in Docker image)
 !services/translator/models/
 services/translator/models/*

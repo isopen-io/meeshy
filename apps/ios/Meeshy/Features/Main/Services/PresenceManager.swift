@@ -46,10 +46,34 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Clear stale presence on socket disconnect
+        MessageSocketManager.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] connected in
+                if !connected {
+                    self?.presenceMap.removeAll()
+                }
+            }
+            .store(in: &cancellables)
+
         // Recalculate every 60s (online -> away after 5min idle)
         recalcTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.objectWillChange.send()
+            }
+        }
+    }
+
+    // Seed initial presence from conversations API response
+    func seed(from conversations: [APIConversation], currentUserId: String) {
+        for conv in conversations {
+            guard let members = conv.members else { continue }
+            for member in members where member.userId != currentUserId {
+                guard let user = member.user, let isOnline = user.isOnline else { continue }
+                presenceMap[member.userId] = UserPresence(
+                    isOnline: isOnline,
+                    lastActiveAt: user.lastActiveAt
+                )
             }
         }
     }
