@@ -199,6 +199,10 @@ export class AuthMiddleware {
       // Throttling: 5 secondes (léger pour ne pas surcharger la DB)
       if (this.statusService) {
         this.statusService.updateUserLastSeen(user.id);
+        // Si l'utilisateur est offline en DB, le remettre en ligne via REST (throttlé 60s)
+        if (!user.isOnline) {
+          this.statusService.ensureUserOnline(user.id, false);
+        }
       }
 
       // Si on a un sessionToken (session trusted), mettre à jour son lastActivityAt

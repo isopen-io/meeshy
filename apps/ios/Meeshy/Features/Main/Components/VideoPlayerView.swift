@@ -56,7 +56,7 @@ struct VideoPlayerView: View {
             // Video preview / inline player
             ZStack {
                 if isInlinePlay, context == .feedPost || context == .storyOverlay,
-                   !attachment.fileUrl.isEmpty, let url = URL(string: attachment.fileUrl) {
+                   !attachment.fileUrl.isEmpty, let url = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
                     // Inline AVPlayer for feed/story
                     VideoPlayer(player: {
                         let p = AVPlayer(url: url)
@@ -131,7 +131,7 @@ struct VideoPlayerView: View {
     private var thumbnailView: some View {
         Group {
             if let thumbUrl = attachment.thumbnailUrl ?? (attachment.fileUrl.isEmpty ? nil : attachment.fileUrl),
-               let url = URL(string: thumbUrl) {
+               let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -301,7 +301,7 @@ struct VideoFullscreenPlayer: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let url = URL(string: urlString) {
+            if let url = MeeshyConfig.resolveMediaURL(urlString) {
                 VideoPlayer(player: {
                     let p = AVPlayer(url: url)
                     p.rate = Float(speed.rawValue)

@@ -601,10 +601,7 @@ struct ConversationView: View {
             .zIndex(100)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
 
-            // Options ladder — unfolds downward below header band
-            optionsLadder
-
-            // Dismiss overlay (options menu) — hidden when typing
+            // Dismiss overlay (header band) — hidden when typing
             if showOptions && !isTyping {
                 Color.clear
                     .contentShape(Rectangle())

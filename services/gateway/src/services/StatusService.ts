@@ -38,6 +38,7 @@ export class StatusService {
   // Caches séparés pour activité légère et connexion
   private activityCache = new Map<string, number>();
   private connectionCache = new Map<string, number>();
+  private onlineEnsureCache = new Map<string, number>(); // throttle pour ensureUserOnline
 
   // Guard contre les race conditions: empêche les updates fire-and-forget après un disconnect
   private disconnectedUsers = new Map<string, number>(); // key -> timestamp disconnect
@@ -50,6 +51,10 @@ export class StatusService {
   // Throttling différencié
   private readonly ACTIVITY_THROTTLE_MS = 5000; // 5 secondes (activité légère)
   private readonly CONNECTION_THROTTLE_MS = 60000; // 1 minute (actions significatives)
+  private readonly ONLINE_ENSURE_THROTTLE_MS = 60000; // 1 minute (mise en ligne via REST)
+
+  // Callback pour broadcaster les changements de présence (set par MeeshySocketIOManager)
+  private presenceCallback: ((userId: string, isOnline: boolean, isAnonymous: boolean) => void) | null = null;
 
   private readonly CACHE_CLEANUP_INTERVAL_MS = 300000; // 5 minutes
   private readonly CACHE_MAX_AGE_MS = 600000; // 10 minutes
@@ -73,10 +78,59 @@ export class StatusService {
   }
 
   /**
+   * Définir le callback de broadcast pour les changements de présence
+   * Appelé par MeeshySocketIOManager après initialisation
+   */
+  setPresenceCallback(callback: (userId: string, isOnline: boolean, isAnonymous: boolean) => void): void {
+    this.presenceCallback = callback;
+    logger.info('✅ StatusService: presenceCallback configuré');
+  }
+
+  /**
+   * S'assurer qu'un utilisateur est marqué en ligne via REST
+   * Throttling: 60 secondes — si l'utilisateur fait des requêtes REST mais n'est pas
+   * connecté via Socket.IO, on le marque en ligne et on broadcaste.
+   */
+  ensureUserOnline(userId: string, isAnonymous: boolean = false): void {
+    const cacheKey = isAnonymous ? `anon_online_${userId}` : userId;
+
+    if (this.disconnectedUsers.has(cacheKey)) return;
+
+    const now = Date.now();
+    const lastEnsure = this.onlineEnsureCache.get(cacheKey) || 0;
+
+    if (now - lastEnsure < this.ONLINE_ENSURE_THROTTLE_MS) return;
+
+    this.onlineEnsureCache.set(cacheKey, now);
+
+    const updatePromise = isAnonymous
+      ? this.prisma.anonymousParticipant.update({
+          where: { id: userId },
+          data: { isOnline: true, lastActiveAt: new Date() }
+        })
+      : this.prisma.user.update({
+          where: { id: userId },
+          data: { isOnline: true, lastActiveAt: new Date() }
+        });
+
+    updatePromise
+      .then(() => {
+        logger.info(`🟢 ${isAnonymous ? 'Anonymous' : 'User'} ${userId} marked online via REST`);
+        if (this.presenceCallback) {
+          this.presenceCallback(userId, true, isAnonymous);
+        }
+      })
+      .catch(err => {
+        logger.error(`❌ Failed to ensure online for ${userId}:`, err);
+      });
+  }
+
+  /**
    * Marquer un utilisateur comme déconnecté (empêche les updates fire-and-forget post-disconnect)
    */
   markDisconnected(userId: string, isAnonymous: boolean): void {
     const key = isAnonymous ? `anon_activity_${userId}` : userId;
+    const onlineKey = isAnonymous ? `anon_online_${userId}` : userId;
     this.disconnectedUsers.set(key, Date.now());
     // Aussi le key connection pour anonymes
     if (isAnonymous) {
@@ -84,6 +138,7 @@ export class StatusService {
     }
     this.activityCache.delete(key);
     this.connectionCache.delete(isAnonymous ? `anon_connection_${userId}` : userId);
+    this.onlineEnsureCache.delete(onlineKey);
 
     // Supprimer la clé Redis de présence
     const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
@@ -130,7 +185,7 @@ export class StatusService {
     }
 
     this.activityCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Renouveler le TTL Redis de présence
     this.redis.setex(`presence:user:${userId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
@@ -172,7 +227,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -212,7 +267,7 @@ export class StatusService {
     }
 
     this.activityCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Renouveler le TTL Redis de présence
     this.redis.setex(`presence:anon:${participantId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
@@ -256,7 +311,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.anonymousParticipant.update({
@@ -332,6 +387,14 @@ export class StatusService {
       }
     }
 
+    // Nettoyer le cache onlineEnsure
+    for (const [key, timestamp] of this.onlineEnsureCache.entries()) {
+      if (now - timestamp > this.CACHE_MAX_AGE_MS) {
+        this.onlineEnsureCache.delete(key);
+        deletedCount++;
+      }
+    }
+
     // Purger les entries disconnectedUsers de plus de 60s (évite fuite mémoire)
     for (const [key, timestamp] of this.disconnectedUsers.entries()) {
       if (now - timestamp > this.DISCONNECT_GUARD_MAX_AGE_MS) {
@@ -340,7 +403,7 @@ export class StatusService {
       }
     }
 
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size;
+    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     if (deletedCount > 0) {
       logger.debug(`🧹 Cache cleanup: ${deletedCount} entrées supprimées (taille: ${this.metrics.cacheSize})`);
@@ -434,6 +497,7 @@ export class StatusService {
 
     this.activityCache.clear();
     this.connectionCache.clear();
+    this.onlineEnsureCache.clear();
     this.disconnectedUsers.clear();
     logger.info('🛑 StatusService arrêté');
   }

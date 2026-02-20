@@ -186,6 +186,16 @@ export class MeeshySocketIOManager {
     return this.socialEventsHandler;
   }
 
+  /**
+   * Expose broadcast function for REST-triggered presence updates
+   * Permet au StatusService du serveur de broadcaster les changements de présence
+   */
+  public getPresenceBroadcastCallback(): (userId: string, isOnline: boolean, isAnonymous: boolean) => void {
+    return (userId: string, isOnline: boolean, isAnonymous: boolean) => {
+      this._broadcastUserStatus(userId, isOnline, isAnonymous);
+    };
+  }
+
   async initialize(): Promise<void> {
     try {
       // Initialiser le service de traduction
