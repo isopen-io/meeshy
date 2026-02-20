@@ -246,7 +246,7 @@ export function registerCoreRoutes(
           communityId: true,
           memberCount: true,
           members: {
-            take: 5, // Optimized: reduced from 10 to 5 for better performance
+            take: 5,
             where: {
               isActive: true
             },
@@ -256,7 +256,17 @@ export function registerCoreRoutes(
               role: true,
               nickname: true,
               joinedAt: true,
-              isActive: true
+              isActive: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true,
+                  lastActiveAt: true
+                }
+              }
             }
           },
           // User preferences (isPinned, isMuted, isArchived, tags, categoryId)

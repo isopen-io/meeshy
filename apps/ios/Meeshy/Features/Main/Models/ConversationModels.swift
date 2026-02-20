@@ -47,6 +47,7 @@ struct APIConversation: Decodable {
     let banner: String?
     let isActive: Bool?
     let communityId: String?
+    let memberCount: Int?
     let members: [APIConversationMember]?
     let lastMessage: APIConversationLastMessage?
     let lastMessageAt: Date?
@@ -76,10 +77,10 @@ extension APIConversation {
             }
         }()
 
-        // Title resolution: API title > other user name (DM) > fallback
+        // Title resolution: DM → other user name first; non-DM → API title
         let displayName: String = {
-            if let t = title, !t.isEmpty { return t }
             if convType == .direct, let user = otherUser { return user.name }
+            if let t = title, !t.isEmpty { return t }
             return "Conversation"
         }()
 
@@ -104,7 +105,7 @@ extension APIConversation {
             banner: banner,
             communityId: communityId,
             isActive: isActive ?? true,
-            memberCount: members?.count ?? 2,
+            memberCount: memberCount ?? members?.count ?? 2,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             createdAt: createdAt,
             updatedAt: lastMessageAt ?? createdAt,

@@ -11,7 +11,7 @@ class ConversationListViewModel: ObservableObject {
     @Published var hasMore = true
 
     private let api = APIClient.shared
-    private let limit = 15
+    private let limit = 30
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
 
@@ -227,8 +227,6 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Helpers
 
     private var currentUserId: String {
-        // Extract from JWT token or use placeholder
-        // In production, this would come from auth state
-        UserDefaults.standard.string(forKey: "meeshy_user_id") ?? ""
+        AuthManager.shared.currentUser?.id ?? ""
     }
 }

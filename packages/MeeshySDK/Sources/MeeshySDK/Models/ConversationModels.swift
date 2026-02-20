@@ -59,8 +59,8 @@ extension APIConversation {
         }()
 
         let displayName: String = {
-            if let n = name, !n.isEmpty { return n }
             if convType == .direct, let user = otherUser { return user.name }
+            if let n = name, !n.isEmpty { return n }
             return "Conversation"
         }()
 
