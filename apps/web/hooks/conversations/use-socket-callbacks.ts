@@ -11,6 +11,7 @@
 
 import { useCallback, useRef, useEffect } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useNotificationStore } from '@/stores/notification-store';
 import type { Message, Conversation, User } from '@meeshy/shared/types';
 
 interface Translation {
@@ -161,8 +162,10 @@ export function useSocketCallbacks({
         const currentConversation = prevConversations[conversationIndex];
         const isMessageFromCurrentUser =
           currentUser && message.senderId === currentUser.id;
+        const activeConvId = useNotificationStore.getState().activeConversationId;
         const isCurrentlyViewingThisConversation =
-          message.conversationId === currentConvId;
+          message.conversationId === currentConvId ||
+          message.conversationId === activeConvId;
 
         const shouldIncrementUnread =
           !isMessageFromCurrentUser && !isCurrentlyViewingThisConversation;

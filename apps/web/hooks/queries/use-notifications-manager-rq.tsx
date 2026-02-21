@@ -28,6 +28,7 @@ import { buildNotificationTitle, buildNotificationContent, getNotificationLink, 
 import { useI18n } from '@/hooks/useI18n';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { useNotificationStore } from '@/stores/notification-store';
 
 interface UseNotificationsManagerRQOptions {
   filters?: NotificationFilters;
@@ -139,88 +140,78 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     }
 
     const handleNewNotification = (notification: Notification) => {
+      const notificationConversationId = notification.context?.conversationId;
+
+      // Vérifier si l'utilisateur est actuellement dans la conversation concernée
+      const activeConversationId = useNotificationStore.getState().activeConversationId;
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const isInActiveConversation = notificationConversationId && (
+        activeConversationId === notificationConversationId ||
+        currentPath.includes(`/conversations/${notificationConversationId}`)
+      );
+
       // Vérifier si la notification existe déjà dans le cache
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
 
-      const notificationExists = queries.some(([key, data]: any) => {
+      const notificationExists = queries.some(([_key, data]: any) => {
         if (!data || !data.pages) {
           return false;
         }
-        const exists = data.pages.some((page: any) =>
+        return data.pages.some((page: any) =>
           (page.notifications ?? []).some((n: Notification) => n.id === notification.id)
         );
-        return exists;
       });
 
-      if (notificationExists) {
-        // NE PAS ajouter à nouveau au cache, mais continuer pour afficher le toast si approprié
-      } else {
-
-        // Mettre à jour le cache React Query pour TOUTES les queries infinite qui commencent par notifications.lists()
+      if (!notificationExists) {
+        // Ajouter au cache React Query
         queryClient.setQueriesData(
           { queryKey: queryKeys.notifications.lists(), exact: false },
           (old: any) => {
             if (!old || !old.pages) return old;
 
-            // Ajouter la nouvelle notification au début de la première page
             const updatedPages = old.pages.map((page: any, index: number) => {
               if (index === 0) {
                 return {
                   ...page,
                   notifications: [notification, ...(page.notifications ?? [])],
-                  // Incrémenter unreadCount si présent
-                  unreadCount: (page.unreadCount ?? 0) + 1,
+                  // Incrémenter unreadCount SEULEMENT si pas dans la conversation active
+                  unreadCount: isInActiveConversation
+                    ? (page.unreadCount ?? 0)
+                    : (page.unreadCount ?? 0) + 1,
                 };
               }
               return page;
             });
 
-            return {
-              ...old,
-              pages: updatedPages,
-            };
+            return { ...old, pages: updatedPages };
           }
         );
 
-        // Mettre à jour le compteur (uniquement si nouveau)
-        queryClient.setQueryData(
-          queryKeys.notifications.unreadCount(),
-          (old: number | undefined) => (old ?? 0) + 1
-        );
+        // Incrémenter le compteur global SEULEMENT si pas dans la conversation active
+        if (!isInActiveConversation) {
+          queryClient.setQueryData(
+            queryKeys.notifications.unreadCount(),
+            (old: number | undefined) => (old ?? 0) + 1
+          );
+        }
       }
 
-      // Décider si on affiche un toast
-      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-      const notificationConversationId = notification.context?.conversationId;
-
-      // Ne pas afficher si déjà sur la page des notifications
-      if (currentPath === '/notifications') {
+      // Ne pas afficher toast/son si dans la conversation active ou sur la page notifications
+      if (isInActiveConversation || currentPath === '/notifications') {
         return;
       }
 
-      // Ne pas afficher si dans la conversation concernée par la notification
-      if (notificationConversationId && currentPath.includes(`/conversations/${notificationConversationId}`)) {
-        return;
-      }
-
-      // Afficher le toast
       showNotificationToast(notification);
 
-      // Jouer le son approprié selon le type de notification
       try {
-        // Utiliser mention.wav pour les mentions, notification.wav pour le reste
         const soundFile = notification.type === 'user_mentioned'
           ? '/sounds/mention.wav'
           : '/sounds/notification.wav';
-
         const volume = notification.type === 'user_mentioned' ? 0.7 : 0.6;
-
         const audio = new Audio(soundFile);
         audio.volume = volume;
-        audio.play().catch(() => {
-          // Silently ignore audio playback errors
-        });
-      } catch (error) {
+        audio.play().catch(() => {});
+      } catch {
         // Silently ignore audio playback errors
       }
     };
