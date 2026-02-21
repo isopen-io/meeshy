@@ -42,6 +42,8 @@ struct ConversationView: View {
     @StateObject private var textAnalyzer = TextAnalyzer()
     @State private var showLanguagePicker = false
     @State private var pendingReplyReference: ReplyReference?
+    @State private var editingMessageId: String?
+    @State private var editingOriginalContent: String?
     @State private var showStoryViewerFromHeader = false
     @State private var storyGroupIndexForHeader = 0
 
@@ -280,7 +282,7 @@ struct ConversationView: View {
                 }
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 20)
                     .onChanged { value in
                         // Only allow horizontal swipes
@@ -815,6 +817,13 @@ struct ConversationView: View {
                     onCopy: {
                         UIPasteboard.general.string = msg.content
                         HapticFeedback.success()
+                    },
+                    onEdit: {
+                        editingMessageId = msg.id
+                        editingOriginalContent = msg.content
+                        messageText = msg.content
+                        isTyping = true
+                        HapticFeedback.light()
                     },
                     onForward: {
                         actionAlert = "Transférer"
@@ -1377,8 +1386,14 @@ struct ConversationView: View {
     // MARK: - Themed Composer
     private var themedComposer: some View {
         VStack(spacing: 8) {
+            // Edit mode banner
+            if editingMessageId != nil {
+                composerEditBanner
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Reply preview banner
-            if let reply = pendingReplyReference {
+            if let reply = pendingReplyReference, editingMessageId == nil {
                 composerReplyBanner(reply)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -1531,12 +1546,14 @@ struct ConversationView: View {
                 // Send button - show when recording, has pending attachments, or has text
                 if audioRecorder.isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     ThemedComposerButton(
-                        icon: "paperplane.fill",
-                        colors: ["FF6B6B", "4ECDC4"],
+                        icon: editingMessageId != nil ? "checkmark" : "paperplane.fill",
+                        colors: editingMessageId != nil ? ["F8B500", "E67E22"] : ["FF6B6B", "4ECDC4"],
                         isActive: true,
-                        rotateIcon: true
+                        rotateIcon: editingMessageId == nil
                     ) {
-                        if audioRecorder.isRecording {
+                        if editingMessageId != nil {
+                            submitEdit()
+                        } else if audioRecorder.isRecording {
                             stopAndSendRecording()
                         } else {
                             sendMessageWithAttachments()
@@ -1638,6 +1655,78 @@ struct ConversationView: View {
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
+    }
+
+    // MARK: - Edit Banner
+    private var composerEditBanner: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color(hex: "F8B500"))
+                .frame(width: 3, height: 36)
+
+            Image(systemName: "pencil")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color(hex: "F8B500"))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Modifier le message")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(hex: "F8B500"))
+
+                Text(editingOriginalContent ?? "")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                cancelEdit()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.surfaceGradient(tint: "F8B500"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.border(tint: "F8B500", intensity: 0.3), lineWidth: 1)
+                )
+        )
+    }
+
+    private func submitEdit() {
+        guard let messageId = editingMessageId else { return }
+        let newContent = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newContent.isEmpty else { return }
+
+        // Don't send if content unchanged
+        if newContent == editingOriginalContent {
+            cancelEdit()
+            return
+        }
+
+        let id = messageId
+        cancelEdit()
+        Task {
+            await viewModel.editMessage(messageId: id, newContent: newContent)
+        }
+    }
+
+    private func cancelEdit() {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            editingMessageId = nil
+            editingOriginalContent = nil
+            messageText = ""
+        }
     }
 
     private func composerReplyAttachmentIcon(_ type: String) -> String {

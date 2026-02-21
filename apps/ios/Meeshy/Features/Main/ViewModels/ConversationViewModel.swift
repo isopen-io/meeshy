@@ -362,6 +362,37 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Edit Message
+
+    func editMessage(messageId: String, newContent: String) async {
+        let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Optimistic update
+        var originalContent: String?
+        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            originalContent = messages[idx].content
+            messages[idx].content = trimmed
+            messages[idx].isEdited = true
+        }
+
+        do {
+            struct EditBody: Encodable { let content: String }
+            let _: APIResponse<[String: String]> = try await APIClient.shared.put(
+                endpoint: "/messages/\(messageId)",
+                body: EditBody(content: trimmed)
+            )
+        } catch {
+            // Revert on failure
+            if let idx = messages.firstIndex(where: { $0.id == messageId }),
+               let original = originalContent {
+                messages[idx].content = original
+                messages[idx].isEdited = false
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Mark as Read
 
     func markAsRead() {

@@ -9,6 +9,7 @@ struct MessageOverlayMenu: View {
     @Binding var isPresented: Bool
     var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
+    var onEdit: (() -> Void)?
     var onForward: (() -> Void)?
     var onDelete: (() -> Void)?
     var onPin: (() -> Void)?
@@ -397,6 +398,16 @@ struct MessageOverlayMenu: View {
         ))
 
         if message.isMe {
+            if hasTextContent {
+                actions.append(OverlayAction(
+                    id: "edit",
+                    icon: "pencil",
+                    label: "Modifier",
+                    color: "F8B500",
+                    handler: { onEdit?() }
+                ))
+            }
+
             actions.append(OverlayAction(
                 id: "delete",
                 icon: "trash.fill",
