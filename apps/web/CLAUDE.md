@@ -105,3 +105,6 @@ export const Component = memo(function Component({ prop }: Props) {
 - Audio only via WebSocket `message:send-with-attachments` (not REST)
 - Never hardcode URLs - derive from `window.location` in `lib/config.ts`
 - Encryption handlers set on SocketIO service per conversation
+
+## Architectural Decisions
+Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (state management, data fetching, routing, auth, WebSocket, styling, i18n, build, encryption, audio/media, URL config) avec contexte, alternatives rejetes et consquences.

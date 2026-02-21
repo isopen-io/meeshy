@@ -169,3 +169,6 @@ pytest tests/ -v --cov=src            # With coverage
 5. Implement Singleton for expensive resources (models, connections)
 6. Add type hints everywhere, including `Optional[]`
 7. Use `field(default_factory=...)` for mutable defaults
+
+## Architectural Decisions
+Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (FastAPI, Faster-Whisper, NLLB-200, multi-backend TTS, ZeroMQ, worker pool, Redis fallback, OpenVoice V2, uv, singletons, config, audio pipeline) avec contexte, alternatives rejetes et consquences.

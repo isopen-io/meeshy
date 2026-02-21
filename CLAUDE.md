@@ -176,4 +176,14 @@ Each major directory has its own CLAUDE.md with domain-specific conventions:
 - `services/gateway/CLAUDE.md` - Fastify API patterns
 - `services/translator/CLAUDE.md` - FastAPI ML patterns
 - `packages/shared/CLAUDE.md` - Shared types & schema
+- `packages/MeeshySDK/CLAUDE.md` - Swift SDK (core + UI targets)
 - `infrastructure/CLAUDE.md` - Docker & deployment
+
+## Architectural Decision Records
+Each active development directory has a `decisions.md` file documenting key architectural choices:
+- `apps/web/decisions.md` - State, routing, auth, styling, i18n, build decisions
+- `apps/ios/decisions.md` - MVVM, navigation, singletons, cache, security decisions
+- `services/gateway/decisions.md` - Framework, WebSocket, ZMQ, encryption, rate limiting decisions
+- `services/translator/decisions.md` - ML models, TTS backends, worker pool, package manager decisions
+- `packages/shared/decisions.md` - Type system, validation, events, database, API format decisions
+- `packages/MeeshySDK/decisions.md` - Dual-target, networking, sockets, cache, auth decisions

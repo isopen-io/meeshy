@@ -2,12 +2,12 @@ name: Meeshy
 options:
   bundleIdPrefix: com.meeshy
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
   developmentLanguage: en
 
 settings:
   SWIFT_VERSION: "5.0"
-  IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+  IPHONEOS_DEPLOYMENT_TARGET: "17.0"
   PRODUCT_NAME: Meeshy
   TARGETED_DEVICE_FAMILY: "1,2"
 
@@ -15,7 +15,7 @@ targets:
   Meeshy:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "17.0"
 
     sources:
       - path: Meeshy

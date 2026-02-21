@@ -14,8 +14,8 @@ private struct ConversationActiveMember: Identifiable {
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
-    let onBack: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
@@ -36,7 +36,6 @@ struct ConversationView: View {
     @State private var isLoadingLocation = false
     @FocusState private var isTyping: Bool
     @State private var typingBounce: Bool = false
-    @GestureState private var dragOffset: CGFloat = 0
     @StateObject private var textAnalyzer = TextAnalyzer()
     @State private var showLanguagePicker = false
     @State private var pendingReplyReference: ReplyReference?
@@ -106,10 +105,9 @@ struct ConversationView: View {
             .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
     }
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, onBack: @escaping () -> Void) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
-        self.onBack = onBack
         _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? ""))
     }
 
@@ -500,7 +498,7 @@ struct ConversationView: View {
                     HStack(spacing: 8) {
                         ThemedBackButton(color: accentColor) {
                             HapticFeedback.light()
-                            onBack()
+                            dismiss()
                         }
                         Spacer()
                         ThemedAvatarButton(
@@ -528,7 +526,7 @@ struct ConversationView: View {
                             // Back button — own circle collapses when band opens
                             ThemedBackButton(color: accentColor, compactMode: showOptions) {
                                 HapticFeedback.light()
-                                onBack()
+                                dismiss()
                             }
 
                             // Band content — slides in from avatar side
@@ -655,10 +653,6 @@ struct ConversationView: View {
             // Attach options
             attachOptionsLadder
         }
-        .gesture(swipeBackGesture)
-        .offset(x: dragOffset)
-        .scaleEffect(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.05) : 1.0)
-        .opacity(dragOffset > 0 ? 1.0 - (dragOffset / UIScreen.main.bounds.width * 0.3) : 1.0)
         .task {
             await viewModel.loadMessages()
             // Connect message socket
@@ -1638,19 +1632,6 @@ struct ConversationView: View {
         HapticFeedback.light()
     }
 
-    // MARK: - Gestures
-    private var swipeBackGesture: some Gesture {
-        DragGesture()
-            .updating($dragOffset) { value, state, _ in
-                if value.startLocation.x < 50 && value.translation.width > 0 {
-                    state = value.translation.width
-                }
-            }
-            .onEnded { value in
-                if value.translation.width > 100 { onBack() }
-            }
-    }
-
     private func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let text = messageText
@@ -1889,6 +1870,8 @@ struct ThemedMessageBubble: View {
                 // Grille visuelle (images + vidéos)
                 if !visualAttachments.isEmpty {
                     visualMediaGrid
+                        .background(Color.black)
+                        .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
 
@@ -2002,12 +1985,16 @@ struct ThemedMessageBubble: View {
             .frame(width: gridMaxWidth, height: 180)
 
         case 3:
+            let leftW = (gridMaxWidth - gridSpacing) * 0.6
+            let rightW = (gridMaxWidth - gridSpacing) * 0.4
             HStack(spacing: gridSpacing) {
                 visualGridCell(items[0])
+                    .frame(width: leftW)
                 VStack(spacing: gridSpacing) {
                     visualGridCell(items[1])
-                    visualGridCell(items[2])
+                    visualGridCell(items[2], isFirstRow: false)
                 }
+                .frame(width: rightW)
             }
             .frame(width: gridMaxWidth, height: 240)
 
@@ -2019,8 +2006,8 @@ struct ThemedMessageBubble: View {
                     visualGridCell(items[1])
                 }
                 HStack(spacing: gridSpacing) {
-                    visualGridCell(items[2])
-                    visualGridCell(items[3], overflowCount: overflow)
+                    visualGridCell(items[2], isFirstRow: false)
+                    visualGridCell(items[3], overflowCount: overflow, isFirstRow: false)
                 }
             }
             .frame(width: gridMaxWidth, height: 240)
@@ -2028,8 +2015,11 @@ struct ThemedMessageBubble: View {
     }
 
     @ViewBuilder
-    private func visualGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0) -> some View {
+    private func visualGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, isFirstRow: Bool = true) -> some View {
         ZStack {
+            // Dark background prevents thumbnailColor from bleeding at edges
+            Color.black
+
             switch attachment.type {
             case .image:
                 gridImageCell(attachment)
@@ -2047,9 +2037,10 @@ struct ThemedMessageBubble: View {
             }
         }
         .clipped()
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: isFirstRow ? .bottomTrailing : .topTrailing) {
             downloadBadge(attachment)
-                .offset(x: 8, y: -8)
+                .padding(isFirstRow ? 6 : 0)
+                .offset(x: isFirstRow ? 0 : 8, y: isFirstRow ? 0 : -8)
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -2060,7 +2051,8 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private func gridImageCell(_ attachment: MessageAttachment) -> some View {
-        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        // Prefer thumbnail (lighter) for grid cells, fallback to full image
+        let urlStr = attachment.thumbnailUrl ?? (attachment.fileUrl.isEmpty ? "" : attachment.fileUrl)
         if !urlStr.isEmpty {
             CachedAsyncImage(url: urlStr) {
                 Color(hex: attachment.thumbnailColor).shimmer()

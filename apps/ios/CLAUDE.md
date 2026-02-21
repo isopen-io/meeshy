@@ -1,7 +1,7 @@
 # apps/ios - SwiftUI iOS App
 
 ## Tech Stack
-- SwiftUI (NOT UIKit), iOS 16.0+, Swift 5.9
+- SwiftUI (NOT UIKit), iOS 17.0+, Swift 5.9
 - MVVM architecture
 - Swift Package Manager (SPM)
 - Firebase 10.29 (Analytics, Crashlytics, Messaging, Performance)
@@ -21,6 +21,7 @@ Meeshy/
 │   ├── Views/                   → Full-screen views
 │   ├── ViewModels/              → State management (MVVM)
 │   ├── Models/                  → Data models (API + local)
+│   ├── Navigation/              → Router, Route enum (NavigationStack)
 │   ├── Services/                → Networking & business logic
 │   └── Components/              → Reusable UI components
 └── Assets.xcassets
@@ -108,10 +109,12 @@ MediaCacheManager.shared    // Disk caching
 - Bearer token: `Authorization: Bearer {token}`
 
 ## Navigation
-- **ZStack-based** (NOT NavigationStack)
-- State-driven with `@State` flags controlling visibility
-- `.asymmetric()` transitions with `.spring()` animations
-- Callbacks: `onSelect`, `onBack` between views
+- **Hybrid NavigationStack + ZStack** pattern
+- NavigationStack for hierarchical flows (conversation list → conversation detail)
+- ZStack for overlays (feed, menu ladder, floating buttons)
+- Router.swift (`Features/Main/Navigation/Router.swift`) manages NavigationPath
+- `@Environment(\.dismiss)` for back navigation (replaces custom `onBack` callbacks)
+- Native iOS swipe-to-back gesture (replaces custom DragGesture)
 
 ## Design System
 - Colors: Pink (#FF2E63), Cyan (#08D9D6), Purple (#A855F7)
@@ -690,3 +693,9 @@ struct MeeshyApp: App {
 - Message list scroll: zero dropped frames
 - Memory: < 150MB typical usage
 - Network: < 5 seconds for initial conversation load
+
+## Architectural Decisions
+Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (MVVM, ZStack navigation, singletons, networking, property wrappers, mdia, design system, concurrence, tokens, build script, dpendances) avec contexte, alternatives rejetes et consquences.
+
+## MeeshySDK
+Le SDK Swift est dans `packages/MeeshySDK/` avec son propre `CLAUDE.md` et `decisions.md`. Voir ces fichiers pour l'architecture dual-target (MeeshySDK core + MeeshyUI), les conventions et les dcisions architecturales du SDK.

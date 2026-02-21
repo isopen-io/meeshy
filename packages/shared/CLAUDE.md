@@ -120,3 +120,6 @@ npm run build   # TypeScript → dist/ (ESM + declarations + source maps)
 - 60+ languages with metadata (name, flag, TTS/STT/voice cloning capabilities)
 - Helper functions: `getLanguageInfo()`, `getLanguagesWithTTS()`, `getSupportedLanguageCodes()`
 - Language mappings for NLLB: `'en' → 'eng_Latn'`, `'fr' → 'fra_Latn'`, etc.
+
+## Architectural Decisions
+Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (TypeScript strict, branded types, type vs interface, Socket.IO events, GatewayMessage vs UIMessage, Zod, encryption DI, ESM, langues, rles, MongoDB/Prisma, API response) avec contexte, alternatives rejetes et consquences.

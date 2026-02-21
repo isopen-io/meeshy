@@ -526,10 +526,16 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        start_log_stream
-        start_crash_monitor
-        wait "$LOG_STREAM_PID" 2>/dev/null || true
-        cleanup
+        if [ -t 1 ]; then
+            # Interactive terminal — stream logs until Ctrl+C
+            start_log_stream
+            start_crash_monitor
+            wait "$LOG_STREAM_PID" 2>/dev/null || true
+            cleanup
+        else
+            # Non-interactive (scripts, CI, agents) — exit immediately
+            ok "App running. Use ${BOLD}./meeshy.sh logs${NC} to stream logs."
+        fi
         ;;
 
     build)
@@ -554,10 +560,14 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        start_log_stream
-        start_crash_monitor
-        wait "$LOG_STREAM_PID" 2>/dev/null || true
-        cleanup
+        if [ -t 1 ]; then
+            start_log_stream
+            start_crash_monitor
+            wait "$LOG_STREAM_PID" 2>/dev/null || true
+            cleanup
+        else
+            ok "App running. Use ${BOLD}./meeshy.sh logs${NC} to stream logs."
+        fi
         ;;
 
     logs)

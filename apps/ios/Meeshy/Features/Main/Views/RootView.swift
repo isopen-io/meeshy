@@ -6,10 +6,9 @@ struct RootView: View {
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
-    @State private var showConversation = false
+    @StateObject private var router = Router()
     @State private var showFeed = false
     @State private var showMenu = false
-    @State private var selectedConversation: Conversation?
     @State private var notificationCount = 3
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
@@ -38,50 +37,30 @@ struct RootView: View {
             // 1. Dynamic Background
             themedBackground
 
-            // 2. Main content
-            if showConversation {
-                ConversationView(
-                    conversation: selectedConversation,
-                    replyContext: pendingReplyContext,
-                    onBack: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            showConversation = false
-                            pendingReplyContext = nil
-                        }
-                    }
-                )
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .trailing)
-                            .combined(with: .opacity),
-                        removal: .move(edge: .trailing)
-                            .combined(with: .scale(scale: 0.95))
-                            .combined(with: .opacity)
-                    )
-                )
-            } else {
+            // 2. Main content — NavigationStack
+            NavigationStack(path: $router.path) {
                 ConversationListView(
                     isScrollingDown: $isScrollingDown,
                     feedIsVisible: $showFeed,
                     onSelect: { conversation in
-                        selectedConversation = conversation
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            showConversation = true
-                        }
+                        router.push(.conversation(conversation))
                     },
                     onStoryViewRequest: { groupIndex, _ in
                         selectedStoryGroupIndexFromConv = groupIndex
                         showStoryViewerFromConv = true
                     }
                 )
-                .transition(
-                    .asymmetric(
-                        insertion: .scale(scale: 0.97)
-                            .combined(with: .opacity),
-                        removal: .scale(scale: 0.95)
-                            .combined(with: .opacity)
-                    )
-                )
+                .navigationBarHidden(true)
+                .navigationDestination(for: Route.self) { route in
+                    switch route {
+                    case .conversation(let conv):
+                        ConversationView(
+                            conversation: conv,
+                            replyContext: pendingReplyContext
+                        )
+                        .navigationBarHidden(true)
+                    }
+                }
             }
 
             // 3. Feed overlay
@@ -100,7 +79,7 @@ struct RootView: View {
             }
 
             // 4. Draggable Floating buttons
-            if !showConversation {
+            if !router.isInConversation {
                 draggableFloatingButtons
             }
 
@@ -116,10 +95,11 @@ struct RootView: View {
             }
 
             // 6. Menu ladder
-            if !showConversation {
+            if !router.isInConversation {
                 menuLadder
             }
         }
+        .environmentObject(router)
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
@@ -144,7 +124,6 @@ struct RootView: View {
                 )
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showConversation)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
     }
@@ -160,10 +139,7 @@ struct RootView: View {
 
         if let conversation = conversationViewModel.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
             pendingReplyContext = context
-            selectedConversation = conversation
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                showConversation = true
-            }
+            router.navigateToConversation(conversation)
         }
     }
 
