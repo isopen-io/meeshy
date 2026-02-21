@@ -88,6 +88,7 @@ import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
 import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
+import { TusCleanupService } from './services/TusCleanupService';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -294,6 +295,7 @@ class MeeshyServer {
   private callCleanupService: CallCleanupService;
   private backgroundJobs: BackgroundJobsManager;
   private jobMappingCache: MultiLevelJobMappingCache;
+  private tusCleanup: TusCleanupService;
 
   constructor() {
     // Check if HTTPS mode is enabled
@@ -412,6 +414,9 @@ class MeeshyServer {
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
     this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService);
+
+    // Initialiser le service de nettoyage des uploads tus incomplets
+    this.tusCleanup = new TusCleanupService();
 
     // Expose emailService for use in routes (friend requests, etc.)
     this.server.decorate('emailService', emailService);
@@ -1163,6 +1168,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Start background jobs (token cleanup, account unlock, notification digest)
       this.backgroundJobs.startAll();
 
+      // Start tus cleanup cron (hourly, removes uploads older than 24h)
+      this.tusCleanup.start();
+      logger.info('✓ TUS cleanup service started');
+
     } catch (error) {
       logger.error('❌ Failed to start server: ', error);
       process.exit(1);
@@ -1183,6 +1192,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.backgroundJobs) {
         this.backgroundJobs.stopAll();
         logger.info('✓ Background jobs stopped');
+      }
+
+      // Stop tus cleanup cron
+      if (this.tusCleanup) {
+        this.tusCleanup.stop();
+        logger.info('✓ TUS cleanup service stopped');
       }
 
       // SECURITY: Clear all cryptographic material from memory
