@@ -56,13 +56,14 @@ function getAnonymousChatService(linkId: string): AnonymousChatService {
  */
 async function fetchMessagesFromService(
   conversationId: string,
-  page: number,
+  pageParam: number | string,
   limit: number,
   linkId?: string
-): Promise<{ messages: Message[]; hasMore: boolean; total: number }> {
+): Promise<{ messages: Message[]; hasMore: boolean; total: number; nextCursor?: string | null }> {
   if (linkId) {
     // Utilisateur anonyme via lien partagé - utiliser AnonymousChatService
     const service = getAnonymousChatService(linkId);
+    const page = typeof pageParam === 'number' ? pageParam : 1;
     const offset = (page - 1) * limit;
     const result = await service.loadMessages(limit, offset);
 
@@ -73,12 +74,15 @@ async function fetchMessagesFromService(
     };
   } else {
     // Utilisateur authentifié - utiliser conversationsService
-    const result = await conversationsService.getMessages(conversationId, page, limit);
+    const cursor = typeof pageParam === 'string' ? pageParam : null;
+    const page = typeof pageParam === 'number' ? pageParam : 1;
+    const result = await conversationsService.getMessages(conversationId, page, limit, cursor);
 
     return {
       messages: result.messages || [],
       hasMore: result.hasMore || false,
       total: result.total || 0,
+      nextCursor: result.cursorPagination?.nextCursor,
     };
   }
 }
@@ -124,9 +128,10 @@ export function useConversationMessagesRQ(
     queryKey,
     queryFn: ({ pageParam = 1 }) =>
       fetchMessagesFromService(conversationId!, pageParam, limit, linkId),
-    initialPageParam: 1,
+    initialPageParam: 1 as number | string,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined;
+      if (lastPage.nextCursor) return lastPage.nextCursor;
       return allPages.length + 1;
     },
     enabled: enabled && !!conversationId,

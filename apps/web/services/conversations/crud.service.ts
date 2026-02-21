@@ -9,6 +9,7 @@ import { transformersService } from './transformers.service';
 import type {
   Conversation,
   CreateConversationRequest,
+  CursorPaginationMeta,
 } from '@meeshy/shared/types';
 import type {
   GetConversationsOptions,
@@ -23,10 +24,10 @@ export class ConversationsCrudService {
    * Obtenir toutes les conversations de l'utilisateur avec pagination et filtres
    */
   async getConversations(options: GetConversationsOptions = {}): Promise<GetConversationsResponse> {
-    const { limit = 20, offset = 0, skipCache = false, type, withUserId } = options;
+    const { limit = 20, offset = 0, skipCache = false, type, withUserId, before } = options;
 
-    // Vérifier le cache (seulement pour la première page sans offset et sans filtres)
-    if (!skipCache && offset === 0 && !type && !withUserId) {
+    // Vérifier le cache (seulement pour la première page sans offset, sans filtres, sans cursor)
+    if (!skipCache && !before && offset === 0 && !type && !withUserId) {
       const cachedConversations = cacheService.getConversationsFromCache();
       if (cachedConversations) {
         return {
@@ -43,8 +44,12 @@ export class ConversationsCrudService {
 
     const queryParams: Record<string, string> = {
       limit: limit.toString(),
-      offset: offset.toString()
     };
+    if (before) {
+      queryParams.before = before;
+    } else {
+      queryParams.offset = offset.toString();
+    }
     if (type) queryParams.type = type;
     if (withUserId) queryParams.withUserId = withUserId;
 
@@ -57,6 +62,7 @@ export class ConversationsCrudService {
         total: number;
         hasMore: boolean;
       };
+      cursorPagination?: CursorPaginationMeta;
     }>('/conversations', queryParams);
 
     if (!response.data?.success || !Array.isArray(response.data?.data)) {
@@ -67,8 +73,10 @@ export class ConversationsCrudService {
       transformersService.transformConversationData(conv)
     );
 
-    // Mettre en cache les conversations (seulement pour la première page)
-    if (offset === 0) {
+    const cursorPagination = response.data.cursorPagination;
+
+    // Mettre en cache les conversations (seulement pour la première page, not cursor-based)
+    if (offset === 0 && !before) {
       cacheService.setConversationsCache(conversations);
     }
 
@@ -79,7 +87,8 @@ export class ConversationsCrudService {
         offset,
         total: conversations.length,
         hasMore: false
-      }
+      },
+      cursorPagination,
     };
   }
 

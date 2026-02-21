@@ -108,9 +108,10 @@ export class ConversationsService {
   async getMessages(
     conversationId: string,
     page = 1,
-    limit = 20
+    limit = 20,
+    cursor?: string | null
   ): Promise<GetMessagesResponse> {
-    return messagesService.getMessages(conversationId, page, limit);
+    return messagesService.getMessages(conversationId, page, limit, cursor);
   }
 
   /**

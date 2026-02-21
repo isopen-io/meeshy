@@ -10,6 +10,7 @@ import type {
   Message,
   SendMessageRequest,
   PaginationMeta,
+  CursorPaginationMeta,
 } from '@meeshy/shared/types';
 import type {
   GetMessagesResponse,
@@ -37,7 +38,8 @@ export class MessagesService {
   async getMessages(
     conversationId: string,
     page = 1,
-    limit = 20
+    limit = 20,
+    cursor?: string | null
   ): Promise<GetMessagesResponse> {
     try {
       const requestKey = `messages-${conversationId}`;
@@ -45,14 +47,22 @@ export class MessagesService {
 
       const offset = (page - 1) * limit;
 
+      const queryParams: Record<string, unknown> = { limit };
+      if (cursor) {
+        queryParams.before = cursor;
+      } else {
+        queryParams.offset = offset;
+      }
+
       const response = await apiService.get<{
         success: boolean;
         data: unknown[];
         pagination?: PaginationMeta;
+        cursorPagination?: CursorPaginationMeta;
         meta?: { userLanguage?: string };
       }>(
         `/conversations/${conversationId}/messages`,
-        { offset, limit },
+        queryParams,
         { signal: controller.signal }
       );
 
@@ -68,12 +78,14 @@ export class MessagesService {
       );
 
       const pagination = response.data.pagination;
+      const cursorPagination = response.data.cursorPagination;
 
       return {
         messages: transformedMessages,
         total: pagination?.total ?? transformedMessages.length,
-        hasMore: pagination?.hasMore ?? false,
+        hasMore: cursorPagination?.hasMore ?? pagination?.hasMore ?? false,
         pagination,
+        cursorPagination,
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

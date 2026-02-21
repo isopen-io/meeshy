@@ -9,7 +9,7 @@ import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveUserLanguage, isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
+import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
   messageSchema,
@@ -494,13 +494,15 @@ export function registerMessagesRoutes(
       const isAnonymousUser = authRequest.authContext.isAnonymous;
 
       const [totalCount, messages, userPrefs] = await Promise.all([
-        // 1. Compter le total des messages (pour pagination)
-        prisma.message.count({
-          where: {
-            conversationId: conversationId,
-            isDeleted: false
-          }
-        }),
+        // 1. Compter le total des messages (pour pagination) - skip when using cursor
+        before
+          ? Promise.resolve(0)
+          : prisma.message.count({
+              where: {
+                conversationId: conversationId,
+                isDeleted: false
+              }
+            }),
         // 2. Récupérer les messages avec toutes les relations
         prisma.message.findMany({
           where: whereClause,
@@ -801,7 +803,13 @@ export function registerMessagesRoutes(
       }
 
       // Construire les métadonnées de pagination standard
-      const paginationMeta = buildPaginationMeta(totalCount, offset, limit, messages.length);
+      const paginationMeta = before
+        ? buildPaginationMeta(0, 0, limit, messages.length)
+        : buildPaginationMeta(totalCount, offset, limit, messages.length);
+
+      // Construire les métadonnées de cursor pagination
+      const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
+      const cursorPaginationMeta = buildCursorPaginationMeta(limit, messages.length, lastMessageId);
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
       // Aligné avec MessagesListResponse de @meeshy/shared/types
@@ -809,6 +817,7 @@ export function registerMessagesRoutes(
         success: true,
         data: mappedMessages,
         pagination: paginationMeta,
+        cursorPagination: cursorPaginationMeta,
         meta: {
           userLanguage: userPreferredLanguage
         }

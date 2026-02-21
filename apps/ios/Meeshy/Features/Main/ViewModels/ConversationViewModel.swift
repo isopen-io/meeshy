@@ -81,11 +81,25 @@ class ConversationViewModel: ObservableObject {
     /// When true, onAppear prefetch triggers are suppressed.
     @Published var isProgrammaticScroll = false
 
+    // MARK: - Search State
+
+    @Published var searchResults: [SearchResultItem] = []
+    @Published var isSearching = false
+    @Published var searchHasMore = false
+    var searchNextCursor: String?
+
+    /// True when the user jumped to a search result and messages are loaded around that point
+    @Published var isInJumpedState = false
+    private var savedMessages: [Message]?
+    private var savedCursor: String?
+    private var savedHasOlder: Bool = true
+
     // MARK: - Private
 
     let conversationId: String
     private let initialUnreadCount: Int
     private let limit = 50
+    private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
 
     private var currentUserId: String {
@@ -196,7 +210,8 @@ class ConversationViewModel: ObservableObject {
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
-            hasOlderMessages = response.pagination?.hasMore ?? false
+            self.nextMessageCursor = response.cursorPagination?.nextCursor
+            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
 
             // Calculate first unread message position
             if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
@@ -226,12 +241,14 @@ class ConversationViewModel: ObservableObject {
         // Save anchor BEFORE prepend so the view can restore scroll position
         scrollAnchorId = oldestId
 
+        let beforeValue = nextMessageCursor ?? oldestId
+
         do {
             let response: MessagesAPIResponse = try await APIClient.shared.request(
                 endpoint: "/conversations/\(conversationId)/messages",
                 queryItems: [
                     URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "before", value: oldestId),
+                    URLQueryItem(name: "before", value: beforeValue),
                     URLQueryItem(name: "include_replies", value: "true"),
                 ]
             )
@@ -244,7 +261,8 @@ class ConversationViewModel: ObservableObject {
             let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
             messages.insert(contentsOf: newMessages, at: 0)
 
-            hasOlderMessages = response.pagination?.hasMore ?? false
+            self.nextMessageCursor = response.cursorPagination?.nextCursor
+            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
         } catch {
             self.error = error.localizedDescription
         }
@@ -744,5 +762,139 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink(receiveValue: audioHandler)
             .store(in: &cancellables)
+    }
+
+    // MARK: - Search Messages
+
+    func searchMessages(query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+        searchNextCursor = nil
+
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages",
+                queryItems: [
+                    URLQueryItem(name: "search", value: trimmed),
+                    URLQueryItem(name: "limit", value: "20"),
+                ]
+            )
+
+            let userId = currentUserId
+            searchResults = response.data.map { apiMsg in
+                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
+                let content = apiMsg.content ?? ""
+                return SearchResultItem(
+                    id: apiMsg.id,
+                    conversationId: apiMsg.conversationId,
+                    content: content,
+                    matchedText: content,
+                    matchType: "content",
+                    senderName: senderName,
+                    senderAvatar: apiMsg.sender?.avatar,
+                    createdAt: apiMsg.createdAt
+                )
+            }
+            searchNextCursor = response.cursorPagination?.nextCursor
+            searchHasMore = response.cursorPagination?.hasMore ?? false
+        } catch {
+            searchResults = []
+        }
+
+        isSearching = false
+    }
+
+    func loadMoreSearchResults(query: String) async {
+        guard searchHasMore, let cursor = searchNextCursor, !isSearching else { return }
+        isSearching = true
+
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages",
+                queryItems: [
+                    URLQueryItem(name: "search", value: query),
+                    URLQueryItem(name: "limit", value: "20"),
+                    URLQueryItem(name: "before", value: cursor),
+                ]
+            )
+
+            let newResults = response.data.map { apiMsg in
+                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
+                let content = apiMsg.content ?? ""
+                return SearchResultItem(
+                    id: apiMsg.id,
+                    conversationId: apiMsg.conversationId,
+                    content: content,
+                    matchedText: content,
+                    matchType: "content",
+                    senderName: senderName,
+                    senderAvatar: apiMsg.sender?.avatar,
+                    createdAt: apiMsg.createdAt
+                )
+            }
+            searchResults.append(contentsOf: newResults)
+            searchNextCursor = response.cursorPagination?.nextCursor
+            searchHasMore = response.cursorPagination?.hasMore ?? false
+        } catch {
+            // Ignore pagination errors
+        }
+
+        isSearching = false
+    }
+
+    // MARK: - Jump to Message (load messages around a specific message)
+
+    func loadMessagesAround(messageId: String) async {
+        // Save current state so we can return later
+        if !isInJumpedState {
+            savedMessages = messages
+            savedCursor = nextMessageCursor
+            savedHasOlder = hasOlderMessages
+        }
+
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages",
+                queryItems: [
+                    URLQueryItem(name: "around", value: messageId),
+                    URLQueryItem(name: "limit", value: "\(limit)"),
+                    URLQueryItem(name: "include_replies", value: "true"),
+                ]
+            )
+
+            let userId = currentUserId
+            messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            nextMessageCursor = response.cursorPagination?.nextCursor
+            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+            isInJumpedState = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func returnToLatest() async {
+        guard isInJumpedState else { return }
+
+        if let saved = savedMessages {
+            messages = saved
+            nextMessageCursor = savedCursor
+            hasOlderMessages = savedHasOlder
+        } else {
+            // Reload from scratch
+            isInJumpedState = false
+            await loadMessages()
+            return
+        }
+
+        savedMessages = nil
+        savedCursor = nil
+        savedHasOlder = true
+        isInJumpedState = false
     }
 }

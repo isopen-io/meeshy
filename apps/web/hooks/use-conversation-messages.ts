@@ -59,6 +59,7 @@ export function useConversationMessages(
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const defaultContainerRef = useRef<HTMLDivElement>(null);
   const actualContainerRef = containerRef || defaultContainerRef;
@@ -67,6 +68,7 @@ export function useConversationMessages(
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScrollTopRef = useRef<number>(0);
   const offsetRef = useRef<number>(0); // Ref pour l'offset pour éviter les problèmes de timing
+  const nextCursorRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef<boolean>(false); // Ref pour éviter de charger avant le scroll initial
 
   // 🔴 OPTIMISATION: Index Map pour updateMessage O(1) au lieu de O(n)
@@ -122,6 +124,7 @@ export function useConversationMessages(
 
       // Calculer l'offset AVANT de faire l'appel API
       const currentOffset = isLoadMore ? offsetRef.current : 0;
+      const currentCursor = isLoadMore ? nextCursorRef.current : null;
 
       // Déterminer l'endpoint selon le contexte
       let endpoint: string;
@@ -143,6 +146,15 @@ export function useConversationMessages(
         throw new Error('Configuration invalide pour charger les messages');
       }
 
+      // Build query params - prefer cursor over offset
+      const queryParams: Record<string, string> = {
+        limit: limit.toString(),
+      };
+      if (currentCursor) {
+        queryParams.before = currentCursor;
+      } else {
+        queryParams.offset = currentOffset.toString();
+      }
 
       // Format optimisé: { success, data: Message[], pagination, meta: { userLanguage } }
       // Backend inclut toujours réactions et traductions automatiquement
@@ -150,25 +162,25 @@ export function useConversationMessages(
         success: boolean;
         data: Message[];  // Directement les messages
         pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
+        cursorPagination?: { limit: number; hasMore: boolean; nextCursor: string | null };
         meta?: { userLanguage?: string };
       }>(
         endpoint,
-        {
-          limit: limit.toString(),
-          offset: currentOffset.toString()
-        },
+        queryParams,
         requestOptions.headers ? { headers: requestOptions.headers } : undefined
       );
 
       const data = response.data;
 
-      if (!data.success) {
+      if (!data?.success) {
         throw new Error('Erreur lors du chargement des messages');
       }
 
       // data.data est directement Message[] (format optimisé)
       const newMessages = data.data || [];
-      const hasMoreMessages = data.pagination?.hasMore ?? false;
+      const cursorPagination = data.cursorPagination;
+      const hasMoreMessages = cursorPagination?.hasMore ?? data.pagination?.hasMore ?? false;
+      const newCursor = cursorPagination?.nextCursor ?? null;
 
       // Log des traductions reçues pour debugging
 
@@ -218,7 +230,9 @@ export function useConversationMessages(
         }
         
         setOffset(prev => prev + limit);
-        offsetRef.current += limit; // Mettre à jour la ref immédiatement
+        offsetRef.current += limit;
+        setNextCursor(newCursor);
+        nextCursorRef.current = newCursor;
       } else {
         // Premier chargement : garder l'ordre du backend (récents en premier)
         // MessagesDisplay avec reverseOrder=true va inverser pour afficher anciens en haut, récents en bas
@@ -228,7 +242,9 @@ export function useConversationMessages(
 
         setMessages(sortedMessages);
         setOffset(limit);
-        offsetRef.current = limit; // Mettre à jour la ref immédiatement
+        offsetRef.current = limit;
+        setNextCursor(newCursor);
+        nextCursorRef.current = newCursor;
         setIsInitialized(true);
       }
 
@@ -282,6 +298,8 @@ export function useConversationMessages(
     setMessages([]);
     setOffset(0);
     offsetRef.current = 0; // Reset ref
+    setNextCursor(null);
+    nextCursorRef.current = null;
     setHasMore(true);
     setIsInitialized(false);
     setError(null);

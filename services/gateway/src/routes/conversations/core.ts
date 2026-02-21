@@ -27,6 +27,7 @@ import type {
   CreateConversationBody
 } from './types';
 import { conversationListCache, invalidateConversationCacheAsync } from '../../services/ConversationListCache';
+import { buildCursorPaginationMeta } from '../../utils/pagination';
 
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant (peut être un ObjectID ou un identifier)
@@ -117,7 +118,7 @@ export function registerCoreRoutes(
   });
 
   // Route pour obtenir toutes les conversations de l'utilisateur
-  fastify.get<{ Querystring: { limit?: string; offset?: string; includeCount?: string; type?: string; withUserId?: string } }>('/conversations', {
+  fastify.get<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string } }>('/conversations', {
     schema: {
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
@@ -127,6 +128,7 @@ export function registerCoreRoutes(
         properties: {
           limit: { type: 'string', description: 'Maximum number of conversations to return (max 50, default 15)' },
           offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
+          before: { type: 'string', description: 'Cursor for pagination: get conversations before this conversation ID (by lastMessageAt)' },
           includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
           type: { type: 'string', enum: ['direct', 'group', 'anonymous', 'broadcast'], description: 'Filter by conversation type' },
           withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' }
@@ -140,7 +142,7 @@ export function registerCoreRoutes(
       }
     },
     preValidation: [optionalAuth]
-  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; includeCount?: string; type?: string; withUserId?: string } }>, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string; before?: string; includeCount?: string; type?: string; withUserId?: string } }>, reply) => {
     try {
       const authRequest = request as UnifiedAuthRequest;
 
@@ -162,6 +164,7 @@ export function registerCoreRoutes(
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
       const typeFilter = request.query.type;
       const withUserId = request.query.withUserId;
+      const beforeCursor = request.query.before;
 
       // === CACHE DISABLED ===
       // Le cache des conversations causait des problèmes de synchronisation
@@ -228,10 +231,23 @@ export function registerCoreRoutes(
         delete whereClause.members;
       }
 
+      // Cursor-based pagination: filter by lastMessageAt of the cursor conversation
+      let cursorLastMessageAt: Date | null = null;
+      if (beforeCursor) {
+        const cursorConversation = await prisma.conversation.findFirst({
+          where: { id: beforeCursor },
+          select: { lastMessageAt: true }
+        });
+        if (cursorConversation?.lastMessageAt) {
+          cursorLastMessageAt = cursorConversation.lastMessageAt;
+          whereClause.lastMessageAt = { lt: cursorLastMessageAt };
+        }
+      }
+
       t0 = performance.now();
       const conversations = await prisma.conversation.findMany({
         where: whereClause,
-        skip: offset,
+        skip: beforeCursor ? 0 : offset,
         take: limit,
         select: {
           id: true,
@@ -363,8 +379,8 @@ export function registerCoreRoutes(
         // Unread counts
         readStatusService.getUnreadCountsForConversations(userId, conversationIds),
 
-        // Count (if requested)
-        (includeCount || offset === 0)
+        // Count (if requested) - skip when using cursor pagination
+        (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
           : Promise.resolve(0)
       ]);
@@ -432,6 +448,16 @@ export function registerCoreRoutes(
         }).catch(err => console.error('[CACHE-SAVE] Erreur sauvegarde cache:', err));
       }
 
+      // Build cursor pagination meta
+      const lastConversation = conversationsWithUnreadCount.length > 0
+        ? conversationsWithUnreadCount[conversationsWithUnreadCount.length - 1]
+        : null;
+      const cursorPaginationMeta = buildCursorPaginationMeta(
+        limit,
+        conversationsWithUnreadCount.length,
+        lastConversation?.id ?? null
+      );
+
       reply.send({
         success: true,
         data: conversationsWithUnreadCount,
@@ -440,7 +466,8 @@ export function registerCoreRoutes(
           offset,
           total: totalCount,
           hasMore
-        }
+        },
+        cursorPagination: cursorPaginationMeta
       });
 
     } catch (error) {

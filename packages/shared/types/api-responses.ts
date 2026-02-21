@@ -28,6 +28,12 @@ export interface PaginationMeta {
   hasMore: boolean;
 }
 
+export interface CursorPaginationMeta {
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /**
  * Extended metadata for responses (optional, for advanced use cases)
  */
@@ -59,6 +65,7 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   code?: string;
   pagination?: PaginationMeta;
+  cursorPagination?: CursorPaginationMeta;
   meta?: ResponseMeta;
 }
 
@@ -123,6 +130,7 @@ export interface MessagesListMeta extends ResponseMeta {
  */
 export interface MessagesListResponse<TMessage = unknown> extends ApiResponse<readonly TMessage[]> {
   pagination: PaginationMeta;
+  cursorPagination?: CursorPaginationMeta;
   meta?: MessagesListMeta;
 }
 

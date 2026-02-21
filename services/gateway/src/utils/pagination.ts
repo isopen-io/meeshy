@@ -1,4 +1,4 @@
-import type { PaginationMeta } from '@meeshy/shared/types';
+import type { PaginationMeta, CursorPaginationMeta } from '@meeshy/shared/types';
 
 export interface PaginationParams {
   offset: number;
@@ -6,7 +6,7 @@ export interface PaginationParams {
 }
 
 // Re-export PaginationMeta from shared for convenience
-export type { PaginationMeta } from '@meeshy/shared/types';
+export type { PaginationMeta, CursorPaginationMeta } from '@meeshy/shared/types';
 
 export function validatePagination(
   offset: string = '0',
@@ -29,5 +29,17 @@ export function buildPaginationMeta(
     offset,
     limit,
     hasMore: offset + resultCount < total
+  };
+}
+
+export function buildCursorPaginationMeta(
+  limit: number,
+  resultCount: number,
+  lastItemId: string | null
+): CursorPaginationMeta {
+  return {
+    limit,
+    hasMore: resultCount === limit,
+    nextCursor: resultCount > 0 ? lastItemId : null
   };
 }

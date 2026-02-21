@@ -86,6 +86,7 @@ struct MessagesAPIResponse: Decodable {
     let success: Bool
     let data: [APIMessage]
     let pagination: OffsetPagination?
+    let cursorPagination: CursorPagination?
 }
 
 // MARK: - Send Message Request
@@ -107,6 +108,19 @@ struct SendMessageResponseData: Decodable {
     let senderId: String?
     let content: String?
     let messageType: String?
+    let createdAt: Date
+}
+
+// MARK: - Search Result Item
+
+struct SearchResultItem: Identifiable {
+    let id: String
+    let conversationId: String
+    let content: String
+    let matchedText: String
+    let matchType: String // "content" or "translation"
+    let senderName: String
+    let senderAvatar: String?
     let createdAt: Date
 }
 

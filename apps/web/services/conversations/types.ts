@@ -8,6 +8,7 @@ import type {
   Message,
   User,
   PaginationMeta,
+  CursorPaginationMeta,
   ConversationType,
   TranslationModel,
   Attachment,
@@ -35,6 +36,7 @@ export interface GetConversationsOptions {
   skipCache?: boolean;
   type?: ConversationType;
   withUserId?: string;
+  before?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ export interface GetConversationsResponse {
     total: number;
     hasMore: boolean;
   };
+  cursorPagination?: CursorPaginationMeta;
 }
 
 /**
@@ -58,6 +61,7 @@ export interface GetMessagesResponse {
   total: number;
   hasMore: boolean;
   pagination?: PaginationMeta;
+  cursorPagination?: CursorPaginationMeta;
 }
 
 /**
