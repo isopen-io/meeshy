@@ -436,7 +436,7 @@ class MeeshyServer {
     await this.server.register(multipart, {
       limits: {
         fileSize: 4294967296, // 4GB max file size
-        files: 100, // Max 100 files per request
+        files: 30, // Max 30 files per request
       },
     });
 
@@ -651,9 +651,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 100 files at once. Please reduce the number of files.`,
+          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`,
           details: {
-            maxFiles: 100,
+            maxFiles: 30,
             limit: 'Files limit reached'
           },
           statusCode: 413,
