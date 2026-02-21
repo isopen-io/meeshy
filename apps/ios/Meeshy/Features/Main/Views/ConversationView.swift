@@ -2680,6 +2680,7 @@ struct ThemedMessageBubble: View {
     @State private var fullscreenAttachment: MessageAttachment? = nil
     @State private var showCarousel: Bool = false
     @State private var carouselIndex: Int = 0
+    @State private var isBlurRevealed: Bool = false
     @ObservedObject private var theme = ThemeManager.shared
 
     private let gridMaxWidth: CGFloat = 300
@@ -2810,52 +2811,101 @@ struct ThemedMessageBubble: View {
                         }
                 }
 
-                // Grille visuelle (images + vidéos)
-                if !visualAttachments.isEmpty {
-                    if showCarousel {
-                        carouselView
-                            .background(Color.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .transition(.opacity)
-                    } else {
-                        visualMediaGrid
-                            .background(Color.black)
-                            .compositingGroup()
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .transition(.opacity)
+                // Message content (blurred if isBlurred and not revealed)
+                let shouldBlur = message.isBlurred && !isBlurRevealed
+
+                ZStack {
+                    VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+                        // Grille visuelle (images + vidéos)
+                        if !visualAttachments.isEmpty {
+                            if showCarousel {
+                                carouselView
+                                    .background(Color.black)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .transition(.opacity)
+                            } else {
+                                visualMediaGrid
+                                    .background(Color.black)
+                                    .compositingGroup()
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .transition(.opacity)
+                            }
+                        }
+
+                        // Audio standalone
+                        ForEach(audioAttachments) { attachment in
+                            mediaStandaloneView(attachment)
+                        }
+
+                        // Bulle texte + non-media attachments (file, location)
+                        if hasTextOrNonMediaContent {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(nonMediaAttachments) { attachment in
+                                    attachmentView(attachment)
+                                }
+
+                                if !message.content.isEmpty {
+                                    Text(message.content)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(bubbleBackground)
+                            .shadow(
+                                color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                                radius: 6,
+                                y: 3
+                            )
+                        }
+                    }
+                    .blur(radius: shouldBlur ? 20 : 0)
+                    .allowsHitTesting(!shouldBlur)
+
+                    // Blur reveal overlay
+                    if shouldBlur {
+                        VStack(spacing: 6) {
+                            Image(systemName: message.isViewOnce ? "eye.slash.fill" : "eye.slash.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.white)
+
+                            Text(message.isViewOnce ? "Voir une fois" : "Contenu masqué")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+
+                            Text("Maintenir pour voir")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                        .contentShape(Rectangle())
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.3) {
+                    guard message.isBlurred && !isBlurRevealed else { return }
+                    HapticFeedback.medium()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isBlurRevealed = true
+                    }
+                    if message.isViewOnce {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            withAnimation(.easeOut(duration: 0.5)) {
+                                isBlurRevealed = false
+                            }
+                        }
                     }
                 }
 
-                // Audio standalone
-                ForEach(audioAttachments) { attachment in
-                    mediaStandaloneView(attachment)
-                }
-
-                // Bulle texte + non-media attachments (file, location)
-                if hasTextOrNonMediaContent {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(nonMediaAttachments) { attachment in
-                            attachmentView(attachment)
-                        }
-
-                        if !message.content.isEmpty {
-                            Text(message.content)
-                                .font(.system(size: 15))
-                                .foregroundColor(message.isMe ? .white : theme.textPrimary)
-                        }
+                // View-once indicator + timestamp
+                HStack(spacing: 3) {
+                    if message.isViewOnce {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange.opacity(0.8))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleBackground)
-                    .shadow(
-                        color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
-                        radius: 6,
-                        y: 3
-                    )
+                    messageMetaRow(insideBubble: false)
                 }
-
-                // Timestamp always outside bubble
-                messageMetaRow(insideBubble: false)
             }
             .overlay(alignment: .bottomLeading) {
                 reactionsOverlay
@@ -2905,6 +2955,12 @@ struct ThemedMessageBubble: View {
     @ViewBuilder
     private func messageMetaRow(insideBubble: Bool) -> some View {
         HStack(spacing: 3) {
+            if message.isEncrypted {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(theme.textSecondary.opacity(0.5))
+            }
+
             if message.isEdited {
                 Text("modifié")
                     .font(.system(size: 10, weight: .medium))
