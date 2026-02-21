@@ -74,6 +74,9 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
+    /// ID of the first unread message (set once after initial load, cleared on scroll to bottom)
+    @Published var firstUnreadMessageId: String?
+
     /// True during programmatic scrolls (initial load, send, scroll-to-bottom tap)
     /// When true, onAppear prefetch triggers are suppressed.
     @Published var isProgrammaticScroll = false
@@ -81,6 +84,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Private
 
     let conversationId: String
+    private let initialUnreadCount: Int
     private let limit = 50
     private var cancellables = Set<AnyCancellable>()
 
@@ -99,8 +103,9 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Init
 
-    init(conversationId: String) {
+    init(conversationId: String, unreadCount: Int = 0) {
         self.conversationId = conversationId
+        self.initialUnreadCount = unreadCount
         subscribeToSocket()
         joinRoom()
     }
@@ -193,6 +198,15 @@ class ConversationViewModel: ObservableObject {
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
             hasOlderMessages = response.pagination?.hasMore ?? false
 
+            // Calculate first unread message position
+            if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
+                let unreadStartIndex = messages.count - initialUnreadCount
+                let candidate = messages[unreadStartIndex]
+                if !candidate.isMe {
+                    firstUnreadMessageId = candidate.id
+                }
+            }
+
             // Mark conversation as read (fire-and-forget)
             markAsRead()
         } catch {
@@ -240,7 +254,7 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    func sendMessage(content: String, replyToId: String? = nil, attachmentIds: [String]? = nil) async {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil) async {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
 
@@ -257,6 +271,8 @@ class ConversationViewModel: ObservableObject {
             senderId: currentUserId,
             content: text,
             replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
             createdAt: Date(),
             updatedAt: Date(),
             deliveryStatus: .sending,
@@ -270,6 +286,8 @@ class ConversationViewModel: ObservableObject {
                 content: text.isEmpty ? nil : text,
                 originalLanguage: nil,
                 replyToId: replyToId,
+                forwardedFromId: forwardedFromId,
+                forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds
             )
             let response: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(

@@ -126,7 +126,7 @@ struct ConversationView: View {
     init(conversation: Conversation?, replyContext: ReplyContext? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
-        _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? ""))
+        _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? "", unreadCount: conversation?.unreadCount ?? 0))
     }
 
     // MARK: - Date Sections
@@ -217,6 +217,27 @@ struct ConversationView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+
+    // MARK: - Unread Separator
+
+    private var unreadSeparator: some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(Color(hex: "FF6B6B").opacity(0.5))
+                .frame(height: 1)
+            Text("Nouveaux messages")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: "FF6B6B"))
+                .lineLimit(1)
+                .fixedSize()
+            Rectangle()
+                .fill(Color(hex: "FF6B6B").opacity(0.5))
+                .frame(height: 1)
+        }
+        .padding(.vertical, 4)
+        .id("unread_separator")
+        .transition(.opacity)
     }
 
     // MARK: - Extracted message row (avoids type-checker timeout)
@@ -537,6 +558,12 @@ struct ConversationView: View {
                             if shouldShowDateSection(at: index) {
                                 dateSectionView(for: msg.createdAt)
                             }
+
+                            // Unread separator
+                            if msg.id == viewModel.firstUnreadMessageId {
+                                unreadSeparator
+                            }
+
                             messageRow(index: index, msg: msg)
                         }
 
@@ -556,6 +583,11 @@ struct ConversationView: View {
                                 isNearBottom = true
                                 unreadBadgeCount = 0
                                 viewModel.lastUnreadMessage = nil
+                                if viewModel.firstUnreadMessageId != nil {
+                                    withAnimation(.easeOut(duration: 0.3)) {
+                                        viewModel.firstUnreadMessageId = nil
+                                    }
+                                }
                             }
                             .onDisappear {
                                 isNearBottom = false
