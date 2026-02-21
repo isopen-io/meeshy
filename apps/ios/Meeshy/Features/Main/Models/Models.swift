@@ -631,20 +631,7 @@ struct MessageAttachment: Identifiable, Codable {
     }
 }
 
-// MARK: - Reply Reference
-struct ReplyReference {
-    let authorName: String
-    let authorColor: String
-    let previewText: String
-    let isMe: Bool
-
-    init(authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil) {
-        self.authorName = authorName
-        self.previewText = previewText
-        self.isMe = isMe
-        self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
-    }
-}
+// ReplyReference is defined in MeeshySDK/Models/CoreModels.swift
 
 // MARK: - Reaction Model (Prisma-aligned)
 struct Reaction: Identifiable, Codable {

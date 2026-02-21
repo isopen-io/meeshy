@@ -45,6 +45,7 @@ struct ConversationView: View {
     // Reaction bar state
     @State private var quickReactionMessageId: String? = nil
     @State private var showEmojiPickerSheet = false
+    @State private var emojiOnlyMode: Bool = false
 
     // Scroll state
     @State private var isNearBottom: Bool = true
@@ -204,38 +205,96 @@ struct ConversationView: View {
 
     // MARK: - Extracted message row (avoids type-checker timeout)
 
+    @State private var swipedMessageId: String? = nil
+    @State private var swipeOffset: CGFloat = 0
+
     @ViewBuilder
     private func messageRow(index: Int, msg: Message) -> some View {
         let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
         let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
         let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId ?? "")
 
-        VStack(spacing: 0) {
-            // Quick reaction bar + action menu (above the bubble)
-            if quickReactionMessageId == msg.id {
-                quickReactionBar(for: msg.id)
-                    .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
-                    .padding(.bottom, 6)
+        // Swipe direction: reply = swipe toward center (right for other, left for own)
+        let replyDirection: CGFloat = msg.isMe ? -1 : 1
+        let isActiveSwipe = swipedMessageId == msg.id
+
+        ZStack {
+            // Reply icon revealed behind the bubble
+            if isActiveSwipe && abs(swipeOffset) > 20 {
+                HStack {
+                    if !msg.isMe {
+                        Spacer()
+                    }
+                    Image(systemName: swipeOffset * replyDirection > 0 ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500"))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500").opacity(0.15)))
+                        .scaleEffect(min(abs(swipeOffset) / 60.0, 1.0))
+                        .opacity(min(abs(swipeOffset) / 40.0, 1.0))
+                    if msg.isMe {
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 16)
             }
 
-            ThemedMessageBubble(
-                message: msg,
-                contactColor: accentColor,
-                showAvatar: !isDirect && isLastInGroup,
-                presenceState: bubblePresence,
-                onAddReaction: { messageId in
+            VStack(spacing: 0) {
+                // Quick reaction bar + action menu (above the bubble)
+                if quickReactionMessageId == msg.id {
+                    quickReactionBar(for: msg.id)
+                        .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
+                        .padding(.bottom, 6)
+                }
+
+                ThemedMessageBubble(
+                    message: msg,
+                    contactColor: accentColor,
+                    showAvatar: !isDirect && isLastInGroup,
+                    presenceState: bubblePresence,
+                    onAddReaction: { messageId in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            emojiOnlyMode = true
+                            quickReactionMessageId = messageId
+                        }
+                        HapticFeedback.medium()
+                    }
+                )
+                .onLongPressGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        quickReactionMessageId = messageId
+                        emojiOnlyMode = false
+                        quickReactionMessageId = msg.id
                     }
                     HapticFeedback.medium()
                 }
-            )
-            .onLongPressGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    quickReactionMessageId = msg.id
-                }
-                HapticFeedback.medium()
             }
+            .offset(x: isActiveSwipe ? swipeOffset : 0)
+            .gesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        // Only allow horizontal swipes
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        swipedMessageId = msg.id
+                        // Elastic resistance after threshold
+                        let raw = value.translation.width
+                        let clamped = raw > 0 ? min(raw, 80) : max(raw, -80)
+                        swipeOffset = clamped
+                    }
+                    .onEnded { value in
+                        let threshold: CGFloat = 60
+                        if swipeOffset * replyDirection > threshold {
+                            // Reply action
+                            triggerReply(for: msg)
+                        } else if swipeOffset * replyDirection < -threshold {
+                            // Forward action (opposite direction)
+                            actionAlert = "Transferer"
+                        }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            swipeOffset = 0
+                            swipedMessageId = nil
+                        }
+                    }
+            )
         }
         .id(msg.id)
         .transition(
@@ -245,6 +304,21 @@ struct ConversationView: View {
             )
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+    }
+
+    private func triggerReply(for msg: Message) {
+        let preview = msg.content.isEmpty
+            ? (msg.attachments.first.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
+            : msg.content
+        pendingReplyReference = ReplyReference(
+            messageId: msg.id,
+            authorName: msg.senderName ?? "?",
+            previewText: preview,
+            isMe: msg.isMe,
+            authorColor: msg.senderColor
+        )
+        isTyping = true
+        HapticFeedback.medium()
     }
 
     // MARK: - Quick Reaction Bar + Actions
@@ -300,41 +374,45 @@ struct ConversationView: View {
                     .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 12, y: 4)
             )
 
-            // Action buttons row
-            HStack(spacing: 8) {
-                messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
-                    // TODO: wire reply
-                    actionAlert = "Repondre"
-                    closeReactionBar()
-                }
-                messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
-                    if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
-                        UIPasteboard.general.string = msg.content
+            // Action buttons row (hidden in emoji-only mode)
+            if !emojiOnlyMode {
+                HStack(spacing: 8) {
+                    messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
+                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                            triggerReply(for: msg)
+                        }
+                        closeReactionBar()
                     }
-                    closeReactionBar()
+                    messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
+                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                            UIPasteboard.general.string = msg.content
+                        }
+                        closeReactionBar()
+                    }
+                    messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
+                        // TODO: wire forward
+                        actionAlert = "Transferer"
+                        closeReactionBar()
+                    }
+                    messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
+                        // TODO: wire delete
+                        actionAlert = "Supprimer"
+                        closeReactionBar()
+                    }
                 }
-                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                    // TODO: wire forward
-                    actionAlert = "Transferer"
-                    closeReactionBar()
-                }
-                messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
-                    // TODO: wire delete
-                    actionAlert = "Supprimer"
-                    closeReactionBar()
-                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                )
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-            )
         }
     }
 
@@ -1223,6 +1301,12 @@ struct ConversationView: View {
     // MARK: - Themed Composer
     private var themedComposer: some View {
         VStack(spacing: 8) {
+            // Reply preview banner
+            if let reply = pendingReplyReference {
+                composerReplyBanner(reply)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Pending attachments preview
             if !pendingAttachments.isEmpty {
                 pendingAttachmentsPreview
@@ -1412,6 +1496,50 @@ struct ConversationView: View {
         }
     }
 
+    // MARK: - Composer Reply Banner
+    private func composerReplyBanner(_ reply: ReplyReference) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+                .frame(width: 3, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reply.isMe ? "Vous" : reply.authorName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+
+                Text(reply.previewText)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    pendingReplyReference = nil
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.surfaceGradient(tint: accentColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                )
+        )
+    }
+
     // MARK: - Pending Attachments Preview
     private var pendingAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1584,7 +1712,7 @@ struct ConversationView: View {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
 
-        let replyId = pendingReplyReference != nil ? nil : nil as String? // TODO: wire reply ID
+        let replyId = pendingReplyReference?.messageId.isEmpty == false ? pendingReplyReference?.messageId : nil
         let content = text
 
         // Clear UI state immediately
@@ -2109,7 +2237,7 @@ struct ThemedMessageBubble: View {
             if overflowCount > 0 {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCarousel = true
-                    carouselIndex = 3
+                    carouselIndex = 0
                 }
                 HapticFeedback.light()
             } else {
@@ -2132,10 +2260,15 @@ struct ThemedMessageBubble: View {
 
     @State private var carouselDragOffset: CGFloat = 0
 
+    private var carouselWidth: CGFloat {
+        UIScreen.main.bounds.width - 32 // Full width minus padding
+    }
+
     @ViewBuilder
     private var carouselView: some View {
         let items = visualAttachments
-        let totalOffset = -CGFloat(carouselIndex) * gridMaxWidth + carouselDragOffset
+        let itemWidth = carouselWidth
+        let totalOffset = -CGFloat(carouselIndex) * itemWidth + carouselDragOffset
 
         ZStack(alignment: .top) {
             HStack(spacing: 0) {
@@ -2145,28 +2278,19 @@ struct ThemedMessageBubble: View {
 
                         switch attachment.type {
                         case .image:
-                            gridImageCell(attachment)
+                            carouselImageCell(attachment)
                         case .video:
                             gridVideoCell(attachment)
                         default:
                             EmptyView()
                         }
                     }
-                    .frame(width: gridMaxWidth, height: 240)
+                    .frame(width: itemWidth, height: 280)
                     .clipped()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        Task {
-                            let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
-                            if cached {
-                                fullscreenAttachment = attachment
-                                HapticFeedback.light()
-                            }
-                        }
-                    }
-                    .overlay(alignment: .bottom) {
-                        downloadBadge(attachment)
-                            .padding(.bottom, 6)
+                        fullscreenAttachment = attachment
+                        HapticFeedback.light()
                     }
                 }
             }
@@ -2181,7 +2305,7 @@ struct ThemedMessageBubble: View {
                         }
                     }
                     .onEnded { value in
-                        let threshold: CGFloat = gridMaxWidth * 0.25
+                        let threshold: CGFloat = itemWidth * 0.25
                         let velocity = value.predictedEndTranslation.width - value.translation.width
 
                         if value.translation.width < -threshold || velocity < -100 {
@@ -2193,7 +2317,7 @@ struct ThemedMessageBubble: View {
                         HapticFeedback.light()
                     }
             )
-            .frame(width: gridMaxWidth, height: 240)
+            .frame(width: itemWidth, height: 280)
             .clipped()
 
             HStack {
@@ -2222,19 +2346,55 @@ struct ThemedMessageBubble: View {
                     .padding(8)
             }
         }
+        .task {
+            // Pre-download all attachments when carousel opens
+            for attachment in items {
+                Task {
+                    _ = try? await MediaCacheManager.shared.image(
+                        for: MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
+                    )
+                }
+            }
+        }
     }
 
     @ViewBuilder
     private func gridImageCell(_ attachment: MessageAttachment) -> some View {
-        // Prefer thumbnail (lighter) for grid cells, fallback to full image
-        let urlStr = attachment.thumbnailUrl ?? (attachment.fileUrl.isEmpty ? "" : attachment.fileUrl)
+        // Use full image (fileUrl) when available, fallback to thumbnail
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        let thumbUrl = attachment.thumbnailUrl
+        let urlStr = fullUrl ?? thumbUrl ?? ""
         if !urlStr.isEmpty {
             CachedAsyncImage(url: urlStr) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+                // Show thumbnail as placeholder while full image loads
+                if let thumbUrl, fullUrl != nil, thumbUrl != fullUrl {
+                    CachedAsyncImage(url: thumbUrl) {
+                        Color(hex: attachment.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: .fill)
+                } else {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
             }
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
+        } else {
+            Color(hex: attachment.thumbnailColor)
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+        }
+    }
+
+    @ViewBuilder
+    private func carouselImageCell(_ attachment: MessageAttachment) -> some View {
+        // Always use full image in carousel
+        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        if !urlStr.isEmpty {
+            CachedAsyncImage(url: urlStr) {
+                Color(hex: attachment.thumbnailColor).shimmer()
+            }
+            .aspectRatio(contentMode: .fit)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         } else {
             Color(hex: attachment.thumbnailColor)
                 .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
