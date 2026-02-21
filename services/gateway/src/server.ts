@@ -72,6 +72,7 @@ import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
 import { registerVoiceRoutes } from './routes/voice';
+import { registerTusRoutes } from './routes/uploads/tus-handler';
 import { voiceAnalysisRoutes } from './routes/voice-analysis';
 import { getAudioTranslateService } from './services/AudioTranslateService';
 import { passwordResetRoutes } from './routes/password-reset';
@@ -429,7 +430,7 @@ class MeeshyServer {
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
       limits: {
-        fileSize: 2147483648, // 2GB max file size
+        fileSize: 4294967296, // 4GB max file size
         files: 100, // Max 100 files per request
       },
     });
@@ -659,9 +660,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         return reply.code(413).send({
           error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 2 GB. Please reduce the file size.`,
+          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`,
           details: {
-            maxFileSize: '2 GB',
+            maxFileSize: '4 GB',
             limit: 'File size exceeded'
           },
           statusCode: 413,
@@ -964,6 +965,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // LEGACY: Register attachment routes with /api prefix (without v1) for backward compatibility
     // Existing data in DB uses /api/attachments/file/... URLs without v1
     await this.server.register(attachmentRoutes, { prefix: '/api' });
+
+    // Register tus resumable upload routes (mounted at /api/v1/uploads)
+    await this.server.register(registerTusRoutes);
+    logger.info('✓ TUS resumable upload routes registered');
 
     // Register reaction routes with /api prefix
     await this.server.register(reactionRoutes, { prefix: API_PREFIX });

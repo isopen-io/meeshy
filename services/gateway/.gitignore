@@ -47,8 +47,10 @@ shared/
 pnpm-workspace.yaml
 package.json.workspace
 
-# Uploads (runtime)
+# Uploads (runtime data)
 uploads/
+# But keep source code in routes/uploads/
+!src/routes/uploads/
 
 # Firebase credentials (CRITICAL: NEVER commit!)
 secrets/
