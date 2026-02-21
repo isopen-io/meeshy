@@ -35,6 +35,7 @@ struct ConversationView: View {
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var isLoadingMedia = false
     @State private var showPhotoPicker = false
+    @State private var showCamera = false
     @State private var showFilePicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var isLoadingLocation = false
@@ -1169,11 +1170,12 @@ struct ConversationView: View {
             }
             .menuAnimation(showMenu: showAttachOptions, delay: 0.04)
 
-            // Camera (placeholder)
+            // Camera
             ThemedActionButton(icon: "camera.fill", color: "F8B500") {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAttachOptions = false }
-                // Camera would be implemented with UIImagePickerController
-                addPlaceholderImage(type: "camera")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    showCamera = true
+                }
             }
             .menuAnimation(showMenu: showAttachOptions, delay: 0.08)
 
@@ -1659,6 +1661,12 @@ struct ConversationView: View {
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPickerView { image in
+                handleCameraCapture(image)
+            }
+            .ignoresSafeArea()
         }
         .onChange(of: selectedPhotoItems) { items in
             handlePhotoSelection(items)
@@ -2316,12 +2324,27 @@ struct ConversationView: View {
         }
     }
 
-    private func addPlaceholderImage(type: String) {
-        let colors = ["FF6B6B", "4ECDC4", "9B59B6", "F8B500", "45B7D1"]
-        let randomColor = colors.randomElement() ?? "4ECDC4"
-        let attachment = MessageAttachment.image(color: randomColor)
+    private func handleCameraCapture(_ image: UIImage) {
+        let fileName = "camera_\(UUID().uuidString).jpg"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        guard let compressed = image.jpegData(compressionQuality: 0.8) else { return }
+        try? compressed.write(to: tempURL)
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(
+            id: attachmentId,
+            fileName: fileName,
+            originalName: fileName,
+            mimeType: "image/jpeg",
+            fileSize: compressed.count,
+            fileUrl: tempURL.absoluteString,
+            width: Int(image.size.width),
+            height: Int(image.size.height),
+            thumbnailColor: accentColor
+        )
+        pendingMediaFiles[attachmentId] = tempURL
+        pendingThumbnails[attachmentId] = image
         pendingAttachments.append(attachment)
-        HapticFeedback.light()
+        HapticFeedback.success()
     }
 
     private func sendMessage() {
