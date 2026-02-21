@@ -409,13 +409,17 @@ public struct ReplyReference {
     public let authorColor: String
     public let previewText: String
     public let isMe: Bool
+    public let attachmentType: String?
+    public let attachmentThumbnailUrl: String?
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil) {
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
         self.isMe = isMe
         self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
+        self.attachmentType = attachmentType
+        self.attachmentThumbnailUrl = attachmentThumbnailUrl
     }
 }
 

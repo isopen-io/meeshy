@@ -26,10 +26,9 @@ struct ConversationView: View {
     @State private var showOptions = false
     @State private var showAttachOptions = false
     @State private var actionAlert: String? = nil
-    @State private var isRecording = false
-    @State private var recordingTime: TimeInterval = 0
-    @State private var recordingTimer: Timer? = nil
+    @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachments: [MessageAttachment] = []
+    @State private var pendingAudioURL: URL? = nil
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -42,7 +41,13 @@ struct ConversationView: View {
     @State private var showStoryViewerFromHeader = false
     @State private var storyGroupIndexForHeader = 0
 
-    // Reaction bar state
+    // Overlay menu state
+    @State private var overlayMessage: Message? = nil
+    @State private var showOverlayMenu = false
+    @State private var showMessageInfoSheet = false
+    @State private var infoSheetMessage: Message? = nil
+
+    // Reaction bar state (legacy, kept for emoji-only mode)
     @State private var quickReactionMessageId: String? = nil
     @State private var showEmojiPickerSheet = false
     @State private var emojiOnlyMode: Bool = false
@@ -259,14 +264,15 @@ struct ConversationView: View {
                             quickReactionMessageId = messageId
                         }
                         HapticFeedback.medium()
+                    },
+                    onShowInfo: {
+                        infoSheetMessage = msg
+                        showMessageInfoSheet = true
                     }
                 )
                 .onLongPressGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        emojiOnlyMode = false
-                        quickReactionMessageId = msg.id
-                    }
-                    HapticFeedback.medium()
+                    overlayMessage = msg
+                    showOverlayMenu = true
                 }
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
@@ -308,15 +314,20 @@ struct ConversationView: View {
     }
 
     private func triggerReply(for msg: Message) {
+        let firstAttachment = msg.attachments.first
         let preview = msg.content.isEmpty
-            ? (msg.attachments.first.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
+            ? (firstAttachment.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
             : msg.content
+        let attType = firstAttachment?.type.rawValue
+        let attThumb = firstAttachment?.thumbnailUrl ?? (firstAttachment?.type == .image ? firstAttachment?.fileUrl : nil)
         pendingReplyReference = ReplyReference(
             messageId: msg.id,
             authorName: msg.senderName ?? "?",
             previewText: preview,
             isMe: msg.isMe,
-            authorColor: msg.senderColor
+            authorColor: msg.senderColor,
+            attachmentType: attType,
+            attachmentThumbnailUrl: attThumb
         )
         isTyping = true
         HapticFeedback.medium()
@@ -442,7 +453,7 @@ struct ConversationView: View {
         if !pendingAttachments.isEmpty {
             height += 110 // Attachment preview height
         }
-        if isRecording {
+        if audioRecorder.isRecording {
             height += 10 // Extra space for recording UI
         }
         return height
@@ -554,7 +565,7 @@ struct ConversationView: View {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
-                .onChange(of: isRecording) { _ in
+                .onChange(of: audioRecorder.isRecording) { _ in
                     if isNearBottom, let last = viewModel.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
@@ -787,6 +798,53 @@ struct ConversationView: View {
                 }
             )
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
+        }
+        .overlay {
+            if showOverlayMenu, let msg = overlayMessage {
+                MessageOverlayMenu(
+                    message: msg,
+                    contactColor: accentColor,
+                    isPresented: $showOverlayMenu,
+                    onReply: {
+                        triggerReply(for: msg)
+                    },
+                    onCopy: {
+                        UIPasteboard.general.string = msg.content
+                        HapticFeedback.success()
+                    },
+                    onForward: {
+                        actionAlert = "Transférer"
+                    },
+                    onDelete: {
+                        deleteConfirmMessageId = msg.id
+                    },
+                    onPin: {
+                        actionAlert = "Épingler"
+                    },
+                    onReact: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                    },
+                    onShowInfo: {
+                        infoSheetMessage = msg
+                        showMessageInfoSheet = true
+                    },
+                    onAddReaction: {
+                        quickReactionMessageId = msg.id
+                        showEmojiPickerSheet = true
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(999)
+            }
+        }
+        .sheet(isPresented: $showMessageInfoSheet) {
+            if let msg = infoSheetMessage {
+                MessageInfoSheet(
+                    message: msg,
+                    contactColor: accentColor
+                )
+                .presentationDetents([.medium] as Set<PresentationDetent>)
+            }
         }
     }
 
@@ -1329,7 +1387,7 @@ struct ConversationView: View {
 
             HStack(alignment: .bottom, spacing: 12) {
                 // Plus/Mic button (hidden only when recording)
-                if !isRecording {
+                if !audioRecorder.isRecording {
                     ThemedComposerButton(
                         icon: showAttachOptions ? "mic.fill" : "plus",
                         colors: showAttachOptions ? ["FF6B6B", "E74C3C"] : [accentColor, secondaryColor],
@@ -1351,7 +1409,7 @@ struct ConversationView: View {
 
                 // Input field with mic/stop button inside
                 HStack(spacing: 0) {
-                    if isRecording {
+                    if audioRecorder.isRecording {
                         // Stop button inside input (replaces mic)
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -1446,28 +1504,28 @@ struct ConversationView: View {
                 .frame(minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 22)
-                        .fill(theme.surfaceGradient(tint: isRecording ? "FF6B6B" : accentColor))
+                        .fill(theme.surfaceGradient(tint: audioRecorder.isRecording ? "FF6B6B" : accentColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 22)
                                 .stroke(
-                                    (isTyping || isRecording) ?
-                                    LinearGradient(colors: [Color(hex: isRecording ? "FF6B6B" : accentColor), Color(hex: isRecording ? "E74C3C" : secondaryColor)], startPoint: .leading, endPoint: .trailing) :
+                                    (isTyping || audioRecorder.isRecording) ?
+                                    LinearGradient(colors: [Color(hex: audioRecorder.isRecording ? "FF6B6B" : accentColor), Color(hex: audioRecorder.isRecording ? "E74C3C" : secondaryColor)], startPoint: .leading, endPoint: .trailing) :
                                     theme.border(tint: accentColor, intensity: 0.3),
-                                    lineWidth: (isTyping || isRecording) ? 2 : 1
+                                    lineWidth: (isTyping || audioRecorder.isRecording) ? 2 : 1
                                 )
                         )
                 )
                 .scaleEffect(typingBounce ? 1.02 : 1.0)
 
                 // Send button - show when recording, has pending attachments, or has text
-                if isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if audioRecorder.isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     ThemedComposerButton(
                         icon: "paperplane.fill",
                         colors: ["FF6B6B", "4ECDC4"],
                         isActive: true,
                         rotateIcon: true
                     ) {
-                        if isRecording {
+                        if audioRecorder.isRecording {
                             stopAndSendRecording()
                         } else {
                             sendMessageWithAttachments()
@@ -1480,7 +1538,7 @@ struct ConversationView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: messageText.isEmpty)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isRecording)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: audioRecorder.isRecording)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: pendingAttachments.count)
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
@@ -1515,20 +1573,37 @@ struct ConversationView: View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: reply.isMe ? accentColor : reply.authorColor))
-                .frame(width: 3, height: 32)
+                .frame(width: 3, height: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reply.isMe ? "Vous" : reply.authorName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
 
-                Text(reply.previewText)
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if let attType = reply.attachmentType {
+                        Image(systemName: composerReplyAttachmentIcon(attType))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    Text(reply.previewText)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
+
+            // Attachment thumbnail in composer reply banner
+            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: reply.authorColor).opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
 
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -1552,6 +1627,17 @@ struct ConversationView: View {
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
+    }
+
+    private func composerReplyAttachmentIcon(_ type: String) -> String {
+        switch type {
+        case "image": return "photo"
+        case "video": return "video"
+        case "audio": return "waveform"
+        case "file": return "doc"
+        case "location": return "mappin"
+        default: return "paperclip"
+        }
     }
 
     // MARK: - Pending Attachments Preview
@@ -1648,33 +1734,36 @@ struct ConversationView: View {
                 Circle()
                     .fill(Color(hex: "FF6B6B").opacity(0.3))
                     .frame(width: 20, height: 20)
-                    .scaleEffect(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.5 : 1.0)
-                    .opacity(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 0 : 0.5)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
+                    .scaleEffect(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.5 : 1.0)
+                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 0 : 0.5)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
 
                 Circle()
                     .fill(Color(hex: "FF6B6B"))
                     .frame(width: 12, height: 12)
-                    .opacity(recordingTime.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
+                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
             }
 
-            // Animated waveform bars
+            // Real waveform bars from microphone levels
             HStack(spacing: 3) {
                 ForEach(0..<15, id: \.self) { i in
-                    AnimatedWaveformBar(index: i, isRecording: isRecording)
+                    AudioLevelBar(
+                        level: i < audioRecorder.audioLevels.count ? audioRecorder.audioLevels[i] : 0,
+                        isRecording: audioRecorder.isRecording
+                    )
                 }
             }
 
             Spacer()
 
             // Timer with subtle scale
-            Text(formatRecordingTime(recordingTime))
+            Text(formatRecordingTime(audioRecorder.duration))
                 .font(.system(size: 15, weight: .semibold, design: .monospaced))
                 .foregroundColor(theme.textPrimary)
                 .padding(.trailing, 8)
                 .contentTransition(.numericText())
-                .animation(.spring(response: 0.3), value: recordingTime)
+                .animation(.spring(response: 0.3), value: audioRecorder.duration)
         }
         .padding(.leading, 16)
         .padding(.vertical, 12)
@@ -1682,43 +1771,33 @@ struct ConversationView: View {
 
     // MARK: - Recording Functions
     private func startRecording() {
-        isRecording = true
-        recordingTime = 0
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            recordingTime += 0.1
-        }
+        audioRecorder.startRecording()
         HapticFeedback.medium()
     }
 
-    private func stopRecording() {
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-    }
-
     private func stopAndPreviewRecording() {
-        guard recordingTime > 0.5 else {
-            stopRecording()
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
             return
         }
-        let durationMs = Int(recordingTime * 1000)
+        let durationMs = Int(audioRecorder.duration * 1000)
+        let url = audioRecorder.stopRecording()
+        pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         pendingAttachments.append(audioAttachment)
-        stopRecording()
-        recordingTime = 0
         HapticFeedback.light()
     }
 
     private func stopAndSendRecording() {
-        guard recordingTime > 0.5 else {
-            stopRecording()
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
             return
         }
-        let durationMs = Int(recordingTime * 1000)
+        let durationMs = Int(audioRecorder.duration * 1000)
+        let url = audioRecorder.stopRecording()
+        pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         pendingAttachments.append(audioAttachment)
-        stopRecording()
-        recordingTime = 0
         sendMessageWithAttachments()
     }
 
@@ -1729,15 +1808,62 @@ struct ConversationView: View {
         let replyId = pendingReplyReference?.messageId.isEmpty == false ? pendingReplyReference?.messageId : nil
         let content = text
 
-        // Clear UI state immediately
+        // Capture state before clearing
         let attachments = pendingAttachments
+        let audioURL = pendingAudioURL
+
+        // Clear UI state immediately
         pendingAttachments.removeAll()
+        pendingAudioURL = nil
         messageText = ""
         pendingReplyReference = nil
         viewModel.stopTypingEmission()
         HapticFeedback.light()
 
-        // If we have local-only attachments (not uploaded), fall back to local append
+        // If we have an audio file to upload, do TUS upload then send with attachment ID
+        if let audioURL, attachments.contains(where: { $0.type == .audio }) {
+            Task {
+                do {
+                    let serverOrigin = MeeshyConfig.shared.serverOrigin
+                    guard let baseURL = URL(string: serverOrigin),
+                          let token = APIClient.shared.authToken else {
+                        print("[Audio] Missing base URL or token for upload")
+                        return
+                    }
+                    let uploader = TusUploadManager(baseURL: baseURL)
+                    let result = try await uploader.uploadFile(
+                        fileURL: audioURL,
+                        mimeType: "audio/mp4",
+                        token: token
+                    )
+                    // Send with attachment ID
+                    await viewModel.sendMessage(
+                        content: content,
+                        replyToId: replyId,
+                        attachmentIds: [result.id]
+                    )
+                    // Clean up temp file
+                    try? FileManager.default.removeItem(at: audioURL)
+                } catch {
+                    print("[Audio] Upload failed: \(error)")
+                    // Fallback: show error in local message
+                    let conversationId = conversation?.id ?? "temp"
+                    let newMsg = Message(
+                        conversationId: conversationId,
+                        content: content.isEmpty ? "Audio" : content,
+                        messageType: .audio,
+                        createdAt: Date(),
+                        attachments: attachments,
+                        deliveryStatus: .sending,
+                        isMe: true
+                    )
+                    viewModel.messages.append(newMsg)
+                }
+            }
+            return
+        }
+
+        // Non-audio attachments (images/video) — local append for now
         if !attachments.isEmpty {
             let conversationId = conversation?.id ?? "temp"
             let newMsg = Message(
@@ -1985,6 +2111,7 @@ struct ThemedMessageBubble: View {
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
+    var onShowInfo: (() -> Void)? = nil
 
     @State private var showProfileAlert = false
     @State private var showShareSheet = false
@@ -2140,8 +2267,6 @@ struct ThemedMessageBubble: View {
                                 .font(.system(size: 15))
                                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                         }
-
-                        messageMetaRow(insideBubble: true)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -2153,10 +2278,8 @@ struct ThemedMessageBubble: View {
                     )
                 }
 
-                // Timestamp for media-only messages (no text bubble)
-                if !hasTextOrNonMediaContent {
-                    messageMetaRow(insideBubble: false)
-                }
+                // Timestamp always outside bubble
+                messageMetaRow(insideBubble: false)
             }
             .overlay(alignment: .bottomLeading) {
                 reactionsOverlay
@@ -2207,18 +2330,21 @@ struct ThemedMessageBubble: View {
     private func messageMetaRow(insideBubble: Bool) -> some View {
         HStack(spacing: 3) {
             if message.isEdited {
-                Text("modifie")
+                Text("modifié")
                     .font(.system(size: 10, weight: .medium))
                     .italic()
-                    .foregroundColor(insideBubble && message.isMe ? .white.opacity(0.6) : theme.textSecondary.opacity(0.6))
+                    .foregroundColor(theme.textSecondary.opacity(0.6))
             }
 
             Text(timeString)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(insideBubble && message.isMe ? .white.opacity(0.6) : theme.textSecondary.opacity(0.6))
+                .foregroundColor(theme.textSecondary.opacity(0.6))
 
             if message.isMe {
                 deliveryCheckmarks
+                    .onTapGesture {
+                        onShowInfo?()
+                    }
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -2226,15 +2352,16 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private var deliveryCheckmarks: some View {
+        let metaColor = theme.textSecondary.opacity(0.6)
         switch message.deliveryStatus {
         case .sending:
             Image(systemName: "clock")
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(metaColor)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(metaColor)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
@@ -2243,7 +2370,7 @@ struct ThemedMessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .offset(x: 4)
             }
-            .foregroundColor(.white.opacity(0.6))
+            .foregroundColor(metaColor)
             .frame(width: 16)
         case .read:
             ZStack(alignment: .leading) {
@@ -2270,10 +2397,31 @@ struct ThemedMessageBubble: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? contactColor : reply.authorColor))
 
-                Text(reply.previewText)
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    // Attachment type icon
+                    if let attType = reply.attachmentType {
+                        Image(systemName: replyAttachmentIcon(attType))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+
+                    Text(reply.previewText)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // Attachment thumbnail preview
+            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: reply.authorColor).opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 10)
@@ -2282,6 +2430,17 @@ struct ThemedMessageBubble: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
         )
+    }
+
+    private func replyAttachmentIcon(_ type: String) -> String {
+        switch type {
+        case "image": return "photo"
+        case "video": return "video"
+        case "audio": return "waveform"
+        case "file": return "doc"
+        case "location": return "mappin"
+        default: return "paperclip"
+        }
     }
 
     // MARK: - Visual Media Grid
@@ -3153,6 +3312,28 @@ struct AnimatedWaveformBar: View {
         ) {
             barHeight = CGFloat.random(in: (minHeight + 4)...maxHeight)
         }
+    }
+}
+
+// MARK: - Audio Level Bar (real microphone levels)
+struct AudioLevelBar: View {
+    let level: CGFloat // 0-1 normalized
+    let isRecording: Bool
+
+    private let minHeight: CGFloat = 6
+    private let maxHeight: CGFloat = 26
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.9), Color.white.opacity(0.5)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 3, height: isRecording ? minHeight + (maxHeight - minHeight) * level : minHeight)
+            .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
     }
 }
 

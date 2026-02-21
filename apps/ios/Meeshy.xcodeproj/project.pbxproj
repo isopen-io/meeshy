@@ -43,11 +43,14 @@
 		CC1600000000002F16 /* VideoThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1600000000001F16 /* VideoThumbnailView.swift */; };
 		CC1400000000002F14 /* ImageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1400000000001F14 /* ImageViewerView.swift */; };
 		CC1500000000002F15 /* DocumentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1500000000001F15 /* DocumentViewerView.swift */; };
+		CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1700000000001F17 /* MessageOverlayMenu.swift */; };
+		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
 		AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF04 /* UserDisplayName.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
 		AABB00110022FF01 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00110022EE01 /* PresenceManager.swift */; };
 		RR1100000000002F01 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = RR1100000000001F01 /* Router.swift */; };
+		AACC00220033FF01 /* AudioRecorderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00220033EE01 /* AudioRecorderManager.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 /* End PBXBuildFile section */
@@ -89,6 +92,7 @@
 		AA66BB77CC880001FF03 /* MeeshyAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAvatar.swift; sourceTree = "<group>"; };
 		AA66BB77CC880001FF04 /* UserDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDisplayName.swift; sourceTree = "<group>"; };
 		AABB00110022EE01 /* PresenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManager.swift; sourceTree = "<group>"; };
+		AACC00220033EE01 /* AudioRecorderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderManager.swift; sourceTree = "<group>"; };
 		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
 		CC1100000000001F11 /* MediaTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTranscriptionView.swift; sourceTree = "<group>"; };
 		CC1200000000001F12 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
@@ -97,6 +101,8 @@
 		CC1400000000001F14 /* ImageViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewerView.swift; sourceTree = "<group>"; };
 		CC1500000000001F15 /* DocumentViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentViewerView.swift; sourceTree = "<group>"; };
 		RR1100000000001F01 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
+		CC1700000000001F17 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
+		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +130,8 @@
 						CC1600000000001F16 /* VideoThumbnailView.swift */,
 						CC1400000000001F14 /* ImageViewerView.swift */,
 						CC1500000000001F15 /* DocumentViewerView.swift */,
+						CC1700000000001F17 /* MessageOverlayMenu.swift */,
+						CC1800000000001F18 /* MessageInfoSheet.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
 				AA66BB77CC880001FF04 /* UserDisplayName.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
@@ -177,6 +185,7 @@
 		AABB00110022DD01 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AACC00220033EE01 /* AudioRecorderManager.swift */,
 				AABB00110022EE01 /* PresenceManager.swift */,
 			);
 			path = Services;
@@ -362,9 +371,12 @@
 						CC1600000000002F16 /* VideoThumbnailView.swift in Sources */,
 						CC1400000000002F14 /* ImageViewerView.swift in Sources */,
 						CC1500000000002F15 /* DocumentViewerView.swift in Sources */,
+						CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
+						CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
 				AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,
+				AACC00220033FF01 /* AudioRecorderManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
