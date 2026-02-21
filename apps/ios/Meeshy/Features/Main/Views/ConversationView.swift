@@ -4,6 +4,15 @@ import CoreLocation
 import AVFoundation
 import MeeshySDK
 
+// MARK: - Message Frame PreferenceKey
+
+struct MessageFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
 // MARK: - Active Member (for conversation detail header)
 private struct ConversationActiveMember: Identifiable {
     let id: String
@@ -52,6 +61,8 @@ struct ConversationView: View {
     // Overlay menu state
     @State private var overlayMessage: Message? = nil
     @State private var showOverlayMenu = false
+    @State private var overlayMessageFrame: CGRect = .zero
+    @State private var messageFrames: [String: CGRect] = [:]
     @State private var showMessageInfoSheet = false
     @State private var infoSheetMessage: Message? = nil
     @State private var longPressEnabled = false
@@ -69,6 +80,13 @@ struct ConversationView: View {
     @State private var scrollToMessageId: String? = nil
     @State private var highlightedMessageId: String? = nil
     @StateObject private var scrollButtonAudioPlayer = AudioPlayerManager()
+
+    // Search state
+    @State private var showSearch = false
+    @State private var searchQuery = ""
+    @State private var searchResultIds: [String] = []
+    @State private var searchCurrentIndex: Int = 0
+    @FocusState private var isSearchFocused: Bool
 
     private var headerHasStoryRing: Bool {
         guard let userId = conversation?.participantUserId else { return false }
@@ -305,8 +323,17 @@ struct ConversationView: View {
                         scrollToMessageId = messageId
                     }
                 )
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: MessageFrameKey.self,
+                            value: [msg.id: geo.frame(in: .global)]
+                        )
+                    }
+                )
                 .onLongPressGesture(minimumDuration: 0.5) {
                     guard longPressEnabled else { return }
+                    overlayMessageFrame = messageFrames[msg.id] ?? .zero
                     overlayMessage = msg
                     showOverlayMenu = true
                 }
@@ -398,6 +425,125 @@ struct ConversationView: View {
         }
     }
 
+    // MARK: - Search Overlay
+
+    private var searchOverlay: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+
+                    TextField("Rechercher...", text: $searchQuery)
+                        .font(.system(size: 15))
+                        .foregroundColor(theme.textPrimary)
+                        .focused($isSearchFocused)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.search)
+                        .onSubmit { performSearch() }
+                        .onChange(of: searchQuery) { _ in performSearch() }
+
+                    if !searchQuery.isEmpty {
+                        Button {
+                            searchQuery = ""
+                            searchResultIds = []
+                            searchCurrentIndex = 0
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                )
+
+                if !searchResultIds.isEmpty {
+                    HStack(spacing: 4) {
+                        Text("\(searchCurrentIndex + 1)/\(searchResultIds.count)")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.textSecondary)
+
+                        Button {
+                            navigateSearch(direction: -1)
+                        } label: {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(hex: accentColor))
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(Color(hex: accentColor).opacity(0.12)))
+                        }
+
+                        Button {
+                            navigateSearch(direction: 1)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(hex: accentColor))
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(Color(hex: accentColor).opacity(0.12)))
+                        }
+                    }
+                }
+
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSearch = false
+                        searchQuery = ""
+                        searchResultIds = []
+                        searchCurrentIndex = 0
+                        highlightedMessageId = nil
+                    }
+                    isSearchFocused = false
+                } label: {
+                    Text("Fermer")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            )
+
+            Spacer()
+        }
+    }
+
+    private func performSearch() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard query.count >= 2 else {
+            searchResultIds = []
+            searchCurrentIndex = 0
+            highlightedMessageId = nil
+            return
+        }
+        searchResultIds = viewModel.messages
+            .filter { !$0.isDeleted && $0.content.lowercased().contains(query) }
+            .map(\.id)
+        searchCurrentIndex = searchResultIds.isEmpty ? 0 : searchResultIds.count - 1
+        if let targetId = searchResultIds.last {
+            scrollToMessageId = targetId
+        }
+    }
+
+    private func navigateSearch(direction: Int) {
+        guard !searchResultIds.isEmpty else { return }
+        searchCurrentIndex = (searchCurrentIndex + direction + searchResultIds.count) % searchResultIds.count
+        let targetId = searchResultIds[searchCurrentIndex]
+        scrollToMessageId = targetId
+        HapticFeedback.light()
+    }
+
     // MARK: - Quick Reaction Bar + Actions
 
     private let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
@@ -467,7 +613,7 @@ struct ConversationView: View {
                         closeReactionBar()
                     }
                     messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                        forwardMessage = viewModel.messages.first { $0.id == messageId }
+                        forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
                         closeReactionBar()
                     }
                     messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
@@ -722,7 +868,10 @@ struct ConversationView: View {
 
                                 // Search
                                 Button {
-                                    actionAlert = "Rechercher dans la conversation"
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        showSearch = true
+                                    }
+                                    isSearchFocused = true
                                 } label: {
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 13, weight: .semibold))
@@ -823,6 +972,13 @@ struct ConversationView: View {
 
             // Attach options
             attachOptionsLadder
+
+            // Search overlay
+            if showSearch {
+                searchOverlay
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(200)
+            }
         }
         .task {
             await viewModel.loadMessages()
@@ -894,11 +1050,15 @@ struct ConversationView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .onPreferenceChange(MessageFrameKey.self) { frames in
+            messageFrames = frames
+        }
         .overlay {
             if showOverlayMenu, let msg = overlayMessage {
                 MessageOverlayMenu(
                     message: msg,
                     contactColor: accentColor,
+                    messageBubbleFrame: overlayMessageFrame,
                     isPresented: $showOverlayMenu,
                     onReply: {
                         triggerReply(for: msg)
@@ -2640,57 +2800,60 @@ struct ThemedMessageBubble: View {
                         }
                 }
 
-                // Grille visuelle (images + vidéos)
-                if !visualAttachments.isEmpty {
-                    if showCarousel {
-                        carouselView
-                            .background(Color.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .transition(.opacity)
-                    } else {
-                        visualMediaGrid
-                            .background(Color.black)
-                            .compositingGroup()
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .transition(.opacity)
-                    }
-                }
-
-                // Audio standalone
-                ForEach(audioAttachments) { attachment in
-                    mediaStandaloneView(attachment)
-                }
-
-                // Bulle texte + non-media attachments (file, location)
-                if hasTextOrNonMediaContent {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(nonMediaAttachments) { attachment in
-                            attachmentView(attachment)
-                        }
-
-                        if !message.content.isEmpty {
-                            Text(message.content)
-                                .font(.system(size: 15))
-                                .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                // Bubble content (media + text) with reaction overlay
+                VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+                    // Grille visuelle (images + vidéos)
+                    if !visualAttachments.isEmpty {
+                        if showCarousel {
+                            carouselView
+                                .background(Color.black)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .transition(.opacity)
+                        } else {
+                            visualMediaGrid
+                                .background(Color.black)
+                                .compositingGroup()
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .transition(.opacity)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleBackground)
-                    .shadow(
-                        color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
-                        radius: 6,
-                        y: 3
-                    )
+
+                    // Audio standalone
+                    ForEach(audioAttachments) { attachment in
+                        mediaStandaloneView(attachment)
+                    }
+
+                    // Bulle texte + non-media attachments (file, location)
+                    if hasTextOrNonMediaContent {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(nonMediaAttachments) { attachment in
+                                attachmentView(attachment)
+                            }
+
+                            if !message.content.isEmpty {
+                                Text(message.content)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(bubbleBackground)
+                        .shadow(
+                            color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                            radius: 6,
+                            y: 3
+                        )
+                    }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    reactionsOverlay
+                        .padding(.leading, 8)
+                        .offset(y: 10)
                 }
 
                 // Timestamp always outside bubble
                 messageMetaRow(insideBubble: false)
-            }
-            .overlay(alignment: .bottomLeading) {
-                reactionsOverlay
-                    .padding(.leading, 8)
-                    .offset(y: 20)
             }
 
             if !message.isMe { Spacer(minLength: 50) }
