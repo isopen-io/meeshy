@@ -27,6 +27,7 @@ struct ConversationView: View {
     @State private var showOptions = false
     @State private var showAttachOptions = false
     @State private var actionAlert: String? = nil
+    @State private var forwardMessage: Message? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var pendingAudioURL: URL? = nil
@@ -52,6 +53,7 @@ struct ConversationView: View {
     @State private var showOverlayMenu = false
     @State private var showMessageInfoSheet = false
     @State private var infoSheetMessage: Message? = nil
+    @State private var longPressEnabled = false
 
     // Reaction bar state (legacy, kept for emoji-only mode)
     @State private var quickReactionMessageId: String? = nil
@@ -63,6 +65,8 @@ struct ConversationView: View {
     @State private var isNearBottom: Bool = true
     @State private var unreadBadgeCount: Int = 0
     @State private var scrollToBottomTrigger: Int = 0
+    @State private var scrollToMessageId: String? = nil
+    @State private var highlightedMessageId: String? = nil
     @StateObject private var scrollButtonAudioPlayer = AudioPlayerManager()
 
     private var headerHasStoryRing: Bool {
@@ -274,9 +278,13 @@ struct ConversationView: View {
                     onShowInfo: {
                         infoSheetMessage = msg
                         showMessageInfoSheet = true
+                    },
+                    onReplyTap: { messageId in
+                        scrollToMessageId = messageId
                     }
                 )
-                .onLongPressGesture(minimumDuration: 0.4) {
+                .onLongPressGesture(minimumDuration: 0.5) {
+                    guard longPressEnabled else { return }
                     overlayMessage = msg
                     showOverlayMenu = true
                 }
@@ -306,7 +314,7 @@ struct ConversationView: View {
                             triggerReply(for: msg)
                         } else if swipeOffset * replyDirection < -threshold {
                             // Forward action (opposite direction)
-                            actionAlert = "Transferer"
+                            forwardMessage = msg
                         }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             swipeOffset = 0
@@ -316,6 +324,12 @@ struct ConversationView: View {
             )
         }
         .id(msg.id)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(hex: accentColor).opacity(highlightedMessageId == msg.id ? 0.2 : 0))
+                .animation(.easeInOut(duration: 0.3), value: highlightedMessageId)
+                .allowsHitTesting(false)
+        )
         .transition(
             .asymmetric(
                 insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
@@ -343,6 +357,23 @@ struct ConversationView: View {
         )
         isTyping = true
         HapticFeedback.medium()
+    }
+
+    private func scrollToAndHighlight(_ targetId: String, proxy: ScrollViewProxy) {
+        viewModel.markProgrammaticScroll()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            proxy.scrollTo(targetId, anchor: .center)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeIn(duration: 0.15)) {
+                highlightedMessageId = targetId
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    highlightedMessageId = nil
+                }
+            }
+        }
     }
 
     // MARK: - Quick Reaction Bar + Actions
@@ -414,8 +445,7 @@ struct ConversationView: View {
                         closeReactionBar()
                     }
                     messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                        // TODO: wire forward
-                        actionAlert = "Transferer"
+                        forwardMessage = viewModel.messages.first { $0.id == messageId }
                         closeReactionBar()
                     }
                     messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
@@ -591,6 +621,12 @@ struct ConversationView: View {
                         }
                     }
                 }
+                // Triggered by tapping a reply preview → scroll to original message
+                .onChange(of: scrollToMessageId) { targetId in
+                    guard let targetId else { return }
+                    scrollToMessageId = nil
+                    scrollToAndHighlight(targetId, proxy: proxy)
+                }
             }
 
             // Floating controls — morphing header (avatar expands into band)
@@ -765,6 +801,10 @@ struct ConversationView: View {
             if let context = replyContext {
                 pendingReplyReference = context.toReplyReference
             }
+            // Delay long-press to prevent touch bleed-through during NavigationStack transition
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                longPressEnabled = true
+            }
         }
         .fullScreenCover(isPresented: $showStoryViewerFromHeader) {
             if storyGroupIndexForHeader < storyViewModel.storyGroups.count {
@@ -811,6 +851,16 @@ struct ConversationView: View {
             )
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
+        .sheet(item: $forwardMessage) { msgToForward in
+            ForwardPickerSheet(
+                message: msgToForward,
+                sourceConversationId: conversation?.id ?? "",
+                accentColor: accentColor
+            ) {
+                forwardMessage = nil
+            }
+            .presentationDetents([.medium, .large])
+        }
         .overlay {
             if showOverlayMenu, let msg = overlayMessage {
                 MessageOverlayMenu(
@@ -832,7 +882,7 @@ struct ConversationView: View {
                         HapticFeedback.light()
                     },
                     onForward: {
-                        actionAlert = "Transférer"
+                        forwardMessage = msg
                     },
                     onDelete: {
                         deleteConfirmMessageId = msg.id
@@ -2396,6 +2446,7 @@ struct ThemedMessageBubble: View {
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
     var onShowInfo: (() -> Void)? = nil
+    var onReplyTap: ((String) -> Void)? = nil
 
     @State private var showProfileAlert = false
     @State private var showShareSheet = false
@@ -2513,9 +2564,19 @@ struct ThemedMessageBubble: View {
             }
 
             VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                // Reply reference
+                // Forwarded indicator
+                if message.forwardedFromId != nil {
+                    forwardedIndicator
+                }
+
+                // Reply reference (tap to scroll to original)
                 if let reply = message.replyTo {
                     replyPreview(reply)
+                        .onTapGesture {
+                            guard !reply.messageId.isEmpty else { return }
+                            HapticFeedback.light()
+                            onReplyTap?(reply.messageId)
+                        }
                 }
 
                 // Grille visuelle (images + vidéos)
@@ -2674,6 +2735,21 @@ struct ThemedMessageBubble: View {
     }
 
     // MARK: - Reply Preview
+    private var forwardedIndicator: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrowshape.turn.up.right.fill")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(theme.textMuted)
+
+            Text("Transféré")
+                .font(.system(size: 11, weight: .medium))
+                .italic()
+                .foregroundColor(theme.textMuted)
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 2)
+    }
+
     private func replyPreview(_ reply: ReplyReference) -> some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)

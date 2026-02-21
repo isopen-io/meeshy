@@ -45,6 +45,7 @@
 		CC1500000000002F15 /* DocumentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1500000000001F15 /* DocumentViewerView.swift */; };
 		CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1700000000001F17 /* MessageOverlayMenu.swift */; };
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
+		CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000001F19 /* ForwardPickerSheet.swift */; };
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
 		AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF04 /* UserDisplayName.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
@@ -103,6 +104,7 @@
 		RR1100000000001F01 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		CC1700000000001F17 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
 		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
+		CC1900000000001F19 /* ForwardPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +134,7 @@
 						CC1500000000001F15 /* DocumentViewerView.swift */,
 						CC1700000000001F17 /* MessageOverlayMenu.swift */,
 						CC1800000000001F18 /* MessageInfoSheet.swift */,
+						CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
 				AA66BB77CC880001FF04 /* UserDisplayName.swift */,
 				9DF7035D7F9CE206D8422552 /* ChatBubble.swift */,
@@ -373,6 +376,7 @@
 						CC1500000000002F15 /* DocumentViewerView.swift in Sources */,
 						CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
 						CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
+				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,
 				AA66BB77CC880002FF04 /* UserDisplayName.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,
