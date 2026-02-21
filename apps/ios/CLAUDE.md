@@ -697,5 +697,12 @@ struct MeeshyApp: App {
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (MVVM, ZStack navigation, singletons, networking, property wrappers, mdia, design system, concurrence, tokens, build script, dpendances) avec contexte, alternatives rejetes et consquences.
 
+## API Data Models
+Le mapping complet entre les reponses JSON du gateway et les modeles Swift (API layer -> domain layer) est documente dans `api-data-models.md` dans ce repertoire. Ce fichier couvre:
+- Tous les champs retournes par `GET /conversations` et `GET /conversations/:id/messages`
+- Les structs `Decodable` du SDK (`APIConversation`, `APIMessage`, etc.)
+- La logique de conversion vers les types domain (`MeeshyConversation`, `MeeshyMessage`, etc.)
+- Les notes sur les cas particuliers (pinnedAt string, latitude/longitude non implemente, enrichment gateway)
+
 ## MeeshySDK
 Le SDK Swift est dans `packages/MeeshySDK/` avec son propre `CLAUDE.md` et `decisions.md`. Voir ces fichiers pour l'architecture dual-target (MeeshySDK core + MeeshyUI), les conventions et les dcisions architecturales du SDK.
