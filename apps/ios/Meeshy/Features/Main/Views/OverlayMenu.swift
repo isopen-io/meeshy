@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 struct OverlayMenu: View {
     let onDismiss: () -> Void

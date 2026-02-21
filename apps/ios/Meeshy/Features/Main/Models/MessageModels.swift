@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - API Message Models (aligned with gateway GET /conversations/:id/messages)
 

@@ -3,7 +3,7 @@ import UIKit
 
 // MARK: - Tag Model
 
-public struct ConversationTag: Identifiable, Hashable, Codable {
+public struct MeeshyConversationTag: Identifiable, Hashable, Codable {
     public let id: String
     public let name: String
     public let color: String
@@ -25,23 +25,23 @@ public struct ConversationTag: Identifiable, Hashable, Codable {
         "E91E63", "3498DB", "FF7F50", "00CED1", "45B7D1",
     ]
 
-    public static let samples: [ConversationTag] = [
-        ConversationTag(name: "Travail", color: "3498DB"),
-        ConversationTag(name: "Famille", color: "2ECC71"),
-        ConversationTag(name: "Important", color: "FF6B6B"),
-        ConversationTag(name: "Amis", color: "9B59B6"),
-        ConversationTag(name: "Projet", color: "F8B500"),
-        ConversationTag(name: "Urgent", color: "E91E63"),
-        ConversationTag(name: "Perso", color: "4ECDC4"),
-        ConversationTag(name: "Sport", color: "2ECC71"),
-        ConversationTag(name: "Musique", color: "FF7F50"),
-        ConversationTag(name: "Tech", color: "45B7D1"),
+    public static let samples: [MeeshyConversationTag] = [
+        MeeshyConversationTag(name: "Travail", color: "3498DB"),
+        MeeshyConversationTag(name: "Famille", color: "2ECC71"),
+        MeeshyConversationTag(name: "Important", color: "FF6B6B"),
+        MeeshyConversationTag(name: "Amis", color: "9B59B6"),
+        MeeshyConversationTag(name: "Projet", color: "F8B500"),
+        MeeshyConversationTag(name: "Urgent", color: "E91E63"),
+        MeeshyConversationTag(name: "Perso", color: "4ECDC4"),
+        MeeshyConversationTag(name: "Sport", color: "2ECC71"),
+        MeeshyConversationTag(name: "Musique", color: "FF7F50"),
+        MeeshyConversationTag(name: "Tech", color: "45B7D1"),
     ]
 }
 
 // MARK: - Conversation Section Model
 
-public struct ConversationSection: Identifiable, Hashable {
+public struct MeeshyConversationSection: Identifiable, Hashable {
     public let id: String
     public let name: String
     public let icon: String
@@ -58,19 +58,19 @@ public struct ConversationSection: Identifiable, Hashable {
         self.order = order
     }
 
-    public static let pinned = ConversationSection(id: "pinned", name: "Epingles", icon: "pin.fill", color: "FF6B6B", order: 0)
-    public static let work = ConversationSection(id: "work", name: "Travail", icon: "briefcase.fill", color: "3498DB", order: 1)
-    public static let family = ConversationSection(id: "family", name: "Famille", icon: "house.fill", color: "2ECC71", order: 2)
-    public static let friends = ConversationSection(id: "friends", name: "Amis", icon: "person.2.fill", color: "9B59B6", order: 3)
-    public static let groups = ConversationSection(id: "groups", name: "Groupes", icon: "person.3.fill", color: "F8B500", order: 4)
-    public static let other = ConversationSection(id: "other", name: "Autres", icon: "tray.fill", color: "45B7D1", order: 5)
+    public static let pinned = MeeshyConversationSection(id: "pinned", name: "Épinglés", icon: "pin.fill", color: "FF6B6B", order: 0)
+    public static let work = MeeshyConversationSection(id: "work", name: "Travail", icon: "briefcase.fill", color: "3498DB", order: 1)
+    public static let family = MeeshyConversationSection(id: "family", name: "Famille", icon: "house.fill", color: "2ECC71", order: 2)
+    public static let friends = MeeshyConversationSection(id: "friends", name: "Amis", icon: "person.2.fill", color: "9B59B6", order: 3)
+    public static let groups = MeeshyConversationSection(id: "groups", name: "Groupes", icon: "person.3.fill", color: "F8B500", order: 4)
+    public static let other = MeeshyConversationSection(id: "other", name: "Autres", icon: "tray.fill", color: "45B7D1", order: 5)
 
-    public static let allSections: [ConversationSection] = [.pinned, .work, .family, .friends, .groups, .other]
+    public static let allSections: [MeeshyConversationSection] = [.pinned, .work, .family, .friends, .groups, .other]
 }
 
 // MARK: - Conversation Model
 
-public struct Conversation: Identifiable, Hashable {
+public struct MeeshyConversation: Identifiable, Hashable {
     public let id: String
     public let identifier: String
     public let type: ConversationType
@@ -88,7 +88,7 @@ public struct Conversation: Identifiable, Hashable {
 
     public var unreadCount: Int = 0
     public var lastMessagePreview: String?
-    public var tags: [ConversationTag] = []
+    public var tags: [MeeshyConversationTag] = []
 
     public var isPinned: Bool = false
     public var sectionId: String? = nil
@@ -140,7 +140,7 @@ public struct Conversation: Identifiable, Hashable {
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 unreadCount: Int = 0, lastMessagePreview: String? = nil,
-                tags: [ConversationTag] = [], isPinned: Bool = false, sectionId: String? = nil,
+                tags: [MeeshyConversationTag] = [], isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general) {
@@ -156,12 +156,12 @@ public struct Conversation: Identifiable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    public static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
+    public static func == (lhs: MeeshyConversation, rhs: MeeshyConversation) -> Bool { lhs.id == rhs.id }
 }
 
 // MARK: - Community Model
 
-public struct Community: Identifiable, Hashable {
+public struct MeeshyCommunity: Identifiable, Hashable {
     public let id: String
     public let identifier: String
     public let name: String
@@ -200,7 +200,7 @@ public struct Community: Identifiable, Hashable {
 
 // MARK: - Message Model
 
-public struct Message: Identifiable {
+public struct MeeshyMessage: Identifiable {
     public let id: String
     public let conversationId: String
     public var senderId: String?
@@ -227,9 +227,10 @@ public struct Message: Identifiable {
     public var encryptionMode: String?
     public let createdAt: Date
     public var updatedAt: Date
-    public var attachments: [MessageAttachment] = []
-    public var reactions: [Reaction] = []
+    public var attachments: [MeeshyMessageAttachment] = []
+    public var reactions: [MeeshyReaction] = []
     public var replyTo: ReplyReference?
+    public var forwardedFrom: ForwardReference?
     public var senderName: String?
     public var senderColor: String?
     public var senderAvatarURL: String?
@@ -261,8 +262,8 @@ public struct Message: Identifiable {
                 viewOnceCount: Int = 0, isBlurred: Bool = false, pinnedAt: Date? = nil, pinnedBy: String? = nil,
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
-                attachments: [MessageAttachment] = [], reactions: [Reaction] = [],
-                replyTo: ReplyReference? = nil,
+                attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
+                replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
                 senderName: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
@@ -276,21 +277,21 @@ public struct Message: Identifiable {
         self.pinnedAt = pinnedAt; self.pinnedBy = pinnedBy
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
-        self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo
+        self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
         self.senderName = senderName; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
     }
 
     public var text: String { content }
     public var timestamp: Date { createdAt }
-    public var attachment: MessageAttachment? { attachments.first }
+    public var attachment: MeeshyMessageAttachment? { attachments.first }
 }
 
-public typealias ChatMessage = Message
+public typealias MeeshyChatMessage = MeeshyMessage
 
 // MARK: - Message Attachment
 
-public struct MessageAttachment: Identifiable, Codable {
+public struct MeeshyMessageAttachment: Identifiable, Codable {
     public let id: String
     public var messageId: String?
     public let fileName: String
@@ -369,24 +370,24 @@ public struct MessageAttachment: Identifiable, Codable {
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
     }
 
-    public static func image(color: String = "4ECDC4") -> MessageAttachment {
-        MessageAttachment(mimeType: "image/jpeg", thumbnailColor: color)
+    public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(mimeType: "image/jpeg", thumbnailColor: color)
     }
 
-    public static func video(durationMs: Int, color: String = "FF6B6B") -> MessageAttachment {
-        MessageAttachment(mimeType: "video/mp4", duration: durationMs, thumbnailColor: color)
+    public static func video(durationMs: Int, color: String = "FF6B6B") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(mimeType: "video/mp4", duration: durationMs, thumbnailColor: color)
     }
 
-    public static func audio(durationMs: Int, color: String = "9B59B6") -> MessageAttachment {
-        MessageAttachment(mimeType: "audio/mpeg", duration: durationMs, thumbnailColor: color)
+    public static func audio(durationMs: Int, color: String = "9B59B6") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(mimeType: "audio/mpeg", duration: durationMs, thumbnailColor: color)
     }
 
-    public static func file(name: String, size: Int, color: String = "F8B500") -> MessageAttachment {
-        MessageAttachment(fileName: name, originalName: name, mimeType: "application/octet-stream", fileSize: size, thumbnailColor: color)
+    public static func file(name: String, size: Int, color: String = "F8B500") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(fileName: name, originalName: name, mimeType: "application/octet-stream", fileSize: size, thumbnailColor: color)
     }
 
-    public static func location(latitude: Double = 0, longitude: Double = 0, color: String = "2ECC71") -> MessageAttachment {
-        MessageAttachment(mimeType: "application/x-location", latitude: latitude, longitude: longitude, thumbnailColor: color)
+    public static func location(latitude: Double = 0, longitude: Double = 0, color: String = "2ECC71") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(mimeType: "application/x-location", latitude: latitude, longitude: longitude, thumbnailColor: color)
     }
 
     public var durationFormatted: String? {
@@ -424,9 +425,35 @@ public struct ReplyReference {
     }
 }
 
+// MARK: - Forward Reference
+
+public struct ForwardReference {
+    public let originalMessageId: String
+    public let senderName: String
+    public let senderAvatar: String?
+    public let previewText: String
+    public let conversationId: String?
+    public let conversationName: String?
+    public let attachmentType: String?
+    public let attachmentThumbnailUrl: String?
+
+    public init(originalMessageId: String = "", senderName: String, senderAvatar: String? = nil,
+                previewText: String, conversationId: String? = nil, conversationName: String? = nil,
+                attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil) {
+        self.originalMessageId = originalMessageId
+        self.senderName = senderName
+        self.senderAvatar = senderAvatar
+        self.previewText = previewText
+        self.conversationId = conversationId
+        self.conversationName = conversationName
+        self.attachmentType = attachmentType
+        self.attachmentThumbnailUrl = attachmentThumbnailUrl
+    }
+}
+
 // MARK: - Reaction Model
 
-public struct Reaction: Identifiable, Codable {
+public struct MeeshyReaction: Identifiable, Codable {
     public let id: String
     public let messageId: String
     public var userId: String?
@@ -444,7 +471,7 @@ public struct Reaction: Identifiable, Codable {
 
 // MARK: - Reaction Summary
 
-public struct ReactionSummary {
+public struct MeeshyReactionSummary {
     public let emoji: String
     public let count: Int
     public let includesMe: Bool
@@ -454,11 +481,11 @@ public struct ReactionSummary {
     }
 }
 
-public typealias MessageReaction = ReactionSummary
+public typealias MeeshyMessageReaction = MeeshyReactionSummary
 
 // MARK: - Feed Item Model
 
-public struct FeedItem: Identifiable {
+public struct MeeshyFeedItem: Identifiable {
     public let id = UUID()
     public let author: String
     public let content: String
@@ -474,13 +501,13 @@ public struct FeedItem: Identifiable {
 
 // MARK: - Category Filter
 
-public enum ConversationCategory: String, CaseIterable, Identifiable {
+public enum MeeshyConversationCategory: String, CaseIterable, Identifiable {
     case all = "Tous"
     case unread = "Non lus"
     case personnel = "Personnel"
-    case privee = "Privee"
+    case privee = "Privée"
     case ouvertes = "Ouvertes"
-    case archived = "Archives"
+    case archived = "Archivés"
 
     public var id: String { self.rawValue }
 

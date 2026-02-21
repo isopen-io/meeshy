@@ -81,33 +81,43 @@ struct ForwardPickerSheet: View {
         }
     }
 
-    // MARK: - Message Preview
+    // MARK: - Message Preview (thin, like reply banner)
 
     private var messagePreview: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5)
                 .fill(Color(hex: accentColor))
-                .frame(width: 3)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(message.senderName ?? "?")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-
-                Text(message.content.isEmpty ? "[Media]" : message.content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
+                .frame(width: 3, height: 28)
 
             if let firstAttachment = message.attachments.first {
                 attachmentThumbnail(firstAttachment)
             }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(message.senderName ?? "?")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(hex: accentColor))
+                    .lineLimit(1)
+
+                Text(message.content.isEmpty ? "[Media]" : message.content)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                dismiss()
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
         .background(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
     }
 
@@ -119,64 +129,69 @@ struct ForwardPickerSheet: View {
                 Color(hex: accentColor).opacity(0.3)
             }
             .aspectRatio(contentMode: .fill)
-            .frame(width: 40, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: 28, height: 28)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
         }
     }
 
     // MARK: - Conversation Row
 
     private func conversationRow(_ conv: Conversation) -> some View {
-        Button {
-            forwardTo(conv)
-        } label: {
-            HStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: conv.name,
-                    mode: .conversationList,
-                    accentColor: conv.accentColor,
-                    avatarURL: conv.avatar
-                )
+        HStack(spacing: 12) {
+            MeeshyAvatar(
+                name: conv.name,
+                mode: .conversationList,
+                accentColor: conv.accentColor,
+                avatarURL: conv.avatar
+            )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(conv.name)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(conv.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
 
-                    HStack(spacing: 4) {
-                        Text(conv.type.rawValue)
+                HStack(spacing: 4) {
+                    Text(conv.type.rawValue)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textMuted)
+
+                    if conv.memberCount > 0 {
+                        Text("\u{2022} \(conv.memberCount) membres")
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
-
-                        if conv.memberCount > 0 {
-                            Text("\u{2022} \(conv.memberCount) membres")
-                                .font(.system(size: 12))
-                                .foregroundColor(theme.textMuted)
-                        }
                     }
                 }
-
-                Spacer()
-
-                if sentToIds.contains(conv.id) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.green)
-                } else if sendingToId == conv.id {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "paperplane.circle")
-                        .font(.system(size: 22))
-                        .foregroundColor(Color(hex: accentColor).opacity(0.6))
-                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+
+            Spacer()
+
+            sendButton(for: conv)
         }
-        .disabled(sendingToId != nil || sentToIds.contains(conv.id))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func sendButton(for conv: Conversation) -> some View {
+        if sentToIds.contains(conv.id) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.green)
+        } else if sendingToId == conv.id {
+            ProgressView()
+                .scaleEffect(0.8)
+                .frame(width: 24, height: 24)
+        } else {
+            Button {
+                forwardTo(conv)
+            } label: {
+                Image(systemName: "paperplane.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+            .disabled(sendingToId != nil)
+        }
     }
 
     // MARK: - Actions

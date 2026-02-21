@@ -3,206 +3,11 @@ import AVFoundation
 import CoreLocation
 import Combine
 
-// ============================================================================
-// MARK: - Models
-// ============================================================================
+// See ComposerModels.swift for: ComposerAttachmentType, ComposerAttachment,
+// LanguageOption, KeyboardObserver, ComposerLocationHelper, ComposerWaveformBar
 
-enum ComposerAttachmentType: String, Equatable {
-    case image, file, voice, location, video
-}
-
-struct ComposerAttachment: Identifiable, Equatable {
-    let id: String
-    let type: ComposerAttachmentType
-    let name: String
-    var url: URL?
-    var size: Int?
-    var duration: TimeInterval?
-    var latitude: Double?
-    var longitude: Double?
-    var thumbnailColor: String = "808080"
-
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
-
-    // Convenience factories
-    static func voice(duration: TimeInterval) -> ComposerAttachment {
-        ComposerAttachment(
-            id: "voice-\(Int(Date().timeIntervalSince1970 * 1000))",
-            type: .voice,
-            name: "Message vocal (\(Self.formatDur(duration)))",
-            duration: duration,
-            thumbnailColor: "FF6B6B"
-        )
-    }
-
-    static func location(lat: Double, lng: Double) -> ComposerAttachment {
-        ComposerAttachment(
-            id: "location-\(Int(Date().timeIntervalSince1970 * 1000))",
-            type: .location,
-            name: "Position actuelle",
-            latitude: lat,
-            longitude: lng,
-            thumbnailColor: "2ECC71"
-        )
-    }
-
-    static func image(url: URL? = nil, name: String = "Photo", color: String = "9B59B6") -> ComposerAttachment {
-        ComposerAttachment(
-            id: "image-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
-            type: .image,
-            name: name,
-            url: url,
-            thumbnailColor: color
-        )
-    }
-
-    static func file(url: URL? = nil, name: String = "Fichier", size: Int? = nil, color: String = "45B7D1") -> ComposerAttachment {
-        ComposerAttachment(
-            id: "file-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
-            type: .file,
-            name: name,
-            url: url,
-            size: size,
-            thumbnailColor: color
-        )
-    }
-
-    private static func formatDur(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-}
-
-struct LanguageOption: Identifiable {
-    var id: String { code }
-    let code: String
-    let name: String
-    let flag: String
-
-    static let defaults: [LanguageOption] = [
-        LanguageOption(code: "fr", name: "Français", flag: "🇫🇷"),
-        LanguageOption(code: "en", name: "English", flag: "🇬🇧"),
-        LanguageOption(code: "es", name: "Español", flag: "🇪🇸"),
-        LanguageOption(code: "de", name: "Deutsch", flag: "🇩🇪"),
-        LanguageOption(code: "it", name: "Italiano", flag: "🇮🇹"),
-        LanguageOption(code: "pt", name: "Português", flag: "🇧🇷"),
-        LanguageOption(code: "ja", name: "日本語", flag: "🇯🇵"),
-        LanguageOption(code: "zh", name: "中文", flag: "🇨🇳"),
-        LanguageOption(code: "ko", name: "한국어", flag: "🇰🇷"),
-        LanguageOption(code: "ar", name: "العربية", flag: "🇸🇦"),
-    ]
-}
-
-// ============================================================================
-// MARK: - Keyboard Observer
-// ============================================================================
-
-class KeyboardObserver: ObservableObject {
-    @Published var height: CGFloat = 0
-    @Published var isVisible = false
-
-    /// Last non-zero keyboard height — useful for sizing emoji panel
-    var lastKnownHeight: CGFloat = 280
-
-    private var cancellables = Set<AnyCancellable>()
-
-    init() {
-        NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
-            .sink { [weak self] notification in
-                guard let self = self,
-                      let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-                      let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
-                else { return }
-
-                let screenHeight = UIScreen.main.bounds.height
-                let newHeight = max(screenHeight - endFrame.origin.y, 0)
-
-                if newHeight > 0 {
-                    self.lastKnownHeight = newHeight
-                }
-
-                withAnimation(.easeInOut(duration: max(duration, 0.15))) {
-                    self.height = newHeight
-                    self.isVisible = newHeight > 0
-                }
-            }
-            .store(in: &cancellables)
-    }
-}
-
-// ============================================================================
-// MARK: - Location Helper
-// ============================================================================
-
-private class ComposerLocationHelper: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    var onLocationReceived: ((Double, Double) -> Void)?
-
-    override init() {
-        super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-    }
-
-    func requestLocation() {
-        let status = manager.authorizationStatus
-        if status == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        }
-        manager.requestLocation()
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let loc = locations.first {
-            onLocationReceived?(loc.coordinate.latitude, loc.coordinate.longitude)
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("ComposerLocationHelper error:", error.localizedDescription)
-    }
-}
-
-// ============================================================================
-// MARK: - Waveform Bar Animation
-// ============================================================================
-
-private struct ComposerWaveformBar: View {
-    let index: Int
-    let isRecording: Bool
-    let accentColor: String
-
-    @State private var height: CGFloat = 4
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 2)
-            .fill(
-                LinearGradient(
-                    colors: [Color(hex: accentColor).opacity(0.8), Color(hex: accentColor).opacity(0.4)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .frame(width: 3, height: height)
-            .onAppear { animate() }
-            .onChange(of: isRecording) { rec in
-                if rec { animate() } else { height = 4 }
-            }
-    }
-
-    private func animate() {
-        guard isRecording else { return }
-        let delay = Double(index) * 0.05
-        withAnimation(
-            .easeInOut(duration: Double.random(in: 0.3...0.6))
-            .repeatForever(autoreverses: true)
-            .delay(delay)
-        ) {
-            height = CGFloat.random(in: 6...24)
-        }
-    }
-}
+// See UniversalComposerBar+Recording.swift for recording views & logic
+// See UniversalComposerBar+Attachments.swift for attachment views & logic
 
 // ============================================================================
 // MARK: - UniversalComposerBar
@@ -306,59 +111,59 @@ struct UniversalComposerBar: View {
     /// True = has pending content that should block story timer.
     var onHasContentChange: ((Bool) -> Void)? = nil
 
-    // MARK: - State
+    // MARK: - State (internal for cross-file extension access)
 
-    @State private var text = ""
-    @FocusState private var isFocused: Bool
-    @State private var sendBounce = false
-    @State private var focusBounce = false
-    @State private var showAttachOptions = false
+    @State var text = ""
+    @FocusState var isFocused: Bool
+    @State var sendBounce = false
+    @State var focusBounce = false
+    @State var showAttachOptions = false
     @State private var attachButtonPressed = false
-    @State private var currentLanguage: String = "fr"
+    @State var currentLanguage: String = "fr"
     @State private var previousStoryId: String? = nil
 
     // Voice recording
-    @State private var isRecording = false
-    @State private var recordingDuration: TimeInterval = 0
-    @State private var recordingTimer: Timer?
+    @State var isRecording = false
+    @State var recordingDuration: TimeInterval = 0
+    @State var recordingTimer: Timer?
 
     // Attachments
-    @State private var attachments: [ComposerAttachment] = []
+    @State var attachments: [ComposerAttachment] = []
 
     // Minimized / expanded state
-    @State private var isMinimized: Bool = false
+    @State var isMinimized: Bool = false
     @State private var dragOffsetY: CGFloat = 0
-    @State private var clipboardContent: ClipboardContent? = nil
+    @State var clipboardContent: ClipboardContent? = nil
 
     // Location
-    @StateObject private var locationHelper = ComposerLocationHelper()
+    @StateObject var locationHelper = ComposerLocationHelper()
 
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
-    @State private var attachRotation: Double = 0
-    @State private var typeWave: Bool = false
+    @State var attachRotation: Double = 0
+    @State var typeWave: Bool = false
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject var theme = ThemeManager.shared
 
     // MARK: - Mode-resolved properties
 
-    private var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
-    private var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
-    private var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
-    private var resolvedShowAttachment: Bool { mode?.showAttachment ?? showAttachment }
+    var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
+    var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
+    var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
+    var resolvedShowAttachment: Bool { mode?.showAttachment ?? showAttachment }
     private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
 
     // MARK: - Computed
 
-    private var hasText: Bool {
+    var hasText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var hasContent: Bool {
+    var hasContent: Bool {
         hasText || !allAttachments.isEmpty
     }
 
-    private var allAttachments: [ComposerAttachment] {
+    var allAttachments: [ComposerAttachment] {
         attachments + externalAttachments
     }
 
@@ -484,7 +289,7 @@ struct UniversalComposerBar: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(.white)
                     }
-                    Text("Écrire")
+                    Text("\u{00C9}crire")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                 }
@@ -753,216 +558,11 @@ struct UniversalComposerBar: View {
     }
 
     // ========================================================================
-    // MARK: - Recording Indicator
-    // ========================================================================
-
-    private var recordingIndicator: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(Color(hex: "EF4444"))
-                .frame(width: 6, height: 6)
-                .opacity(recordingDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
-
-            Text(formatDuration(recordingDuration))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(Color(hex: "EF4444"))
-                .contentTransition(.numericText())
-        }
-    }
-
-    // ========================================================================
-    // MARK: - Attachments Preview
-    // ========================================================================
-
-    private var attachmentsPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(allAttachments) { attachment in
-                    attachmentChip(attachment)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-        }
-    }
-
-    private func attachmentChip(_ attachment: ComposerAttachment) -> some View {
-        HStack(spacing: 6) {
-            // Type icon
-            Image(systemName: iconForType(attachment.type))
-                .font(.system(size: 12))
-                .foregroundColor(Color(hex: attachment.thumbnailColor))
-
-            Text(attachment.name)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-                .frame(maxWidth: 120)
-
-            if let size = attachment.size {
-                Text(formatFileSize(size))
-                    .font(.system(size: 10))
-                    .opacity(0.6)
-            }
-
-            // Remove button
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                    attachments.removeAll { $0.id == attachment.id }
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(mutedColor)
-                    .frame(width: 18, height: 18)
-                    .background(
-                        Circle().fill(style == .dark ? Color.white.opacity(0.15) : theme.textMuted.opacity(0.15))
-                    )
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(style == .dark ? Color.white.opacity(0.12) : theme.inputBackground)
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            style == .dark ? Color.white.opacity(0.15) : theme.textMuted.opacity(0.2),
-                            lineWidth: 0.5
-                        )
-                )
-        )
-        .foregroundColor(style == .dark ? .white : theme.textPrimary)
-    }
-
-    // ========================================================================
-    // MARK: - Attachment Ladder
-    // ========================================================================
-
-    private var attachmentLadder: some View {
-        VStack(spacing: 8) {
-            // Emoji picker
-            attachLadderButton(icon: "face.smiling.fill", color: "FF9F43", delay: 0.0) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    onRequestTextEmoji?()
-                }
-            }
-            // File picker
-            attachLadderButton(icon: "doc.fill", color: "45B7D1", delay: 0.04) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onFilePicker?() }
-            }
-            // Location
-            attachLadderButton(icon: "location.fill", color: "2ECC71", delay: 0.08) {
-                closeAttachMenu()
-                HapticFeedback.light()
-                locationHelper.requestLocation()
-                onLocationRequest?()
-            }
-            // Camera
-            attachLadderButton(icon: "camera.fill", color: "F8B500", delay: 0.12) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onCamera?() }
-            }
-            // Photo library
-            attachLadderButton(icon: "photo.fill", color: "9B59B6", delay: 0.16) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onPhotoLibrary?() }
-            }
-            // Voice recording
-            attachLadderButton(icon: "mic.fill", color: "E74C3C", delay: 0.20) {
-                closeAttachMenu()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { startRecording() }
-            }
-        }
-        .padding(.bottom, 52)
-    }
-
-    private func attachLadderButton(icon: String, color: String, delay: Double, action: @escaping () -> Void) -> some View {
-        Button(action: {
-            onAnyInteraction?()
-            HapticFeedback.light()
-            action()
-        }) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: color), Color(hex: color).opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 42, height: 42)
-                    .shadow(color: Color(hex: color).opacity(0.45), radius: 8, y: 3)
-
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .menuAnimation(showMenu: showAttachOptions, delay: delay)
-    }
-
-    /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
-    private func notifyContentChange() {
-        onHasContentChange?(hasText || !attachments.isEmpty || isRecording)
-    }
-
-    private func closeAttachMenu() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            showAttachOptions = false
-        }
-    }
-
-    // ========================================================================
-    // MARK: - Attach Button (copy-paste from MessageComposer)
-    // ========================================================================
-
-    private var attachButton: some View {
-        Button(action: {
-            onAnyInteraction?()
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            if showAttachOptions {
-                // xmark showing → close menu
-                closeAttachMenu()
-            } else {
-                // (+) showing → open menu
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    attachRotation += 90
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = true
-                }
-            }
-        }) {
-            Image(systemName: showAttachOptions ? "xmark" : "plus")
-                .font(.system(size: showAttachOptions ? 16 : 20, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-                .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(0.1))
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                )
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
-        }
-    }
-
-    // ========================================================================
-    // MARK: - Action Button: Mic / Send (copy-paste from MessageComposer)
+    // MARK: - Action Button: Mic / Send
     // ========================================================================
 
     @ViewBuilder
-    private var actionButton: some View {
+    var actionButton: some View {
         if isRecording || hasContent {
             sendButton
                 .transition(.scale.combined(with: .opacity))
@@ -971,121 +571,13 @@ struct UniversalComposerBar: View {
         }
     }
 
-    // ========================================================================
-    // MARK: - Text Field
-    // ========================================================================
-
-    private var textInputField: some View {
-        HStack(spacing: 0) {
-            // Mic button inside field (left) — hidden when focused
-            if resolvedShowVoice && !isFocused {
-                Button {
-                    onAnyInteraction?()
-                    HapticFeedback.light()
-                    startRecording()
-                } label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 36, height: 36)
-                }
-                .padding(.leading, 4)
-                .transition(.scale.combined(with: .opacity))
-            }
-
-            // Text input
-            ZStack(alignment: .leading) {
-                if text.isEmpty {
-                    Text(resolvedPlaceholder)
-                        .foregroundColor(.white.opacity(0.4))
-                        .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
-                }
-
-                TextField("", text: $text, axis: .vertical)
-                    .focused($isFocused)
-                    .foregroundColor(.white)
-                    .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
-                    .padding(.trailing, 16)
-                    .padding(.vertical, 12)
-                    .lineLimit(1...5)
-                    .font(.system(size: 16))
-                    .onChange(of: text) { newValue in
-                        if let maxLen = resolvedMaxLength, newValue.count > maxLen {
-                            text = String(newValue.prefix(maxLen))
-                        }
-                    }
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
-        .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            focusBounce ?
-                            LinearGradient(colors: [Color(hex: "08D9D6").opacity(0.5), Color(hex: "FF2E63").opacity(0.5)], startPoint: .leading, endPoint: .trailing) :
-                                LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
-                            lineWidth: focusBounce ? 1.5 : 1
-                        )
-                )
-                .shadow(color: focusBounce ? Color(hex: "08D9D6").opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
-        )
-        .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
-        .scaleEffect(focusBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.35), value: typeWave)
-    }
-
-    // ========================================================================
-    // MARK: - Voice Recording View (replaces text field while recording)
-    // ========================================================================
-
-    private var voiceRecordingView: some View {
-        HStack(spacing: 12) {
-            // Animated waveform bars
-            HStack(spacing: 3) {
-                ForEach(0..<15, id: \.self) { i in
-                    ComposerWaveformBar(index: i, isRecording: isRecording, accentColor: "FF6B6B")
-                }
-            }
-
-            Spacer()
-
-            // Timer
-            Text(formatDuration(recordingDuration))
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3), value: recordingDuration)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            LinearGradient(colors: [Color(hex: "FF2E63").opacity(0.5), Color(hex: "FF6B6B").opacity(0.5)], startPoint: .leading, endPoint: .trailing),
-                            lineWidth: 1.5
-                        )
-                )
-        )
-        // Wave pulse synced to recording timer (~every 0.5s)
-        .scaleEffect(
-            x: recordingDuration.truncatingRemainder(dividingBy: 0.5) < 0.25 ? 1.012 : 1.0,
-            y: recordingDuration.truncatingRemainder(dividingBy: 0.5) < 0.25 ? 0.975 : 1.0
-        )
-        .animation(.spring(response: 0.25, dampingFraction: 0.35), value: recordingDuration)
-    }
+    // See UniversalComposerBar+Recording.swift for textInputField
 
     // ========================================================================
     // MARK: - Send Button
     // ========================================================================
 
-    private var sendButton: some View {
+    var sendButton: some View {
         Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                 sendBounce = true
@@ -1119,111 +611,11 @@ struct UniversalComposerBar: View {
     }
 
     // ========================================================================
-    // MARK: - Stop Recording Button
-    // ========================================================================
-
-    private var stopRecordingButton: some View {
-        Button {
-            HapticFeedback.light()
-            stopRecording()
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 10, y: 3)
-
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .scaleEffect(recordingDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.08 : 1.0)
-            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isRecording)
-        }
-    }
-
-    // ========================================================================
     // MARK: - Background
     // ========================================================================
 
     private var composerBackground: some View {
         Color.clear
-    }
-
-    // ========================================================================
-    // MARK: - Recording Logic
-    // ========================================================================
-
-    private func startRecording() {
-        onAnyInteraction?()
-        isRecording = true
-        recordingDuration = 0
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            recordingDuration += 0.1
-        }
-        onRecordingChange?(true)
-        HapticFeedback.medium()
-    }
-
-    private func stopRecording() {
-        onAnyInteraction?()
-        guard recordingDuration > 0.5 else {
-            // Too short — cancel
-            isRecording = false
-            recordingTimer?.invalidate()
-            recordingTimer = nil
-            recordingDuration = 0
-            onRecordingChange?(false)
-            return
-        }
-
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        // Add voice attachment
-        let attachment = ComposerAttachment.voice(duration: duration)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            attachments.append(attachment)
-        }
-
-        // Callback for parent to handle actual audio data
-        if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-            onVoiceRecord?(url, duration)
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
-        HapticFeedback.light()
-    }
-
-    /// Force-stop recording when switching stories — always saves the voice attachment regardless of duration
-    private func forceStopRecording() {
-        guard isRecording else { return }
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        if duration > 0.3 {
-            let attachment = ComposerAttachment.voice(duration: duration)
-            attachments.append(attachment)
-            if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-                onVoiceRecord?(url, duration)
-            }
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
     }
 
     // ========================================================================
@@ -1260,30 +652,13 @@ struct UniversalComposerBar: View {
     // MARK: - Helpers
     // ========================================================================
 
-    private var mutedColor: Color {
+    var mutedColor: Color {
         style == .dark ? .white.opacity(0.5) : theme.textMuted
     }
 
-    private func iconForType(_ type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
-        }
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+    /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
+    func notifyContentChange() {
+        onHasContentChange?(hasText || !attachments.isEmpty || isRecording)
     }
 
     // ========================================================================
@@ -1306,16 +681,6 @@ struct UniversalComposerBar: View {
         onExpand?()
     }
 
-    private func expandAndStartRecording() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            isMinimized = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            startRecording()
-        }
-        onExpand?()
-    }
-
     // ========================================================================
     // MARK: - Swipe Handle
     // ========================================================================
@@ -1330,74 +695,5 @@ struct UniversalComposerBar: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 2)
-    }
-
-    // ========================================================================
-    // MARK: - Clipboard Content Handling
-    // ========================================================================
-
-    private func handleClipboardCheck(_ newText: String) {
-        // Detect if a paste of 2000+ chars just happened
-        let delta = newText.count - (text.count - (newText.count - text.count))
-        if newText.count > 2000 && delta > 500 {
-            // Likely a paste — create clipboard content
-            let clip = ClipboardContent(text: newText)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                clipboardContent = clip
-            }
-            // Clear the text field since it's now an attachment
-            DispatchQueue.main.async {
-                text = ""
-            }
-            onClipboardContent?(clip)
-            HapticFeedback.medium()
-        }
-    }
-
-    private func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "doc.plaintext.fill")
-                .font(.system(size: 18))
-                .foregroundColor(Color(hex: "9B59B6"))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Contenu du presse-papier")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(style == .dark ? .white : theme.textPrimary)
-
-                Text(clip.truncatedPreview)
-                    .font(.system(size: 10))
-                    .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
-                    .lineLimit(2)
-
-                Text("\(clip.charCount) caractères")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(Color(hex: "9B59B6"))
-            }
-
-            Spacer()
-
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    clipboardContent = nil
-                }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "FF6B6B"))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: "9B59B6").opacity(0.3), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
     }
 }
