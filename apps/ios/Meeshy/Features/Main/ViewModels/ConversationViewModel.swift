@@ -342,6 +342,29 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Delete Message
+
+    func deleteMessage(messageId: String) async {
+        // Optimistic: mark as deleted locally
+        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            messages[idx].isDeleted = true
+            messages[idx].content = ""
+        }
+
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages/\(messageId)",
+                method: "DELETE"
+            )
+        } catch {
+            // Revert on failure
+            if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[idx].isDeleted = false
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Typing Safety Timeout
 
     private func resetTypingSafetyTimer(for username: String) {

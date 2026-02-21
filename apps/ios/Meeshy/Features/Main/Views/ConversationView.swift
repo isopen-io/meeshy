@@ -46,6 +46,7 @@ struct ConversationView: View {
     @State private var quickReactionMessageId: String? = nil
     @State private var showEmojiPickerSheet = false
     @State private var emojiOnlyMode: Bool = false
+    @State private var deleteConfirmMessageId: String? = nil
 
     // Scroll state
     @State private var isNearBottom: Bool = true
@@ -395,8 +396,7 @@ struct ConversationView: View {
                         closeReactionBar()
                     }
                     messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
-                        // TODO: wire delete
-                        actionAlert = "Supprimer"
+                        deleteConfirmMessageId = messageId
                         closeReactionBar()
                     }
                 }
@@ -760,6 +760,20 @@ struct ConversationView: View {
             Button("OK") { actionAlert = nil }
         } message: {
             Text(actionAlert ?? "")
+        }
+        .alert("Supprimer ce message ?", isPresented: Binding(
+            get: { deleteConfirmMessageId != nil },
+            set: { if !$0 { deleteConfirmMessageId = nil } }
+        )) {
+            Button("Annuler", role: .cancel) { deleteConfirmMessageId = nil }
+            Button("Supprimer", role: .destructive) {
+                if let msgId = deleteConfirmMessageId {
+                    Task { await viewModel.deleteMessage(messageId: msgId) }
+                }
+                deleteConfirmMessageId = nil
+            }
+        } message: {
+            Text("Cette action est irréversible.")
         }
         .sheet(isPresented: $showEmojiPickerSheet) {
             EmojiPickerSheet(
@@ -2025,6 +2039,44 @@ struct ThemedMessageBubble: View {
     }
 
     var body: some View {
+        if message.isDeleted {
+            deletedMessageView
+        } else {
+            messageContent
+        }
+    }
+
+    private var deletedMessageView: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if message.isMe { Spacer(minLength: 50) }
+
+            HStack(spacing: 6) {
+                Image(systemName: "nosign")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                Text("Message supprimé")
+                    .font(.system(size: 13, weight: .regular))
+                    .italic()
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .overlay(
+                        Capsule()
+                            .stroke(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                    )
+            )
+
+            if !message.isMe { Spacer(minLength: 50) }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 2)
+    }
+
+    private var messageContent: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if message.isMe { Spacer(minLength: 50) }
 
