@@ -325,8 +325,10 @@ export class UploadProcessor {
     let thumbnailPath: string | null = null;
     if (attachmentType === 'image') {
       thumbnailPath = await this.metadataManager.generateThumbnail(filePath);
-      metadata.thumbnailGenerated = !!thumbnailPath;
+    } else if (attachmentType === 'video') {
+      thumbnailPath = await this.metadataManager.generateVideoThumbnail(filePath);
     }
+    metadata.thumbnailGenerated = !!thumbnailPath;
 
     const fileUrl = this.getAttachmentPath(filePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
@@ -424,6 +426,8 @@ export class UploadProcessor {
     let thumbnailBuffer: Buffer | undefined;
     if (attachmentType === 'image') {
       thumbnailBuffer = await this.metadataManager.generateThumbnailFromBuffer(fileBuffer);
+    } else if (attachmentType === 'video') {
+      thumbnailBuffer = await this.metadataManager.generateVideoThumbnailFromBuffer(fileBuffer, file.mimeType);
     }
 
     const encryptionResult = await this.encryptionService.encryptAttachment({

@@ -6,6 +6,9 @@
 import sharp from 'sharp';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
+import { spawn } from 'child_process';
+import { v4 as uuidv4 } from 'uuid';
 import { parseFile } from 'music-metadata';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
@@ -97,6 +100,93 @@ export class MetadataManager {
     } catch (error) {
       logger.warn('[MetadataManager] Could not generate thumbnail from buffer:', error);
       return undefined;
+    }
+  }
+
+  /**
+   * Génère une miniature pour une vidéo avec ffmpeg
+   */
+  async generateVideoThumbnail(videoPath: string): Promise<string | null> {
+    try {
+      const fullPath = path.join(this.uploadBasePath, videoPath);
+      const ext = path.extname(videoPath);
+      const thumbnailPath = videoPath.replace(ext, '_thumb.jpg');
+      const fullThumbnailPath = path.join(this.uploadBasePath, thumbnailPath);
+
+      await fs.mkdir(path.dirname(fullThumbnailPath), { recursive: true });
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('ffmpeg thumbnail timeout')), 30000);
+
+        const proc = spawn('ffmpeg', [
+          '-i', fullPath,
+          '-ss', '1',
+          '-vframes', '1',
+          '-vf', 'scale=300:-1',
+          '-q:v', '3',
+          '-y',
+          fullThumbnailPath
+        ]);
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout);
+          code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}`));
+        });
+        proc.on('error', (err) => { clearTimeout(timeout); reject(err); });
+      });
+
+      const stats = await fs.stat(fullThumbnailPath);
+      if (stats.size < 100) {
+        await fs.unlink(fullThumbnailPath).catch(() => {});
+        return null;
+      }
+
+      return thumbnailPath;
+    } catch (error) {
+      logger.warn('[MetadataManager] Video thumbnail generation failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Génère une miniature vidéo à partir d'un buffer (pour fichiers chiffrés)
+   */
+  async generateVideoThumbnailFromBuffer(buffer: Buffer, mimeType: string): Promise<Buffer | undefined> {
+    const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp4') ? 'mp4' : 'mp4';
+    const tempInput = path.join(os.tmpdir(), `video_thumb_in_${uuidv4()}.${ext}`);
+    const tempOutput = path.join(os.tmpdir(), `video_thumb_out_${uuidv4()}.jpg`);
+
+    try {
+      await fs.writeFile(tempInput, buffer);
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('ffmpeg thumbnail timeout')), 30000);
+
+        const proc = spawn('ffmpeg', [
+          '-i', tempInput,
+          '-ss', '1',
+          '-vframes', '1',
+          '-vf', 'scale=300:-1',
+          '-q:v', '3',
+          '-y',
+          tempOutput
+        ]);
+
+        proc.on('close', (code) => {
+          clearTimeout(timeout);
+          code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}`));
+        });
+        proc.on('error', (err) => { clearTimeout(timeout); reject(err); });
+      });
+
+      const thumbBuffer = await fs.readFile(tempOutput);
+      return thumbBuffer.length > 100 ? thumbBuffer : undefined;
+    } catch (error) {
+      logger.warn('[MetadataManager] Video thumbnail from buffer failed:', error);
+      return undefined;
+    } finally {
+      await fs.unlink(tempInput).catch(() => {});
+      await fs.unlink(tempOutput).catch(() => {});
     }
   }
 

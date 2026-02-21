@@ -130,7 +130,7 @@ struct VideoPlayerView: View {
     // MARK: - Thumbnail
     private var thumbnailView: some View {
         Group {
-            if let thumbUrl = attachment.thumbnailUrl ?? (attachment.fileUrl.isEmpty ? nil : attachment.fileUrl),
+            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -142,6 +142,11 @@ struct VideoPlayerView: View {
                         videoPlaceholder
                     }
                 }
+            } else if !attachment.fileUrl.isEmpty {
+                VideoThumbnailView(
+                    videoUrlString: attachment.fileUrl,
+                    accentColor: accentColor
+                )
             } else {
                 videoPlaceholder
             }

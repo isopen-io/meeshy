@@ -40,6 +40,7 @@
 		CC1100000000002F11 /* MediaTranscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1100000000001F11 /* MediaTranscriptionView.swift */; };
 		CC1200000000002F12 /* AudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1200000000001F12 /* AudioPlayerView.swift */; };
 		CC1300000000002F13 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1300000000001F13 /* VideoPlayerView.swift */; };
+		CC1600000000002F16 /* VideoThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1600000000001F16 /* VideoThumbnailView.swift */; };
 		CC1400000000002F14 /* ImageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1400000000001F14 /* ImageViewerView.swift */; };
 		CC1500000000002F15 /* DocumentViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1500000000001F15 /* DocumentViewerView.swift */; };
 		AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA66BB77CC880001FF03 /* MeeshyAvatar.swift */; };
@@ -91,6 +92,7 @@
 		CC1100000000001F11 /* MediaTranscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaTranscriptionView.swift; sourceTree = "<group>"; };
 		CC1200000000001F12 /* AudioPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerView.swift; sourceTree = "<group>"; };
 		CC1300000000001F13 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		CC1600000000001F16 /* VideoThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoThumbnailView.swift; sourceTree = "<group>"; };
 		CC1400000000001F14 /* ImageViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewerView.swift; sourceTree = "<group>"; };
 		CC1500000000001F15 /* DocumentViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentViewerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -117,6 +119,7 @@
 						CC1100000000001F11 /* MediaTranscriptionView.swift */,
 						CC1200000000001F12 /* AudioPlayerView.swift */,
 						CC1300000000001F13 /* VideoPlayerView.swift */,
+						CC1600000000001F16 /* VideoThumbnailView.swift */,
 						CC1400000000001F14 /* ImageViewerView.swift */,
 						CC1500000000001F15 /* DocumentViewerView.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
@@ -345,6 +348,7 @@
 						CC1100000000002F11 /* MediaTranscriptionView.swift in Sources */,
 						CC1200000000002F12 /* AudioPlayerView.swift in Sources */,
 						CC1300000000002F13 /* VideoPlayerView.swift in Sources */,
+						CC1600000000002F16 /* VideoThumbnailView.swift in Sources */,
 						CC1400000000002F14 /* ImageViewerView.swift in Sources */,
 						CC1500000000002F15 /* DocumentViewerView.swift in Sources */,
 				AA66BB77CC880002FF03 /* MeeshyAvatar.swift in Sources */,

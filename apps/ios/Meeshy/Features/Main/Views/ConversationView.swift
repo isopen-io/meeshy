@@ -1806,11 +1806,36 @@ struct ThemedMessageBubble: View {
     var onAddReaction: ((String) -> Void)? = nil
 
     @State private var showProfileAlert = false
+    @State private var showShareSheet = false
+    @State private var shareURL: URL? = nil
+    @State private var fullscreenAttachment: MessageAttachment? = nil
     @ObservedObject private var theme = ThemeManager.shared
-    private let myColors = ["FF6B6B", "E91E63"]
+
+    private let gridMaxWidth: CGFloat = 240
+    private let gridSpacing: CGFloat = 2
 
     private var bubbleColor: String {
-        message.isMe ? myColors[0] : contactColor
+        message.isMe ? contactColor : contactColor
+    }
+
+    private var visualAttachments: [MessageAttachment] {
+        message.attachments.filter { [.image, .video].contains($0.type) }
+    }
+
+    private var audioAttachments: [MessageAttachment] {
+        message.attachments.filter { $0.type == .audio }
+    }
+
+    private var nonMediaAttachments: [MessageAttachment] {
+        message.attachments.filter { ![.image, .audio, .video].contains($0.type) }
+    }
+
+    private var hasTextOrNonMediaContent: Bool {
+        let hasNonMedia = !nonMediaAttachments.isEmpty
+        let hasText = !message.content.isEmpty
+        let isAudioOnlyWithTranscription = hasText && !audioAttachments.isEmpty && visualAttachments.isEmpty && nonMediaAttachments.isEmpty
+        if isAudioOnlyWithTranscription { return false }
+        return hasText || hasNonMedia
     }
 
     // Computed reaction summaries for display
@@ -1861,43 +1886,79 @@ struct ThemedMessageBubble: View {
                     replyPreview(reply)
                 }
 
-                // Main bubble avec réactions par-dessus
-                VStack(alignment: .leading, spacing: 8) {
-                    // Attachments
-                    ForEach(message.attachments) { attachment in
-                        attachmentView(attachment)
-                    }
+                // Grille visuelle (images + vidéos)
+                if !visualAttachments.isEmpty {
+                    visualMediaGrid
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(alignment: .bottomTrailing) {
+                            if visualAttachments.count == 1 {
+                                downloadBadge(visualAttachments[0])
+                            }
+                        }
+                }
 
-                    // Text content
-                    if !message.content.isEmpty {
-                        Text(message.content)
-                            .font(.system(size: 15))
-                            .foregroundColor(.white)
+                // Audio standalone
+                ForEach(audioAttachments) { attachment in
+                    mediaStandaloneView(attachment)
+                }
+
+                // Bulle texte + non-media attachments (file, location)
+                if hasTextOrNonMediaContent {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(nonMediaAttachments) { attachment in
+                            attachmentView(attachment)
+                        }
+
+                        if !message.content.isEmpty {
+                            Text(message.content)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white)
+                        }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(bubbleBackground)
+                    .shadow(
+                        color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                        radius: 6,
+                        y: 3
+                    )
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(bubbleBackground)
-                .shadow(
-                    color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
-                    radius: 6,
-                    y: 3
-                )
-                .overlay(alignment: .bottomLeading) {
-                    // Réactions chevauchant la bordure basse (80-90% hors du cadre)
-                    reactionsOverlay
-                        .padding(.leading, 8)
-                        .offset(y: 20)
-                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                reactionsOverlay
+                    .padding(.leading, 8)
+                    .offset(y: 20)
             }
 
             if !message.isMe { Spacer(minLength: 50) }
         }
-        .padding(.bottom, 16) // Espace pour les réactions qui dépassent sous la bulle
+        .padding(.bottom, 16)
         .alert("Navigation", isPresented: $showProfileAlert) {
             Button("OK") {}
         } message: {
             Text("Naviguer vers le profil de \(message.senderName ?? "?")")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = shareURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
+        .fullScreenCover(item: $fullscreenAttachment) { attachment in
+            switch attachment.type {
+            case .image:
+                let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                ImageFullscreen(
+                    imageUrl: urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr),
+                    accentColor: contactColor
+                )
+            case .video:
+                if !attachment.fileUrl.isEmpty {
+                    VideoFullscreenPlayer(urlString: attachment.fileUrl, speed: .x1_0)
+                }
+            default:
+                EmptyView()
+            }
         }
     }
 
@@ -1905,13 +1966,13 @@ struct ThemedMessageBubble: View {
     private func replyPreview(_ reply: ReplyReference) -> some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: reply.isMe ? myColors[0] : reply.authorColor))
+                .fill(Color(hex: reply.isMe ? contactColor : reply.authorColor))
                 .frame(width: 3)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reply.isMe ? "Vous" : reply.authorName)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.isMe ? myColors[0] : reply.authorColor))
+                    .foregroundColor(Color(hex: reply.isMe ? contactColor : reply.authorColor))
 
                 Text(reply.previewText)
                     .font(.system(size: 12))
@@ -1925,6 +1986,125 @@ struct ThemedMessageBubble: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
         )
+    }
+
+    // MARK: - Visual Media Grid
+
+    @ViewBuilder
+    private var visualMediaGrid: some View {
+        let items = visualAttachments
+
+        switch items.count {
+        case 1:
+            visualGridCell(items[0])
+                .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+
+        case 2:
+            HStack(spacing: gridSpacing) {
+                visualGridCell(items[0])
+                visualGridCell(items[1])
+            }
+            .frame(maxWidth: gridMaxWidth, maxHeight: 160)
+
+        case 3:
+            HStack(spacing: gridSpacing) {
+                visualGridCell(items[0])
+                    .frame(maxWidth: .infinity)
+                VStack(spacing: gridSpacing) {
+                    visualGridCell(items[1])
+                    visualGridCell(items[2])
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+
+        default:
+            let overflow = items.count - 3
+            VStack(spacing: gridSpacing) {
+                HStack(spacing: gridSpacing) {
+                    visualGridCell(items[0])
+                    visualGridCell(items[1])
+                }
+                HStack(spacing: gridSpacing) {
+                    visualGridCell(items[2])
+                    visualGridCell(items[3], overflowCount: overflow)
+                }
+            }
+            .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+        }
+    }
+
+    @ViewBuilder
+    private func visualGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0) -> some View {
+        ZStack {
+            switch attachment.type {
+            case .image:
+                gridImageCell(attachment)
+            case .video:
+                gridVideoCell(attachment)
+            default:
+                EmptyView()
+            }
+
+            if overflowCount > 0 {
+                Color.black.opacity(0.5)
+                Text("+\(overflowCount)")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            fullscreenAttachment = attachment
+            HapticFeedback.light()
+        }
+    }
+
+    @ViewBuilder
+    private func gridImageCell(_ attachment: MessageAttachment) -> some View {
+        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        if !urlStr.isEmpty {
+            GeometryReader { geo in
+                CachedAsyncImage(url: urlStr) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+            }
+            .clipped()
+        } else {
+            Color(hex: attachment.thumbnailColor)
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+        }
+    }
+
+    @ViewBuilder
+    private func gridVideoCell(_ attachment: MessageAttachment) -> some View {
+        let thumbUrl = attachment.thumbnailUrl ?? ""
+        ZStack {
+            if !thumbUrl.isEmpty {
+                GeometryReader { geo in
+                    CachedAsyncImage(url: thumbUrl) {
+                        Color(hex: attachment.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+                }
+                .clipped()
+            } else if !attachment.fileUrl.isEmpty {
+                VideoThumbnailView(
+                    videoUrlString: attachment.fileUrl,
+                    accentColor: attachment.thumbnailColor
+                )
+            } else {
+                Color(hex: attachment.thumbnailColor)
+            }
+
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.white, .black.opacity(0.3))
+        }
     }
 
     // MARK: - Attachment View
@@ -2056,18 +2236,21 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
-        RoundedRectangle(cornerRadius: 18)
+        let accent = Color(hex: contactColor)
+        let isDark = theme.mode.isDark
+
+        return RoundedRectangle(cornerRadius: 18)
             .fill(
                 message.isMe ?
                 LinearGradient(
-                    colors: myColors.map { Color(hex: $0) },
+                    colors: [accent, accent.opacity(0.8)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ) :
                 LinearGradient(
                     colors: [
-                        Color(hex: contactColor).opacity(theme.mode.isDark ? 0.35 : 0.25),
-                        Color(hex: contactColor).opacity(theme.mode.isDark ? 0.2 : 0.15)
+                        accent.opacity(isDark ? 0.35 : 0.25),
+                        accent.opacity(isDark ? 0.2 : 0.15)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -2079,7 +2262,7 @@ struct ThemedMessageBubble: View {
                         message.isMe ?
                         LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing) :
                         LinearGradient(
-                            colors: [Color(hex: contactColor).opacity(0.5), Color(hex: contactColor).opacity(0.2)],
+                            colors: [accent.opacity(0.5), accent.opacity(0.2)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -2087,6 +2270,107 @@ struct ThemedMessageBubble: View {
                     )
             )
     }
+
+    // MARK: - Media Standalone View
+    @ViewBuilder
+    private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
+        switch attachment.type {
+        case .audio:
+            VStack(alignment: .leading, spacing: 4) {
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .messageBubble,
+                    accentColor: contactColor
+                )
+                .overlay(alignment: .topTrailing) { downloadBadge(attachment) }
+
+                if attachment.fileSize > 0 {
+                    Text(attachment.fileSizeFormatted)
+                        .font(.system(size: 10))
+                        .foregroundColor(theme.textMuted)
+                        .padding(.leading, 4)
+                }
+
+                if !message.content.isEmpty && visualAttachments.isEmpty {
+                    Text(message.content)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(3)
+                        .padding(.leading, 4)
+                        .padding(.top, 2)
+                }
+            }
+
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Audio Bubble Background
+    private var audioBubbleBackground: some View {
+        let accent = Color(hex: contactColor)
+        let isDark = theme.mode.isDark
+        return RoundedRectangle(cornerRadius: 20)
+            .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
+            )
+    }
+
+    // MARK: - Download Badge
+    @ViewBuilder
+    private func downloadBadge(_ attachment: MessageAttachment) -> some View {
+        Button(action: { downloadAttachment(attachment) }) {
+            HStack(spacing: 4) {
+                if attachment.fileSize > 0 {
+                    Text(attachment.fileSizeFormatted)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 20))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color(hex: contactColor).opacity(0.8))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(.black.opacity(0.4)))
+            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+        }
+        .padding(6)
+    }
+
+    // MARK: - Download Attachment
+    private func downloadAttachment(_ attachment: MessageAttachment) {
+        guard !attachment.fileUrl.isEmpty else { return }
+        Task {
+            do {
+                let data = try await MediaCacheManager.shared.data(for: attachment.fileUrl)
+                let fileName = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                try data.write(to: tempURL)
+                await MainActor.run {
+                    shareURL = tempURL
+                    showShareSheet = true
+                }
+                HapticFeedback.success()
+            } catch {
+                HapticFeedback.error()
+            }
+        }
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Animated Waveform Bar
