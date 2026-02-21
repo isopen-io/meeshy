@@ -7,23 +7,23 @@ class ThemeManager: ObservableObject {
 
     @Published var mode: ThemeMode = .dark
 
-    // MARK: - Background Colors (Pastel tones for both modes)
+    // MARK: - Background Colors (Warm tones for both modes)
     var backgroundPrimary: Color {
         mode.isDark ?
-            Color(hex: "1E1E2E") :  // Dark pastel blue-gray
-            Color(hex: "E8E8F0")    // Light pastel blue-gray
+            Color(hex: "0F0F14") :  // Deep warm charcoal
+            Color(hex: "F8F6F2")    // Warm off-white
     }
 
     var backgroundSecondary: Color {
         mode.isDark ?
-            Color(hex: "252536") :  // Slightly lighter dark pastel
-            Color(hex: "F0F0F8")    // Slightly lighter light pastel
+            Color(hex: "191920") :  // Warm dark surface
+            Color(hex: "FFFFFF")    // Clean white
     }
 
     var backgroundTertiary: Color {
         mode.isDark ?
-            Color(hex: "2D2D40") :  // Even lighter dark pastel
-            Color(hex: "E0E0EC")    // Slightly darker light pastel
+            Color(hex: "222230") :  // Warm elevated surface
+            Color(hex: "F2EDE6")    // Warm cream
     }
 
     // MARK: - Surface Colors (for cards)
@@ -62,15 +62,15 @@ class ThemeManager: ObservableObject {
 
     // MARK: - Text Colors
     var textPrimary: Color {
-        mode.isDark ? Color(hex: "FFFFFF") : Color(hex: "1A1A24")
+        mode.isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917")
     }
 
     var textSecondary: Color {
-        mode.isDark ? Color(hex: "FFFFFF").opacity(0.7) : Color(hex: "1A1A24").opacity(0.6)
+        mode.isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6)
     }
 
     var textMuted: Color {
-        mode.isDark ? Color(hex: "FFFFFF").opacity(0.5) : Color(hex: "1A1A24").opacity(0.4)
+        mode.isDark ? Color(hex: "F5F5F0").opacity(0.5) : Color(hex: "1C1917").opacity(0.4)
     }
 
     // MARK: - Button/Interactive Colors
@@ -90,29 +90,29 @@ class ThemeManager: ObservableObject {
     var ambientOrbs: [(color: String, opacity: Double, size: CGFloat, offset: CGPoint)] {
         if mode.isDark {
             return [
-                ("FF6B6B", 0.12, 300, CGPoint(x: -100, y: -200)),
-                ("4ECDC4", 0.12, 350, CGPoint(x: 150, y: 300)),
-                ("9B59B6", 0.10, 250, CGPoint(x: 100, y: -100)),
-                ("F8B500", 0.08, 200, CGPoint(x: -150, y: 200))
+                ("E76F51", 0.10, 300, CGPoint(x: -100, y: -200)),
+                ("2A9D8F", 0.10, 350, CGPoint(x: 150, y: 300)),
+                ("9B59B6", 0.08, 250, CGPoint(x: 100, y: -100)),
+                ("E9C46A", 0.07, 200, CGPoint(x: -150, y: 200))
             ]
         } else {
             return [
-                ("FF6B6B", 0.08, 300, CGPoint(x: -100, y: -200)),
-                ("4ECDC4", 0.08, 350, CGPoint(x: 150, y: 300)),
-                ("9B59B6", 0.06, 250, CGPoint(x: 100, y: -100)),
-                ("F8B500", 0.05, 200, CGPoint(x: -150, y: 200))
+                ("E76F51", 0.06, 300, CGPoint(x: -100, y: -200)),
+                ("2A9D8F", 0.06, 350, CGPoint(x: 150, y: 300)),
+                ("9B59B6", 0.04, 250, CGPoint(x: 100, y: -100)),
+                ("E9C46A", 0.04, 200, CGPoint(x: -150, y: 200))
             ]
         }
     }
 
-    // MARK: - Background Gradient (Pastel tones for both modes)
+    // MARK: - Background Gradient (Warm tones for both modes)
     var backgroundGradient: LinearGradient {
         if mode.isDark {
             return LinearGradient(
                 colors: [
-                    Color(hex: "252538"),  // Dark pastel purple-blue
-                    Color(hex: "1E2A35"),  // Dark pastel teal-blue
-                    Color(hex: "1E1E2E")   // Dark pastel blue-gray
+                    Color(hex: "141418"),  // Deep warm charcoal
+                    Color(hex: "18161E"),  // Hint of warm purple
+                    Color(hex: "0F0F14")   // Deepest warm black
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -120,9 +120,9 @@ class ThemeManager: ObservableObject {
         } else {
             return LinearGradient(
                 colors: [
-                    Color(hex: "E8E0F0"),  // Light pastel purple
-                    Color(hex: "E0ECF0"),  // Light pastel teal
-                    Color(hex: "E8E8F0")   // Light pastel blue-gray
+                    Color(hex: "FAF8F5"),  // Warm white
+                    Color(hex: "F5F0EA"),  // Warm cream
+                    Color(hex: "F8F6F2")   // Warm off-white
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -132,11 +132,11 @@ class ThemeManager: ObservableObject {
 
     // MARK: - Input Field Styling
     var inputBackground: Color {
-        mode.isDark ? Color(hex: "2D2D40") : Color(hex: "F0F0F8")
+        mode.isDark ? Color(hex: "1E1E28") : Color(hex: "F5F2ED")
     }
 
     var inputBorder: Color {
-        mode.isDark ? Color(hex: "404058") : Color(hex: "D0D0E0")
+        mode.isDark ? Color(hex: "3A3A48") : Color(hex: "DDD8D0")
     }
 
     func inputBorderFocused(tint: String) -> LinearGradient {

@@ -1890,7 +1890,7 @@ struct ThemedMessageBubble: View {
                         if !message.content.isEmpty {
                             Text(message.content)
                                 .font(.system(size: 15))
-                                .foregroundColor(.white)
+                                .foregroundColor(message.isMe ? .white : theme.textPrimary)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -2017,7 +2017,6 @@ struct ThemedMessageBubble: View {
     @ViewBuilder
     private func visualGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, isFirstRow: Bool = true) -> some View {
         ZStack {
-            // Dark background prevents thumbnailColor from bleeding at edges
             Color.black
 
             switch attachment.type {
@@ -2037,15 +2036,22 @@ struct ThemedMessageBubble: View {
             }
         }
         .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Only open fullscreen if file is cached (badge not shown)
+            // When badge is visible, its Button handles the tap instead
+            Task {
+                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                if cached {
+                    fullscreenAttachment = attachment
+                    HapticFeedback.light()
+                }
+            }
+        }
         .overlay(alignment: isFirstRow ? .bottomTrailing : .topTrailing) {
             downloadBadge(attachment)
                 .padding(isFirstRow ? 6 : 0)
                 .offset(x: isFirstRow ? 0 : 8, y: isFirstRow ? 0 : -8)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            fullscreenAttachment = attachment
-            HapticFeedback.light()
         }
     }
 
@@ -2259,26 +2265,17 @@ struct ThemedMessageBubble: View {
     private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
         switch attachment.type {
         case .audio:
-            VStack(alignment: .leading, spacing: 4) {
-                AudioPlayerView(
-                    attachment: attachment,
-                    context: .messageBubble,
-                    accentColor: contactColor
-                )
-                .overlay(alignment: .topTrailing) {
-                    downloadBadge(attachment)
-                        .offset(x: 8, y: -8)
+            AudioMediaView(
+                attachment: attachment,
+                message: message,
+                contactColor: contactColor,
+                visualAttachments: visualAttachments,
+                theme: theme,
+                onShareFile: { url in
+                    shareURL = url
+                    showShareSheet = true
                 }
-
-                if !message.content.isEmpty && visualAttachments.isEmpty {
-                    Text(message.content)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(3)
-                        .padding(.leading, 4)
-                        .padding(.top, 2)
-                }
-            }
+            )
 
         default:
             EmptyView()
@@ -2332,19 +2329,25 @@ struct DownloadBadgeView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     private var totalSizeText: String {
-        if attachment.fileSize > 0 { return AttachmentDownloader.fmt(Int64(attachment.fileSize)) }
         if downloader.totalBytes > 0 { return AttachmentDownloader.fmt(downloader.totalBytes) }
+        if attachment.fileSize > 0 { return AttachmentDownloader.fmt(Int64(attachment.fileSize)) }
         return ""
     }
 
     var body: some View {
-        if !downloader.isCached {
-            if downloader.isDownloading {
+        Group {
+            if downloader.isCached {
+                EmptyView()
+            } else if downloader.isDownloading {
                 downloadingBadge
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             } else {
                 idleBadge
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: downloader.isCached)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: downloader.isDownloading)
     }
 
     private var idleBadge: some View {
@@ -2375,17 +2378,24 @@ struct DownloadBadgeView: View {
             VStack(spacing: 2) {
                 ZStack {
                     Circle()
-                        .stroke(Color.white.opacity(0.2), lineWidth: 2.5)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
                     Circle()
                         .trim(from: 0, to: downloader.progress)
                         .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 0.15), value: downloader.progress)
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white)
-                        .frame(width: 8, height: 8)
+                        .animation(.linear(duration: 0.2), value: downloader.progress)
+
+                    if downloader.progress > 0 {
+                        Text("\(Int(downloader.progress * 100))")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                    } else {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color.white)
+                            .frame(width: 7, height: 7)
+                    }
                 }
-                .frame(width: 22, height: 22)
+                .frame(width: 24, height: 24)
 
                 Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
                     .font(.system(size: 7, weight: .medium, design: .monospaced))
@@ -2393,14 +2403,14 @@ struct DownloadBadgeView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
             }
-            .padding(4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.55)))
+            .padding(5)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.6)))
         }
         .padding(4)
     }
 }
 
-// MARK: - Attachment Downloader
+// MARK: - Attachment Downloader (real byte-level progress via URLSession.bytes)
 @MainActor
 final class AttachmentDownloader: ObservableObject {
     @Published var isCached = false
@@ -2413,39 +2423,86 @@ final class AttachmentDownloader: ObservableObject {
         return min(Double(downloadedBytes) / Double(totalBytes), 1.0)
     }
 
-    private var task: Task<Void, Never>?
+    private var downloadTask: Task<Void, Never>?
 
     func checkCache(_ urlString: String) async {
-        isCached = await MediaCacheManager.shared.isCached(urlString)
+        let cached = await MediaCacheManager.shared.isCached(urlString)
+        if cached { isCached = true }
     }
 
     func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
-        guard !attachment.fileUrl.isEmpty else { return }
+        let fileUrl = attachment.fileUrl
+        guard !fileUrl.isEmpty else { return }
         isDownloading = true
         downloadedBytes = 0
         totalBytes = Int64(attachment.fileSize)
         HapticFeedback.light()
 
-        task = Task { [weak self] in
+        downloadTask = Task.detached { [weak self] in
             do {
-                let data = try await MediaCacheManager.shared.data(for: attachment.fileUrl)
-                guard let self, !Task.isCancelled else { return }
-                self.downloadedBytes = Int64(data.count)
-                self.totalBytes = Int64(data.count)
-                self.isDownloading = false
-                self.isCached = true
-                HapticFeedback.success()
+                guard let url = MeeshyConfig.resolveMediaURL(fileUrl) else { throw URLError(.badURL) }
+
+                let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
+
+                guard let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode) else {
+                    throw URLError(.badServerResponse)
+                }
+
+                let expectedLength = http.expectedContentLength
+                if expectedLength > 0 {
+                    await MainActor.run { [weak self] in self?.totalBytes = expectedLength }
+                }
+
+                var data = Data()
+                if expectedLength > 0 {
+                    data.reserveCapacity(Int(expectedLength))
+                }
+
+                var buffer = [UInt8]()
+                buffer.reserveCapacity(16384)
+
+                for try await byte in asyncBytes {
+                    guard !Task.isCancelled else { return }
+                    buffer.append(byte)
+
+                    if buffer.count >= 16384 {
+                        data.append(contentsOf: buffer)
+                        buffer.removeAll(keepingCapacity: true)
+                        let current = Int64(data.count)
+                        await MainActor.run { [weak self] in self?.downloadedBytes = current }
+                    }
+                }
+
+                guard !Task.isCancelled else { return }
+
+                if !buffer.isEmpty {
+                    data.append(contentsOf: buffer)
+                }
+
+                await MediaCacheManager.shared.store(data, for: fileUrl)
+
+                let finalSize = Int64(data.count)
+                await MainActor.run { [weak self] in
+                    self?.downloadedBytes = finalSize
+                    self?.totalBytes = finalSize
+                    self?.isDownloading = false
+                    self?.isCached = true
+                    HapticFeedback.success()
+                }
             } catch {
-                guard let self, !Task.isCancelled else { return }
-                self.isDownloading = false
-                HapticFeedback.error()
+                guard !Task.isCancelled else { return }
+                await MainActor.run { [weak self] in
+                    self?.isDownloading = false
+                    HapticFeedback.error()
+                }
             }
         }
     }
 
     func cancel() {
-        task?.cancel()
-        task = nil
+        downloadTask?.cancel()
+        downloadTask = nil
         isDownloading = false
         downloadedBytes = 0
         HapticFeedback.light()
@@ -2459,7 +2516,7 @@ final class AttachmentDownloader: ObservableObject {
     }
 }
 
-// MARK: - Cached Play Icon (only shows when video data is locally available)
+// MARK: - Cached Play Icon (active when media is locally cached, polls until available)
 struct CachedPlayIcon: View {
     let fileUrl: String
     @State private var isCached = false
@@ -2469,18 +2526,135 @@ struct CachedPlayIcon: View {
             if isCached {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.white, .black.opacity(0.4))
+                    .foregroundStyle(.white, Color.black.opacity(0.4))
                     .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-            } else {
-                Image(systemName: "play.circle")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isCached)
+        .task {
+            while !Task.isCancelled && !isCached {
+                let cached = await MediaCacheManager.shared.isCached(fileUrl)
+                if cached {
+                    isCached = true
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
+    }
+}
+
+// MARK: - Audio Media View (shows placeholder until cached, then full player)
+struct AudioMediaView: View {
+    let attachment: MessageAttachment
+    let message: Message
+    let contactColor: String
+    let visualAttachments: [MessageAttachment]
+    @ObservedObject var theme: ThemeManager
+    var onShareFile: ((URL) -> Void)?
+
+    @State private var isCached = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ZStack {
+                if isCached {
+                    AudioPlayerView(
+                        attachment: attachment,
+                        context: .messageBubble,
+                        accentColor: contactColor
+                    )
+                    .transition(.opacity)
+                } else {
+                    audioPlaceholder
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: isCached)
+            .overlay(alignment: .topTrailing) {
+                DownloadBadgeView(
+                    attachment: attachment,
+                    accentColor: contactColor,
+                    onShareFile: onShareFile
+                )
+                .offset(x: 8, y: -8)
+            }
+
+            if !message.content.isEmpty && visualAttachments.isEmpty {
+                Text(message.content)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(3)
+                    .padding(.leading, 4)
+                    .padding(.top, 2)
             }
         }
         .task {
-            let cached = await MediaCacheManager.shared.isCached(fileUrl)
-            await MainActor.run { isCached = cached }
+            while !Task.isCancelled && !isCached {
+                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                if cached {
+                    isCached = true
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
         }
+    }
+
+    private var audioPlaceholder: some View {
+        let accent = Color(hex: contactColor)
+        let isDark = theme.mode.isDark
+        let duration = Double(attachment.duration ?? 0) / 1000.0
+
+        return HStack(spacing: 8) {
+            // Disabled play circle
+            ZStack {
+                Circle()
+                    .fill(accent.opacity(0.3))
+                    .frame(width: 34, height: 34)
+                Image(systemName: "play.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.3))
+                    .offset(x: 1)
+            }
+
+            // Static waveform placeholder
+            HStack(spacing: 2) {
+                ForEach(0..<25, id: \.self) { i in
+                    let height = CGFloat.random(in: 6...22)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(accent.opacity(0.2))
+                        .frame(width: 2, height: height)
+                }
+            }
+            .frame(height: 26)
+
+            Spacer()
+
+            // Duration label
+            if duration > 0 {
+                Text(formatDuration(duration))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
+                )
+        )
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
 

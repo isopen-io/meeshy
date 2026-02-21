@@ -98,17 +98,32 @@ extension Color {
 
 struct GlassCard: ViewModifier {
     var cornerRadius: CGFloat = 20
+    @ObservedObject private var theme = ThemeManager.shared
 
     func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
-            .background(Color.black.opacity(0.2))
+            .background(theme.mode.isDark ? Color.black.opacity(0.2) : Color.white.opacity(0.4))
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(MeeshyColors.glassBorderGradient, lineWidth: 1)
+                    .stroke(
+                        theme.mode.isDark
+                            ? MeeshyColors.glassBorderGradient
+                            : LinearGradient(
+                                colors: [Color.black.opacity(0.08), Color.black.opacity(0.03)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                        lineWidth: 1
+                    )
             )
-            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+            .shadow(
+                color: theme.mode.isDark ? Color.black.opacity(0.2) : Color.black.opacity(0.06),
+                radius: theme.mode.isDark ? 10 : 8,
+                x: 0,
+                y: theme.mode.isDark ? 5 : 3
+            )
     }
 }
 

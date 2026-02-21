@@ -6,6 +6,7 @@ struct MeeshyApp: App {
     @StateObject private var authManager = AuthManager.shared
     @State private var showSplash = true
     @State private var hasCheckedSession = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some Scene {
         WindowGroup {
@@ -34,6 +35,12 @@ struct MeeshyApp: App {
                 await authManager.checkExistingSession()
                 hasCheckedSession = true
             }
+            .onChange(of: colorScheme) { _, newScheme in
+                ThemeManager.shared.mode = newScheme == .dark ? .dark : .light
+            }
+            .onAppear {
+                ThemeManager.shared.mode = colorScheme == .dark ? .dark : .light
+            }
         }
     }
 }
@@ -47,15 +54,22 @@ struct SplashScreen: View {
     @State private var showSubtitle = false
     @State private var glowPulse = false
     @State private var backgroundScale: CGFloat = 1.2
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var isDark: Bool { theme.mode.isDark }
 
     var body: some View {
         ZStack {
-            // Animated dark gradient background
+            // Animated gradient background
             LinearGradient(
-                colors: [
-                    Color(hex: "0a0a1a"),
-                    Color(hex: "1a1035"),
-                    Color(hex: "0d1f2d")
+                colors: isDark ? [
+                    Color(hex: "0a0a14"),
+                    Color(hex: "18141E"),
+                    Color(hex: "0d1520")
+                ] : [
+                    Color(hex: "FAF8F5"),
+                    Color(hex: "F5F0EA"),
+                    Color(hex: "F8F6F2")
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -65,21 +79,21 @@ struct SplashScreen: View {
 
             // Ambient orbs
             Circle()
-                .fill(Color(hex: "08D9D6").opacity(0.15))
+                .fill(Color(hex: "2A9D8F").opacity(isDark ? 0.15 : 0.10))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: -80, y: -200)
                 .scaleEffect(glowPulse ? 1.3 : 0.8)
 
             Circle()
-                .fill(Color(hex: "FF2E63").opacity(0.12))
+                .fill(Color(hex: "E76F51").opacity(isDark ? 0.12 : 0.08))
                 .frame(width: 160, height: 160)
                 .blur(radius: 50)
                 .offset(x: 90, y: 180)
                 .scaleEffect(glowPulse ? 1.2 : 0.9)
 
             Circle()
-                .fill(Color(hex: "B24BF3").opacity(0.1))
+                .fill(Color(hex: "B24BF3").opacity(isDark ? 0.10 : 0.06))
                 .frame(width: 120, height: 120)
                 .blur(radius: 40)
                 .offset(x: 60, y: -80)
@@ -89,13 +103,13 @@ struct SplashScreen: View {
                 Spacer()
 
                 // Animated Logo
-                AnimatedLogoView(color: .white, lineWidth: 10, continuous: false)
+                AnimatedLogoView(color: isDark ? .white : Color(hex: "1C1917"), lineWidth: 10, continuous: false)
                     .frame(width: 120, height: 120)
                     .opacity(showLogo ? 1 : 0)
                     .scaleEffect(showLogo ? 1 : 0.5)
                     .padding(.bottom, 32)
 
-                // App Name — fade in + descend from above with bounce
+                // App Name
                 Text("Meeshy")
                     .font(.system(size: 46, weight: .bold, design: .rounded))
                     .foregroundStyle(
@@ -105,17 +119,17 @@ struct SplashScreen: View {
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: Color(hex: "B24BF3").opacity(0.5), radius: 12, x: 0, y: 4)
+                    .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .fixedSize()
                     .frame(height: 80)
                     .opacity(showTitle ? 1 : 0)
                     .offset(y: showTitle ? 0 : -40)
                     .padding(.bottom, 8)
 
-                // Tagline — fade in + descend from above with bounce
+                // Tagline
                 Text("Break the language barrier")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
                     .offset(y: showSubtitle ? 0 : -20)
