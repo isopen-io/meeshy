@@ -17,6 +17,7 @@ class ConversationListViewModel: ObservableObject {
 
     init() {
         observeSocketReconnect()
+        subscribeToSocketEvents()
     }
 
     // Re-seed presence when Socket.IO reconnects (online → offline → online)
@@ -29,6 +30,42 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] _ in
                 Task { [weak self] in
                     await self?.loadConversations()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Real-time Socket Subscriptions
+
+    private func subscribeToSocketEvents() {
+        let socketManager = MessageSocketManager.shared
+
+        // Unread count updates from server
+        socketManager.unreadUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let idx = self.conversations.firstIndex(where: { $0.id == event.conversationId }) {
+                    self.conversations[idx].unreadCount = event.unreadCount
+                }
+            }
+            .store(in: &cancellables)
+
+        // New message → update last message preview + bump to top
+        socketManager.messageReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiMsg in
+                guard let self else { return }
+                let convId = apiMsg.conversationId
+                guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
+
+                self.conversations[idx].lastMessagePreview = apiMsg.content
+                self.conversations[idx].lastMessageAt = apiMsg.createdAt
+
+                // Move conversation to top if not already
+                if idx > 0 {
+                    let conv = self.conversations.remove(at: idx)
+                    self.conversations.insert(conv, at: 0)
                 }
             }
             .store(in: &cancellables)
