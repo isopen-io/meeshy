@@ -30,6 +30,8 @@ struct ConversationView: View {
     @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
+    @EnvironmentObject var router: Router
+    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject private var viewModel: ConversationViewModel
     @StateObject private var locationManager = LocationManager()
     @State private var messageText = ""
@@ -1317,9 +1319,42 @@ struct ConversationView: View {
             showConversationInfo = true
         })
         items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
-            // TODO: Navigate to DM with this user
+            Task { await self.navigateToDM(with: userId, name: name) }
         })
         return items
+    }
+
+    // MARK: - Navigate to DM
+
+    private func navigateToDM(with userId: String, name: String) async {
+        // Check if a DM already exists in the loaded conversation list
+        if let existing = conversationListViewModel.conversations.first(where: {
+            $0.type == .direct && $0.participantUserId == userId
+        }) {
+            router.navigateToConversation(existing)
+            return
+        }
+
+        // Create a new DM via API
+        do {
+            struct CreateDMBody: Encodable {
+                let type: String
+                let participantIds: [String]
+            }
+            let body = CreateDMBody(type: "direct", participantIds: [userId])
+            let response: APIResponse<APIConversation> = try await APIClient.shared.post(
+                endpoint: "/conversations",
+                body: body
+            )
+            if response.success {
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                let newConv = response.data.toConversation(currentUserId: currentUserId)
+                await conversationListViewModel.refresh()
+                router.navigateToConversation(newConv)
+            }
+        } catch {
+            print("[ConversationView] Create DM error: \(error)")
+        }
     }
 
     // MARK: - Attach Options Ladder
