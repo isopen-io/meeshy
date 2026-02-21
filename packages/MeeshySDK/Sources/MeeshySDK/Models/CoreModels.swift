@@ -241,6 +241,7 @@ public struct Message: Identifiable {
         case sent      // server confirmed (single check)
         case delivered // recipient received (double gray check)
         case read      // recipient read (double blue check)
+        case failed    // send failed, retry available
     }
 
     public enum MessageType: String, Codable, CaseIterable {

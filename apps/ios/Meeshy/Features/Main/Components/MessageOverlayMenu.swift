@@ -277,6 +277,10 @@ struct MessageOverlayMenu: View {
                         .foregroundColor(Color(hex: "4ECDC4"))
                         .offset(x: 4)
                 )
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(hex: "FF6B6B"))
         }
     }
 

@@ -294,12 +294,31 @@ class ConversationViewModel: ObservableObject {
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
             if let idx = messages.firstIndex(where: { $0.id == tempId }) {
-                messages[idx].content = "⚠️ " + messages[idx].content
+                messages[idx].deliveryStatus = .failed
             }
             self.error = error.localizedDescription
         }
 
         isSending = false
+    }
+
+    // MARK: - Retry Failed Message
+
+    func retryMessage(messageId: String) async {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let failedMsg = messages[idx]
+        guard failedMsg.deliveryStatus == .failed else { return }
+
+        // Remove failed message and re-send
+        let content = failedMsg.content
+        let replyToId = failedMsg.replyToId
+        messages.remove(at: idx)
+
+        await sendMessage(content: content, replyToId: replyToId)
+    }
+
+    func removeFailedMessage(messageId: String) {
+        messages.removeAll { $0.id == messageId && $0.deliveryStatus == .failed }
     }
 
     // MARK: - Toggle Reaction

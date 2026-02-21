@@ -276,9 +276,15 @@ struct ConversationView: View {
                         showMessageInfoSheet = true
                     }
                 )
-                .onLongPressGesture {
+                .onLongPressGesture(minimumDuration: 0.4) {
                     overlayMessage = msg
                     showOverlayMenu = true
+                }
+                .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
+
+                // Failed message retry bar
+                if msg.deliveryStatus == .failed && msg.isMe {
+                    failedMessageBar(for: msg)
                 }
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
@@ -1891,6 +1897,45 @@ struct ConversationView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Failed Message Retry
+    private func failedMessageBar(for msg: Message) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundColor(Color(hex: "FF6B6B"))
+
+            Text("Échec de l'envoi")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "FF6B6B"))
+
+            Text("·")
+                .foregroundColor(theme.textMuted)
+
+            Button {
+                HapticFeedback.light()
+                Task { await viewModel.retryMessage(messageId: msg.id) }
+            } label: {
+                Text("Réessayer")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    viewModel.removeFailedMessage(messageId: msg.id)
+                }
+            } label: {
+                Text("Supprimer")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
     // MARK: - Recording Functions
     private func startRecording() {
         audioRecorder.startRecording()
@@ -1995,7 +2040,7 @@ struct ConversationView: View {
                         content: content.isEmpty ? "Media" : content,
                         createdAt: Date(),
                         attachments: attachments,
-                        deliveryStatus: .sending,
+                        deliveryStatus: .failed,
                         isMe: true
                     )
                     viewModel.messages.append(newMsg)
@@ -2621,6 +2666,10 @@ struct ThemedMessageBubble: View {
             }
             .foregroundColor(Color(hex: "34B7F1"))
             .frame(width: 16)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(hex: "FF6B6B"))
         }
     }
 
