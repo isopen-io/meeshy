@@ -181,6 +181,11 @@ struct ImageFullscreen: View {
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var showControls = true
+    @State private var saveState: SaveState = .idle
+
+    private enum SaveState {
+        case idle, saving, saved, failed
+    }
 
     var body: some View {
         ZStack {
@@ -244,13 +249,30 @@ struct ImageFullscreen: View {
                         }
                         Spacer()
 
-                        // Share button
-                        Button { /* TODO: share */ } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding()
+                        // Save to Photos
+                        Button {
+                            saveToPhotos()
+                        } label: {
+                            Group {
+                                switch saveState {
+                                case .idle:
+                                    Image(systemName: "arrow.down.to.line")
+                                case .saving:
+                                    ProgressView().tint(.white)
+                                case .saved:
+                                    Image(systemName: "checkmark")
+                                case .failed:
+                                    Image(systemName: "xmark")
+                                }
+                            }
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                            .frame(width: 40, height: 40)
+                            .background(Circle().fill(Color.white.opacity(0.2)))
+                            .padding(.trailing, 12)
+                            .padding(.top, 8)
                         }
+                        .disabled(saveState == .saving || saveState == .saved)
                     }
                     Spacer()
                 }
@@ -258,5 +280,34 @@ struct ImageFullscreen: View {
             }
         }
         .statusBar(hidden: true)
+    }
+
+    private func saveToPhotos() {
+        guard let url = imageUrl else { return }
+        saveState = .saving
+        HapticFeedback.light()
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let saved = await PhotoLibraryManager.shared.saveImage(data)
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        saveState = saved ? .saved : .failed
+                    }
+                    if saved { HapticFeedback.success() } else { HapticFeedback.error() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation { saveState = .failed }
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            }
+        }
     }
 }

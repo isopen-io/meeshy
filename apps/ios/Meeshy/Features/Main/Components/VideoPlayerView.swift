@@ -301,6 +301,11 @@ struct VideoFullscreenPlayer: View {
     let speed: PlaybackSpeed
 
     @Environment(\.dismiss) private var dismiss
+    @State private var saveState: VideoSaveState = .idle
+
+    private enum VideoSaveState {
+        case idle, saving, saved, failed
+    }
 
     var body: some View {
         ZStack {
@@ -324,8 +329,62 @@ struct VideoFullscreenPlayer: View {
                             .padding()
                     }
                     Spacer()
+
+                    Button { saveVideoToPhotos() } label: {
+                        Group {
+                            switch saveState {
+                            case .idle:
+                                Image(systemName: "arrow.down.to.line")
+                            case .saving:
+                                ProgressView().tint(.white)
+                            case .saved:
+                                Image(systemName: "checkmark")
+                            case .failed:
+                                Image(systemName: "xmark")
+                            }
+                        }
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .padding(.trailing, 12)
+                        .padding(.top, 8)
+                    }
+                    .disabled(saveState == .saving || saveState == .saved)
                 }
                 Spacer()
+            }
+        }
+    }
+
+    private func saveVideoToPhotos() {
+        guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+        saveState = .saving
+        HapticFeedback.light()
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("save_\(UUID().uuidString).mp4")
+                try data.write(to: tempFile)
+                let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
+                try? FileManager.default.removeItem(at: tempFile)
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        saveState = saved ? .saved : .failed
+                    }
+                    if saved { HapticFeedback.success() } else { HapticFeedback.error() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation { saveState = .failed }
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
             }
         }
     }
