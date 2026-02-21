@@ -2987,10 +2987,26 @@ struct ThemedMessageBubble: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            Text("Transféré")
-                .font(.system(size: 11, weight: .medium))
-                .italic()
-                .foregroundColor(theme.textMuted)
+            if let fwd = message.forwardedFrom {
+                if let convName = fwd.conversationName {
+                    Text("Transf. de \(fwd.senderName) \u{2022} \(convName)")
+                        .font(.system(size: 10))
+                        .italic()
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                } else {
+                    Text("Transf. de \(fwd.senderName)")
+                        .font(.system(size: 10))
+                        .italic()
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                }
+            } else {
+                Text("Transféré")
+                    .font(.system(size: 10))
+                    .italic()
+                    .foregroundColor(theme.textMuted)
+            }
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)

@@ -326,6 +326,7 @@ struct Message: Identifiable {
     var attachments: [MessageAttachment] = []
     var reactions: [Reaction] = []
     var replyTo: ReplyReference?
+    var forwardedFrom: ForwardReference?
 
     // Sender display info (for avatar in bubbles)
     var senderName: String?
@@ -392,6 +393,7 @@ struct Message: Identifiable {
          attachments: [MessageAttachment] = [],
          reactions: [Reaction] = [],
          replyTo: ReplyReference? = nil,
+         forwardedFrom: ForwardReference? = nil,
          senderName: String? = nil,
          senderColor: String? = nil,
          senderAvatarURL: String? = nil,
@@ -426,6 +428,7 @@ struct Message: Identifiable {
         self.attachments = attachments
         self.reactions = reactions
         self.replyTo = replyTo
+        self.forwardedFrom = forwardedFrom
         self.senderName = senderName
         self.senderColor = senderColor
         self.senderAvatarURL = senderAvatarURL

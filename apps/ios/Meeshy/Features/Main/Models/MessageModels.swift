@@ -32,6 +32,23 @@ struct APIMessageReplyTo: Decodable {
     let attachments: [APIMessageAttachment]?
 }
 
+struct APIForwardedFrom: Decodable {
+    let id: String
+    let content: String?
+    let messageType: String?
+    let createdAt: Date?
+    let sender: APIMessageSender?
+    let attachments: [APIMessageAttachment]?
+}
+
+struct APIForwardedFromConversation: Decodable {
+    let id: String
+    let title: String?
+    let identifier: String?
+    let type: String?
+    let avatar: String?
+}
+
 struct APIMessage: Decodable {
     let id: String
     let conversationId: String
@@ -58,6 +75,8 @@ struct APIMessage: Decodable {
     let reactionSummary: [String: Int]?
     let reactionCount: Int?
     let currentUserReactions: [String]?
+    let forwardedFrom: APIForwardedFrom?
+    let forwardedFromConversation: APIForwardedFromConversation?
 }
 
 // MARK: - Messages API Response
@@ -170,6 +189,32 @@ extension APIMessage {
             )
         }()
 
+        let uiForwardedFrom: ForwardReference? = {
+            guard let fwd = forwardedFrom, let fwdSender = fwd.sender else { return nil }
+            let senderName = fwdSender.displayName ?? fwdSender.username
+            let previewText = (fwd.content ?? "").isEmpty ? "[Media]" : (fwd.content ?? "")
+            let firstAtt = fwd.attachments?.first
+            let attType: String? = firstAtt.flatMap { att in
+                guard let mime = att.mimeType else { return nil }
+                if mime.hasPrefix("image/") { return "image" }
+                if mime.hasPrefix("video/") { return "video" }
+                if mime.hasPrefix("audio/") { return "audio" }
+                return "file"
+            }
+            let attThumb = firstAtt?.thumbnailUrl ?? (attType == "image" ? firstAtt?.fileUrl : nil)
+            let convName = forwardedFromConversation?.title ?? forwardedFromConversation?.identifier
+            return ForwardReference(
+                originalMessageId: fwd.id,
+                senderName: senderName,
+                senderAvatar: fwdSender.avatar,
+                previewText: previewText,
+                conversationId: forwardedFromConversationId,
+                conversationName: convName,
+                attachmentType: attType,
+                attachmentThumbnailUrl: attThumb
+            )
+        }()
+
         let parsedPinnedAt: Date? = {
             guard let str = pinnedAt else { return nil }
             let formatter = ISO8601DateFormatter()
@@ -200,6 +245,7 @@ extension APIMessage {
             attachments: uiAttachments,
             reactions: uiReactions,
             replyTo: uiReplyTo,
+            forwardedFrom: uiForwardedFrom,
             senderName: sender?.displayName ?? sender?.username,
             senderColor: DynamicColorGenerator.colorForName(sender?.username ?? "?"),
             senderAvatarURL: sender?.avatar,
