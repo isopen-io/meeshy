@@ -387,8 +387,8 @@ struct MessageOverlayMenu: View {
 
         actions.append(OverlayAction(
             id: "pin",
-            icon: "pin.fill",
-            label: "Epingler",
+            icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
+            label: message.pinnedAt != nil ? "Désépingler" : "Épingler",
             color: "3498DB",
             handler: { onPin?() }
         ))

@@ -66,11 +66,14 @@ public struct SendMessageRequest: Encodable {
     public let content: String?
     public let originalLanguage: String?
     public let replyToId: String?
+    public let forwardedFromId: String?
+    public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, attachmentIds: [String]? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
-        self.replyToId = replyToId; self.attachmentIds = attachmentIds
+        self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
+        self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
     }
 }
 

@@ -399,6 +399,47 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Pin / Unpin Message
+
+    func togglePin(messageId: String) async {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let wasPinned = messages[idx].pinnedAt != nil
+
+        if wasPinned {
+            // Optimistic unpin
+            messages[idx].pinnedAt = nil
+            messages[idx].pinnedBy = nil
+
+            do {
+                let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
+                    method: "DELETE"
+                )
+            } catch {
+                // Revert
+                messages[idx].pinnedAt = Date()
+                self.error = error.localizedDescription
+            }
+        } else {
+            // Optimistic pin
+            let now = Date()
+            messages[idx].pinnedAt = now
+            messages[idx].pinnedBy = AuthManager.shared.currentUser?.id
+
+            do {
+                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
+                    method: "PUT"
+                )
+            } catch {
+                // Revert
+                messages[idx].pinnedAt = nil
+                messages[idx].pinnedBy = nil
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
     // MARK: - Edit Message
 
     func editMessage(messageId: String, newContent: String) async {

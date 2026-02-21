@@ -288,6 +288,8 @@ export class MessageProcessor {
     originalLanguage: string;
     messageType?: string;
     replyToId?: string;
+    forwardedFromId?: string;
+    forwardedFromConversationId?: string;
     mentionedUserIds?: readonly string[];
     encryptedContent?: string;
     encryptionMetadata?: Prisma.InputJsonValue;
@@ -329,6 +331,8 @@ export class MessageProcessor {
         originalLanguage: data.originalLanguage,
         messageType: data.messageType || 'text',
         replyToId: data.replyToId,
+        forwardedFromId: data.forwardedFromId,
+        forwardedFromConversationId: data.forwardedFromConversationId,
         isEncrypted: encryptionContext.isEncrypted,
         encryptionMode: encryptionContext.mode,
         encryptedContent: encryptionContext.encryptedContent,

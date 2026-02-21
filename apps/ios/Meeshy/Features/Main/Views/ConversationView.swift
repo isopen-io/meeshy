@@ -921,7 +921,8 @@ struct ConversationView: View {
                         deleteConfirmMessageId = msg.id
                     },
                     onPin: {
-                        actionAlert = "Épingler"
+                        Task { await viewModel.togglePin(messageId: msg.id) }
+                        HapticFeedback.medium()
                     },
                     onReact: { emoji in
                         viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
@@ -2619,6 +2620,11 @@ struct ThemedMessageBubble: View {
             }
 
             VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+                // Pin indicator
+                if message.pinnedAt != nil {
+                    pinnedIndicator
+                }
+
                 // Forwarded indicator
                 if message.forwardedFromId != nil {
                     forwardedIndicator
@@ -2790,6 +2796,21 @@ struct ThemedMessageBubble: View {
     }
 
     // MARK: - Reply Preview
+    private var pinnedIndicator: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(Color(hex: "3498DB"))
+                .rotationEffect(.degrees(45))
+
+            Text("Épinglé")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "3498DB"))
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 2)
+    }
+
     private var forwardedIndicator: some View {
         HStack(spacing: 4) {
             Image(systemName: "arrowshape.turn.up.right.fill")

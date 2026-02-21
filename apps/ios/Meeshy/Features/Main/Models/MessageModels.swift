@@ -29,6 +29,7 @@ struct APIMessageReplyTo: Decodable {
     let content: String?
     let senderId: String?
     let sender: APIMessageSender?
+    let attachments: [APIMessageAttachment]?
 }
 
 struct APIMessage: Decodable {
@@ -43,7 +44,10 @@ struct APIMessage: Decodable {
     let isEdited: Bool?
     let isDeleted: Bool?
     let replyToId: String?
+    let forwardedFromId: String?
+    let forwardedFromConversationId: String?
     let pinnedAt: String?
+    let pinnedBy: String?
     let isViewOnce: Bool?
     let isBlurred: Bool?
     let createdAt: Date
@@ -70,6 +74,8 @@ struct SendMessageRequest: Encodable {
     let content: String?
     let originalLanguage: String?
     let replyToId: String?
+    let forwardedFromId: String?
+    let forwardedFromConversationId: String?
     let attachmentIds: [String]?
 }
 
@@ -142,11 +148,33 @@ extension APIMessage {
             guard let reply = replyTo else { return nil }
             let isReplyMe = reply.senderId == currentUserId
             let authorName = reply.sender?.displayName ?? reply.sender?.username ?? "?"
+            let firstAttachment = reply.attachments?.first
+            let attType: String? = firstAttachment.flatMap { att in
+                guard let mime = att.mimeType else { return nil }
+                if mime.hasPrefix("image/") { return "image" }
+                if mime.hasPrefix("video/") { return "video" }
+                if mime.hasPrefix("audio/") { return "audio" }
+                return "file"
+            }
+            let attThumb = firstAttachment?.thumbnailUrl ?? (attType == "image" ? firstAttachment?.fileUrl : nil)
+            let previewText = (reply.content ?? "").isEmpty
+                ? (attType.map { "[\($0.capitalized)]" } ?? "")
+                : (reply.content ?? "")
             return ReplyReference(
+                messageId: reply.id,
                 authorName: authorName,
-                previewText: reply.content ?? "",
-                isMe: isReplyMe
+                previewText: previewText,
+                isMe: isReplyMe,
+                attachmentType: attType,
+                attachmentThumbnailUrl: attThumb
             )
+        }()
+
+        let parsedPinnedAt: Date? = {
+            guard let str = pinnedAt else { return nil }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter.date(from: str)
         }()
 
         return Message(
@@ -161,8 +189,12 @@ extension APIMessage {
             isEdited: isEdited ?? false,
             isDeleted: isDeleted ?? false,
             replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
             isViewOnce: isViewOnce ?? false,
             isBlurred: isBlurred ?? false,
+            pinnedAt: parsedPinnedAt,
+            pinnedBy: pinnedBy,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments,

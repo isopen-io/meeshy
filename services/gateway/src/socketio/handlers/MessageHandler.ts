@@ -71,6 +71,8 @@ export class MessageHandler {
       originalLanguage?: string;
       messageType?: string;
       replyToId?: string;
+      forwardedFromId?: string;
+      forwardedFromConversationId?: string;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -105,6 +107,8 @@ export class MessageHandler {
         originalLanguage: data.originalLanguage,
         messageType: data.messageType || 'text',
         replyToId: data.replyToId,
+        forwardedFromId: data.forwardedFromId,
+        forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
         anonymousDisplayName,
         metadata: {
@@ -161,6 +165,8 @@ export class MessageHandler {
       originalLanguage?: string;
       attachmentIds: string[];
       replyToId?: string;
+      forwardedFromId?: string;
+      forwardedFromConversationId?: string;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -204,6 +210,8 @@ export class MessageHandler {
         originalLanguage: data.originalLanguage,
         messageType: 'text',
         replyToId: data.replyToId,
+        forwardedFromId: data.forwardedFromId,
+        forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
         anonymousDisplayName,
         attachments: data.attachmentIds.map((id) => ({ id } as never)),
@@ -391,6 +399,8 @@ export class MessageHandler {
       attachments: (message as never)['attachments'] || [],
       replyToId: message.replyToId,
       replyTo: (message as never)['replyTo'],
+      forwardedFromId: message.forwardedFromId || undefined,
+      forwardedFromConversationId: message.forwardedFromConversationId || undefined,
       meta: { conversationStats: stats }
     };
   }

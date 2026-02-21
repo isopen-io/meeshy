@@ -103,6 +103,8 @@ export interface MessageRequest {
   readonly originalLanguage?: string;        // Default: détection auto ou langue utilisateur
   readonly messageType?: string;             // Default: "text"
   readonly replyToId?: string;              // Pour les réponses/threads
+  readonly forwardedFromId?: string;        // ID du message original (transfert)
+  readonly forwardedFromConversationId?: string; // ID de la conversation source (transfert cross-conversation)
 
   // Mentions d'utilisateurs - envoyées depuis le frontend
   readonly mentionedUserIds?: readonly string[];  // IDs des utilisateurs mentionnés (@user)

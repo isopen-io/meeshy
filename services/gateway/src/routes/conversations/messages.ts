@@ -879,6 +879,8 @@ export function registerMessagesRoutes(
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
+          forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
+          forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
           encryptedContent: { type: 'string', description: 'Encrypted message content' },
           encryptionMode: { type: 'string', enum: ['e2e', 'server'], description: 'Encryption mode' },
           encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
@@ -925,6 +927,8 @@ export function registerMessagesRoutes(
         originalLanguage = 'fr',
         messageType = 'text',
         replyToId,
+        forwardedFromId,
+        forwardedFromConversationId,
         encryptedContent,
         encryptionMode,
         encryptionMetadata,
@@ -1026,7 +1030,9 @@ export function registerMessagesRoutes(
         content: processedContent,
         originalLanguage,
         messageType,
-        replyToId
+        replyToId,
+        forwardedFromId,
+        forwardedFromConversationId
       };
 
       // Add encryption fields if message is encrypted
@@ -1508,6 +1514,158 @@ export function registerMessagesRoutes(
         success: false,
         error: 'Error marking conversation as unread'
       });
+    }
+  });
+
+  // ============================================================================
+  // PIN / UNPIN MESSAGE
+  // ============================================================================
+
+  fastify.put<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/pin', {
+    schema: {
+      description: 'Pin a message in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'Pin message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to pin' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                pinnedAt: { type: 'string', format: 'date-time' },
+                pinnedBy: { type: 'string' }
+              }
+            }
+          }
+        },
+        ...errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+      }
+
+      const hasAccess = await canAccessConversation(prisma, conversationId, authRequest.authContext);
+      if (!hasAccess) {
+        return reply.status(403).send({ success: false, error: 'Access denied' });
+      }
+
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId }
+      });
+      if (!message) {
+        return reply.status(404).send({ success: false, error: 'Message not found' });
+      }
+
+      const now = new Date();
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { pinnedAt: now, pinnedBy: userId }
+      });
+
+      logger.info(`[PIN] User ${userId} pinned message ${messageId} in conversation ${conversationId}`);
+
+      // Broadcast pin event via Socket.IO
+      if (socketIOHandler) {
+        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:pinned', {
+          messageId,
+          conversationId,
+          pinnedAt: now.toISOString(),
+          pinnedBy: userId
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: { pinnedAt: now.toISOString(), pinnedBy: userId }
+      });
+    } catch (error) {
+      logger.error('Error pinning message', error);
+      reply.status(500).send({ success: false, error: 'Error pinning message' });
+    }
+  });
+
+  fastify.delete<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/pin', {
+    schema: {
+      description: 'Unpin a message in a conversation',
+      tags: ['conversations', 'messages'],
+      summary: 'Unpin message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to unpin' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' }
+          }
+        },
+        ...errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+      }
+
+      const hasAccess = await canAccessConversation(prisma, conversationId, authRequest.authContext);
+      if (!hasAccess) {
+        return reply.status(403).send({ success: false, error: 'Access denied' });
+      }
+
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { pinnedAt: null, pinnedBy: null }
+      });
+
+      logger.info(`[UNPIN] User ${userId} unpinned message ${messageId} in conversation ${conversationId}`);
+
+      // Broadcast unpin event via Socket.IO
+      if (socketIOHandler) {
+        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:unpinned', {
+          messageId,
+          conversationId
+        });
+      }
+
+      return reply.send({ success: true });
+    } catch (error) {
+      logger.error('Error unpinning message', error);
+      reply.status(500).send({ success: false, error: 'Error unpinning message' });
     }
   });
 
