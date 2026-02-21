@@ -10,6 +10,7 @@
 		1269C20F2394879CD524AD89 /* ConversationView+ScrollIndicators.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82FC9616A29206D7B9D9C42 /* ConversationView+ScrollIndicators.swift */; };
 		2E46EEA2DA493728930C87D8 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60EE19EAAF10B595D04E99F8 /* ConversationView.swift */; };
 		2FC8583F3AB2170FFC13A49D /* ConversationListHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8803B4442F5F663F4D5B63 /* ConversationListHelpers.swift */; };
+		SWIPE002A002A002A002A0002 /* SwipeableRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = SWIPE001A001A001A001A0001 /* SwipeableRow.swift */; };
 		31CE5B4926353C39FC1A0DE8 /* DraggableFloatingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE24D0EE2C24B1A24B988CB /* DraggableFloatingButton.swift */; };
 		333071447886052AD4A3F397 /* AnimatedLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D79006802F73CC53F1D675 /* AnimatedLogoView.swift */; };
 		470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */; };
@@ -95,6 +96,7 @@
 		553CE480C5B7C55136F3B3B4 /* ConversationView+AttachmentHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+AttachmentHandlers.swift"; sourceTree = "<group>"; };
 		56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationMediaViews.swift; sourceTree = "<group>"; };
 		5832205F0A09E149C8B976A8 /* Meeshy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Meeshy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		SWIPE001A001A001A001A0001 /* SwipeableRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeableRow.swift; sourceTree = "<group>"; };
 		5AF92F095894B8DD05EB0BFD /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+MessageRow.swift"; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 				CC1700000000001F17 /* MessageOverlayMenu.swift */,
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
+				SWIPE001A001A001A001A0001 /* SwipeableRow.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
 				CC2000000000001F20 /* CameraPickerView.swift */,
 				AA66BB77CC880001FF03 /* MeeshyAvatar.swift */,
@@ -426,6 +429,7 @@
 				F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */,
 				2E46EEA2DA493728930C87D8 /* ConversationView.swift in Sources */,
 				D22635DE1CE583B57963A2C3 /* DesignSystem.swift in Sources */,
+				SWIPE002A002A002A002A0002 /* SwipeableRow.swift in Sources */,
 				31CE5B4926353C39FC1A0DE8 /* DraggableFloatingButton.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */,

@@ -200,36 +200,81 @@ struct ConversationListView: View {
     @ViewBuilder
     private func conversationRow(for conversation: Conversation) -> some View {
         let rowWidth = UIScreen.main.bounds.width - 32 - 52 - 28 - 24
-        ThemedConversationRow(
-            conversation: conversation,
-            availableWidth: rowWidth,
-            isDragging: draggingConversation?.id == conversation.id,
-            onViewStory: {
-                handleStoryView(conversation)
-            },
-            onViewProfile: {
-                handleProfileView(conversation)
-            },
-            onMoodBadgeTap: { anchor in
-                handleMoodBadgeTap(conversation, at: anchor)
+        SwipeableRow(
+            leadingActions: leadingSwipeActions(for: conversation),
+            trailingActions: trailingSwipeActions(for: conversation)
+        ) {
+            ThemedConversationRow(
+                conversation: conversation,
+                availableWidth: rowWidth,
+                isDragging: draggingConversation?.id == conversation.id,
+                onViewStory: {
+                    handleStoryView(conversation)
+                },
+                onViewProfile: {
+                    handleProfileView(conversation)
+                },
+                onMoodBadgeTap: { anchor in
+                    handleMoodBadgeTap(conversation, at: anchor)
+                }
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                HapticFeedback.light()
+                isSearching = false
+                onSelect(conversation)
             }
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            HapticFeedback.light()
-            isSearching = false
-            onSelect(conversation)
+            .contextMenu {
+                conversationContextMenu(for: conversation)
+            } preview: {
+                ConversationPreviewView(conversation: conversation)
+            }
+            .onDrag {
+                draggingConversation = conversation
+                HapticFeedback.medium()
+                return NSItemProvider(object: conversation.id as NSString)
+            }
         }
-        .contextMenu {
-            conversationContextMenu(for: conversation)
-        } preview: {
-            ConversationPreviewView(conversation: conversation)
-        }
-        .onDrag {
-            draggingConversation = conversation
-            HapticFeedback.medium()
-            return NSItemProvider(object: conversation.id as NSString)
-        }
+    }
+
+    // MARK: - Swipe Actions
+
+    private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
+        [
+            SwipeAction(
+                icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
+                label: conversation.isPinned ? "Désépingler" : "Épingler",
+                color: Color(hex: "3B82F6")
+            ) {
+                Task { await conversationViewModel.togglePin(for: conversation.id) }
+            },
+            SwipeAction(
+                icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
+                label: conversation.isMuted ? "Son" : "Silence",
+                color: Color(hex: "6B7280")
+            ) {
+                Task { await conversationViewModel.toggleMute(for: conversation.id) }
+            }
+        ]
+    }
+
+    private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
+        [
+            SwipeAction(
+                icon: "archivebox.fill",
+                label: "Archiver",
+                color: Color(hex: "F59E0B")
+            ) {
+                Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+            },
+            SwipeAction(
+                icon: "trash.fill",
+                label: "Supprimer",
+                color: Color(hex: "EF4444")
+            ) {
+                Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+            }
+        ]
     }
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
