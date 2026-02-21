@@ -340,13 +340,21 @@ export interface UploadMultipleResponse {
  * Limites de taille d'upload par type de fichier (en octets)
  */
 export const UPLOAD_LIMITS = {
-  IMAGE: 2147483648, // 2GB
-  DOCUMENT: 2147483648, // 2GB
-  AUDIO: 2147483648, // 2GB
-  VIDEO: 2147483648, // 2GB
+  IMAGE: 4294967296, // 4GB
+  DOCUMENT: 4294967296, // 4GB
+  AUDIO: 4294967296, // 4GB
+  VIDEO: 4294967296, // 4GB
   TEXT: 2147483648, // 2GB
   CODE: 2147483648, // 2GB
 } as const;
+
+export const MAX_FILES_PER_MESSAGE = 30;
+
+export const MAX_CONCURRENT_UPLOADS = 3;
+
+export const TUS_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+
+export const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024; // 50 MB - below this, use direct REST upload
 
 /**
  * Type des limites d'upload
