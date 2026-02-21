@@ -134,7 +134,7 @@ struct ForwardPickerSheet: View {
                 MeeshyAvatar(
                     name: conv.name,
                     mode: .conversationList,
-                    accentColor: conv.accentColor ?? accentColor,
+                    accentColor: conv.accentColor,
                     avatarURL: conv.avatar
                 )
 

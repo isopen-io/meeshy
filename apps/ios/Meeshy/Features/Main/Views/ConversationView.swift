@@ -37,6 +37,7 @@ struct ConversationView: View {
     @State private var showAttachOptions = false
     @State private var actionAlert: String? = nil
     @State private var forwardMessage: Message? = nil
+    @State private var showConversationInfo = false
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var pendingAudioURL: URL? = nil
@@ -850,7 +851,7 @@ struct ConversationView: View {
                             if showOptions {
                                 HStack(spacing: 4) {
                                     Button {
-                                        actionAlert = "Configuration conversation"
+                                        showConversationInfo = true
                                     } label: {
                                         Text(conversation?.name ?? "Conversation")
                                             .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -1002,6 +1003,15 @@ struct ConversationView: View {
                     groups: [storyViewModel.storyGroups[storyGroupIndexForHeader]],
                     currentGroupIndex: 0,
                     isPresented: $showStoryViewerFromHeader
+                )
+            }
+        }
+        .sheet(isPresented: $showConversationInfo) {
+            if let conv = conversation {
+                ConversationInfoSheet(
+                    conversation: conv,
+                    accentColor: accentColor,
+                    messages: viewModel.messages
                 )
             }
         }
@@ -1223,12 +1233,12 @@ struct ConversationView: View {
                     }
                 }
                 Button {
-                    actionAlert = "Profil de \(conversation?.name ?? "Contact")"
+                    showConversationInfo = true
                 } label: {
                     Label("Voir le profil", systemImage: "person.fill")
                 }
                 Button {
-                    actionAlert = "Infos de la conversation"
+                    showConversationInfo = true
                 } label: {
                     Label("Infos conversation", systemImage: "info.circle.fill")
                 }
@@ -1304,10 +1314,10 @@ struct ConversationView: View {
             })
         }
         items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            actionAlert = "Profil de \(name)"
+            showConversationInfo = true
         })
         items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
-            actionAlert = "Message à \(name)"
+            // TODO: Navigate to DM with this user
         })
         return items
     }
@@ -2800,60 +2810,57 @@ struct ThemedMessageBubble: View {
                         }
                 }
 
-                // Bubble content (media + text) with reaction overlay
-                VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                    // Grille visuelle (images + vidéos)
-                    if !visualAttachments.isEmpty {
-                        if showCarousel {
-                            carouselView
-                                .background(Color.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .transition(.opacity)
-                        } else {
-                            visualMediaGrid
-                                .background(Color.black)
-                                .compositingGroup()
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .transition(.opacity)
-                        }
-                    }
-
-                    // Audio standalone
-                    ForEach(audioAttachments) { attachment in
-                        mediaStandaloneView(attachment)
-                    }
-
-                    // Bulle texte + non-media attachments (file, location)
-                    if hasTextOrNonMediaContent {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(nonMediaAttachments) { attachment in
-                                attachmentView(attachment)
-                            }
-
-                            if !message.content.isEmpty {
-                                Text(message.content)
-                                    .font(.system(size: 15))
-                                    .foregroundColor(message.isMe ? .white : theme.textPrimary)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(bubbleBackground)
-                        .shadow(
-                            color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
-                            radius: 6,
-                            y: 3
-                        )
+                // Grille visuelle (images + vidéos)
+                if !visualAttachments.isEmpty {
+                    if showCarousel {
+                        carouselView
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .transition(.opacity)
+                    } else {
+                        visualMediaGrid
+                            .background(Color.black)
+                            .compositingGroup()
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .transition(.opacity)
                     }
                 }
-                .overlay(alignment: .bottomLeading) {
-                    reactionsOverlay
-                        .padding(.leading, 8)
-                        .offset(y: 10)
+
+                // Audio standalone
+                ForEach(audioAttachments) { attachment in
+                    mediaStandaloneView(attachment)
+                }
+
+                // Bulle texte + non-media attachments (file, location)
+                if hasTextOrNonMediaContent {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(nonMediaAttachments) { attachment in
+                            attachmentView(attachment)
+                        }
+
+                        if !message.content.isEmpty {
+                            Text(message.content)
+                                .font(.system(size: 15))
+                                .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(bubbleBackground)
+                    .shadow(
+                        color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
+                        radius: 6,
+                        y: 3
+                    )
                 }
 
                 // Timestamp always outside bubble
                 messageMetaRow(insideBubble: false)
+            }
+            .overlay(alignment: .bottomLeading) {
+                reactionsOverlay
+                    .padding(.leading, 8)
+                    .offset(y: 6)
             }
 
             if !message.isMe { Spacer(minLength: 50) }
