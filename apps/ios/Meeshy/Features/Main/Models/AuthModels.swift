@@ -1,51 +1,11 @@
-import Foundation
+// LoginRequest, LoginResponseData, MeeshyUser, MeResponseData
+// are now sourced from MeeshySDK/Auth/AuthModels.swift to avoid type ambiguity.
 
-// MARK: - Login Request
+import MeeshySDK
 
-struct LoginRequest: Encodable {
-    let username: String
-    let password: String
-    let rememberDevice: Bool
-}
-
-// MARK: - Login Response
-
-// Backend returns: { success: true, data: { user: {...}, token: "...", sessionToken: "...", expiresIn: 86400 } }
-struct LoginResponseData: Decodable {
-    let user: MeeshyUser
-    let token: String
-    let sessionToken: String?
-    let expiresIn: Int?
-}
-
-// MARK: - User Model
-
-struct MeeshyUser: Codable, Identifiable {
-    let id: String
-    let username: String
-    let email: String?
-    let firstName: String?
-    let lastName: String?
-    let displayName: String?
-    let bio: String?
-    let avatar: String?
-    let role: String?
-    let systemLanguage: String?
-    let regionalLanguage: String?
-    let isOnline: Bool?
-    let lastActiveAt: String?
-    let createdAt: String?
-}
-
-// MARK: - Refresh Token Response
+// MARK: - Refresh Token Response (not in SDK)
 
 struct RefreshTokenData: Decodable {
     let token: String
     let expiresIn: Int
-}
-
-// MARK: - /auth/me Response
-
-struct MeResponseData: Decodable {
-    let user: MeeshyUser
 }

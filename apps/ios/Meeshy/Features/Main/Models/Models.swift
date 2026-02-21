@@ -8,5 +8,5 @@ import MeeshySDK
 //
 // - Conversation.swift      -> ConversationTag, ConversationSection, Conversation, Community
 // - Message.swift            -> Message, ChatMessage, MessageAttachment, Reaction, ReactionSummary
-// - FeedModels.swift         -> FeedItem, ConversationCategory
+// - FeedModels.swift         -> FeedItem, ConversationFilter
 // - SampleData.swift         -> SampleData

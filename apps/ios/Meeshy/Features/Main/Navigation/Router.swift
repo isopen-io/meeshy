@@ -3,6 +3,8 @@ import MeeshySDK
 
 enum Route: Hashable {
     case conversation(Conversation)
+    case settings
+    case profile
 }
 
 @MainActor

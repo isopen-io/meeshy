@@ -2,6 +2,8 @@
 import SwiftUI
 import MeeshySDK
 
+private var searchDebounceKey: UInt8 = 0
+
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
 
@@ -171,121 +173,290 @@ extension ConversationView {
 
     // MARK: - Search Overlay
 
-    var searchOverlay: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+    // MARK: - Search Bar (below header)
 
-                    TextField("Rechercher...", text: $searchQuery)
-                        .font(.system(size: 15))
-                        .foregroundColor(theme.textPrimary)
-                        .focused($isSearchFocused)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .submitLabel(.search)
-                        .onSubmit { performSearch() }
-                        .onChange(of: searchQuery) { _ in performSearch() }
+    var searchBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textMuted)
 
-                    if !searchQuery.isEmpty {
-                        Button {
-                            searchQuery = ""
-                            searchResultIds = []
-                            searchCurrentIndex = 0
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(theme.textMuted)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-                )
+                TextField("Rechercher dans la conversation...", text: $searchQuery)
+                    .font(.system(size: 15))
+                    .foregroundColor(theme.textPrimary)
+                    .focused($isSearchFocused)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.search)
+                    .onSubmit { triggerBackendSearch() }
+                    .onChange(of: searchQuery) { _ in debounceSearch() }
 
-                if !searchResultIds.isEmpty {
-                    HStack(spacing: 4) {
-                        Text("\(searchCurrentIndex + 1)/\(searchResultIds.count)")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(theme.textSecondary)
-
-                        Button {
-                            navigateSearch(direction: -1)
-                        } label: {
-                            Image(systemName: "chevron.up")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(hex: accentColor))
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(Color(hex: accentColor).opacity(0.12)))
-                        }
-
-                        Button {
-                            navigateSearch(direction: 1)
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(hex: accentColor))
-                                .frame(width: 28, height: 28)
-                                .background(Circle().fill(Color(hex: accentColor).opacity(0.12)))
-                        }
-                    }
-                }
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showSearch = false
+                if !searchQuery.isEmpty {
+                    Button {
                         searchQuery = ""
-                        searchResultIds = []
-                        searchCurrentIndex = 0
-                        highlightedMessageId = nil
+                        viewModel.searchResults = []
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(theme.textMuted)
                     }
-                    isSearchFocused = false
-                } label: {
-                    Text("Fermer")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: accentColor))
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
             )
 
-            Spacer()
+            if viewModel.isSearching {
+                ProgressView()
+                    .tint(Color(hex: accentColor))
+                    .scaleEffect(0.8)
+            }
+
+            Button {
+                dismissSearch()
+            } label: {
+                Text("Fermer")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+        )
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Search Results Overlay (blurred background)
+
+    var searchResultsOverlay: some View {
+        VStack(spacing: 0) {
+            if viewModel.searchResults.isEmpty && !viewModel.isSearching && searchQuery.count >= 2 {
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundColor(theme.textMuted.opacity(0.5))
+                    Text("Aucun résultat")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !viewModel.searchResults.isEmpty {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(viewModel.searchResults) { result in
+                            searchResultRow(result)
+                                .onTapGesture {
+                                    Task { await jumpToSearchResult(result) }
+                                }
+                                .onAppear {
+                                    if result.id == viewModel.searchResults.last?.id && viewModel.searchHasMore {
+                                        Task { await viewModel.loadMoreSearchResults(query: searchQuery) }
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            Color.black.opacity(0.001)
+                .onTapGesture { dismissSearch() }
+        )
+    }
+
+    private func searchResultRow(_ result: SearchResultItem) -> some View {
+        HStack(spacing: 10) {
+            // Avatar
+            MeeshyAvatar(
+                name: result.senderName,
+                mode: .custom(36),
+                accentColor: DynamicColorGenerator.colorForName(result.senderName),
+                avatarURL: result.senderAvatar
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(result.senderName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text(formatSearchDate(result.createdAt))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                HStack(spacing: 4) {
+                    if result.matchType == "translation" {
+                        Image(systemName: "globe")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: accentColor).opacity(0.7))
+                    }
+
+                    Text(highlightedText(result.matchedText, query: searchQuery))
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
+        )
+        .contentShape(Rectangle())
+    }
+
+    private func highlightedText(_ text: String, query: String) -> AttributedString {
+        var attributed = AttributedString(text.prefix(120) + (text.count > 120 ? "..." : ""))
+        let queryLower = query.lowercased()
+        let textLower = String(text.prefix(120)).lowercased()
+        if let range = textLower.range(of: queryLower) {
+            let start = text.distance(from: text.startIndex, to: range.lowerBound)
+            let end = text.distance(from: text.startIndex, to: range.upperBound)
+            let attrStart = attributed.index(attributed.startIndex, offsetByCharacters: start)
+            let attrEnd = attributed.index(attributed.startIndex, offsetByCharacters: min(end, text.prefix(120).count))
+            if attrStart < attributed.endIndex && attrEnd <= attributed.endIndex {
+                attributed[attrStart..<attrEnd].foregroundColor = Color(hex: accentColor)
+                attributed[attrStart..<attrEnd].font = .system(size: 13, weight: .bold)
+            }
+        }
+        return attributed
+    }
+
+    private func formatSearchDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: date)
+        }
+        if calendar.isDateInYesterday(date) {
+            return "Hier"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yy"
+        return formatter.string(from: date)
+    }
+
+    // MARK: - Search Actions
+
+    func triggerBackendSearch() {
+        Task { await viewModel.searchMessages(query: searchQuery) }
+    }
+
+    private var searchDebounceTask: Task<Void, Never>? {
+        get { objc_getAssociatedObject(self, &searchDebounceKey) as? Task<Void, Never> }
+        nonmutating set { objc_setAssociatedObject(self, &searchDebounceKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
+    }
+
+    func debounceSearch() {
+        searchDebounceTask?.cancel()
+        let query = searchQuery
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled, query.count >= 2 else { return }
+            await viewModel.searchMessages(query: query)
         }
     }
 
-    func performSearch() {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard query.count >= 2 else {
-            searchResultIds = []
-            searchCurrentIndex = 0
+    func jumpToSearchResult(_ result: SearchResultItem) async {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showSearch = false
+        }
+        isSearchFocused = false
+        HapticFeedback.medium()
+
+        await viewModel.loadMessagesAround(messageId: result.id)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        scrollToMessageId = result.id
+    }
+
+    func dismissSearch() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showSearch = false
+            searchQuery = ""
             highlightedMessageId = nil
-            return
         }
-        searchResultIds = viewModel.messages
-            .filter { !$0.isDeleted && $0.content.lowercased().contains(query) }
-            .map(\.id)
-        searchCurrentIndex = searchResultIds.isEmpty ? 0 : searchResultIds.count - 1
-        if let targetId = searchResultIds.last {
-            scrollToMessageId = targetId
+        viewModel.searchResults = [SearchResultItem]()
+        viewModel.searchHasMore = false
+        viewModel.searchNextCursor = nil as String?
+        isSearchFocused = false
+    }
+
+    // MARK: - Search Results Blur Overlay (extracted for type-checker)
+
+    @ViewBuilder
+    var searchResultsBlurOverlay: some View {
+        if showSearch && searchQuery.count >= 2 {
+            Color.black.opacity(0.001)
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+                .zIndex(80)
+                .transition(.opacity)
+
+            VStack(spacing: 0) {
+                Color.clear.frame(height: showOptions ? 140 : 100)
+                searchResultsOverlay
+            }
+            .zIndex(81)
+            .transition(.opacity)
         }
     }
 
-    func navigateSearch(direction: Int) {
-        guard !searchResultIds.isEmpty else { return }
-        searchCurrentIndex = (searchCurrentIndex + direction + searchResultIds.count) % searchResultIds.count
-        let targetId = searchResultIds[searchCurrentIndex]
-        scrollToMessageId = targetId
-        HapticFeedback.light()
+    // MARK: - Return to Latest Button (extracted for type-checker)
+
+    @ViewBuilder
+    var returnToLatestButton: some View {
+        if viewModel.isInJumpedState && !showSearch {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        HapticFeedback.medium()
+                        Task { await viewModel.returnToLatest() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.to.line")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Messages récents")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: accentColor).opacity(0.9))
+                                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
+                        )
+                    }
+                    Spacer()
+                }
+                .padding(.bottom, composerHeight + 8)
+            }
+            .zIndex(65)
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
+        }
     }
 
     // MARK: - Quick Reaction Bar + Actions

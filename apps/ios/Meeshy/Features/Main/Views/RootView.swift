@@ -64,6 +64,12 @@ struct RootView: View {
                             replyContext: pendingReplyContext
                         )
                         .navigationBarHidden(true)
+                    case .settings:
+                        SettingsView()
+                            .navigationBarHidden(true)
+                    case .profile:
+                        ProfileView()
+                            .navigationBarHidden(true)
                     }
                 }
             }
@@ -307,7 +313,7 @@ struct RootView: View {
 
             // Menu items
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
-                ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
+                ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
@@ -316,7 +322,7 @@ struct RootView: View {
                         theme.cyclePreference(systemScheme: systemColorScheme)
                     }
                 }),
-                ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } })
+                ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
