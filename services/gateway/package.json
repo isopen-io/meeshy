@@ -40,6 +40,8 @@
     "@parse/node-apn": "^7.0.1",
     "@prisma/client": "^6.19.2",
     "@signalapp/libsignal-client": "^0.86.14",
+    "@tus/file-store": "^2.0.0",
+    "@tus/server": "^2.3.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
