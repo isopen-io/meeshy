@@ -2140,6 +2140,8 @@ struct ThemedMessageBubble: View {
                                 .font(.system(size: 15))
                                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                         }
+
+                        messageMetaRow(insideBubble: true)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -2149,6 +2151,11 @@ struct ThemedMessageBubble: View {
                         radius: 6,
                         y: 3
                     )
+                }
+
+                // Timestamp for media-only messages (no text bubble)
+                if !hasTextOrNonMediaContent {
+                    messageMetaRow(insideBubble: false)
                 }
             }
             .overlay(alignment: .bottomLeading) {
@@ -2185,6 +2192,69 @@ struct ThemedMessageBubble: View {
             default:
                 EmptyView()
             }
+        }
+    }
+
+    // MARK: - Message Meta (timestamp + delivery status)
+
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: message.createdAt)
+    }
+
+    @ViewBuilder
+    private func messageMetaRow(insideBubble: Bool) -> some View {
+        HStack(spacing: 3) {
+            if message.isEdited {
+                Text("modifie")
+                    .font(.system(size: 10, weight: .medium))
+                    .italic()
+                    .foregroundColor(insideBubble && message.isMe ? .white.opacity(0.6) : theme.textSecondary.opacity(0.6))
+            }
+
+            Text(timeString)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(insideBubble && message.isMe ? .white.opacity(0.6) : theme.textSecondary.opacity(0.6))
+
+            if message.isMe {
+                deliveryCheckmarks
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    private var deliveryCheckmarks: some View {
+        switch message.deliveryStatus {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.5))
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+        case .delivered:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .offset(x: 4)
+            }
+            .foregroundColor(.white.opacity(0.6))
+            .frame(width: 16)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .offset(x: 4)
+            }
+            .foregroundColor(Color(hex: "34B7F1"))
+            .frame(width: 16)
         }
     }
 

@@ -332,8 +332,18 @@ struct Message: Identifiable {
     var senderColor: String?
     var senderAvatarURL: String?
 
+    // Delivery status for own messages (sent → delivered → read)
+    var deliveryStatus: DeliveryStatus = .sent
+
     // Computed properties for UI
     var isMe: Bool = false // Set based on current user comparison
+
+    enum DeliveryStatus: String {
+        case sending   // optimistic, not confirmed
+        case sent      // server confirmed (single check)
+        case delivered // recipient received (double gray check)
+        case read      // recipient read (double blue check)
+    }
 
     enum MessageType: String, Codable, CaseIterable {
         case text
@@ -385,6 +395,7 @@ struct Message: Identifiable {
          senderName: String? = nil,
          senderColor: String? = nil,
          senderAvatarURL: String? = nil,
+         deliveryStatus: DeliveryStatus = .sent,
          isMe: Bool = false) {
         self.id = id
         self.conversationId = conversationId
@@ -419,6 +430,7 @@ struct Message: Identifiable {
         self.senderColor = senderColor
         self.senderAvatarURL = senderAvatarURL
         self.isMe = isMe
+        self.deliveryStatus = deliveryStatus
     }
 
     // Legacy convenience property

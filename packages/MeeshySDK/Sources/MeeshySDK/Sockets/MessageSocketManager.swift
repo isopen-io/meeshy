@@ -127,6 +127,13 @@ public struct AudioTranslationEvent: Decodable {
     public let processingTimeMs: Int?
 }
 
+public struct ReadStatusUpdateEvent: Decodable {
+    public let conversationId: String
+    public let userId: String
+    public let type: String // "read" or "received"
+    public let updatedAt: Date
+}
+
 // MARK: - Message Socket Manager
 
 public final class MessageSocketManager: ObservableObject {
@@ -148,6 +155,9 @@ public final class MessageSocketManager: ObservableObject {
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     public let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+
+    // Combine publishers — read status
+    public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
 
     // Combine publishers — translation
     public let translationReceived = PassthroughSubject<TranslationEvent, Never>()
@@ -366,6 +376,14 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("audio:translations-completed") { [weak self] data, _ in
             self?.decode(AudioTranslationEvent.self, from: data) { event in
                 self?.audioTranslationCompleted.send(event)
+            }
+        }
+
+        // --- Read status events ---
+
+        socket.on("read-status:updated") { [weak self] data, _ in
+            self?.decode(ReadStatusUpdateEvent.self, from: data) { event in
+                self?.readStatusUpdated.send(event)
             }
         }
     }

@@ -194,12 +194,7 @@ class ConversationViewModel: ObservableObject {
             hasOlderMessages = response.pagination?.hasMore ?? false
 
             // Mark conversation as read (fire-and-forget)
-            Task {
-                let _: APIResponse<[String: Bool]>? = try? await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/mark-read",
-                    method: "POST"
-                )
-            }
+            markAsRead()
         } catch {
             self.error = error.localizedDescription
         }
@@ -264,6 +259,7 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId,
             createdAt: Date(),
             updatedAt: Date(),
+            deliveryStatus: .sending,
             isMe: true
         )
         messages.append(optimisticMessage)
@@ -291,6 +287,7 @@ class ConversationViewModel: ObservableObject {
                     replyToId: replyToId,
                     createdAt: response.data.createdAt,
                     updatedAt: response.data.createdAt,
+                    deliveryStatus: .sent,
                     isMe: true
                 )
             }
@@ -362,6 +359,17 @@ class ConversationViewModel: ObservableObject {
                 messages[idx].isDeleted = false
             }
             self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: - Mark as Read
+
+    func markAsRead() {
+        Task {
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/mark-as-read",
+                method: "POST"
+            )
         }
     }
 
@@ -494,6 +502,29 @@ class ConversationViewModel: ObservableObject {
                 guard let self else { return }
                 self.typingUsernames.removeAll { $0 == event.username }
                 self.clearTypingSafetyTimer(for: event.username)
+            }
+            .store(in: &cancellables)
+
+        // Read status updated (delivered / read)
+        socketManager.readStatusUpdated
+            .filter { $0.conversationId == convId }
+            .filter { $0.userId != userId } // Only care about OTHER users reading/receiving
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let newStatus: Message.DeliveryStatus = event.type == "read" ? .read : .delivered
+                // Update all own messages that were created before the read/delivered timestamp
+                for i in self.messages.indices.reversed() {
+                    guard self.messages[i].isMe else { continue }
+                    guard self.messages[i].deliveryStatus.rawValue != Message.DeliveryStatus.read.rawValue else { continue }
+                    if self.messages[i].createdAt <= event.updatedAt {
+                        // Only upgrade status (sent → delivered → read), never downgrade
+                        let current = self.messages[i].deliveryStatus
+                        if newStatus == .read || (newStatus == .delivered && current != .read) {
+                            self.messages[i].deliveryStatus = newStatus
+                        }
+                    }
+                }
             }
             .store(in: &cancellables)
 

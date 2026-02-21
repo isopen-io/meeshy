@@ -233,7 +233,15 @@ public struct Message: Identifiable {
     public var senderName: String?
     public var senderColor: String?
     public var senderAvatarURL: String?
+    public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
+
+    public enum DeliveryStatus: String {
+        case sending   // optimistic, not confirmed
+        case sent      // server confirmed (single check)
+        case delivered // recipient received (double gray check)
+        case read      // recipient read (double blue check)
+    }
 
     public enum MessageType: String, Codable, CaseIterable {
         case text, image, file, audio, video, location
@@ -255,7 +263,7 @@ public struct Message: Identifiable {
                 attachments: [MessageAttachment] = [], reactions: [Reaction] = [],
                 replyTo: ReplyReference? = nil,
                 senderName: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
-                isMe: Bool = false) {
+                deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.anonymousSenderId = anonymousSenderId; self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
@@ -269,7 +277,7 @@ public struct Message: Identifiable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo
         self.senderName = senderName; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
-        self.isMe = isMe
+        self.deliveryStatus = deliveryStatus; self.isMe = isMe
     }
 
     public var text: String { content }
