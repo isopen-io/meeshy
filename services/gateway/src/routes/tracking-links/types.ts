@@ -29,7 +29,7 @@ export const createTrackingLinkSchema = z.object({
   conversationId: z.string().optional(),
   messageId: z.string().optional(),
   expiresAt: z.string().datetime().optional(),
-  customToken: z.string().regex(/^[a-zA-Z0-9_-]{2,50}$/, 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores').optional()
+  customToken: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret').optional()
 });
 
 export const recordClickSchema = z.object({

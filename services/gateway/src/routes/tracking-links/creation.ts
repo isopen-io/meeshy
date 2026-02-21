@@ -86,8 +86,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           },
           customToken: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9_-]{2,50}$',
-            description: 'Optional custom token (2-50 alphanumeric chars, dashes, underscores)'
+            pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$',
+            description: 'Optional custom token (2-50 alphanumeric chars, cannot start or end with dash)'
           }
         }
       },
@@ -146,8 +146,17 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const body = createTrackingLinkSchema.parse(request.body);
 
       let createdBy: string | undefined;
+      const isPrivileged = isRegisteredUser(request.authContext) &&
+        ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(request.authContext.registeredUser!.role);
       if (isRegisteredUser(request.authContext)) {
         createdBy = request.authContext.registeredUser!.id;
+      }
+
+      if (body.customToken && body.customToken.length < 5 && !isPrivileged) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Le token personnalisé doit contenir au moins 5 caractères'
+        });
       }
 
       const existingLink = await trackingLinkService.findExistingTrackingLink(
@@ -733,8 +742,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           },
           newToken: {
             type: 'string',
-            pattern: '^[a-zA-Z0-9_-]{2,50}$',
-            description: 'New token to replace current token (2-50 chars)'
+            pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$',
+            description: 'New token (2-50 chars, cannot start or end with dash)'
           }
         }
       },
@@ -816,10 +825,20 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (body.newToken && !/^[a-zA-Z0-9_-]{2,50}$/.test(body.newToken)) {
+      if (body.newToken && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/.test(body.newToken)) {
         return reply.status(400).send({
           success: false,
-          error: 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores'
+          error: 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret'
+        });
+      }
+
+      const isPrivileged = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(
+        request.authContext.registeredUser!.role
+      );
+      if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Le token doit contenir au moins 5 caractères'
         });
       }
 

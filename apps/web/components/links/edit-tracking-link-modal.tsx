@@ -18,6 +18,7 @@ import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { buildApiUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { authManager } from '@/services/auth-manager.service';
 
 interface EditTrackingLinkModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export function EditTrackingLinkModal({
 
   // Check token availability when it changes
   useEffect(() => {
-    if (!newToken || !link || newToken === link.token || newToken.length !== 6) {
+    if (!newToken || !link || newToken === link.token || newToken.length < 2) {
       setTokenAvailability('idle');
       return;
     }
@@ -64,7 +65,7 @@ export function EditTrackingLinkModal({
       setTokenAvailability('checking');
 
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = authManager.getAuthToken();
         const response = await fetch(buildApiUrl(`/tracking-links/check-token/${newToken}`), {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -121,7 +122,7 @@ export function EditTrackingLinkModal({
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = authManager.getAuthToken();
       const updateData: any = {
         originalUrl: originalUrl.trim(),
         isActive,
