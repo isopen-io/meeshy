@@ -1811,7 +1811,7 @@ struct ThemedMessageBubble: View {
     @State private var fullscreenAttachment: MessageAttachment? = nil
     @ObservedObject private var theme = ThemeManager.shared
 
-    private let gridMaxWidth: CGFloat = 240
+    private let gridMaxWidth: CGFloat = 300
     private let gridSpacing: CGFloat = 2
 
     private var bubbleColor: String {
@@ -1890,11 +1890,6 @@ struct ThemedMessageBubble: View {
                 if !visualAttachments.isEmpty {
                     visualMediaGrid
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(alignment: .bottomTrailing) {
-                            if visualAttachments.count == 1 {
-                                downloadBadge(visualAttachments[0])
-                            }
-                        }
                 }
 
                 // Audio standalone
@@ -1997,26 +1992,24 @@ struct ThemedMessageBubble: View {
         switch items.count {
         case 1:
             visualGridCell(items[0])
-                .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+                .frame(width: gridMaxWidth, height: 240)
 
         case 2:
             HStack(spacing: gridSpacing) {
                 visualGridCell(items[0])
                 visualGridCell(items[1])
             }
-            .frame(maxWidth: gridMaxWidth, maxHeight: 160)
+            .frame(width: gridMaxWidth, height: 180)
 
         case 3:
             HStack(spacing: gridSpacing) {
                 visualGridCell(items[0])
-                    .frame(maxWidth: .infinity)
                 VStack(spacing: gridSpacing) {
                     visualGridCell(items[1])
                     visualGridCell(items[2])
                 }
-                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+            .frame(width: gridMaxWidth, height: 240)
 
         default:
             let overflow = items.count - 3
@@ -2030,7 +2023,7 @@ struct ThemedMessageBubble: View {
                     visualGridCell(items[3], overflowCount: overflow)
                 }
             }
-            .frame(maxWidth: gridMaxWidth, maxHeight: 200)
+            .frame(width: gridMaxWidth, height: 240)
         }
     }
 
@@ -2054,6 +2047,10 @@ struct ThemedMessageBubble: View {
             }
         }
         .clipped()
+        .overlay(alignment: .topTrailing) {
+            downloadBadge(attachment)
+                .offset(x: 8, y: -8)
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             fullscreenAttachment = attachment
@@ -2065,13 +2062,11 @@ struct ThemedMessageBubble: View {
     private func gridImageCell(_ attachment: MessageAttachment) -> some View {
         let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
         if !urlStr.isEmpty {
-            GeometryReader { geo in
-                CachedAsyncImage(url: urlStr) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+            CachedAsyncImage(url: urlStr) {
+                Color(hex: attachment.thumbnailColor).shimmer()
             }
+            .aspectRatio(contentMode: .fill)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
@@ -2084,13 +2079,11 @@ struct ThemedMessageBubble: View {
         let thumbUrl = attachment.thumbnailUrl ?? ""
         ZStack {
             if !thumbUrl.isEmpty {
-                GeometryReader { geo in
-                    CachedAsyncImage(url: thumbUrl) {
-                        Color(hex: attachment.thumbnailColor).shimmer()
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
                 }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
             } else if !attachment.fileUrl.isEmpty {
                 VideoThumbnailView(
@@ -2101,9 +2094,7 @@ struct ThemedMessageBubble: View {
                 Color(hex: attachment.thumbnailColor)
             }
 
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(.white, .black.opacity(0.3))
+            CachedPlayIcon(fileUrl: attachment.fileUrl)
         }
     }
 
@@ -2282,13 +2273,9 @@ struct ThemedMessageBubble: View {
                     context: .messageBubble,
                     accentColor: contactColor
                 )
-                .overlay(alignment: .topTrailing) { downloadBadge(attachment) }
-
-                if attachment.fileSize > 0 {
-                    Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 10))
-                        .foregroundColor(theme.textMuted)
-                        .padding(.leading, 4)
+                .overlay(alignment: .topTrailing) {
+                    downloadBadge(attachment)
+                        .offset(x: 8, y: -8)
                 }
 
                 if !message.content.isEmpty && visualAttachments.isEmpty {
@@ -2318,47 +2305,17 @@ struct ThemedMessageBubble: View {
             )
     }
 
-    // MARK: - Download Badge
-    @ViewBuilder
-    private func downloadBadge(_ attachment: MessageAttachment) -> some View {
-        Button(action: { downloadAttachment(attachment) }) {
-            HStack(spacing: 4) {
-                if attachment.fileSize > 0 {
-                    Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 20))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, Color(hex: contactColor).opacity(0.8))
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(.black.opacity(0.4)))
-            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-        }
-        .padding(6)
-    }
+    // MARK: - Download Badge (delegated to DownloadBadgeView)
 
-    // MARK: - Download Attachment
-    private func downloadAttachment(_ attachment: MessageAttachment) {
-        guard !attachment.fileUrl.isEmpty else { return }
-        Task {
-            do {
-                let data = try await MediaCacheManager.shared.data(for: attachment.fileUrl)
-                let fileName = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                try data.write(to: tempURL)
-                await MainActor.run {
-                    shareURL = tempURL
-                    showShareSheet = true
-                }
-                HapticFeedback.success()
-            } catch {
-                HapticFeedback.error()
+    private func downloadBadge(_ attachment: MessageAttachment) -> some View {
+        DownloadBadgeView(
+            attachment: attachment,
+            accentColor: contactColor,
+            onShareFile: { url in
+                shareURL = url
+                showShareSheet = true
             }
-        }
+        )
     }
 }
 
@@ -2371,6 +2328,168 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Download Badge View (3 states: idle → downloading → cached)
+struct DownloadBadgeView: View {
+    let attachment: MessageAttachment
+    let accentColor: String
+    var onShareFile: ((URL) -> Void)? = nil
+
+    @StateObject private var downloader = AttachmentDownloader()
+    private var accent: Color { Color(hex: accentColor) }
+
+    private var totalSizeText: String {
+        if attachment.fileSize > 0 { return AttachmentDownloader.fmt(Int64(attachment.fileSize)) }
+        if downloader.totalBytes > 0 { return AttachmentDownloader.fmt(downloader.totalBytes) }
+        return ""
+    }
+
+    var body: some View {
+        if !downloader.isCached {
+            if downloader.isDownloading {
+                downloadingBadge
+            } else {
+                idleBadge
+            }
+        }
+    }
+
+    private var idleBadge: some View {
+        Button {
+            downloader.start(attachment: attachment, onShare: onShareFile)
+        } label: {
+            HStack(spacing: 3) {
+                if !totalSizeText.isEmpty {
+                    Text(totalSizeText)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, accent.opacity(0.85))
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(.black.opacity(0.5)))
+        }
+        .padding(4)
+        .task { await downloader.checkCache(attachment.fileUrl) }
+    }
+
+    private var downloadingBadge: some View {
+        Button { downloader.cancel() } label: {
+            VStack(spacing: 2) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 2.5)
+                    Circle()
+                        .trim(from: 0, to: downloader.progress)
+                        .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.15), value: downloader.progress)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white)
+                        .frame(width: 8, height: 8)
+                }
+                .frame(width: 22, height: 22)
+
+                Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+            }
+            .padding(4)
+            .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.55)))
+        }
+        .padding(4)
+    }
+}
+
+// MARK: - Attachment Downloader
+@MainActor
+final class AttachmentDownloader: ObservableObject {
+    @Published var isCached = false
+    @Published var isDownloading = false
+    @Published var downloadedBytes: Int64 = 0
+    @Published var totalBytes: Int64 = 0
+
+    var progress: Double {
+        guard totalBytes > 0 else { return 0 }
+        return min(Double(downloadedBytes) / Double(totalBytes), 1.0)
+    }
+
+    private var task: Task<Void, Never>?
+
+    func checkCache(_ urlString: String) async {
+        isCached = await MediaCacheManager.shared.isCached(urlString)
+    }
+
+    func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
+        guard !attachment.fileUrl.isEmpty else { return }
+        isDownloading = true
+        downloadedBytes = 0
+        totalBytes = Int64(attachment.fileSize)
+        HapticFeedback.light()
+
+        task = Task { [weak self] in
+            do {
+                let data = try await MediaCacheManager.shared.data(for: attachment.fileUrl)
+                guard let self, !Task.isCancelled else { return }
+                self.downloadedBytes = Int64(data.count)
+                self.totalBytes = Int64(data.count)
+                self.isDownloading = false
+                self.isCached = true
+                HapticFeedback.success()
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.isDownloading = false
+                HapticFeedback.error()
+            }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+        isDownloading = false
+        downloadedBytes = 0
+        HapticFeedback.light()
+    }
+
+    static func fmt(_ bytes: Int64) -> String {
+        let kb = Double(bytes) / 1024
+        if kb < 1 { return "\(bytes)B" }
+        if kb < 1024 { return String(format: "%.0fKB", kb) }
+        return String(format: "%.1fMB", kb / 1024)
+    }
+}
+
+// MARK: - Cached Play Icon (only shows when video data is locally available)
+struct CachedPlayIcon: View {
+    let fileUrl: String
+    @State private var isCached = false
+
+    var body: some View {
+        Group {
+            if isCached {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.white, .black.opacity(0.4))
+                    .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+            } else {
+                Image(systemName: "play.circle")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .task {
+            let cached = await MediaCacheManager.shared.isCached(fileUrl)
+            await MainActor.run { isCached = cached }
+        }
+    }
 }
 
 // MARK: - Animated Waveform Bar
