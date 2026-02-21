@@ -278,12 +278,34 @@ export class MessageHandler {
         )
       ]);
 
-      const messagePayload = this._buildMessagePayload(
+      const messagePayload: any = this._buildMessagePayload(
         message,
         normalizedId,
         translations.status === 'fulfilled' ? translations.value : [],
         stats.status === 'fulfilled' ? stats.value : null
       );
+
+      // Enrichir avec les détails du forward si applicable
+      if (message.forwardedFromId) {
+        const [originalMsg, originalConv] = await Promise.all([
+          this.prisma.message.findUnique({
+            where: { id: message.forwardedFromId },
+            select: {
+              id: true, content: true, senderId: true, messageType: true, createdAt: true,
+              sender: { select: { id: true, username: true, displayName: true, avatar: true } },
+              attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
+            }
+          }),
+          message.forwardedFromConversationId
+            ? this.prisma.conversation.findUnique({
+                where: { id: message.forwardedFromConversationId },
+                select: { id: true, title: true, identifier: true, type: true, avatar: true }
+              })
+            : Promise.resolve(null)
+        ]);
+        if (originalMsg) messagePayload.forwardedFrom = originalMsg;
+        if (originalConv) messagePayload.forwardedFromConversation = originalConv;
+      }
 
       const room = ROOMS.conversation(normalizedId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);

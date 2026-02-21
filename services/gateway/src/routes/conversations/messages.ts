@@ -709,6 +709,81 @@ export function registerMessagesRoutes(
         return mappedMessage;
       });
 
+      // ===== ENRICHIR LES MESSAGES FORWARDÉS =====
+      // Charger les détails du message d'origine et de la conversation source
+      const forwardedIds = mappedMessages
+        .filter((m: any) => m.forwardedFromId)
+        .map((m: any) => m.forwardedFromId);
+
+      if (forwardedIds.length > 0) {
+        const uniqueForwardedIds = [...new Set(forwardedIds)] as string[];
+
+        const forwardedMessages = await prisma.message.findMany({
+          where: { id: { in: uniqueForwardedIds } },
+          select: {
+            id: true,
+            content: true,
+            senderId: true,
+            conversationId: true,
+            messageType: true,
+            createdAt: true,
+            sender: {
+              select: { id: true, username: true, displayName: true, avatar: true }
+            },
+            attachments: {
+              select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true },
+              take: 1
+            }
+          }
+        });
+
+        const forwardedMap = new Map(forwardedMessages.map(m => [m.id, m]));
+
+        // Charger les conversations sources
+        const convIds = mappedMessages
+          .filter((m: any) => m.forwardedFromConversationId)
+          .map((m: any) => m.forwardedFromConversationId);
+        const uniqueConvIds = [...new Set(convIds)] as string[];
+
+        let convMap = new Map<string, any>();
+        if (uniqueConvIds.length > 0) {
+          const conversations = await prisma.conversation.findMany({
+            where: { id: { in: uniqueConvIds } },
+            select: { id: true, title: true, identifier: true, type: true, avatar: true }
+          });
+          convMap = new Map(conversations.map(c => [c.id, c]));
+        }
+
+        // Enrichir chaque message forwardé
+        for (const msg of mappedMessages) {
+          if (msg.forwardedFromId) {
+            const original = forwardedMap.get(msg.forwardedFromId);
+            if (original) {
+              msg.forwardedFrom = {
+                id: original.id,
+                content: original.content,
+                messageType: original.messageType,
+                createdAt: original.createdAt,
+                sender: original.sender,
+                attachments: original.attachments
+              };
+            }
+          }
+          if (msg.forwardedFromConversationId) {
+            const conv = convMap.get(msg.forwardedFromConversationId);
+            if (conv) {
+              msg.forwardedFromConversation = {
+                id: conv.id,
+                title: conv.title,
+                identifier: conv.identifier,
+                type: conv.type,
+                avatar: conv.avatar
+              };
+            }
+          }
+        }
+      }
+
       // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
       if (messages.length > 0 && !authRequest.authContext.isAnonymous) {
         const messageIds = messages.map(m => m.id);
