@@ -4,44 +4,63 @@ import MeeshySDK
 @main
 struct MeeshyApp: App {
     @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var showSplash = true
     @State private var hasCheckedSession = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                Group {
-                    if authManager.isAuthenticated {
-                        RootView()
-                    } else if hasCheckedSession {
-                        LoginView()
+            SystemThemeDetector {
+                ZStack {
+                    Group {
+                        if authManager.isAuthenticated {
+                            RootView()
+                        } else if hasCheckedSession {
+                            LoginView()
+                        }
+                    }
+                    .opacity(showSplash ? 0 : 1)
+
+                    if showSplash {
+                        SplashScreen(onFinish: {
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                showSplash = false
+                            }
+                        })
+                        .transition(.opacity.combined(with: .scale(scale: 1.1)))
+                        .zIndex(1)
                     }
                 }
-                .opacity(showSplash ? 0 : 1)
-
-                if showSplash {
-                    SplashScreen(onFinish: {
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            showSplash = false
-                        }
-                    })
-                    .transition(.opacity.combined(with: .scale(scale: 1.1)))
-                    .zIndex(1)
+                .environmentObject(authManager)
+                .preferredColorScheme(theme.preferredColorScheme)
+                .task {
+                    await authManager.checkExistingSession()
+                    hasCheckedSession = true
                 }
             }
-            .environmentObject(authManager)
-            .task {
-                await authManager.checkExistingSession()
-                hasCheckedSession = true
-            }
-            .onChange(of: colorScheme) { _, newScheme in
-                ThemeManager.shared.mode = newScheme == .dark ? .dark : .light
+        }
+    }
+}
+
+// MARK: - System Theme Detector
+// Sits OUTSIDE preferredColorScheme to always see the real system colorScheme
+struct SystemThemeDetector<Content: View>: View {
+    @Environment(\.colorScheme) private var systemScheme
+    let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content()
+            .onChange(of: systemScheme) { _, newScheme in
+                ThemeManager.shared.syncWithSystem(newScheme)
             }
             .onAppear {
-                ThemeManager.shared.mode = colorScheme == .dark ? .dark : .light
+                ThemeManager.shared.syncWithSystem(systemScheme)
             }
-        }
     }
 }
 

@@ -7,6 +7,7 @@ struct RootView: View {
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
+    @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
     @State private var notificationCount = 3
@@ -306,9 +307,9 @@ struct RootView: View {
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
-                (theme.mode.isDark ? "sun.max.fill" : "moon.fill", theme.mode.isDark ? "F8B500" : "9B59B6", {
+                (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        theme.mode = theme.mode.isDark ? .light : .dark
+                        theme.cyclePreference(systemScheme: systemColorScheme)
                     }
                 }),
                 ("gearshape.fill", "45B7D1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } })

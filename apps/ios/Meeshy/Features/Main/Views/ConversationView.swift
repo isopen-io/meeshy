@@ -50,6 +50,7 @@ struct ConversationView: View {
     @State private var isNearBottom: Bool = true
     @State private var unreadBadgeCount: Int = 0
     @State private var scrollToBottomTrigger: Int = 0
+    @StateObject private var scrollButtonAudioPlayer = AudioPlayerManager()
 
     private var headerHasStoryRing: Bool {
         guard let userId = conversation?.participantUserId else { return false }
@@ -995,6 +996,48 @@ struct ConversationView: View {
 
     private var unreadPreviewContent: some View {
         HStack(spacing: 10) {
+            if unreadBadgeCount > 1 {
+                // Multiple messages: prominent count display
+                multipleUnreadContent
+            } else {
+                // Single unread or typing only: rich preview
+                singleUnreadContent
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 240)
+    }
+
+    private var multipleUnreadContent: some View {
+        Group {
+            // Typing indicator takes priority even with multiple unreads
+            if hasTypingIndicator {
+                HStack(spacing: 4) {
+                    typingDotsView
+                    Text(typingLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text("\(unreadBadgeCount)")
+                        .font(.system(size: 16, weight: .heavy))
+                    Text("messages")
+                        .font(.system(size: 12, weight: .medium))
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .bold))
+        }
+    }
+
+    private var singleUnreadContent: some View {
+        Group {
             // Left: rich preview (image thumbnail or audio play)
             if let attachment = unreadAttachment {
                 unreadAttachmentPreview(attachment)
@@ -1025,7 +1068,7 @@ struct ConversationView: View {
 
             Spacer(minLength: 0)
 
-            // Right: chevron + unread count
+            // Right: chevron + unread count badge
             VStack(spacing: 2) {
                 if unreadBadgeCount > 0 {
                     Text("\(unreadBadgeCount)")
@@ -1037,10 +1080,6 @@ struct ConversationView: View {
                     .font(.system(size: 11, weight: .bold))
             }
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 240)
     }
 
     @ViewBuilder
@@ -1071,11 +1110,22 @@ struct ConversationView: View {
                 }
             }
         case .audio:
-            // Play button
-            Image(systemName: "play.fill")
+            // Independently tappable play button (downloads + plays audio without scrolling)
+            Image(systemName: scrollButtonAudioPlayer.isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: 14, weight: .bold))
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.25)))
+                .background(Circle().fill(Color.white.opacity(scrollButtonAudioPlayer.isPlaying ? 0.4 : 0.25)))
+                .contentShape(Circle())
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        HapticFeedback.light()
+                        if scrollButtonAudioPlayer.isPlaying {
+                            scrollButtonAudioPlayer.stop()
+                        } else {
+                            scrollButtonAudioPlayer.play(urlString: attachment.fileUrl)
+                        }
+                    }
+                )
         default:
             EmptyView()
         }
@@ -1103,19 +1153,24 @@ struct ConversationView: View {
 
     @State private var typingDotPhase: Int = 0
 
+    private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
     private var typingDotsView: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(Color.white)
-                    .frame(width: 4, height: 4)
-                    .opacity(typingDotPhase == i ? 1.0 : 0.4)
+                    .frame(width: 5, height: 5)
+                    .offset(y: typingDotPhase == i ? -3 : 0)
+                    .animation(
+                        .spring(response: 0.3, dampingFraction: 0.5)
+                            .delay(Double(i) * 0.1),
+                        value: typingDotPhase
+                    )
             }
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: false)) {
-                typingDotPhase = (typingDotPhase + 1) % 3
-            }
+        .onReceive(typingDotTimer) { _ in
+            typingDotPhase = (typingDotPhase + 1) % 3
         }
     }
 
@@ -1127,13 +1182,18 @@ struct ConversationView: View {
         let accent = Color(hex: accentColor)
 
         return HStack(spacing: 8) {
-            // Animated dots bubble
+            // Animated dots bubble (wave bounce)
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(accent.opacity(inlineTypingDotPhase == i ? 1.0 : 0.35))
                         .frame(width: 6, height: 6)
-                        .scaleEffect(inlineTypingDotPhase == i ? 1.2 : 1.0)
+                        .offset(y: inlineTypingDotPhase == i ? -4 : 0)
+                        .animation(
+                            .spring(response: 0.3, dampingFraction: 0.5)
+                                .delay(Double(i) * 0.1),
+                            value: inlineTypingDotPhase
+                        )
                 }
             }
             .padding(.horizontal, 12)
@@ -1146,10 +1206,8 @@ struct ConversationView: View {
                             .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
                     )
             )
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: false)) {
-                    inlineTypingDotPhase = (inlineTypingDotPhase + 1) % 3
-                }
+            .onReceive(typingDotTimer) { _ in
+                inlineTypingDotPhase = (inlineTypingDotPhase + 1) % 3
             }
 
             // Typing label
@@ -1790,6 +1848,8 @@ struct ThemedMessageBubble: View {
     @State private var showShareSheet = false
     @State private var shareURL: URL? = nil
     @State private var fullscreenAttachment: MessageAttachment? = nil
+    @State private var showCarousel: Bool = false
+    @State private var carouselIndex: Int = 0
     @ObservedObject private var theme = ThemeManager.shared
 
     private let gridMaxWidth: CGFloat = 300
@@ -1869,10 +1929,18 @@ struct ThemedMessageBubble: View {
 
                 // Grille visuelle (images + vidéos)
                 if !visualAttachments.isEmpty {
-                    visualMediaGrid
-                        .background(Color.black)
-                        .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    if showCarousel {
+                        carouselView
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .transition(.opacity)
+                    } else {
+                        visualMediaGrid
+                            .background(Color.black)
+                            .compositingGroup()
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .transition(.opacity)
+                    }
                 }
 
                 // Audio standalone
@@ -2038,20 +2106,121 @@ struct ThemedMessageBubble: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            // Only open fullscreen if file is cached (badge not shown)
-            // When badge is visible, its Button handles the tap instead
-            Task {
-                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
-                if cached {
-                    fullscreenAttachment = attachment
-                    HapticFeedback.light()
+            if overflowCount > 0 {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showCarousel = true
+                    carouselIndex = 3
+                }
+                HapticFeedback.light()
+            } else {
+                Task {
+                    let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                    if cached {
+                        fullscreenAttachment = attachment
+                        HapticFeedback.light()
+                    }
                 }
             }
         }
-        .overlay(alignment: isFirstRow ? .bottomTrailing : .topTrailing) {
+        .overlay(alignment: .bottom) {
             downloadBadge(attachment)
-                .padding(isFirstRow ? 6 : 0)
-                .offset(x: isFirstRow ? 0 : 8, y: isFirstRow ? 0 : -8)
+                .padding(.bottom, 6)
+        }
+    }
+
+    // MARK: - Carousel View
+
+    @State private var carouselDragOffset: CGFloat = 0
+
+    @ViewBuilder
+    private var carouselView: some View {
+        let items = visualAttachments
+        let totalOffset = -CGFloat(carouselIndex) * gridMaxWidth + carouselDragOffset
+
+        ZStack(alignment: .top) {
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, attachment in
+                    ZStack {
+                        Color.black
+
+                        switch attachment.type {
+                        case .image:
+                            gridImageCell(attachment)
+                        case .video:
+                            gridVideoCell(attachment)
+                        default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: gridMaxWidth, height: 240)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        Task {
+                            let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                            if cached {
+                                fullscreenAttachment = attachment
+                                HapticFeedback.light()
+                            }
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        downloadBadge(attachment)
+                            .padding(.bottom, 6)
+                    }
+                }
+            }
+            .offset(x: totalOffset)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: carouselIndex)
+            .animation(.interactiveSpring(), value: carouselDragOffset)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { value in
+                        if abs(value.translation.width) > abs(value.translation.height) {
+                            carouselDragOffset = value.translation.width
+                        }
+                    }
+                    .onEnded { value in
+                        let threshold: CGFloat = gridMaxWidth * 0.25
+                        let velocity = value.predictedEndTranslation.width - value.translation.width
+
+                        if value.translation.width < -threshold || velocity < -100 {
+                            carouselIndex = min(carouselIndex + 1, items.count - 1)
+                        } else if value.translation.width > threshold || velocity > 100 {
+                            carouselIndex = max(carouselIndex - 1, 0)
+                        }
+                        carouselDragOffset = 0
+                        HapticFeedback.light()
+                    }
+            )
+            .frame(width: gridMaxWidth, height: 240)
+            .clipped()
+
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCarousel = false
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(Color.black.opacity(0.6)))
+                }
+                .padding(8)
+
+                Spacer()
+
+                Text("\(carouselIndex + 1)/\(items.count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(8)
+            }
         }
     }
 
@@ -2572,13 +2741,13 @@ struct AudioMediaView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: isCached)
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .bottom) {
                 DownloadBadgeView(
                     attachment: attachment,
                     accentColor: contactColor,
                     onShareFile: onShareFile
                 )
-                .offset(x: 8, y: -8)
+                .padding(.bottom, 6)
             }
 
             if !message.content.isEmpty && visualAttachments.isEmpty {

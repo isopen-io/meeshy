@@ -1,11 +1,115 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Theme Preference (user choice: follow system or force)
+
+enum ThemePreference: String, CaseIterable {
+    case system
+    case light
+    case dark
+
+    var icon: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .system: return "Auto"
+        case .light: return "Clair"
+        case .dark: return "Sombre"
+        }
+    }
+
+    var tintColor: String {
+        switch self {
+        case .system: return "45B7D1"
+        case .light: return "F8B500"
+        case .dark: return "9B59B6"
+        }
+    }
+
+    func next() -> ThemePreference {
+        switch self {
+        case .system: return .light
+        case .light: return .dark
+        case .dark: return .system
+        }
+    }
+
+    func resolvedMode(systemScheme: ColorScheme) -> ThemeMode {
+        switch self {
+        case .system: return systemScheme == .dark ? .dark : .light
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 // MARK: - Theme Manager
 class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
 
     @Published var mode: ThemeMode = .dark
+    @Published var preference: ThemePreference = .system {
+        didSet {
+            UserDefaults.standard.set(preference.rawValue, forKey: "themePreference")
+            resolveMode()
+        }
+    }
+
+    private var traitObserver: NSObjectProtocol?
+
+    private init() {
+        if let saved = UserDefaults.standard.string(forKey: "themePreference"),
+           let pref = ThemePreference(rawValue: saved) {
+            preference = pref
+        }
+
+        resolveMode()
+
+        traitObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.resolveMode()
+        }
+    }
+
+    private var systemIsDark: Bool {
+        UITraitCollection.current.userInterfaceStyle == .dark
+    }
+
+    private var systemScheme: ColorScheme {
+        systemIsDark ? .dark : .light
+    }
+
+    func resolveMode() {
+        let resolved = preference.resolvedMode(systemScheme: systemScheme)
+        if mode != resolved { mode = resolved }
+    }
+
+    func syncWithSystem(_ colorScheme: ColorScheme) {
+        if preference == .system {
+            let resolved: ThemeMode = colorScheme == .dark ? .dark : .light
+            if mode != resolved { mode = resolved }
+        }
+    }
+
+    func cyclePreference(systemScheme: ColorScheme) {
+        preference = preference.next()
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch preference {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
 
     // MARK: - Background Colors (Warm tones for both modes)
     var backgroundPrimary: Color {
