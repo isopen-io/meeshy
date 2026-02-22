@@ -124,22 +124,23 @@ struct ConversationAnimatedBackground: View {
                 baseGradient
 
                 baseAnimation(in: geo.size)
+                    .opacity(0.12)
 
                 if config.showEncryptionOverlay {
                     encryptionOverlay(in: geo.size)
-                        .opacity(0.8)
+                        .opacity(0.12)
                 }
 
                 if config.showMultilingualOverlay {
                     multilingualOverlay(in: geo.size)
-                        .opacity(0.9)
+                        .opacity(0.12)
                 }
 
                 floatingParticles(in: geo.size)
-                    .opacity(0.5)
+                    .opacity(0.12)
 
                 wavesOverlay(in: geo.size)
-                    .opacity(0.6)
+                    .opacity(0.12)
             }
         }
         .ignoresSafeArea()
