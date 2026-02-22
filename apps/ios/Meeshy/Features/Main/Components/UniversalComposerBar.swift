@@ -73,6 +73,34 @@ struct UniversalComposerBar: View {
     var onVoiceRecord: ((URL, TimeInterval) -> Void)? = nil
     var onLocationRequest: (() -> Void)? = nil
 
+    // MARK: - External text binding (edit mode)
+
+    var textBinding: Binding<String>? = nil
+
+    // MARK: - Banners & custom content
+
+    var editBanner: AnyView? = nil
+    var replyBanner: AnyView? = nil
+    var customAttachmentsPreview: AnyView? = nil
+
+    // MARK: - Edit mode
+
+    var isEditMode: Bool = false
+    var onCustomSend: (() -> Void)? = nil
+    var onTextChange: ((String) -> Void)? = nil
+
+    // MARK: - Recording delegation (parent manages real AVAudioRecorder)
+
+    var onStartRecording: (() -> Void)? = nil
+    var onStopRecording: (() -> Void)? = nil
+    var externalIsRecording: Bool? = nil
+    var externalRecordingDuration: TimeInterval? = nil
+    var externalAudioLevels: [CGFloat]? = nil
+
+    // MARK: - External content flag
+
+    var externalHasContent: Bool = false
+
     // MARK: - Attachment ladder callbacks
 
     var onPhotoLibrary: (() -> Void)? = nil
@@ -160,19 +188,27 @@ struct UniversalComposerBar: View {
     }
 
     var hasContent: Bool {
-        hasText || !allAttachments.isEmpty
+        hasText || !allAttachments.isEmpty || externalHasContent
     }
 
     var allAttachments: [ComposerAttachment] {
         attachments + externalAttachments
     }
 
-    private var textColor: Color {
+    var textColor: Color {
         style == .dark ? .white : theme.textPrimary
     }
 
-    private var placeholderColor: Color {
+    var placeholderColor: Color {
         style == .dark ? .white.opacity(0.4) : theme.textMuted
+    }
+
+    var effectiveIsRecording: Bool {
+        externalIsRecording ?? isRecording
+    }
+
+    var effectiveDuration: TimeInterval {
+        externalRecordingDuration ?? recordingDuration
     }
 
     private var currentLangOption: LanguageOption {
@@ -304,15 +340,23 @@ struct UniversalComposerBar: View {
 
     private var expandedComposer: some View {
         VStack(spacing: 0) {
-            // Clipboard content preview (for pasted text > 2000 chars)
-            if let clip = clipboardContent {
-                clipboardContentPreview(clip)
+            // Edit banner
+            if let banner = editBanner { banner }
+            // Reply banner
+            if let banner = replyBanner { banner }
+
+            // Custom attachments (real thumbnails from parent) or default chips
+            if let custom = customAttachmentsPreview {
+                custom
+                    .transition(.scale.combined(with: .opacity))
+            } else if !allAttachments.isEmpty {
+                attachmentsPreview
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Attachments preview (above the composer, like web MessageComposer)
-            if !allAttachments.isEmpty {
-                attachmentsPreview
+            // Clipboard content preview (for pasted text > 2000 chars)
+            if let clip = clipboardContent {
+                clipboardContentPreview(clip)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -334,7 +378,7 @@ struct UniversalComposerBar: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     // Left: (+) attach button with ladder overlay above it
                     Group {
-                        if isRecording {
+                        if effectiveIsRecording {
                             stopRecordingButton
                                 .transition(.scale.combined(with: .opacity))
                         } else if resolvedShowAttachment {
@@ -342,14 +386,14 @@ struct UniversalComposerBar: View {
                         }
                     }
                     .overlay(alignment: .bottom) {
-                        if showAttachOptions && resolvedShowAttachment && !isRecording {
+                        if showAttachOptions && resolvedShowAttachment && !effectiveIsRecording {
                             attachmentLadder
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                     }
 
                     // Center: text field or recording waveform
-                    if isRecording {
+                    if effectiveIsRecording {
                         voiceRecordingView
                     } else {
                         textInputField
@@ -359,7 +403,7 @@ struct UniversalComposerBar: View {
                     actionButton
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isRecording)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: effectiveIsRecording)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             }
@@ -367,7 +411,7 @@ struct UniversalComposerBar: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .onChange(of: attachments.count) { _ in notifyContentChange() }
-        .onChange(of: isRecording) { _ in notifyContentChange() }
+        .onChange(of: effectiveIsRecording) { _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
             previousStoryId = storyId
@@ -430,6 +474,11 @@ struct UniversalComposerBar: View {
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
+            onTextChange?(newValue)
+            // Sync to external binding
+            if let binding = textBinding, binding.wrappedValue != newValue {
+                binding.wrappedValue = newValue
+            }
             // Ripple wave on each keystroke
             if isFocused {
                 typeWave = true
@@ -445,6 +494,10 @@ struct UniversalComposerBar: View {
             }
             // Clipboard content: auto-create when pasting 2000+ chars
             handleClipboardCheck(newValue)
+        }
+        .onChange(of: textBinding?.wrappedValue) { newValue in
+            guard let newValue, newValue != text else { return }
+            text = newValue
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
             LanguagePickerSheet(analyzer: textAnalyzer)
@@ -563,7 +616,7 @@ struct UniversalComposerBar: View {
 
     @ViewBuilder
     var actionButton: some View {
-        if isRecording || hasContent {
+        if effectiveIsRecording || hasContent {
             sendButton
                 .transition(.scale.combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
@@ -578,7 +631,12 @@ struct UniversalComposerBar: View {
     // ========================================================================
 
     var sendButton: some View {
-        Button {
+        let editColors = [Color(hex: "F8B500"), Color(hex: "E67E22")]
+        let sendColors = [Color(hex: "FF2E63"), Color(hex: "FF6B6B")]
+        let colors = isEditMode ? editColors : sendColors
+        let icon = isEditMode ? "checkmark" : "paperplane.fill"
+
+        return Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                 sendBounce = true
             }
@@ -591,19 +649,22 @@ struct UniversalComposerBar: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                            colors: colors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 44, height: 44)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
+                    .shadow(color: colors[0].opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
 
-                Image(systemName: "paperplane.fill")
+                Image(systemName: icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
-                    .rotationEffect(.degrees(sendBounce ? 55 : 45))
-                    .offset(x: sendBounce ? 2 : -1, y: sendBounce ? -2 : 1)
+                    .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
+                    .offset(
+                        x: isEditMode ? 0 : (sendBounce ? 2 : -1),
+                        y: isEditMode ? 0 : (sendBounce ? -2 : 1)
+                    )
             }
             .scaleEffect(sendBounce ? 1.2 : 1)
         }
@@ -624,6 +685,14 @@ struct UniversalComposerBar: View {
 
     private func handleSend() {
         onAnyInteraction?()
+
+        // Custom send (edit mode, recording, or parent-managed send)
+        if let onCustomSend {
+            onCustomSend()
+            HapticFeedback.light()
+            return
+        }
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !allAttachments.isEmpty else { return }
 
@@ -658,7 +727,7 @@ struct UniversalComposerBar: View {
 
     /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
     func notifyContentChange() {
-        onHasContentChange?(hasText || !attachments.isEmpty || isRecording)
+        onHasContentChange?(hasText || !attachments.isEmpty || effectiveIsRecording)
     }
 
     // ========================================================================

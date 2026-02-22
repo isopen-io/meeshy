@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import NaturalLanguage
 
 // MARK: - MessageOverlayMenu
 
@@ -23,13 +24,7 @@ struct MessageOverlayMenu: View {
     @State private var menuDragOffset: CGFloat = 0
     @State private var menuDragStartOffset: CGFloat = 0
     @State private var menuExpanded = false
-
-    @State private var quickViewHeight: CGFloat = 200
-    @State private var quickViewDragOffset: CGFloat = 0
-
-    private let quickViewMinHeight: CGFloat = 50
-    private let quickViewDefaultHeight: CGFloat = 200
-    private let quickViewMaxHeight: CGFloat = 350
+    @State private var selectedInfoTab: InfoTab = .views
 
     private let compactMenuHeight: CGFloat = 180
     private let expandedMenuHeight: CGFloat = 280
@@ -50,6 +45,10 @@ struct MessageOverlayMenu: View {
                     quickViewArea(in: geometry)
                         .opacity(isVisible ? 1 : 0)
                         .offset(y: isVisible ? 0 : -100)
+
+                    infoTabsSection(in: geometry)
+                        .opacity(isVisible ? 1 : 0)
+                        .offset(y: isVisible ? 0 : -50)
 
                     Spacer(minLength: 12)
 
@@ -85,137 +84,519 @@ struct MessageOverlayMenu: View {
             .onTapGesture { dismiss() }
     }
 
-    // MARK: - Quick View Area (TOP)
+    // MARK: - Quick View Area (Compact Emoji Bar)
 
     @ViewBuilder
     private func quickViewArea(in geometry: GeometryProxy) -> some View {
-        let effectiveHeight = max(quickViewMinHeight, quickViewHeight + quickViewDragOffset)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 6)
+        let sorted = EmojiUsageTracker.sortedEmojis(from: allQuickEmojis)
 
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(allQuickEmojis, id: \.self) { emoji in
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(sorted, id: \.self) { emoji in
                         Button {
+                            EmojiUsageTracker.recordUsage(emoji: emoji)
                             dismissThen { onReact?(emoji) }
                         } label: {
                             Text(emoji)
                                 .font(.system(size: 28))
-                                .frame(maxWidth: .infinity, minHeight: 42)
+                                .frame(width: 42, height: 42)
                         }
                         .buttonStyle(EmojiButtonStyle())
                     }
-
-                    Button {
-                        dismissThen { onAddReaction?() }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(theme.mode.isDark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(theme.mode.isDark ? .white.opacity(0.7) : .gray)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                    }
-                    .buttonStyle(EmojiButtonStyle())
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 12)
             }
 
-            quickViewDragHandle
+            Divider()
+                .frame(height: 28)
+                .padding(.horizontal, 4)
+
+            Button {
+                dismissThen { onAddReaction?() }
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(theme.mode.isDark ? .white.opacity(0.7) : .gray)
+                }
+            }
+            .buttonStyle(EmojiButtonStyle())
+            .padding(.trailing, 12)
         }
-        .frame(height: effectiveHeight)
-        .frame(maxWidth: .infinity)
-        .background(quickViewBackground)
+        .frame(height: 52)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            theme.mode.isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.06),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+        )
         .padding(.horizontal, 12)
     }
 
-    private var quickViewDragHandle: some View {
+    // MARK: - Info Tabs Section
+
+    private var availableInfoTabs: [InfoTab] {
+        var tabs: [InfoTab] = [.views]
+        let hasAudioVideo = message.attachments.contains {
+            $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+        }
+        if hasAudioVideo {
+            tabs.append(.transcription)
+        }
+        tabs.append(.language)
+        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasText {
+            tabs.append(.sentiment)
+        }
+        tabs.append(.meta)
+        return tabs
+    }
+
+    @ViewBuilder
+    private func infoTabsSection(in geometry: GeometryProxy) -> some View {
+        let visibleTabs = availableInfoTabs
+
         VStack(spacing: 0) {
-            Capsule()
-                .fill(theme.textMuted.opacity(0.4))
-                .frame(width: 36, height: 4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(visibleTabs) { tab in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedInfoTab = tab
+                            }
+                            HapticFeedback.light()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(tab.label)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(selectedInfoTab == tab
+                                          ? Color.accentColor.opacity(0.15)
+                                          : Color.clear)
+                            )
+                            .foregroundColor(selectedInfoTab == tab
+                                             ? .accentColor
+                                             : theme.textMuted)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+            }
+
+            ScrollView(showsIndicators: false) {
+                Group {
+                    switch selectedInfoTab {
+                    case .views:
+                        viewsTabContent
+                    case .transcription:
+                        transcriptionTabContent
+                    case .language:
+                        languageTabContent
+                    case .sentiment:
+                        sentimentTabContent
+                    case .meta:
+                        metaTabContent
+                    }
+                }
+                .id(selectedInfoTab)
+                .transition(.opacity)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .frame(height: 250)
+            .animation(.easeInOut(duration: 0.2), value: selectedInfoTab)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.mode.isDark ? Color.black.opacity(0.2) : Color.white.opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.04),
+                            lineWidth: 0.5
+                        )
+                )
+        )
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Views Tab Content
+
+    private var viewsTabContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                let initials = senderInitials(message.senderName)
+                let color = Color(hex: message.senderColor ?? contactColor)
+
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                    Text(initials)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(color)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.senderName ?? "Inconnu")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text(formatDateFR(message.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                Spacer()
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Statut de livraison")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+
+                deliveryStatusRow(
+                    icon: "checkmark",
+                    label: "Envoyé",
+                    timestamp: formatTimeFR(message.createdAt),
+                    isReached: deliveryStatusLevel >= 1
+                )
+
+                deliveryStatusRow(
+                    icon: "checkmark.circle",
+                    label: "Distribué",
+                    timestamp: nil,
+                    isReached: deliveryStatusLevel >= 2
+                )
+
+                deliveryStatusRow(
+                    icon: "eye",
+                    label: "Lu",
+                    timestamp: nil,
+                    isReached: deliveryStatusLevel >= 3
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func deliveryStatusRow(icon: String, label: String, timestamp: String?, isReached: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isReached ? .accentColor : theme.textMuted.opacity(0.5))
+                .frame(width: 20)
+
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isReached ? theme.textPrimary : theme.textMuted.opacity(0.5))
+
+            if let timestamp {
+                Spacer()
+                Text(timestamp)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            Spacer()
+        }
+    }
+
+    private var deliveryStatusLevel: Int {
+        switch message.deliveryStatus {
+        case .failed: return -1
+        case .sending: return 0
+        case .sent: return 1
+        case .delivered: return 2
+        case .read: return 3
+        }
+    }
+
+    // MARK: - Transcription Tab Content
+
+    private var transcriptionTabContent: some View {
+        let mediaAttachments = message.attachments.filter {
+            $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+        }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            ForEach(mediaAttachments) { attachment in
+                HStack(spacing: 10) {
+                    Image(systemName: attachment.mimeType.hasPrefix("audio/") ? "waveform" : "video")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.accentColor)
+                        .frame(width: 20)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+
+                        if let duration = attachment.duration {
+                            Text(formatDuration(duration))
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                )
+            }
+
+            HStack {
+                Spacer()
+                VStack(spacing: 6) {
+                    Image(systemName: "text.below.photo")
+                        .font(.system(size: 24))
+                        .foregroundColor(theme.textMuted.opacity(0.5))
+                    Text("Transcription non disponible")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.vertical, 20)
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Language Tab Content
+
+    private var languageTabContent: some View {
+        let originalLang = message.originalLanguage
+        let languages: [(code: String, flag: String, name: String)] = [
+            ("fr", "\u{1F1EB}\u{1F1F7}", "Français"),
+            ("en", "\u{1F1EC}\u{1F1E7}", "English"),
+            ("es", "\u{1F1EA}\u{1F1F8}", "Español"),
+            ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
+            ("ar", "\u{1F1F8}\u{1F1E6}", "العربية"),
+            ("zh", "\u{1F1E8}\u{1F1F3}", "中文"),
+            ("pt", "\u{1F1F5}\u{1F1F9}", "Português"),
+            ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
+            ("ja", "\u{1F1EF}\u{1F1F5}", "日本語"),
+            ("ko", "\u{1F1F0}\u{1F1F7}", "한국어")
+        ]
+
+        let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12, weight: .medium))
+                Text("Langue originale : \(originalLang.uppercased())")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(.accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.accentColor.opacity(0.12)))
+
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(0..<languages.count, id: \.self) { index in
+                    let lang = languages[index]
+                    let isOriginal = lang.code == originalLang
+
+                    Button {
+                        HapticFeedback.light()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(lang.flag)
+                                .font(.system(size: 18))
+                            Text(lang.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                        )
+                        .opacity(isOriginal ? 0.4 : 1.0)
+                    }
+                    .disabled(isOriginal)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Sentiment Tab Content
+
+    private var sentimentTabContent: some View {
+        let score = analyzeSentiment(message.content)
+
+        return VStack(spacing: 16) {
+            Text(sentimentEmoji(score))
+                .font(.system(size: 56))
+
+            Text(sentimentLabel(score))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [.red, .orange, .yellow, .green],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(height: 12)
+
+                    let normalized = (score + 1) / 2
+                    let position = normalized * geo.size.width
+
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 18, height: 18)
+                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        .offset(x: max(0, min(position - 9, geo.size.width - 18)))
+                }
+            }
+            .frame(height: 18)
+            .padding(.horizontal, 20)
+
+            Text(String(format: "Score : %.2f", score))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 28)
-        .contentShape(Rectangle())
-        .gesture(quickViewDragGesture)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                if quickViewHeight <= quickViewMinHeight {
-                    quickViewHeight = quickViewDefaultHeight
-                } else if quickViewHeight < quickViewMaxHeight {
-                    quickViewHeight = quickViewMaxHeight
-                } else {
-                    quickViewHeight = quickViewDefaultHeight
+        .padding(.vertical, 8)
+    }
+
+    private func analyzeSentiment(_ text: String) -> Double {
+        let tagger = NLTagger(tagSchemes: [.sentimentScore])
+        tagger.string = text
+        let (tag, _) = tagger.tag(at: text.startIndex, unit: .paragraph, scheme: .sentimentScore)
+        return Double(tag?.rawValue ?? "0") ?? 0
+    }
+
+    private func sentimentEmoji(_ score: Double) -> String {
+        if score < -0.6 { return "\u{1F621}" }
+        if score < -0.2 { return "\u{1F614}" }
+        if score < 0.2 { return "\u{1F610}" }
+        if score < 0.6 { return "\u{1F642}" }
+        return "\u{1F604}"
+    }
+
+    private func sentimentLabel(_ score: Double) -> String {
+        if score < -0.6 { return "Très négatif" }
+        if score < -0.2 { return "Négatif" }
+        if score < 0.2 { return "Neutre" }
+        if score < 0.6 { return "Positif" }
+        return "Très positif"
+    }
+
+    // MARK: - Meta Tab Content
+
+    private var metaTabContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            metaRow(key: "ID", value: String(message.id.prefix(12)))
+            metaRow(key: "Type", value: message.messageType.rawValue)
+            metaRow(key: "Source", value: message.messageSource.rawValue)
+            metaRow(key: "Langue", value: message.originalLanguage.uppercased())
+            metaRow(key: "Créé le", value: formatDateTimeFR(message.createdAt))
+            metaRow(key: "Modifié le", value: formatDateTimeFR(message.updatedAt))
+
+            metaRow(
+                key: "Chiffrement",
+                value: message.isEncrypted
+                    ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
+                    : "Non"
+            )
+
+            if message.isEdited {
+                metaRow(key: "État", value: "Modifié", valueColor: .yellow)
+            }
+            if message.isDeleted {
+                metaRow(key: "État", value: "Supprimé", valueColor: .red)
+            }
+
+            if !message.attachments.isEmpty {
+                let types = Set(message.attachments.map {
+                    $0.mimeType.components(separatedBy: "/").first ?? "file"
+                })
+                metaRow(
+                    key: "Pièces jointes",
+                    value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))"
+                )
+            }
+
+            if let forward = message.forwardedFrom {
+                Divider()
+                Text("Transféré de")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .textCase(.uppercase)
+                metaRow(key: "Auteur", value: forward.senderName)
+                if let convo = forward.conversationName {
+                    metaRow(key: "Conversation", value: convo)
                 }
             }
-            HapticFeedback.light()
+
+            if let reply = message.replyTo {
+                Divider()
+                Text("Réponse à")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .textCase(.uppercase)
+                metaRow(key: "Auteur", value: reply.authorName)
+                metaRow(key: "Aperçu", value: reply.previewText)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var quickViewDragGesture: some Gesture {
-        DragGesture(minimumDistance: 5)
-            .onChanged { value in
-                quickViewDragOffset = value.translation.height
-            }
-            .onEnded { value in
-                let projected = quickViewHeight + value.predictedEndTranslation.height
-                let midLow = (quickViewMinHeight + quickViewDefaultHeight) / 2
-                let midHigh = (quickViewDefaultHeight + quickViewMaxHeight) / 2
-                let target: CGFloat
-                if projected < midLow {
-                    target = quickViewMinHeight
-                } else if projected < midHigh {
-                    target = quickViewDefaultHeight
-                } else {
-                    target = quickViewMaxHeight
-                }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    quickViewHeight = target
-                    quickViewDragOffset = 0
-                }
-                HapticFeedback.light()
-            }
-    }
+    private func metaRow(key: String, value: String, valueColor: Color? = nil) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(key)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .frame(width: 100, alignment: .trailing)
 
-    private var quickViewBackground: some View {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: 20,
-            bottomTrailingRadius: 20,
-            topTrailingRadius: 0
-        )
-        .fill(.ultraThinMaterial)
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20,
-                topTrailingRadius: 0
-            )
-            .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
-        )
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20,
-                topTrailingRadius: 0
-            )
-            .stroke(
-                theme.mode.isDark
-                    ? Color.white.opacity(0.15)
-                    : Color.black.opacity(0.06),
-                lineWidth: 0.5
-            )
-        )
-        .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+            Text(value)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(valueColor ?? theme.textPrimary)
+                .lineLimit(2)
+
+            Spacer()
+        }
     }
 
     // MARK: - Message Preview (CENTER)
@@ -685,6 +1066,37 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Helpers
 
+    private func senderInitials(_ name: String?) -> String {
+        guard let name = name, !name.isEmpty else { return "?" }
+        let words = name.components(separatedBy: " ")
+        if words.count >= 2 {
+            return String(words[0].prefix(1) + words[1].prefix(1)).uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
+    }
+
+    private func formatDateFR(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func formatTimeFR(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func formatDateTimeFR(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd/MM/yyyy HH:mm"
+        return formatter.string(from: date)
+    }
+
     private func formatDuration(_ seconds: Int) -> String {
         let mins = seconds / 60
         let secs = seconds % 60
@@ -722,6 +1134,56 @@ struct MessageOverlayMenu: View {
                 action()
             }
         }
+    }
+}
+
+// MARK: - InfoTab
+
+private enum InfoTab: String, CaseIterable, Identifiable {
+    case views, transcription, language, sentiment, meta
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .views: return "eye.fill"
+        case .transcription: return "waveform"
+        case .language: return "globe"
+        case .sentiment: return "brain.head.profile"
+        case .meta: return "info.circle"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .views: return "Vues"
+        case .transcription: return "Transcription"
+        case .language: return "Langue"
+        case .sentiment: return "Sentiment"
+        case .meta: return "Meta"
+        }
+    }
+}
+
+// MARK: - Emoji Usage Tracker
+
+private struct EmojiUsageTracker {
+    private static let key = "com.meeshy.emojiUsageCount"
+
+    static func recordUsage(emoji: String) {
+        var counts = getCounts()
+        counts[emoji, default: 0] += 1
+        UserDefaults.standard.set(counts, forKey: key)
+    }
+
+    static func sortedEmojis(from emojis: [String]) -> [String] {
+        let counts = getCounts()
+        if counts.isEmpty { return emojis }
+        return emojis.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
+    }
+
+    private static func getCounts() -> [String: Int] {
+        UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
     }
 }
 

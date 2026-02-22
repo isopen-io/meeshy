@@ -39,7 +39,6 @@ struct ConversationView: View {
     @StateObject var locationManager = LocationManager()
     @State var messageText = ""
     @State var showOptions = false
-    @State var showAttachOptions = false
     @State var actionAlert: String? = nil
     @State var forwardMessage: Message? = nil
     @State var showConversationInfo = false
@@ -55,9 +54,6 @@ struct ConversationView: View {
     @State var selectedPhotoItems: [PhotosPickerItem] = []
     @State var isLoadingLocation = false
     @FocusState var isTyping: Bool
-    @State var typingBounce: Bool = false
-    @StateObject var textAnalyzer = TextAnalyzer()
-    @State private var showLanguagePicker = false
     @State var pendingReplyReference: ReplyReference?
     @State var editingMessageId: String?
     @State var editingOriginalContent: String?
@@ -161,9 +157,10 @@ struct ConversationView: View {
     }
 
     var composerHeight: CGFloat {
-        var height: CGFloat = 100
+        var height: CGFloat = 130 // UCB base + topToolbar
         if !pendingAttachments.isEmpty { height += 110 }
-        if audioRecorder.isRecording { height += 10 }
+        if editingMessageId != nil { height += 52 }
+        if pendingReplyReference != nil && editingMessageId == nil { height += 52 }
         return height
     }
 
@@ -343,7 +340,6 @@ struct ConversationView: View {
             }
 
             VStack { Spacer(); themedComposer }.zIndex(50)
-            attachOptionsLadder
 
             searchResultsBlurOverlay
             returnToLatestButton

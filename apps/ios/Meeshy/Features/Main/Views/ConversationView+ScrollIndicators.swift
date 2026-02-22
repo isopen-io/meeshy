@@ -5,50 +5,6 @@ import MeeshySDK
 // MARK: - Scroll Indicators, Typing & Attach Options
 extension ConversationView {
 
-    // MARK: - Attach Options Ladder
-    var attachOptionsLadder: some View {
-        VStack(spacing: 10) {
-            // File picker
-            ThemedActionButton(icon: "doc.fill", color: "45B7D1") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAttachOptions = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    showFilePicker = true
-                }
-            }
-            .menuAnimation(showMenu: showAttachOptions, delay: 0.0)
-
-            // Location
-            ThemedActionButton(icon: "location.fill", color: "2ECC71") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAttachOptions = false }
-                addCurrentLocation()
-            }
-            .menuAnimation(showMenu: showAttachOptions, delay: 0.04)
-
-            // Camera
-            ThemedActionButton(icon: "camera.fill", color: "F8B500") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAttachOptions = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    showCamera = true
-                }
-            }
-            .menuAnimation(showMenu: showAttachOptions, delay: 0.08)
-
-            // Photo gallery
-            ThemedActionButton(icon: "photo.fill", color: "9B59B6") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showAttachOptions = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    showPhotoPicker = true
-                }
-            }
-            .menuAnimation(showMenu: showAttachOptions, delay: 0.12)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(.leading, 18)
-        .padding(.bottom, 78)
-        .zIndex(showAttachOptions ? 150 : -1)
-        .allowsHitTesting(showAttachOptions)
-    }
-
     // MARK: - Scroll to Bottom Button
 
     var hasTypingIndicator: Bool {

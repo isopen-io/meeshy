@@ -7,191 +7,51 @@ import MeeshySDK
 // MARK: - Composer, Attachments & Recording
 extension ConversationView {
 
-    // MARK: - Themed Composer
+    // MARK: - Themed Composer (powered by UniversalComposerBar)
     var themedComposer: some View {
-        VStack(spacing: 8) {
-            // Edit mode banner
-            if editingMessageId != nil {
-                composerEditBanner
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Reply preview banner
-            if let reply = pendingReplyReference, editingMessageId == nil {
-                composerReplyBanner(reply)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Pending attachments preview
-            if !pendingAttachments.isEmpty || isLoadingMedia {
-                HStack(spacing: 0) {
-                    pendingAttachmentsPreview
-                    if isLoadingMedia {
-                        ProgressView()
-                            .tint(.white)
-                            .padding(.horizontal, 12)
-                    }
+        UniversalComposerBar(
+            style: .light,
+            mode: .message,
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            onFocusChange: { focused in
+                isTyping = focused
+                if focused {
+                    withAnimation { showOptions = false }
                 }
-                .transition(.scale.combined(with: .opacity))
-            }
-
-            HStack(alignment: .bottom, spacing: 12) {
-                // Plus/Mic button (hidden only when recording)
-                if !audioRecorder.isRecording {
-                    ThemedComposerButton(
-                        icon: showAttachOptions ? "mic.fill" : "plus",
-                        colors: showAttachOptions ? ["FF6B6B", "E74C3C"] : [accentColor, secondaryColor],
-                        isActive: showAttachOptions
-                    ) {
-                        if showAttachOptions {
-                            // Start recording when mic is clicked
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showAttachOptions = false
-                                startRecording()
-                            }
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showAttachOptions = true
-                            }
-                        }
-                    }
+            },
+            onLocationRequest: { addCurrentLocation() },
+            textBinding: $messageText,
+            editBanner: editingMessageId != nil
+                ? AnyView(composerEditBanner)
+                : nil,
+            replyBanner: pendingReplyReference != nil && editingMessageId == nil
+                ? AnyView(composerReplyBanner(pendingReplyReference!))
+                : nil,
+            customAttachmentsPreview: (!pendingAttachments.isEmpty || isLoadingMedia)
+                ? AnyView(pendingAttachmentsRow)
+                : nil,
+            isEditMode: editingMessageId != nil,
+            onCustomSend: {
+                if editingMessageId != nil {
+                    submitEdit()
+                } else if audioRecorder.isRecording {
+                    stopAndSendRecording()
+                } else {
+                    sendMessageWithAttachments()
                 }
-
-                // Input field with mic/stop button inside
-                HStack(spacing: 0) {
-                    if audioRecorder.isRecording {
-                        // Stop button inside input (replaces mic)
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                stopAndPreviewRecording()
-                            }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "FF6B6B"), Color(hex: "E74C3C")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 32, height: 32)
-
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .frame(width: 44, height: 44)
-                        }
-
-                        // Recording interface
-                        voiceRecordingView
-                    } else if !showAttachOptions {
-                        // Smart Context Zone / Mic button
-                        let hasText = !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        let textLen = messageText.count
-
-                        if hasText {
-                            SmartContextZone(
-                                analyzer: textAnalyzer,
-                                accentColor: accentColor,
-                                isCompact: false,
-                                showFlag: textLen > 20
-                            )
-                            .transition(.scale.combined(with: .opacity))
-                        } else {
-                            // Mic button - starts recording immediately
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    startRecording()
-                                }
-                            } label: {
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 44, height: 44)
-                            }
-                            .transition(.scale.combined(with: .opacity))
-                        }
-
-                        // Text input
-                        ZStack(alignment: .leading) {
-                            if messageText.isEmpty {
-                                Text("Message...")
-                                    .foregroundColor(theme.textMuted)
-                            }
-
-                            TextField("", text: $messageText, axis: .vertical)
-                                .focused($isTyping)
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1...5)
-                        }
-                        .padding(.trailing, 12)
-                        .padding(.vertical, 12)
-                    } else {
-                        // When attach options shown, just show text input (mic is now the left button)
-                        ZStack(alignment: .leading) {
-                            if messageText.isEmpty {
-                                Text("Message...")
-                                    .foregroundColor(theme.textMuted)
-                            }
-
-                            TextField("", text: $messageText, axis: .vertical)
-                                .focused($isTyping)
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1...5)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                }
-                .frame(minHeight: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(theme.surfaceGradient(tint: audioRecorder.isRecording ? "FF6B6B" : accentColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .stroke(
-                                    (isTyping || audioRecorder.isRecording) ?
-                                    LinearGradient(colors: [Color(hex: audioRecorder.isRecording ? "FF6B6B" : accentColor), Color(hex: audioRecorder.isRecording ? "E74C3C" : secondaryColor)], startPoint: .leading, endPoint: .trailing) :
-                                    theme.border(tint: accentColor, intensity: 0.3),
-                                    lineWidth: (isTyping || audioRecorder.isRecording) ? 2 : 1
-                                )
-                        )
-                )
-                .scaleEffect(typingBounce ? 1.02 : 1.0)
-
-                // Send button - show when recording, has pending attachments, or has text
-                if audioRecorder.isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ThemedComposerButton(
-                        icon: editingMessageId != nil ? "checkmark" : "paperplane.fill",
-                        colors: editingMessageId != nil ? ["F8B500", "E67E22"] : ["FF6B6B", "4ECDC4"],
-                        isActive: true,
-                        rotateIcon: editingMessageId == nil
-                    ) {
-                        if editingMessageId != nil {
-                            submitEdit()
-                        } else if audioRecorder.isRecording {
-                            stopAndSendRecording()
-                        } else {
-                            sendMessageWithAttachments()
-                        }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: messageText.isEmpty)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: audioRecorder.isRecording)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: pendingAttachments.count)
+            },
+            onTextChange: { viewModel.onTextChanged($0) },
+            onStartRecording: { startRecording() },
+            onStopRecording: { stopAndPreviewRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showPhotoPicker = true },
+            onCamera: { showCamera = true },
+            onFilePicker: { showFilePicker = true }
+        )
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
@@ -205,24 +65,17 @@ extension ConversationView {
         .onChange(of: selectedPhotoItems) { items in
             handlePhotoSelection(items)
         }
-        .onChange(of: messageText) { newText in
-            textAnalyzer.analyze(text: newText)
-            viewModel.onTextChanged(newText)
-        }
-        .onChange(of: isTyping) { focused in
-            // Bounce animation on focus
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                typingBounce = focused
+    }
+
+    // MARK: - Pending Attachments Row (custom preview for UCB)
+    private var pendingAttachmentsRow: some View {
+        HStack(spacing: 0) {
+            pendingAttachmentsPreview
+            if isLoadingMedia {
+                ProgressView()
+                    .tint(Color(hex: accentColor))
+                    .padding(.horizontal, 12)
             }
-            // Close attach menu when composer gets focus
-            if focused && showAttachOptions {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = false
-                }
-            }
-        }
-        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
         }
     }
 
@@ -476,49 +329,6 @@ extension ConversationView {
         case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
         case .location: return "Position"
         }
-    }
-
-    // MARK: - Voice Recording View
-    var voiceRecordingView: some View {
-        HStack(spacing: 12) {
-            // Recording indicator with animated pulse
-            ZStack {
-                Circle()
-                    .fill(Color(hex: "FF6B6B").opacity(0.3))
-                    .frame(width: 20, height: 20)
-                    .scaleEffect(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.5 : 1.0)
-                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 0 : 0.5)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
-
-                Circle()
-                    .fill(Color(hex: "FF6B6B"))
-                    .frame(width: 12, height: 12)
-                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
-            }
-
-            // Real waveform bars from microphone levels
-            HStack(spacing: 3) {
-                ForEach(0..<15, id: \.self) { i in
-                    AudioLevelBar(
-                        level: i < audioRecorder.audioLevels.count ? audioRecorder.audioLevels[i] : 0,
-                        isRecording: audioRecorder.isRecording
-                    )
-                }
-            }
-
-            Spacer()
-
-            // Timer with subtle scale
-            Text(formatRecordingTime(audioRecorder.duration))
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
-                .padding(.trailing, 8)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3), value: audioRecorder.duration)
-        }
-        .padding(.leading, 16)
-        .padding(.vertical, 12)
     }
 
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, formatRecordingTime, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, addCurrentLocation, handleCameraCapture, sendMessage
