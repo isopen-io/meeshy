@@ -1282,6 +1282,110 @@ export function registerMessagesRoutes(
         }
       }
 
+      // ÉTAPE 2c: Copier les attachments du message original si transfert
+      let forwardedAttachmentIds: string[] = [];
+      if (forwardedFromId && (!attachmentIds || attachmentIds.length === 0)) {
+        try {
+          const originalAttachments = await prisma.messageAttachment.findMany({
+            where: { messageId: forwardedFromId },
+            select: {
+              id: true,
+              fileName: true,
+              originalName: true,
+              mimeType: true,
+              fileSize: true,
+              filePath: true,
+              fileUrl: true,
+              title: true,
+              alt: true,
+              caption: true,
+              width: true,
+              height: true,
+              thumbnailPath: true,
+              thumbnailUrl: true,
+              duration: true,
+              bitrate: true,
+              sampleRate: true,
+              codec: true,
+              channels: true,
+              fps: true,
+              videoCodec: true,
+              pageCount: true,
+              lineCount: true,
+              uploadedBy: true,
+              isAnonymous: true,
+              transcription: true,
+              translations: true,
+              metadata: true,
+            }
+          });
+
+          if (originalAttachments.length > 0) {
+            const createdAttachments = await Promise.all(
+              originalAttachments.map(att =>
+                prisma.messageAttachment.create({
+                  data: {
+                    messageId: message.id,
+                    fileName: att.fileName,
+                    originalName: att.originalName,
+                    mimeType: att.mimeType,
+                    fileSize: att.fileSize,
+                    filePath: att.filePath,
+                    fileUrl: att.fileUrl,
+                    title: att.title,
+                    alt: att.alt,
+                    caption: att.caption,
+                    forwardedFromAttachmentId: att.id,
+                    isForwarded: true,
+                    width: att.width,
+                    height: att.height,
+                    thumbnailPath: att.thumbnailPath,
+                    thumbnailUrl: att.thumbnailUrl,
+                    duration: att.duration,
+                    bitrate: att.bitrate,
+                    sampleRate: att.sampleRate,
+                    codec: att.codec,
+                    channels: att.channels,
+                    fps: att.fps,
+                    videoCodec: att.videoCodec,
+                    pageCount: att.pageCount,
+                    lineCount: att.lineCount,
+                    uploadedBy: userId,
+                    isAnonymous: false,
+                    transcription: att.transcription ?? undefined,
+                    translations: att.translations ?? undefined,
+                    metadata: att.metadata ?? undefined,
+                  }
+                })
+              )
+            );
+
+            forwardedAttachmentIds = createdAttachments.map(a => a.id);
+
+            // Mettre à jour le messageType si nécessaire
+            if (createdAttachments.length > 0) {
+              const firstMime = createdAttachments[0].mimeType;
+              let detectedType = 'text';
+              if (firstMime.startsWith('image/')) detectedType = 'image';
+              else if (firstMime.startsWith('audio/')) detectedType = 'audio';
+              else if (firstMime.startsWith('video/')) detectedType = 'video';
+              else if (firstMime.startsWith('application/')) detectedType = 'file';
+
+              if (detectedType !== 'text') {
+                await prisma.message.update({
+                  where: { id: message.id },
+                  data: { messageType: detectedType }
+                });
+              }
+            }
+
+            logger.info(`📎 [FORWARD] Copied ${createdAttachments.length} attachment(s) from message ${forwardedFromId}`);
+          }
+        } catch (fwdError) {
+          logger.error('⚠️ [FORWARD] Error copying attachments:', fwdError);
+        }
+      }
+
       // ÉTAPE 3: Opérations post-création en PARALLÈLE (indépendantes)
       // OPTIMIZED: Ces 3 opérations n'ont pas de dépendances entre elles
       const postCreateOperations: Promise<void>[] = [];
