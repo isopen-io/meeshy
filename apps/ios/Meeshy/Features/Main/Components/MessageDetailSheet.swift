@@ -5,7 +5,7 @@ import NaturalLanguage
 // MARK: - DetailTab
 
 enum DetailTab: String, CaseIterable, Identifiable {
-    case language, views, reactions, react, report, delete, forward, sentiment, transcription, meta
+    case language, views, reactions, react, report, delete, forward, sentiment, transcription
 
     var id: String { rawValue }
 
@@ -20,7 +20,6 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .forward: return "arrowshape.turn.up.forward.fill"
         case .sentiment: return "brain.head.profile"
         case .transcription: return "waveform"
-        case .meta: return "info.circle"
         }
     }
 
@@ -35,9 +34,46 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .forward: return "Transferer"
         case .sentiment: return "Sentiment"
         case .transcription: return "Transcription"
-        case .meta: return "Meta"
         }
     }
+}
+
+// MARK: - Views Sub-Filter
+
+private enum ViewsFilter: String, CaseIterable, Identifiable {
+    case sent, delivered, read, listened, watched
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .sent: return "Envoye"
+        case .delivered: return "Distribue"
+        case .read: return "Lu"
+        case .listened: return "Ecoute"
+        case .watched: return "Vu"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .sent: return "paperplane.fill"
+        case .delivered: return "checkmark.circle.fill"
+        case .read: return "eye.fill"
+        case .listened: return "headphones"
+        case .watched: return "play.rectangle.fill"
+        }
+    }
+}
+
+// MARK: - MessageAction (shared for overlay integration)
+
+struct MessageAction: Identifiable {
+    let id: String
+    let icon: String
+    let label: String
+    let color: String
+    let handler: () -> Void
 }
 
 // MARK: - MessageDetailSheet
@@ -46,16 +82,19 @@ struct MessageDetailSheet: View {
     let message: Message
     let contactColor: String
     let conversationId: String
-    var initialTab: DetailTab = .language
+    var initialTab: DetailTab = .views
     var canDelete: Bool = false
+    var actions: [MessageAction]? = nil
+    var onDismissAction: (() -> Void)? = nil
 
     var onReact: ((String) -> Void)?
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var envDismiss
     @State private var selectedTab: DetailTab
+    @State private var actionGridAppeared = false
 
     // Reaction detail state
     @State private var reactionGroups: [ReactionGroup] = []
@@ -83,12 +122,17 @@ struct MessageDetailSheet: View {
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab = .language, canDelete: Bool = false, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
+    // Views sub-filter
+    @State private var viewsFilter: ViewsFilter = .sent
+
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab = .views, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
         self.initialTab = initialTab
         self.canDelete = canDelete
+        self.actions = actions
+        self.onDismissAction = onDismissAction
         self.onReact = onReact
         self.onReport = onReport
         self.onDelete = onDelete
@@ -106,15 +150,32 @@ struct MessageDetailSheet: View {
         }
     }
 
+    private var availableViewsFilters: [ViewsFilter] {
+        var filters: [ViewsFilter] = [.sent, .delivered, .read]
+        let hasAudio = message.attachments.contains { $0.mimeType.hasPrefix("audio/") }
+        let hasVideo = message.attachments.contains { $0.mimeType.hasPrefix("video/") }
+        if hasAudio { filters.append(.listened) }
+        if hasVideo { filters.append(.watched) }
+        return filters
+    }
+
+    private func performDismiss() {
+        if let onDismissAction { onDismissAction() }
+        else { envDismiss() }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            sheetHeader
+            if let actions, !actions.isEmpty {
+                actionGridSection(actions)
+                    .padding(.top, 4)
+            }
             tabBar
             tabContent
         }
-        .background(theme.backgroundPrimary)
+        .background(actions != nil ? Color.clear : theme.backgroundPrimary)
         .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .presentationDragIndicator(actions != nil ? .hidden : .visible)
         .onChange(of: selectedTab) { _, newTab in
             if newTab == .reactions { Task { await loadReactionDetails() } }
             if newTab == .forward { Task { await loadConversations() } }
@@ -124,48 +185,80 @@ struct MessageDetailSheet: View {
             if selectedTab == .reactions { Task { await loadReactionDetails() } }
             if selectedTab == .forward { Task { await loadConversations() } }
             if selectedTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
+                actionGridAppeared = true
+            }
         }
     }
 
-    // MARK: - Sheet Header
+    // MARK: - Action Grid
 
-    private var sheetHeader: some View {
-        let accent = Color(hex: message.senderColor ?? contactColor)
-        let initials = senderInitials(message.senderName)
+    private func actionGridSection(_ actions: [MessageAction]) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 6),
+            GridItem(.flexible(), spacing: 6),
+            GridItem(.flexible(), spacing: 6),
+            GridItem(.flexible(), spacing: 6)
+        ]
 
-        return HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.2))
-                    .frame(width: 40, height: 40)
-                Text(initials)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(accent)
+        return LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                actionGridButton(action, index: index)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(message.senderName ?? "Inconnu")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                Text(formatDateFR(message.createdAt))
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
 
-        // Message preview
+    private func actionGridButton(_ action: MessageAction, index: Int) -> some View {
+        let accent = Color(hex: action.color)
+
+        return Button {
+            HapticFeedback.medium()
+            action.handler()
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [accent.opacity(theme.mode.isDark ? 0.25 : 0.15), accent.opacity(theme.mode.isDark ? 0.12 : 0.06)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(accent.opacity(0.2), lineWidth: 0.5)
+                        )
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: action.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(accent)
+                }
+
+                Text(action.label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .opacity(actionGridAppeared ? 1 : 0)
+            .offset(y: actionGridAppeared ? 0 : 12)
+            .animation(
+                .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                value: actionGridAppeared
+            )
+        }
+        .buttonStyle(DetailActionButtonStyle())
     }
 
     // MARK: - Tab Bar
 
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(availableTabs) { tab in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -175,17 +268,21 @@ struct MessageDetailSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: tab.icon)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                             Text(tab.label)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(selectedTab == tab
-                                      ? Color(hex: contactColor).opacity(0.15)
-                                      : Color.clear)
+                                      ? Color(hex: contactColor).opacity(0.18)
+                                      : theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(selectedTab == tab ? Color(hex: contactColor).opacity(0.3) : Color.clear, lineWidth: 0.5)
                         )
                         .foregroundColor(selectedTab == tab
                                          ? Color(hex: contactColor)
@@ -193,8 +290,8 @@ struct MessageDetailSheet: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
     }
 
@@ -222,14 +319,12 @@ struct MessageDetailSheet: View {
                     sentimentTabContent
                 case .transcription:
                     transcriptionTabContent
-                case .meta:
-                    metaTabContent
                 }
             }
             .id(selectedTab)
             .transition(.opacity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
@@ -295,251 +390,608 @@ struct MessageDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Views Tab Content
+    // MARK: - Views Tab Content (Premium Redesign)
 
     private var viewsTabContent: some View {
         let accent = Color(hex: contactColor)
 
-        return VStack(alignment: .leading, spacing: 16) {
-            // Delivery timeline with real timestamps
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Statut de livraison")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-
-                deliveryStatusRow(
-                    icon: "checkmark",
-                    label: "Envoye",
-                    timestamp: formatTimeFR(message.createdAt),
-                    isReached: deliveryStatusLevel >= 1
-                )
-
-                deliveryStatusRow(
-                    icon: "checkmark.circle",
-                    label: "Distribue",
-                    timestamp: message.deliveredToAllAt.map { formatTimeFR($0) },
-                    isReached: deliveryStatusLevel >= 2,
-                    countText: readStatusData.map { "\($0.receivedCount)/\($0.totalMembers)" }
-                )
-
-                deliveryStatusRow(
-                    icon: "eye",
-                    label: "Lu",
-                    timestamp: message.readByAllAt.map { formatTimeFR($0) },
-                    isReached: deliveryStatusLevel >= 3,
-                    countText: readStatusData.map { "\($0.readCount)/\($0.totalMembers)" }
-                )
-            }
-
-            Divider()
-
-            // Per-user read receipts
-            if isLoadingReadStatus {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .tint(accent)
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-            } else if let status = readStatusData {
-                // Received by section
-                if !status.receivedBy.isEmpty {
-                    readReceiptSection(
-                        title: "Distribue a",
-                        icon: "checkmark.circle",
-                        users: status.receivedBy.map { ReadReceiptRow(userId: $0.userId, username: $0.username, date: $0.receivedAt) }
-                    )
-                }
-
-                // Read by section
-                if !status.readBy.isEmpty {
-                    readReceiptSection(
-                        title: "Lu par",
-                        icon: "eye",
-                        users: status.readBy.map { ReadReceiptRow(userId: $0.userId, username: $0.username, date: $0.readAt) }
-                    )
-                }
-
-                if status.receivedBy.isEmpty && status.readBy.isEmpty {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 6) {
-                            Image(systemName: "person.slash")
-                                .font(.system(size: 24))
-                                .foregroundColor(theme.textMuted.opacity(0.5))
-                            Text("Aucune confirmation de reception")
-                                .font(.system(size: 13))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .padding(.vertical, 12)
-                        Spacer()
+        return VStack(alignment: .leading, spacing: 0) {
+            // Sub-filter capsules
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(availableViewsFilters) { filter in
+                        viewsFilterCapsule(filter, accent: accent)
                     }
                 }
             }
+            .padding(.bottom, 14)
 
-            // Per-attachment media consumption
-            let mediaAttachments = message.attachments.filter {
-                $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
-            }
-
-            if !mediaAttachments.isEmpty {
-                Divider()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Consommation media")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-
-                    if isLoadingAttachmentStatuses {
-                        HStack {
-                            Spacer()
-                            ProgressView().tint(accent)
-                            Spacer()
-                        }
-                    } else {
-                        ForEach(mediaAttachments) { attachment in
-                            attachmentConsumptionSection(attachment)
-                        }
-                    }
+            // Content for selected filter
+            Group {
+                switch viewsFilter {
+                case .sent:
+                    viewsSentContent(accent: accent)
+                case .delivered:
+                    viewsDeliveredContent(accent: accent)
+                case .read:
+                    viewsReadContent(accent: accent)
+                case .listened:
+                    viewsListenedContent(accent: accent)
+                case .watched:
+                    viewsWatchedContent(accent: accent)
                 }
             }
+            .id(viewsFilter)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                removal: .opacity.combined(with: .move(edge: .leading))
+            ))
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewsFilter)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Read Receipt Section
+    private func viewsFilterCapsule(_ filter: ViewsFilter, accent: Color) -> some View {
+        let isSelected = viewsFilter == filter
+        var count: Int? = nil
 
-    private func readReceiptSection(title: String, icon: String, users: [ReadReceiptRow]) -> some View {
-        let accent = Color(hex: contactColor)
+        switch filter {
+        case .delivered: count = readStatusData?.receivedCount
+        case .read: count = readStatusData?.readCount
+        case .listened:
+            let audioIds = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }.map(\.id)
+            count = audioIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
+        case .watched:
+            let videoIds = message.attachments.filter { $0.mimeType.hasPrefix("video/") }.map(\.id)
+            count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
+        default: break
+        }
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
+        return Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                viewsFilter = filter
+            }
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: filter.icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(filter.label)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(accent)
-                Text(title)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(isSelected ? accent : theme.textMuted)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? accent.opacity(0.15) : theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                        )
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isSelected ? accent.opacity(0.15) : theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? accent.opacity(0.35) : Color.clear, lineWidth: 0.5)
+            )
+            .foregroundColor(isSelected ? accent : theme.textMuted)
+        }
+    }
+
+    // MARK: - Envoyé (Sent) — Message Info + Author
+
+    private func viewsSentContent(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Author card with avatar
+            HStack(spacing: 12) {
+                MeeshyAvatar(
+                    name: message.senderName ?? "?",
+                    mode: .conversationHeader,
+                    accentColor: message.senderColor ?? contactColor,
+                    avatarURL: message.senderAvatarURL
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(message.senderName ?? "Inconnu")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+
+                    Text(formatDateFR(message.createdAt))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                Spacer()
+
+                // Delivery badge
+                deliveryBadge(accent: accent)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(accent.opacity(0.1), lineWidth: 0.5)
+                    )
+            )
+
+            // Message meta info (merged from old Meta tab)
+            VStack(spacing: 0) {
+                metaInfoRow(icon: "number", label: "ID", value: String(message.id.prefix(12)), accent: accent)
+                metaDivider
+                metaInfoRow(icon: "bubble.left.fill", label: "Type", value: message.messageType.rawValue, accent: accent)
+                metaDivider
+                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: "Source", value: message.messageSource.rawValue, accent: accent)
+                metaDivider
+                metaInfoRow(icon: "globe", label: "Langue", value: message.originalLanguage.uppercased(), accent: accent)
+                metaDivider
+                metaInfoRow(
+                    icon: "lock.shield.fill",
+                    label: "Chiffrement",
+                    value: message.isEncrypted
+                        ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
+                        : "Non",
+                    accent: accent,
+                    valueColor: message.isEncrypted ? .green : nil
+                )
+
+                if message.isEdited {
+                    metaDivider
+                    metaInfoRow(icon: "pencil", label: "Modifie", value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                }
+
+                if !message.attachments.isEmpty {
+                    metaDivider
+                    let types = Set(message.attachments.map {
+                        $0.mimeType.components(separatedBy: "/").first ?? "file"
+                    })
+                    metaInfoRow(
+                        icon: "paperclip",
+                        label: "Pieces jointes",
+                        value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))",
+                        accent: accent
+                    )
+                }
+
+                if let forward = message.forwardedFrom {
+                    metaDivider
+                    metaInfoRow(icon: "arrowshape.turn.up.forward.fill", label: "Transfere de", value: forward.senderName, accent: accent)
+                    if let convo = forward.conversationName {
+                        metaDivider
+                        metaInfoRow(icon: "bubble.left.and.bubble.right", label: "Conversation", value: convo, accent: accent)
+                    }
+                }
+
+                if let reply = message.replyTo {
+                    metaDivider
+                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: "Reponse a", value: reply.authorName, accent: accent)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func deliveryBadge(accent: Color) -> some View {
+        let level = deliveryStatusLevel
+        let icon: String
+        let label: String
+        let color: Color
+
+        switch level {
+        case 3:
+            icon = "eye.fill"
+            label = "Lu"
+            color = .green
+        case 2:
+            icon = "checkmark.circle.fill"
+            label = "Distribue"
+            color = accent
+        case 1:
+            icon = "checkmark"
+            label = "Envoye"
+            color = accent.opacity(0.7)
+        case 0:
+            icon = "arrow.up.circle"
+            label = "Envoi..."
+            color = theme.textMuted
+        default:
+            icon = "exclamationmark.circle"
+            label = "Echec"
+            color = .red
+        }
+
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(color.opacity(0.12))
+        )
+    }
+
+    private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(accent.opacity(0.6))
+                .frame(width: 16)
+
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .frame(width: 85, alignment: .leading)
+
+            Text(value)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(valueColor ?? theme.textPrimary)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+    }
+
+    private var metaDivider: some View {
+        Rectangle()
+            .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            .frame(height: 0.5)
+            .padding(.leading, 38)
+    }
+
+    // MARK: - Distribué (Delivered) — User List
+
+    private func viewsDeliveredContent(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if isLoadingReadStatus {
+                loadingIndicator(accent: accent)
+            } else if let status = readStatusData {
+                if status.receivedBy.isEmpty {
+                    emptyStateView(icon: "checkmark.circle", text: "Aucune confirmation de distribution", accent: accent)
+                } else {
+                    // Timeline header
+                    if let deliveredAt = message.deliveredToAllAt {
+                        timelineBanner(
+                            icon: "checkmark.circle.fill",
+                            text: "Distribue a tous",
+                            detail: formatTimeFR(deliveredAt),
+                            count: "\(status.receivedCount)/\(status.totalMembers)",
+                            accent: accent
+                        )
+                    }
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(status.receivedBy.enumerated()), id: \.element.userId) { index, user in
+                            userStatusRow(
+                                username: user.username,
+                                avatar: nil,
+                                date: user.receivedAt,
+                                accent: accent,
+                                index: index
+                            )
+                        }
+                    }
+                }
+            } else {
+                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+            }
+        }
+    }
+
+    // MARK: - Lu (Read) — User List
+
+    private func viewsReadContent(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if isLoadingReadStatus {
+                loadingIndicator(accent: accent)
+            } else if let status = readStatusData {
+                if status.readBy.isEmpty {
+                    emptyStateView(icon: "eye.slash", text: "Personne n'a lu ce message", accent: accent)
+                } else {
+                    if let readAt = message.readByAllAt {
+                        timelineBanner(
+                            icon: "eye.fill",
+                            text: "Lu par tous",
+                            detail: formatTimeFR(readAt),
+                            count: "\(status.readCount)/\(status.totalMembers)",
+                            accent: accent
+                        )
+                    }
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(status.readBy.enumerated()), id: \.element.userId) { index, user in
+                            userStatusRow(
+                                username: user.username,
+                                avatar: nil,
+                                date: user.readAt,
+                                accent: accent,
+                                index: index
+                            )
+                        }
+                    }
+                }
+            } else {
+                emptyStateView(icon: "wifi.slash", text: "Impossible de charger les donnees", accent: accent)
+            }
+        }
+    }
+
+    // MARK: - Écouté (Listened) — Per-Audio Attachment
+
+    private func viewsListenedContent(accent: Color) -> some View {
+        let audioAttachments = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }
+
+        return VStack(alignment: .leading, spacing: 14) {
+            if isLoadingAttachmentStatuses {
+                loadingIndicator(accent: accent)
+            } else {
+                ForEach(audioAttachments) { attachment in
+                    mediaConsumptionCard(
+                        attachment: attachment,
+                        isAudio: true,
+                        accent: accent
+                    )
+                }
+
+                if audioAttachments.isEmpty {
+                    emptyStateView(icon: "headphones", text: "Aucun audio attache", accent: accent)
+                }
+            }
+        }
+    }
+
+    // MARK: - Vu (Watched) — Per-Video Attachment
+
+    private func viewsWatchedContent(accent: Color) -> some View {
+        let videoAttachments = message.attachments.filter { $0.mimeType.hasPrefix("video/") }
+
+        return VStack(alignment: .leading, spacing: 14) {
+            if isLoadingAttachmentStatuses {
+                loadingIndicator(accent: accent)
+            } else {
+                ForEach(videoAttachments) { attachment in
+                    mediaConsumptionCard(
+                        attachment: attachment,
+                        isAudio: false,
+                        accent: accent
+                    )
+                }
+
+                if videoAttachments.isEmpty {
+                    emptyStateView(icon: "play.rectangle", text: "Aucune video attachee", accent: accent)
+                }
+            }
+        }
+    }
+
+    // MARK: - Shared Views Components
+
+    private func timelineBanner(icon: String, text: String, detail: String, count: String, accent: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(accent)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(text)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+            }
+
+            Spacer()
+
+            Text(count)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(accent.opacity(0.12))
+                )
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(accent.opacity(theme.mode.isDark ? 0.06 : 0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(accent.opacity(0.12), lineWidth: 0.5)
+                )
+        )
+    }
+
+    private func userStatusRow(username: String, avatar: String?, date: Date, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
+        HStack(spacing: 10) {
+            MeeshyAvatar(
+                name: username,
+                mode: .messageBubble,
+                accentColor: contactColor,
+                avatarURL: avatar
+            )
+
+            Text(username)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            if let trailing {
+                trailing
+            }
+
+            Text(relativeDate(date))
+                .font(.system(size: 11))
+                .foregroundColor(theme.textMuted)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+    }
+
+    private func mediaConsumptionCard(attachment: MessageAttachment, isAudio: Bool, accent: Color) -> some View {
+        let users = attachmentStatuses[attachment.id] ?? []
+        let icon = isAudio ? "waveform" : "film"
+        let name = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
+
+        return VStack(alignment: .leading, spacing: 10) {
+            // Attachment header
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(accent.opacity(theme.mode.isDark ? 0.15 : 0.1))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accent)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+
+                    if let duration = attachment.duration {
+                        Text(formatDuration(duration / 1000))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(theme.textMuted)
+                    }
+                }
+
+                Spacer()
+
                 Text("\(users.count)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(accent)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(accent.opacity(0.12)))
             }
 
-            ForEach(users) { user in
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(0.15))
-                            .frame(width: 30, height: 30)
-                        Text(senderInitials(user.username))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(accent)
-                    }
-
-                    Text(user.username)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-
-                    Spacer()
-
-                    Text(relativeDate(user.date))
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.textMuted)
-                }
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    // MARK: - Attachment Consumption Section
-
-    private func attachmentConsumptionSection(_ attachment: MessageAttachment) -> some View {
-        let accent = Color(hex: contactColor)
-        let isAudio = attachment.mimeType.hasPrefix("audio/")
-        let icon = isAudio ? "waveform" : "video"
-        let actionLabel = isAudio ? "ecoute" : "visionne"
-        let users = attachmentStatuses[attachment.id] ?? []
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(accent)
-
-                Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-
-                if let duration = attachment.duration {
-                    Text(formatDuration(duration / 1000))
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.textMuted)
-                }
-            }
-
             if users.isEmpty {
-                Text("Pas encore \(actionLabel)")
+                Text(isAudio ? "Pas encore ecoute" : "Pas encore visionne")
                     .font(.system(size: 12))
                     .foregroundColor(theme.textMuted)
-                    .padding(.leading, 20)
+                    .padding(.vertical, 4)
             } else {
-                ForEach(users) { user in
+                // User consumption rows
+                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
                     let listenDate = isAudio ? user.listenedAt : user.watchedAt
                     let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
                     let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
+                    let count = isAudio ? user.listenCount : user.watchCount
 
                     HStack(spacing: 10) {
-                        ZStack {
-                            Circle()
-                                .fill(accent.opacity(0.12))
-                                .frame(width: 28, height: 28)
-                            Text(senderInitials(user.username))
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(accent)
-                        }
+                        MeeshyAvatar(
+                            name: user.username,
+                            mode: .messageBubble,
+                            accentColor: contactColor,
+                            avatarURL: user.avatar
+                        )
 
-                        Text(user.username)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(user.username)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+
+                            if let date = listenDate {
+                                Text(relativeDate(date))
+                                    .font(.system(size: 10))
+                                    .foregroundColor(theme.textMuted)
+                            }
+                        }
 
                         Spacer()
 
+                        // Play count badge
+                        if let c = count, c > 1 {
+                            Text("\(c)x")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(accent.opacity(0.8))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(accent.opacity(0.08))
+                                )
+                        }
+
+                        // Completion status
                         if isComplete {
                             HStack(spacing: 3) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.green)
+                                    .font(.system(size: 11))
                                 Text("complet")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.green)
+                                    .font(.system(size: 10, weight: .semibold))
                             }
+                            .foregroundColor(Color(hex: "2ECC71"))
                         } else if let pos = positionMs, pos > 0 {
                             Text(formatDuration(pos / 1000))
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .foregroundColor(theme.textMuted)
-                        }
-
-                        if let date = listenDate {
-                            Text(relativeDate(date))
-                                .font(.system(size: 10))
-                                .foregroundColor(theme.textMuted)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                )
                         }
                     }
-                    .padding(.vertical, 3)
-                    .padding(.leading, 20)
+                    .padding(.vertical, 4)
                 }
             }
         }
-        .padding(10)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04), lineWidth: 0.5)
+                )
         )
+    }
+
+    private func loadingIndicator(accent: Color) -> some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .tint(accent)
+            Spacer()
+        }
+        .padding(.vertical, 30)
+    }
+
+    private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(theme.textMuted.opacity(0.4))
+            Text(text)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
     }
 
     // MARK: - Reactions Tab Content
@@ -566,7 +1018,6 @@ struct MessageDetailSheet: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
             }
 
             if isLoadingReactions {
@@ -628,18 +1079,13 @@ struct MessageDetailSheet: View {
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
-        let accent = Color(hex: contactColor)
-        let initials = senderInitials(item.username)
-
-        return HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.15))
-                    .frame(width: 34, height: 34)
-                Text(initials)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(accent)
-            }
+        HStack(spacing: 10) {
+            MeeshyAvatar(
+                name: item.username,
+                mode: .messageBubble,
+                accentColor: contactColor,
+                avatarURL: item.avatar
+            )
 
             Text(item.username)
                 .font(.system(size: 14, weight: .medium))
@@ -661,16 +1107,7 @@ struct MessageDetailSheet: View {
     }
 
     private var emptyReactionsView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "face.smiling")
-                .font(.system(size: 32))
-                .foregroundColor(theme.textMuted.opacity(0.5))
-            Text("Aucune reaction")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .padding(.vertical, 30)
-        .frame(maxWidth: .infinity)
+        emptyStateView(icon: "face.smiling", text: "Aucune reaction", accent: Color(hex: contactColor))
     }
 
     // MARK: - React Tab Content
@@ -690,7 +1127,7 @@ struct MessageDetailSheet: View {
                         Button {
                             EmojiUsageTracker.recordUsage(emoji: emoji)
                             onReact?(emoji)
-                            dismiss()
+                            performDismiss()
                         } label: {
                             Text(emoji)
                                 .font(.system(size: 36))
@@ -705,7 +1142,7 @@ struct MessageDetailSheet: View {
 
             EmojiPickerView(recentEmojis: quickEmojis) { emoji in
                 onReact?(emoji)
-                dismiss()
+                performDismiss()
             }
             .frame(height: 300)
         }
@@ -739,7 +1176,7 @@ struct MessageDetailSheet: View {
                 Button {
                     HapticFeedback.medium()
                     onDelete?()
-                    dismiss()
+                    performDismiss()
                 } label: {
                     Text("Supprimer")
                         .font(.system(size: 15, weight: .semibold))
@@ -752,7 +1189,7 @@ struct MessageDetailSheet: View {
                 }
 
                 Button {
-                    dismiss()
+                    performDismiss()
                 } label: {
                     Text("Annuler")
                         .font(.system(size: 15, weight: .medium))
@@ -811,7 +1248,7 @@ struct MessageDetailSheet: View {
                     isSubmittingReport = true
                     HapticFeedback.medium()
                     onReport?(reportType.rawValue, reportReason.isEmpty ? nil : reportReason)
-                    dismiss()
+                    performDismiss()
                 } label: {
                     if isSubmittingReport {
                         ProgressView()
@@ -915,15 +1352,7 @@ struct MessageDetailSheet: View {
                     .tint(Color(hex: contactColor))
                     .padding(.vertical, 20)
             } else if filteredForwardConversations.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 32))
-                        .foregroundColor(theme.textMuted)
-                    Text("Aucune conversation")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .padding(.vertical, 20)
+                emptyStateView(icon: "bubble.left.and.bubble.right", text: "Aucune conversation", accent: Color(hex: contactColor))
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredForwardConversations) { conv in
@@ -1081,79 +1510,7 @@ struct MessageDetailSheet: View {
                 )
             }
 
-            HStack {
-                Spacer()
-                VStack(spacing: 6) {
-                    Image(systemName: "text.below.photo")
-                        .font(.system(size: 24))
-                        .foregroundColor(theme.textMuted.opacity(0.5))
-                    Text("Transcription non disponible")
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textMuted)
-                }
-                .padding(.vertical, 20)
-                Spacer()
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Meta Tab Content
-
-    private var metaTabContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            metaRow(key: "ID", value: String(message.id.prefix(12)))
-            metaRow(key: "Type", value: message.messageType.rawValue)
-            metaRow(key: "Source", value: message.messageSource.rawValue)
-            metaRow(key: "Langue", value: message.originalLanguage.uppercased())
-            metaRow(key: "Cree le", value: formatDateTimeFR(message.createdAt))
-            metaRow(key: "Modifie le", value: formatDateTimeFR(message.updatedAt))
-
-            metaRow(
-                key: "Chiffrement",
-                value: message.isEncrypted
-                    ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
-                    : "Non"
-            )
-
-            if message.isEdited {
-                metaRow(key: "Etat", value: "Modifie", valueColor: .yellow)
-            }
-            if message.isDeleted {
-                metaRow(key: "Etat", value: "Supprime", valueColor: .red)
-            }
-
-            if !message.attachments.isEmpty {
-                let types = Set(message.attachments.map {
-                    $0.mimeType.components(separatedBy: "/").first ?? "file"
-                })
-                metaRow(
-                    key: "Pieces jointes",
-                    value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))"
-                )
-            }
-
-            if let forward = message.forwardedFrom {
-                Divider()
-                Text("Transfere de")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .textCase(.uppercase)
-                metaRow(key: "Auteur", value: forward.senderName)
-                if let convo = forward.conversationName {
-                    metaRow(key: "Conversation", value: convo)
-                }
-            }
-
-            if let reply = message.replyTo {
-                Divider()
-                Text("Reponse a")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .textCase(.uppercase)
-                metaRow(key: "Auteur", value: reply.authorName)
-                metaRow(key: "Apercu", value: reply.previewText)
-            }
+            emptyStateView(icon: "text.below.photo", text: "Transcription non disponible", accent: Color(hex: contactColor))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1255,33 +1612,6 @@ struct MessageDetailSheet: View {
 
     // MARK: - Helpers
 
-    private func deliveryStatusRow(icon: String, label: String, timestamp: String?, isReached: Bool, countText: String? = nil) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(isReached ? Color(hex: contactColor) : theme.textMuted.opacity(0.5))
-                .frame(width: 20)
-
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isReached ? theme.textPrimary : theme.textMuted.opacity(0.5))
-
-            if let countText {
-                Text(countText)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color(hex: contactColor).opacity(0.7))
-            }
-
-            Spacer()
-
-            if let timestamp {
-                Text(timestamp)
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.textMuted)
-            }
-        }
-    }
-
     private var deliveryStatusLevel: Int {
         switch message.deliveryStatus {
         case .failed: return -1
@@ -1290,31 +1620,6 @@ struct MessageDetailSheet: View {
         case .delivered: return 2
         case .read: return 3
         }
-    }
-
-    private func metaRow(key: String, value: String, valueColor: Color? = nil) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(key)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .frame(width: 100, alignment: .trailing)
-
-            Text(value)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(valueColor ?? theme.textPrimary)
-                .lineLimit(2)
-
-            Spacer()
-        }
-    }
-
-    private func senderInitials(_ name: String?) -> String {
-        guard let name = name, !name.isEmpty else { return "?" }
-        let words = name.components(separatedBy: " ")
-        if words.count >= 2 {
-            return String(words[0].prefix(1) + words[1].prefix(1)).uppercased()
-        }
-        return String(name.prefix(2)).uppercased()
     }
 
     private func formatDateFR(_ date: Date) -> String {
@@ -1343,14 +1648,6 @@ struct MessageDetailSheet: View {
         let mins = seconds / 60
         let secs = seconds % 60
         return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        let kb = Double(bytes) / 1024
-        if kb < 1024 { return String(format: "%.1f KB", kb) }
-        let mb = kb / 1024
-        return String(format: "%.1f MB", mb)
     }
 
     private func analyzeSentiment(_ text: String) -> Double {
@@ -1384,6 +1681,17 @@ struct MessageDetailSheet: View {
     }
 }
 
+// MARK: - Detail Action Button Style
+
+private struct DetailActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.65), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Reaction User Item
 
 private struct ReactionUserItem: Identifiable {
@@ -1394,16 +1702,6 @@ private struct ReactionUserItem: Identifiable {
     let createdAt: Date
 
     var id: String { "\(userId)-\(emoji)" }
-}
-
-// MARK: - Read Receipt Row
-
-private struct ReadReceiptRow: Identifiable {
-    let userId: String
-    let username: String
-    let date: Date
-
-    var id: String { userId }
 }
 
 // MARK: - Read Status API Models
@@ -1448,5 +1746,3 @@ private struct AttachmentStatusUser: Decodable, Identifiable {
 
     var id: String { userId }
 }
-
-// EmojiUsageTracker is defined in MessageOverlayMenu.swift (shared across app)

@@ -236,7 +236,7 @@ struct ThemedMessageBubble: View {
                 .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
                     reactionsOverlay
                         .padding(message.isMe ? .trailing : .leading, 8)
-                        .offset(y: 6)
+                        .offset(y: 21)
                 }
 
                 // View-once indicator + timestamp
@@ -252,7 +252,7 @@ struct ThemedMessageBubble: View {
 
             if !message.isMe { Spacer(minLength: 50) }
         }
-        .padding(.bottom, 16)
+        .padding(.bottom, message.reactions.isEmpty ? 16 : 30)
         .alert("Navigation", isPresented: $showProfileAlert) {
             Button("OK") {}
         } message: {
@@ -585,72 +585,87 @@ struct ThemedMessageBubble: View {
         let accent = Color(hex: contactColor)
 
         return HStack(spacing: 5) {
-            // Add reaction button
-            Button(action: {
-                onAddReaction?(message.id)
-            }) {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
+            // Add reaction button BEFORE pills for other's messages
+            if !message.isMe {
+                addReactionButton(isDark: isDark, accent: accent)
             }
-            .frame(width: 28, height: 28)
-            .background(
-                Circle()
-                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
-                    .overlay(
-                        Circle()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                    )
-                    .shadow(color: accent.opacity(0.1), radius: 4, y: 2)
-            )
 
-            // Emoji reactions
+            // Emoji reaction pills
             ForEach(reactionSummaries, id: \.emoji) { reaction in
-                HStack(spacing: 3) {
-                    Text(reaction.emoji)
-                        .font(.system(size: 14))
-                    if reaction.count > 1 {
-                        Text("\(reaction.count)")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(
-                                reaction.includesMe
-                                    ? (isDark ? .white : .white)
-                                    : (isDark ? .white.opacity(0.7) : accent)
-                            )
-                    }
-                }
-                .padding(.horizontal, reaction.count > 1 ? 8 : 6)
-                .frame(height: 28)
-                .background(
+                reactionPill(reaction: reaction, isDark: isDark, accent: accent)
+            }
+
+            // Add reaction button AFTER pills for my messages (right side)
+            if message.isMe {
+                addReactionButton(isDark: isDark, accent: accent)
+            }
+        }
+    }
+
+    private func addReactionButton(isDark: Bool, accent: Color) -> some View {
+        Button(action: {
+            onAddReaction?(message.id)
+        }) {
+            Image(systemName: "face.smiling")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
+        }
+        .frame(width: 28, height: 28)
+        .background(
+            Circle()
+                .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
+                .overlay(
+                    Circle()
+                        .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                )
+                .shadow(color: accent.opacity(0.1), radius: 4, y: 2)
+        )
+    }
+
+    private func reactionPill(reaction: ReactionSummary, isDark: Bool, accent: Color) -> some View {
+        HStack(spacing: 3) {
+            Text(reaction.emoji)
+                .font(.system(size: 14))
+            if reaction.count > 1 {
+                Text("\(reaction.count)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(
+                        reaction.includesMe
+                            ? (isDark ? .white : .white)
+                            : (isDark ? .white.opacity(0.7) : accent)
+                    )
+            }
+        }
+        .padding(.horizontal, reaction.count > 1 ? 8 : 6)
+        .frame(height: 28)
+        .background(
+            Capsule()
+                .fill(
+                    reaction.includesMe
+                        ? (isDark
+                            ? accent.opacity(0.35)
+                            : accent.opacity(0.2))
+                        : (isDark
+                            ? Color.white.opacity(0.08)
+                            : Color.black.opacity(0.04))
+                )
+                .overlay(
                     Capsule()
-                        .fill(
+                        .stroke(
                             reaction.includesMe
-                                ? (isDark
-                                    ? accent.opacity(0.35)
-                                    : accent.opacity(0.2))
-                                : (isDark
-                                    ? Color.white.opacity(0.08)
-                                    : Color.black.opacity(0.04))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    reaction.includesMe
-                                        ? accent.opacity(isDark ? 0.6 : 0.4)
-                                        : accent.opacity(isDark ? 0.15 : 0.1),
-                                    lineWidth: reaction.includesMe ? 1.5 : 0.5
-                                )
-                        )
-                        .shadow(
-                            color: reaction.includesMe ? accent.opacity(0.25) : .clear,
-                            radius: 4, y: 2
+                                ? accent.opacity(isDark ? 0.6 : 0.4)
+                                : accent.opacity(isDark ? 0.15 : 0.1),
+                            lineWidth: reaction.includesMe ? 1.5 : 0.5
                         )
                 )
-                .onTapGesture {
-                    HapticFeedback.light()
-                    onShowReactions?(message.id)
-                }
-            }
+                .shadow(
+                    color: reaction.includesMe ? accent.opacity(0.25) : .clear,
+                    radius: 4, y: 2
+                )
+        )
+        .onTapGesture {
+            HapticFeedback.light()
+            onShowReactions?(message.id)
         }
     }
 

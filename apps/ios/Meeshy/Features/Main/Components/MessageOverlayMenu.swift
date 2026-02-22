@@ -7,43 +7,46 @@ import MeeshySDK
 struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
+    let conversationId: String
     let messageBubbleFrame: CGRect
     @Binding var isPresented: Bool
+    var canDelete: Bool = false
     var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
-    var onForward: (() -> Void)?
-    var onDelete: (() -> Void)?
     var onPin: (() -> Void)?
     var onReact: ((String) -> Void)?
-    var onReport: (() -> Void)?
-    var onShowInfo: (() -> Void)?
-    var onAddReaction: (() -> Void)?
+    var onReport: ((String, String?) -> Void)?
+    var onDelete: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isVisible = false
-    @State private var menuExpanded = false
 
-    private let compactMenuHeight: CGFloat = 190
-    private let expandedMenuHeight: CGFloat = 300
     private let previewCharLimit = 500
 
     var body: some View {
         GeometryReader { geometry in
+            let panelHeight = geometry.size.height * 0.56 + geometry.safeAreaInsets.bottom
+            let previewMaxH = geometry.size.height - panelHeight - geometry.safeAreaInsets.top - 16
+
             ZStack {
                 dismissBackground
 
                 VStack(spacing: 0) {
                     Spacer(minLength: geometry.safeAreaInsets.top + 8)
 
-                    messagePreview
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.6)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        messagePreview
+                    }
+                    .frame(maxHeight: max(60, previewMaxH))
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.6)
 
-                    Spacer(minLength: 12)
+                    Spacer(minLength: 8)
 
-                    compactActionMenu(in: geometry)
-                        .offset(y: isVisible ? 0 : 300)
+                    detailPanel(safeBottom: geometry.safeAreaInsets.bottom)
+                        .frame(height: panelHeight)
+                        .offset(y: isVisible ? 0 : panelHeight)
                 }
             }
         }
@@ -241,29 +244,28 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Compact Action Menu (BOTTOM)
+    // MARK: - Detail Panel (replaces compact action menu)
 
-    @ViewBuilder
-    private func compactActionMenu(in geometry: GeometryProxy) -> some View {
-        let actions = availableActions
-        let currentHeight = menuExpanded ? expandedMenuHeight : compactMenuHeight
-
+    private func detailPanel(safeBottom: CGFloat) -> some View {
         VStack(spacing: 0) {
-            dragHandle
-                .gesture(menuDragGesture)
+            panelHandle
 
-            ScrollView(showsIndicators: false) {
-                actionGrid(actions: actions)
-                    .padding(.horizontal, 16)
-            }
-            .frame(maxHeight: currentHeight - 44)
+            MessageDetailSheet(
+                message: message,
+                contactColor: contactColor,
+                conversationId: conversationId,
+                initialTab: .views,
+                canDelete: canDelete,
+                actions: overlayActions,
+                onDismissAction: { dismiss() },
+                onReact: { emoji in onReact?(emoji) },
+                onReport: { type, reason in onReport?(type, reason) },
+                onDelete: { onDelete?() }
+            )
 
-            cancelButton
-
-            Spacer(minLength: 0)
+            Spacer(minLength: safeBottom)
         }
-        .frame(height: currentHeight + 56 + geometry.safeAreaInsets.bottom)
-        .background(menuBackground)
+        .background(panelBackground)
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 20,
@@ -274,78 +276,19 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    private var dragHandle: some View {
+    private var panelHandle: some View {
         VStack(spacing: 0) {
             Capsule()
                 .fill(theme.textMuted.opacity(0.4))
                 .frame(width: 36, height: 4)
-                .padding(.vertical, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                menuExpanded.toggle()
-            }
-            HapticFeedback.light()
-        }
     }
 
-    private func actionGrid(actions: [OverlayAction]) -> some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ]
-
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(actions) { action in
-                actionButton(action)
-            }
-        }
-        .padding(.bottom, 8)
-    }
-
-    private func actionButton(_ action: OverlayAction) -> some View {
-        Button {
-            dismissThen { action.handler() }
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: action.color).opacity(theme.mode.isDark ? 0.2 : 0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: action.icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(Color(hex: action.color))
-                }
-                Text(action.label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: 72)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(ActionButtonStyle())
-    }
-
-    private var cancelButton: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .padding(.horizontal, 16)
-
-            Button { dismiss() } label: {
-                Text("Annuler")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-        }
-    }
-
-    private var menuBackground: some View {
+    private var panelBackground: some View {
         UnevenRoundedRectangle(
             topLeadingRadius: 20,
             bottomLeadingRadius: 0,
@@ -379,89 +322,41 @@ struct MessageOverlayMenu: View {
         .shadow(color: .black.opacity(0.2), radius: 20, y: -4)
     }
 
-    // MARK: - Drag Gesture
+    // MARK: - Quick Actions for Grid
 
-    private var menuDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                let translation = value.translation.height
-                if translation < -30 && !menuExpanded {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        menuExpanded = true
-                    }
-                    HapticFeedback.light()
-                } else if translation > 30 && menuExpanded {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        menuExpanded = false
-                    }
-                    HapticFeedback.light()
-                } else if translation > 60 && !menuExpanded {
-                    dismiss()
-                }
-            }
-    }
+    private var overlayActions: [MessageAction] {
+        var actions: [MessageAction] = []
+        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-    // MARK: - Available Actions
-
-    private var availableActions: [OverlayAction] {
-        var actions: [OverlayAction] = []
-
-        actions.append(OverlayAction(
+        actions.append(MessageAction(
             id: "reply", icon: "arrowshape.turn.up.left.fill",
             label: "Repondre", color: "4ECDC4",
-            handler: { onReply?() }
+            handler: { dismissThen { onReply?() } }
         ))
 
-        let hasTextContent = !message.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty
-        if hasTextContent {
-            actions.append(OverlayAction(
+        if hasText {
+            actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
                 label: "Copier", color: "9B59B6",
-                handler: { onCopy?() }
+                handler: { dismissThen { onCopy?() } }
             ))
         }
 
-        actions.append(OverlayAction(
-            id: "forward", icon: "arrowshape.turn.up.forward.fill",
-            label: "Transferer", color: "F8B500",
-            handler: { onForward?() }
-        ))
-
-        actions.append(OverlayAction(
+        actions.append(MessageAction(
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
             label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
             color: "3498DB",
-            handler: { onPin?() }
+            handler: { dismissThen { onPin?() } }
         ))
 
-        actions.append(OverlayAction(
-            id: "info", icon: "info.circle.fill",
-            label: "Infos", color: "45B7D1",
-            handler: { onShowInfo?() }
-        ))
-
-        if message.isMe {
-            if hasTextContent {
-                actions.append(OverlayAction(
-                    id: "edit", icon: "pencil",
-                    label: "Modifier", color: "F8B500",
-                    handler: { onEdit?() }
-                ))
-            }
-
-            actions.append(OverlayAction(
-                id: "delete", icon: "trash.fill",
-                label: "Supprimer", color: "FF6B6B",
-                handler: { onDelete?() }
+        if message.isMe && hasText {
+            actions.append(MessageAction(
+                id: "edit", icon: "pencil",
+                label: "Modifier", color: "F8B500",
+                handler: { dismissThen { onEdit?() } }
             ))
         }
-
-        actions.append(OverlayAction(
-            id: "report", icon: "exclamationmark.triangle.fill",
-            label: "Signaler", color: "E67E22",
-            handler: { onReport?() }
-        ))
 
         return actions
     }
@@ -866,26 +761,5 @@ struct EmojiUsageTracker {
 
     private static func getCounts() -> [String: Int] {
         UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
-    }
-}
-
-// MARK: - Overlay Action Model
-
-private struct OverlayAction: Identifiable {
-    let id: String
-    let icon: String
-    let label: String
-    let color: String
-    let handler: () -> Void
-}
-
-// MARK: - Action Button Style
-
-private struct ActionButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

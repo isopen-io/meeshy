@@ -41,6 +41,13 @@ extension ConversationView {
             }
 
             VStack(spacing: 0) {
+                if quickReactionMessageId == msg.id {
+                    quickReactionBar(for: msg.id)
+                        .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
+                        .padding(.bottom, 6)
+                        .zIndex(100)
+                }
+
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,

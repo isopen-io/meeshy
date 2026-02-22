@@ -346,36 +346,6 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
-            if quickReactionMessageId != nil {
-                Color.black.opacity(0.001)
-                    .onTapGesture { closeReactionBar() }
-                    .allowsHitTesting(true)
-                    .zIndex(10)
-            }
-
-            // Floating reaction bar — rendered ABOVE dismiss overlay so taps work
-            if let reactionMsgId = quickReactionMessageId {
-                GeometryReader { geo in
-                    let msgFrame = messageFrames[reactionMsgId] ?? .zero
-                    let containerOrigin = geo.frame(in: .global).origin
-                    let barY = msgFrame.minY - containerOrigin.y - 60
-
-                    let targetMsg = viewModel.messages.first(where: { $0.id == reactionMsgId })
-                    let isMe = targetMsg?.isMe ?? false
-
-                    VStack(spacing: 0) {
-                        HStack {
-                            if isMe { Spacer() }
-                            quickReactionBar(for: reactionMsgId)
-                            if !isMe { Spacer() }
-                        }
-                        .padding(.horizontal, 12)
-                    }
-                    .offset(y: max(60, barY))
-                }
-                .zIndex(15)
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
-            }
 
             if !isNearBottom {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
@@ -451,6 +421,12 @@ struct ConversationView: View {
                     Color.clear.frame(height: composerHeight).id("bottom_spacer")
                 }
                 .padding(.horizontal, 16)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if quickReactionMessageId != nil {
+                        closeReactionBar()
+                    }
+                }
             }
             .onChange(of: viewModel.isLoadingInitial) { isLoading in
                 if !isLoading, let last = viewModel.messages.last {
@@ -598,8 +574,12 @@ struct ConversationView: View {
     private var overlayMenuContent: some View {
         if showOverlayMenu, let msg = overlayMessage {
             MessageOverlayMenu(
-                message: msg, contactColor: accentColor, messageBubbleFrame: overlayMessageFrame,
+                message: msg,
+                contactColor: accentColor,
+                conversationId: viewModel.conversationId,
+                messageBubbleFrame: overlayMessageFrame,
                 isPresented: $showOverlayMenu,
+                canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
                 onEdit: {
@@ -607,32 +587,17 @@ struct ConversationView: View {
                     editingOriginalContent = msg.content
                     messageText = msg.content
                 },
-                onForward: {
-                    detailSheetMessage = msg
-                    detailSheetInitialTab = .forward
-                    showMessageDetailSheet = true
-                },
-                onDelete: {
-                    detailSheetMessage = msg
-                    detailSheetInitialTab = .delete
-                    showMessageDetailSheet = true
-                },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
-                onReport: {
-                    detailSheetMessage = msg
-                    detailSheetInitialTab = .report
-                    showMessageDetailSheet = true
+                onReport: { type, reason in
+                    Task {
+                        let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                        if success { HapticFeedback.success() }
+                        else { HapticFeedback.error() }
+                    }
                 },
-                onShowInfo: {
-                    detailSheetMessage = msg
-                    detailSheetInitialTab = .views
-                    showMessageDetailSheet = true
-                },
-                onAddReaction: {
-                    detailSheetMessage = msg
-                    detailSheetInitialTab = .react
-                    showMessageDetailSheet = true
+                onDelete: {
+                    Task { await viewModel.deleteMessage(messageId: msg.id) }
                 }
             )
             .transition(.opacity).zIndex(999)
