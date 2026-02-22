@@ -14,6 +14,7 @@ struct MessageOverlayMenu: View {
     var onEdit: (() -> Void)?
     var onForward: (() -> Void)?
     var onDelete: (() -> Void)?
+    var onReport: (() -> Void)?
     var onPin: (() -> Void)?
     var onReact: ((String) -> Void)?
     var onShowInfo: (() -> Void)?
@@ -1059,6 +1060,14 @@ struct MessageOverlayMenu: View {
                 color: "FF6B6B",
                 handler: { onDelete?() }
             ))
+        } else {
+            actions.append(OverlayAction(
+                id: "report",
+                icon: "exclamationmark.triangle.fill",
+                label: "Signaler",
+                color: "E74C3C",
+                handler: { onReport?() }
+            ))
         }
 
         return actions
@@ -1167,7 +1176,7 @@ private enum InfoTab: String, CaseIterable, Identifiable {
 
 // MARK: - Emoji Usage Tracker
 
-private struct EmojiUsageTracker {
+struct EmojiUsageTracker {
     private static let key = "com.meeshy.emojiUsageCount"
 
     static func recordUsage(emoji: String) {

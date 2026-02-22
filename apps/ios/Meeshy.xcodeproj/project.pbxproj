@@ -27,7 +27,6 @@
 		AA00BB11CC22DD33EE440003 /* FeedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440013 /* FeedModels.swift */; };
 		AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001B /* StoryModels.swift */; };
 		AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001A /* PostModels.swift */; };
-		AA00BB11CC22DD33EE440029 /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440019 /* ConversationModels.swift */; };
 		AA00BB11CC22DD33EE440028 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440018 /* AuthModels.swift */; };
 		AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440014 /* SampleData.swift */; };
 		AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */; };
@@ -48,6 +47,8 @@
 		C5B683209E2718175550AAE6 /* ConversationView+Header.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F74C3B482B09AEDCB4FCB0 /* ConversationView+Header.swift */; };
 		CC1000000000002F10 /* MediaPlayerContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000001F10 /* MediaPlayerContext.swift */; };
 		CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1700000000001F17 /* MessageOverlayMenu.swift */; };
+		CC2100000000002F21 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2100000000001F21 /* ReportMessageSheet.swift */; };
+		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
 		CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000001F19 /* ForwardPickerSheet.swift */; };
 		CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000003F19 /* ConversationInfoSheet.swift */; };
@@ -104,7 +105,6 @@
 		AA00BB11CC22DD33EE440017 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440013 /* FeedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440018 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
-		AA00BB11CC22DD33EE440019 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE44001A /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE44001B /* StoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440014 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
@@ -131,6 +131,8 @@
 		CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Recording.swift"; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Attachments.swift"; sourceTree = "<group>"; };
 		CC1700000000001F17 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
+		CC2100000000001F21 /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
+		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
 		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
 		CC1900000000001F19 /* ForwardPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSheet.swift; sourceTree = "<group>"; };
 		CC1900000000003F19 /* ConversationInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationInfoSheet.swift; sourceTree = "<group>"; };
@@ -165,6 +167,8 @@
 			children = (
 				CC1000000000001F10 /* MediaPlayerContext.swift */,
 				CC1700000000001F17 /* MessageOverlayMenu.swift */,
+				CC2100000000001F21 /* ReportMessageSheet.swift */,
+				CC2200000000001F22 /* MessageDetailSheet.swift */,
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
@@ -292,7 +296,6 @@
 				AA00BB11CC22DD33EE440014 /* SampleData.swift */,
 				AA00BB11CC22DD33EE44001B /* StoryModels.swift */,
 				AA00BB11CC22DD33EE44001A /* PostModels.swift */,
-				AA00BB11CC22DD33EE440019 /* ConversationModels.swift */,
 				AA00BB11CC22DD33EE440018 /* AuthModels.swift */,
 			);
 			path = Models;
@@ -424,6 +427,8 @@
 				FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */,
 				CC1000000000002F10 /* MediaPlayerContext.swift in Sources */,
 				CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
+				CC2100000000002F21 /* ReportMessageSheet.swift in Sources */,
+				CC2200000000002F22 /* MessageDetailSheet.swift in Sources */,
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */,
@@ -437,7 +442,6 @@
 				AA00BB11CC22DD33EE440003 /* FeedModels.swift in Sources */,
 				AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */,
 				AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */,
-				AA00BB11CC22DD33EE440029 /* ConversationModels.swift in Sources */,
 				AA00BB11CC22DD33EE440028 /* AuthModels.swift in Sources */,
 				AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */,
 				AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */,
