@@ -54,13 +54,20 @@ extension ConversationView {
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
                     onAddReaction: { messageId in
-                        overlayMessageFrame = messageFrames[messageId] ?? .zero
-                        overlayMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
-                        showOverlayMenu = true
-                        HapticFeedback.medium()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            emojiOnlyMode = true
+                            quickReactionMessageId = messageId
+                        }
+                        HapticFeedback.light()
                     },
                     onToggleReaction: { emoji in
                         viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                    },
+                    onOpenReactPicker: { messageId in
+                        let target = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetMessage = target
+                        detailSheetInitialTab = .react
+                        showMessageDetailSheet = true
                     },
                     onShowInfo: {
                         detailSheetMessage = msg

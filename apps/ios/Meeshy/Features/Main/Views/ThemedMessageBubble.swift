@@ -10,6 +10,7 @@ struct ThemedMessageBubble: View {
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
+    var onOpenReactPicker: ((String) -> Void)? = nil
     var onShowInfo: (() -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
@@ -159,8 +160,7 @@ struct ThemedMessageBubble: View {
                     VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
                         // Grille visuelle (images + vidéos)
                         if !visualAttachments.isEmpty {
-                            let hasVideo = visualAttachments.contains { $0.type == .video }
-                            let mediaTimestampAlignment: Alignment = hasVideo ? .bottomLeading : .bottomTrailing
+                            let mediaTimestampAlignment: Alignment = .bottomTrailing
 
                             if showCarousel {
                                 carouselView
@@ -206,11 +206,18 @@ struct ThemedMessageBubble: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
-                            .padding(.bottom, 4)
+                            .padding(.top, message.isEdited ? 12 : 0)
+                            .overlay(alignment: .topLeading) {
+                                if message.isEdited {
+                                    editedIndicator
+                                        .padding(.leading, 12)
+                                        .padding(.top, 6)
+                                }
+                            }
                             .overlay(alignment: .bottomTrailing) {
                                 messageMetaRow(insideBubble: true)
                                     .padding(.trailing, 10)
-                                    .padding(.bottom, 6)
+                                    .padding(.bottom, 8)
                             }
                             .background(bubbleBackground)
                             .shadow(
@@ -261,17 +268,6 @@ struct ThemedMessageBubble: View {
                         .offset(y: 16)
                 }
 
-                // View-once indicator + timestamp (only shown externally when no text bubble)
-                if !hasTextOrNonMediaContent {
-                    HStack(spacing: 3) {
-                        if message.isViewOnce {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 9))
-                                .foregroundColor(.orange.opacity(0.8))
-                        }
-                        messageMetaRow(insideBubble: false)
-                    }
-                }
             }
 
             if !message.isMe { Spacer(minLength: 50) }
@@ -318,9 +314,11 @@ struct ThemedMessageBubble: View {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                Text(truncated + "...")
+                (Text(truncated + "...")
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
+                + timestampSpacerText)
+                .fixedSize(horizontal: false, vertical: true)
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -336,9 +334,11 @@ struct ThemedMessageBubble: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Text(content)
+                (Text(content)
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
+                + timestampSpacerText)
+                .fixedSize(horizontal: false, vertical: true)
 
                 if isTextExpanded && content.count > Self.textTruncateLimit {
                     Button {
@@ -372,6 +372,17 @@ struct ThemedMessageBubble: View {
         return formatter.string(from: message.createdAt)
     }
 
+    /// Invisible trailing Text that reserves room for the timestamp overlay so it
+    /// never covers actual message content. Concatenated via `+` to the content Text.
+    private var timestampSpacerText: Text {
+        let spacer = message.isMe
+            ? "\u{00A0}\u{00A0}\u{00A0}\(timeString)\u{00A0}✓✓"
+            : "\u{00A0}\u{00A0}\u{00A0}\(timeString)"
+        return Text(spacer)
+            .font(.system(size: 10))
+            .foregroundColor(.clear)
+    }
+
     @ViewBuilder
     private func messageMetaRow(insideBubble: Bool) -> some View {
         let metaColor: Color = insideBubble && message.isMe
@@ -385,13 +396,6 @@ struct ThemedMessageBubble: View {
                     .foregroundColor(metaColor.opacity(0.8))
             }
 
-            if message.isEdited {
-                Text("modifié")
-                    .font(.system(size: 10, weight: .medium))
-                    .italic()
-                    .foregroundColor(metaColor)
-            }
-
             Text(timeString)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(metaColor)
@@ -403,7 +407,22 @@ struct ThemedMessageBubble: View {
                     }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    // MARK: - Edited Indicator (top-leading overlay)
+    private var editedIndicator: some View {
+        let metaColor: Color = message.isMe
+            ? Color.white.opacity(0.6)
+            : theme.textSecondary.opacity(0.5)
+
+        return HStack(spacing: 3) {
+            Image(systemName: "pencil")
+                .font(.system(size: 8, weight: .semibold))
+            Text("modifié")
+                .font(.system(size: 9, weight: .medium))
+                .italic()
+        }
+        .foregroundColor(metaColor)
     }
 
     @ViewBuilder
@@ -706,24 +725,28 @@ struct ThemedMessageBubble: View {
     }
 
     private func addReactionButton(isDark: Bool, accent: Color) -> some View {
-        Button(action: {
-            HapticFeedback.light()
-            onAddReaction?(message.id)
-        }) {
-            Image(systemName: "face.smiling")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
-        }
-        .frame(width: 22, height: 22)
-        .background(
-            Circle()
-                .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
-                .overlay(
-                    Circle()
-                        .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                )
-                .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
-        )
+        Image(systemName: "face.smiling")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
+            .frame(width: 22, height: 22)
+            .background(
+                Circle()
+                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
+                    .overlay(
+                        Circle()
+                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                    )
+                    .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
+            )
+            .contentShape(Circle())
+            .onTapGesture {
+                HapticFeedback.light()
+                onAddReaction?(message.id)
+            }
+            .onLongPressGesture(minimumDuration: 0.4) {
+                HapticFeedback.medium()
+                onOpenReactPicker?(message.id)
+            }
     }
 
     private func overflowPill(count: Int, isDark: Bool, accent: Color) -> some View {
