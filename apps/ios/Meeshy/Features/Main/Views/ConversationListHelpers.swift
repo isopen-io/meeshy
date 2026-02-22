@@ -109,16 +109,27 @@ struct ConversationPreviewView: View {
     let conversation: Conversation
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var messages: [Message] = []
+    @State private var isLoading = true
 
     private var accentColor: String { conversation.accentColor }
     private var secondaryColor: String { conversation.colorPalette.secondary }
 
-    // Sample messages for preview
-    private var previewMessages: [Message] {
-        SampleData.messages(conversationId: conversation.id)
-            .suffix(6)
-            .reversed()
-            .map { $0 }
+    private func loadRecentMessages() async {
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversation.id)/messages",
+                queryItems: [
+                    URLQueryItem(name: "limit", value: "8"),
+                    URLQueryItem(name: "offset", value: "0"),
+                ]
+            )
+            let userId = AuthManager.shared.currentUser?.id ?? ""
+            messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+        } catch {
+            // Silent fail — preview is best-effort
+        }
+        isLoading = false
     }
 
     var body: some View {
@@ -220,15 +231,37 @@ struct ConversationPreviewView: View {
 
             // Messages preview using ThemedMessageBubble style
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(previewMessages.enumerated()), id: \.element.id) { _, message in
-                        ThemedMessageBubble(message: message, contactColor: accentColor)
-                            .scaleEffect(0.9)
-                            .padding(.horizontal, 4)
+                if isLoading {
+                    VStack(spacing: 12) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(theme.textMuted.opacity(0.15))
+                                .frame(height: 36)
+                                .padding(.horizontal, 20)
+                        }
                     }
+                    .padding(.vertical, 10)
+                } else if messages.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 28))
+                            .foregroundColor(theme.textMuted.opacity(0.4))
+                        Text("Aucun message")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(messages) { message in
+                            ThemedMessageBubble(message: message, contactColor: accentColor)
+                                .scaleEffect(0.9)
+                                .padding(.horizontal, 4)
+                        }
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 8)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 8)
             }
             .frame(height: 300)
             .background(previewBackground)
@@ -247,6 +280,9 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 20, y: 10)
+        .task {
+            await loadRecentMessages()
+        }
     }
 
     private var previewBackground: some View {

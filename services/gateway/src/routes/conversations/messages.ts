@@ -203,6 +203,7 @@ export function registerMessagesRoutes(
         limit: limitStr = '20',
         offset: offsetStr = '0',
         before,
+        around,
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
         include_status: includeStatusStr = 'false',
@@ -256,6 +257,46 @@ export function registerMessagesRoutes(
           whereClause.createdAt = {
             lt: beforeMessage.createdAt
           };
+        }
+      }
+
+
+      // Handle "around" mode: load messages around a specific message
+      let isAroundMode = false;
+      if (around && !before) {
+        isAroundMode = true;
+        const aroundMessage = await prisma.message.findFirst({
+          where: { id: around, conversationId },
+          select: { createdAt: true }
+        });
+
+        if (aroundMessage) {
+          // Get half before and half after the target message
+          const halfLimit = Math.floor(limit / 2);
+
+          const [messagesBefore, messagesAfter] = await Promise.all([
+            prisma.message.findMany({
+              where: { conversationId, isDeleted: false, createdAt: { lt: aroundMessage.createdAt } },
+              orderBy: { createdAt: 'desc' },
+              take: halfLimit,
+              select: { id: true }
+            }),
+            prisma.message.findMany({
+              where: { conversationId, isDeleted: false, createdAt: { gt: aroundMessage.createdAt } },
+              orderBy: { createdAt: 'asc' },
+              take: halfLimit,
+              select: { id: true }
+            })
+          ]);
+
+          const allIds = [
+            ...messagesBefore.map(m => m.id),
+            around,
+            ...messagesAfter.map(m => m.id)
+          ];
+          whereClause.id = { in: allIds };
+          // Remove any createdAt filter since we're using id-based filtering
+          delete whereClause.createdAt;
         }
       }
 
@@ -804,7 +845,7 @@ export function registerMessagesRoutes(
       }
 
       // Construire les métadonnées de pagination standard
-      const paginationMeta = before
+      const paginationMeta = (before || isAroundMode)
         ? buildPaginationMeta(0, 0, limit, messages.length)
         : buildPaginationMeta(totalCount, offset, limit, messages.length);
 
@@ -814,7 +855,7 @@ export function registerMessagesRoutes(
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
       // Aligné avec MessagesListResponse de @meeshy/shared/types
-      reply.send({
+      const responsePayload: any = {
         success: true,
         data: mappedMessages,
         pagination: paginationMeta,
@@ -822,7 +863,27 @@ export function registerMessagesRoutes(
         meta: {
           userLanguage: userPreferredLanguage
         }
-      });
+      };
+
+      // Add around-specific pagination info
+      if (isAroundMode) {
+        const firstMsg = mappedMessages[0];
+        const lastMsg = mappedMessages[mappedMessages.length - 1];
+        if (firstMsg) {
+          const olderCount = await prisma.message.count({
+            where: { conversationId, isDeleted: false, createdAt: { lt: new Date(firstMsg.createdAt) } }
+          });
+          responsePayload.cursorPagination.hasMore = olderCount > 0;
+        }
+        if (lastMsg) {
+          const newerCount = await prisma.message.count({
+            where: { conversationId, isDeleted: false, createdAt: { gt: new Date(lastMsg.createdAt) } }
+          });
+          responsePayload.hasNewer = newerCount > 0;
+        }
+      }
+
+      reply.send(responsePayload);
 
     } catch (error) {
       logger.error('Error fetching messages', error);
@@ -1751,6 +1812,182 @@ export function registerMessagesRoutes(
     } catch (error) {
       logger.error('Error unpinning message', error);
       reply.status(500).send({ success: false, error: 'Error unpinning message' });
+    }
+  });
+
+  // ===== SEARCH MESSAGES IN CONVERSATION =====
+
+  fastify.get<{
+    Params: ConversationParams;
+    Querystring: { q: string; limit?: string; cursor?: string };
+  }>('/conversations/:id/messages/search', {
+    schema: {
+      description: 'Search messages within a conversation by content or translations',
+      tags: ['conversations', 'messages'],
+      summary: 'Search messages in conversation',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        required: ['q'],
+        properties: {
+          q: { type: 'string', description: 'Search query', minLength: 2 },
+          limit: { type: 'string', description: 'Max results (default 20)' },
+          cursor: { type: 'string', description: 'Message ID cursor for pagination' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: messageSchema },
+            cursorPagination: {
+              type: 'object',
+              properties: {
+                hasMore: { type: 'boolean' },
+                nextCursor: { type: 'string', nullable: true },
+                limit: { type: 'integer' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [optionalAuth]
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const { q, limit: limitStr = '20', cursor } = request.query;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      const searchLimit = Math.min(parseInt(limitStr, 10) || 20, 50);
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(403).send({ success: false, error: 'Conversation not found' });
+      }
+
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return reply.status(403).send({ success: false, error: 'Unauthorized' });
+      }
+
+      const queryLower = q.toLowerCase().trim();
+
+      // Build where clause for content search
+      const whereClause: any = {
+        conversationId,
+        isDeleted: false,
+        content: { contains: queryLower, mode: 'insensitive' }
+      };
+
+      if (cursor) {
+        const cursorMsg = await prisma.message.findFirst({
+          where: { id: cursor },
+          select: { createdAt: true }
+        });
+        if (cursorMsg) {
+          whereClause.createdAt = { lt: cursorMsg.createdAt };
+        }
+      }
+
+      // Search in content (Prisma text search)
+      const contentMatches = await prisma.message.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          conversationId: true,
+          content: true,
+          originalLanguage: true,
+          messageType: true,
+          translations: true,
+          createdAt: true,
+          senderId: true,
+          sender: {
+            select: { id: true, username: true, displayName: true, avatar: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: searchLimit + 1 // +1 to check hasMore
+      });
+
+      // Also search in translations (Json field - in-memory filter)
+      let translationMatches: any[] = [];
+      if (contentMatches.length < searchLimit) {
+        const translationCandidates = await prisma.message.findMany({
+          where: {
+            conversationId,
+            isDeleted: false,
+            content: { not: { contains: queryLower, mode: 'insensitive' } },
+            translations: { not: null },
+            ...(cursor ? { createdAt: whereClause.createdAt } : {})
+          },
+          select: {
+            id: true,
+            conversationId: true,
+            content: true,
+            originalLanguage: true,
+            messageType: true,
+            translations: true,
+            createdAt: true,
+            senderId: true,
+            sender: {
+              select: { id: true, username: true, displayName: true, avatar: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 200 // Scan a batch for translation matches
+        });
+
+        translationMatches = translationCandidates.filter((msg: any) => {
+          if (!msg.translations || typeof msg.translations !== 'object') return false;
+          return Object.values(msg.translations).some((t: any) => {
+            const text = typeof t === 'string' ? t : t?.text || t?.content || '';
+            return text.toLowerCase().includes(queryLower);
+          });
+        });
+      }
+
+      // Merge and deduplicate results
+      const seenIds = new Set(contentMatches.map(m => m.id));
+      const merged = [...contentMatches];
+      for (const tm of translationMatches) {
+        if (!seenIds.has(tm.id)) {
+          seenIds.add(tm.id);
+          merged.push(tm);
+        }
+      }
+
+      // Sort by createdAt desc and apply limit
+      merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const hasMore = merged.length > searchLimit;
+      const results = merged.slice(0, searchLimit);
+
+      const lastId = results.length > 0 ? results[results.length - 1].id : null;
+
+      reply.send({
+        success: true,
+        data: results,
+        cursorPagination: {
+          hasMore,
+          nextCursor: hasMore ? lastId : null,
+          limit: searchLimit
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error searching messages', error);
+      reply.status(500).send({ success: false, error: 'Error searching messages' });
     }
   });
 

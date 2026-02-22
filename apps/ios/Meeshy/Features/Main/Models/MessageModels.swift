@@ -87,6 +87,7 @@ struct MessagesAPIResponse: Decodable {
     let data: [APIMessage]
     let pagination: OffsetPagination?
     let cursorPagination: CursorPagination?
+    let hasNewer: Bool?  // Present in "around" mode responses
 }
 
 // MARK: - Send Message Request
