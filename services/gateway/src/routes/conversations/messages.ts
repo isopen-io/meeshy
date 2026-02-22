@@ -153,6 +153,7 @@ export function registerMessagesRoutes(
           limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
           offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
           before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
+          around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
