@@ -536,8 +536,8 @@ export function registerMessagesRoutes(
       const isAnonymousUser = authRequest.authContext.isAnonymous;
 
       const [totalCount, messages, userPrefs] = await Promise.all([
-        // 1. Compter le total des messages (pour pagination) - skip when using cursor
-        before
+        // 1. Compter le total des messages (pour pagination) - skip when using cursor or around
+        (before || isAroundMode)
           ? Promise.resolve(0)
           : prisma.message.count({
               where: {
@@ -550,8 +550,8 @@ export function registerMessagesRoutes(
           where: whereClause,
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
-          take: limit,
-          skip: before ? 0 : offset
+          take: isAroundMode ? limit + 1 : limit, // +1 in around mode to include the target message
+          skip: (before || isAroundMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
         shouldFetchUserPrefs
