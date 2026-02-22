@@ -3,7 +3,7 @@
  *
  * Security Features:
  * - SHA-256 hashed tokens
- * - 1 minute token expiry
+ * - 10 minute token expiry
  * - Single-use tokens
  * - Rate limiting (3 requests per hour per email)
  * - Device tracking (IP, location, browser)
@@ -18,7 +18,7 @@ import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 
-const TOKEN_EXPIRY_MINUTES = 1; // 1 minute as per requirement
+const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
 const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
 

@@ -15,7 +15,7 @@ import { Sparkles, Mail, CheckCircle, ArrowLeft, Clock, RefreshCw, AlertTriangle
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 
 // Constants
-const MAGIC_LINK_EXPIRY_SECONDS = 60; // 1 minute
+const MAGIC_LINK_EXPIRY_SECONDS = 600; // 10 minutes
 const MAX_RETRY_ATTEMPTS = 3;
 const STORAGE_KEY_RETRY_COUNT = 'magic_link_retry_count';
 const STORAGE_KEY_RETRY_EMAIL = 'magic_link_retry_email';
