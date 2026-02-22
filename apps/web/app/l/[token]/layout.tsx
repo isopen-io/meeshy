@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Redirection Meeshy',
-  description: 'Vous êtes en cours de redirection...',
   robots: 'noindex, nofollow',
+  openGraph: null,
+  twitter: null,
 };
 
 export default function TrackingRedirectLayout({
