@@ -25,6 +25,9 @@ export interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  // Forwarding fields
+  forwardedFromId?: string;
+  forwardedFromConversationId?: string;
   // Encryption fields
   encryptedContent?: string;
   encryptionMode?: 'e2ee' | 'server' | 'hybrid';

@@ -1711,7 +1711,7 @@ export function registerMessagesRoutes(
         return reply.status(404).send({ success: false, error: 'Conversation not found' });
       }
 
-      const hasAccess = await canAccessConversation(prisma, conversationId, authRequest.authContext);
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!hasAccess) {
         return reply.status(403).send({ success: false, error: 'Access denied' });
       }
@@ -1788,7 +1788,7 @@ export function registerMessagesRoutes(
         return reply.status(404).send({ success: false, error: 'Conversation not found' });
       }
 
-      const hasAccess = await canAccessConversation(prisma, conversationId, authRequest.authContext);
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!hasAccess) {
         return reply.status(403).send({ success: false, error: 'Access denied' });
       }
@@ -1928,7 +1928,7 @@ export function registerMessagesRoutes(
           where: {
             conversationId,
             isDeleted: false,
-            content: { not: { contains: queryLower, mode: 'insensitive' } },
+            NOT: { content: { contains: queryLower, mode: 'insensitive' } },
             translations: { not: null },
             ...(cursor ? { createdAt: whereClause.createdAt } : {})
           },
