@@ -310,6 +310,7 @@ export function registerCoreRoutes(
               content: true,
               createdAt: true,
               senderId: true,
+              messageType: true,
               sender: {
                 select: {
                   id: true,
@@ -334,6 +335,9 @@ export function registerCoreRoutes(
                   sampleRate: true,  // Audio sample rate
                   metadata: true     // Additional metadata (effects, etc.)
                 }
+              },
+              _count: {
+                select: { attachments: true }
               }
             }
           }

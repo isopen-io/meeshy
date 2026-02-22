@@ -577,8 +577,33 @@ struct ConversationView: View {
                 isPresented: $showOverlayMenu,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
+                onEdit: {
+                    editingMessageId = msg.id
+                    editingOriginalContent = msg.content
+                    messageText = msg.content
+                },
+                onForward: {
+                    detailSheetMessage = msg
+                    detailSheetInitialTab = .forward
+                    showMessageDetailSheet = true
+                },
+                onDelete: {
+                    detailSheetMessage = msg
+                    detailSheetInitialTab = .delete
+                    showMessageDetailSheet = true
+                },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
+                onReport: {
+                    detailSheetMessage = msg
+                    detailSheetInitialTab = .report
+                    showMessageDetailSheet = true
+                },
+                onShowInfo: {
+                    detailSheetMessage = msg
+                    detailSheetInitialTab = .views
+                    showMessageDetailSheet = true
+                },
                 onAddReaction: {
                     detailSheetMessage = msg
                     detailSheetInitialTab = .react

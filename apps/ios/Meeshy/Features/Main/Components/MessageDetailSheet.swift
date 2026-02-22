@@ -77,6 +77,12 @@ struct MessageDetailSheet: View {
     // Delete animation
     @State private var deleteIconScale: CGFloat = 0.5
 
+    // Read status state
+    @State private var readStatusData: ReadStatusData? = nil
+    @State private var isLoadingReadStatus = false
+    @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
+    @State private var isLoadingAttachmentStatuses = false
+
     init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab = .language, canDelete: Bool = false, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.message = message
         self.contactColor = contactColor
@@ -112,10 +118,12 @@ struct MessageDetailSheet: View {
         .onChange(of: selectedTab) { _, newTab in
             if newTab == .reactions { Task { await loadReactionDetails() } }
             if newTab == .forward { Task { await loadConversations() } }
+            if newTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
         }
         .onAppear {
             if selectedTab == .reactions { Task { await loadReactionDetails() } }
             if selectedTab == .forward { Task { await loadConversations() } }
+            if selectedTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
         }
     }
 
@@ -290,34 +298,10 @@ struct MessageDetailSheet: View {
     // MARK: - Views Tab Content
 
     private var viewsTabContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                let initials = senderInitials(message.senderName)
-                let color = Color(hex: message.senderColor ?? contactColor)
+        let accent = Color(hex: contactColor)
 
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.2))
-                        .frame(width: 36, height: 36)
-                    Text(initials)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(color)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(message.senderName ?? "Inconnu")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                    Text(formatDateFR(message.createdAt))
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                Spacer()
-            }
-
-            Divider()
-
+        return VStack(alignment: .leading, spacing: 16) {
+            // Delivery timeline with real timestamps
             VStack(alignment: .leading, spacing: 12) {
                 Text("Statut de livraison")
                     .font(.system(size: 13, weight: .semibold))
@@ -333,19 +317,229 @@ struct MessageDetailSheet: View {
                 deliveryStatusRow(
                     icon: "checkmark.circle",
                     label: "Distribue",
-                    timestamp: nil,
-                    isReached: deliveryStatusLevel >= 2
+                    timestamp: message.deliveredToAllAt.map { formatTimeFR($0) },
+                    isReached: deliveryStatusLevel >= 2,
+                    countText: readStatusData.map { "\($0.receivedCount)/\($0.totalMembers)" }
                 )
 
                 deliveryStatusRow(
                     icon: "eye",
                     label: "Lu",
-                    timestamp: nil,
-                    isReached: deliveryStatusLevel >= 3
+                    timestamp: message.readByAllAt.map { formatTimeFR($0) },
+                    isReached: deliveryStatusLevel >= 3,
+                    countText: readStatusData.map { "\($0.readCount)/\($0.totalMembers)" }
                 )
+            }
+
+            Divider()
+
+            // Per-user read receipts
+            if isLoadingReadStatus {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(accent)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+            } else if let status = readStatusData {
+                // Received by section
+                if !status.receivedBy.isEmpty {
+                    readReceiptSection(
+                        title: "Distribue a",
+                        icon: "checkmark.circle",
+                        users: status.receivedBy.map { ReadReceiptRow(userId: $0.userId, username: $0.username, date: $0.receivedAt) }
+                    )
+                }
+
+                // Read by section
+                if !status.readBy.isEmpty {
+                    readReceiptSection(
+                        title: "Lu par",
+                        icon: "eye",
+                        users: status.readBy.map { ReadReceiptRow(userId: $0.userId, username: $0.username, date: $0.readAt) }
+                    )
+                }
+
+                if status.receivedBy.isEmpty && status.readBy.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 6) {
+                            Image(systemName: "person.slash")
+                                .font(.system(size: 24))
+                                .foregroundColor(theme.textMuted.opacity(0.5))
+                            Text("Aucune confirmation de reception")
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .padding(.vertical, 12)
+                        Spacer()
+                    }
+                }
+            }
+
+            // Per-attachment media consumption
+            let mediaAttachments = message.attachments.filter {
+                $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+            }
+
+            if !mediaAttachments.isEmpty {
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Consommation media")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+
+                    if isLoadingAttachmentStatuses {
+                        HStack {
+                            Spacer()
+                            ProgressView().tint(accent)
+                            Spacer()
+                        }
+                    } else {
+                        ForEach(mediaAttachments) { attachment in
+                            attachmentConsumptionSection(attachment)
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Read Receipt Section
+
+    private func readReceiptSection(title: String, icon: String, users: [ReadReceiptRow]) -> some View {
+        let accent = Color(hex: contactColor)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(accent)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Text("\(users.count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(accent.opacity(0.12)))
+            }
+
+            ForEach(users) { user in
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.15))
+                            .frame(width: 30, height: 30)
+                        Text(senderInitials(user.username))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(accent)
+                    }
+
+                    Text(user.username)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Spacer()
+
+                    Text(relativeDate(user.date))
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // MARK: - Attachment Consumption Section
+
+    private func attachmentConsumptionSection(_ attachment: MessageAttachment) -> some View {
+        let accent = Color(hex: contactColor)
+        let isAudio = attachment.mimeType.hasPrefix("audio/")
+        let icon = isAudio ? "waveform" : "video"
+        let actionLabel = isAudio ? "ecoute" : "visionne"
+        let users = attachmentStatuses[attachment.id] ?? []
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(accent)
+
+                Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                if let duration = attachment.duration {
+                    Text(formatDuration(duration / 1000))
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            if users.isEmpty {
+                Text("Pas encore \(actionLabel)")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textMuted)
+                    .padding(.leading, 20)
+            } else {
+                ForEach(users) { user in
+                    let listenDate = isAudio ? user.listenedAt : user.watchedAt
+                    let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
+                    let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
+
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(accent.opacity(0.12))
+                                .frame(width: 28, height: 28)
+                            Text(senderInitials(user.username))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(accent)
+                        }
+
+                        Text(user.username)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+
+                        Spacer()
+
+                        if isComplete {
+                            HStack(spacing: 3) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.green)
+                                Text("complet")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.green)
+                            }
+                        } else if let pos = positionMs, pos > 0 {
+                            Text(formatDuration(pos / 1000))
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(theme.textMuted)
+                        }
+
+                        if let date = listenDate {
+                            Text(relativeDate(date))
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+                    .padding(.vertical, 3)
+                    .padding(.leading, 20)
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+        )
     }
 
     // MARK: - Reactions Tab Content
@@ -1000,6 +1194,40 @@ struct MessageDetailSheet: View {
         isLoadingConversations = false
     }
 
+    private func loadReadStatus() async {
+        guard readStatusData == nil, !isLoadingReadStatus else { return }
+        isLoadingReadStatus = true
+        defer { isLoadingReadStatus = false }
+        do {
+            let response: APIResponse<ReadStatusData> = try await APIClient.shared.request(
+                endpoint: "/messages/\(message.id)/read-status"
+            )
+            if response.success {
+                readStatusData = response.data
+            }
+        } catch { }
+    }
+
+    private func loadAttachmentStatuses() async {
+        let mediaAttachments = message.attachments.filter {
+            $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+        }
+        guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
+        isLoadingAttachmentStatuses = true
+        defer { isLoadingAttachmentStatuses = false }
+
+        for attachment in mediaAttachments {
+            do {
+                let response: OffsetPaginatedAPIResponse<[AttachmentStatusUser]> = try await APIClient.shared.request(
+                    endpoint: "/attachments/\(attachment.id)/status-details"
+                )
+                if response.success {
+                    attachmentStatuses[attachment.id] = response.data
+                }
+            } catch { }
+        }
+    }
+
     private func forwardTo(_ targetConversation: Conversation) {
         sendingToId = targetConversation.id
         Task {
@@ -1027,7 +1255,7 @@ struct MessageDetailSheet: View {
 
     // MARK: - Helpers
 
-    private func deliveryStatusRow(icon: String, label: String, timestamp: String?, isReached: Bool) -> some View {
+    private func deliveryStatusRow(icon: String, label: String, timestamp: String?, isReached: Bool, countText: String? = nil) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
@@ -1038,14 +1266,19 @@ struct MessageDetailSheet: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(isReached ? theme.textPrimary : theme.textMuted.opacity(0.5))
 
+            if let countText {
+                Text(countText)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color(hex: contactColor).opacity(0.7))
+            }
+
+            Spacer()
+
             if let timestamp {
-                Spacer()
                 Text(timestamp)
                     .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
             }
-
-            Spacer()
         }
     }
 
@@ -1161,6 +1394,59 @@ private struct ReactionUserItem: Identifiable {
     let createdAt: Date
 
     var id: String { "\(userId)-\(emoji)" }
+}
+
+// MARK: - Read Receipt Row
+
+private struct ReadReceiptRow: Identifiable {
+    let userId: String
+    let username: String
+    let date: Date
+
+    var id: String { userId }
+}
+
+// MARK: - Read Status API Models
+
+private struct ReadStatusData: Decodable {
+    let messageId: String
+    let totalMembers: Int
+    let receivedCount: Int
+    let readCount: Int
+    let receivedBy: [ReceivedByUser]
+    let readBy: [ReadByUser]
+}
+
+private struct ReceivedByUser: Decodable {
+    let userId: String
+    let username: String
+    let receivedAt: Date
+}
+
+private struct ReadByUser: Decodable {
+    let userId: String
+    let username: String
+    let readAt: Date
+}
+
+// MARK: - Attachment Status API Models
+
+private struct AttachmentStatusUser: Decodable, Identifiable {
+    let userId: String
+    let username: String
+    let avatar: String?
+    let viewedAt: Date?
+    let downloadedAt: Date?
+    let listenedAt: Date?
+    let watchedAt: Date?
+    let listenCount: Int?
+    let watchCount: Int?
+    let listenedComplete: Bool?
+    let watchedComplete: Bool?
+    let lastPlayPositionMs: Int?
+    let lastWatchPositionMs: Int?
+
+    var id: String { userId }
 }
 
 // EmojiUsageTracker is defined in MessageOverlayMenu.swift (shared across app)

@@ -3,10 +3,19 @@ import AVFoundation
 import Combine
 import MeeshySDK
 
+// MARK: - Attachment Status Body
+
+private struct AttachmentStatusBody: Encodable {
+    let action: String
+    let playPositionMs: Int
+    let durationMs: Int
+    let complete: Bool
+}
+
 // MARK: - Audio Playback Manager
 
 @MainActor
-public class AudioPlaybackManager: ObservableObject {
+public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isPlaying = false
     @Published public var progress: Double = 0
     @Published public var currentTime: TimeInterval = 0
@@ -14,16 +23,22 @@ public class AudioPlaybackManager: ObservableObject {
     @Published public var speed: PlaybackSpeed = .x1_0
     @Published public var isLoading = false
 
+    public var onPlaybackFinished: (() -> Void)?
+    public var attachmentId: String?
+
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var loadTask: Task<Void, Never>?
+    private(set) var currentUrl: String?
+    private var listenStartTime: Date?
 
-    public init() {}
+    public override init() { super.init() }
 
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
-        stop()
+        resetState()
         guard !urlString.isEmpty else { return }
+        currentUrl = urlString
         isLoading = true
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
@@ -46,7 +61,8 @@ public class AudioPlaybackManager: ObservableObject {
 
     // MARK: - Play from local file
     public func playLocal(url: URL) {
-        stop()
+        resetState()
+        currentUrl = url.absoluteString
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -58,6 +74,7 @@ public class AudioPlaybackManager: ObservableObject {
     private func playData(_ data: Data) {
         do {
             player = try AVAudioPlayer(data: data)
+            player?.delegate = self
             player?.enableRate = true
             player?.rate = Float(speed.rawValue)
             player?.prepareToPlay()
@@ -65,6 +82,7 @@ public class AudioPlaybackManager: ObservableObject {
             player?.play()
             isPlaying = true
             isLoading = false
+            listenStartTime = Date()
             startProgressTimer()
         } catch {
             isLoading = false
@@ -72,7 +90,7 @@ public class AudioPlaybackManager: ObservableObject {
     }
 
     // MARK: - Controls
-    public func stop() {
+    private func resetState() {
         player?.stop()
         player = nil
         timer?.invalidate()
@@ -84,16 +102,23 @@ public class AudioPlaybackManager: ObservableObject {
         loadTask = nil
     }
 
+    public func stop() {
+        resetState()
+        currentUrl = nil
+    }
+
     public func togglePlayPause() {
         guard let player = player else { return }
         if player.isPlaying {
             player.pause()
             isPlaying = false
             timer?.invalidate()
+            reportListenProgress(complete: false)
         } else {
             player.rate = Float(speed.rawValue)
             player.play()
             isPlaying = true
+            listenStartTime = listenStartTime ?? Date()
             startProgressTimer()
         }
     }
@@ -118,6 +143,47 @@ public class AudioPlaybackManager: ObservableObject {
         HapticFeedback.light()
     }
 
+    // MARK: - Playback Finished (called by delegate)
+    private func handlePlaybackFinished() {
+        let finishedUrl = currentUrl
+        reportListenProgress(complete: true)
+        timer?.invalidate()
+        timer = nil
+        player = nil
+        isPlaying = false
+        progress = 0
+        currentTime = 0
+        listenStartTime = nil
+        onPlaybackFinished?()
+        if let url = finishedUrl {
+            Self.triggerAutoplayNext(afterUrl: url)
+        }
+        currentUrl = nil
+    }
+
+    // MARK: - Listen Progress Reporting
+    private func reportListenProgress(complete: Bool) {
+        guard let attId = attachmentId else { return }
+        let positionMs = Int(currentTime * 1000)
+        let durationMs: Int = {
+            guard let start = listenStartTime else { return 0 }
+            return Int(Date().timeIntervalSince(start) * 1000)
+        }()
+
+        Task {
+            let body = AttachmentStatusBody(
+                action: "listened",
+                playPositionMs: positionMs,
+                durationMs: durationMs,
+                complete: complete
+            )
+            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+                endpoint: "/attachments/\(attId)/status",
+                body: body
+            )
+        }
+    }
+
     // MARK: - Timer
     private func startProgressTimer() {
         timer?.invalidate()
@@ -127,7 +193,6 @@ public class AudioPlaybackManager: ObservableObject {
                 if player.isPlaying {
                     self.currentTime = player.currentTime
                     self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
-                    if self.progress >= 1.0 { self.stop() }
                 }
             }
         }
@@ -136,6 +201,34 @@ public class AudioPlaybackManager: ObservableObject {
     deinit {
         timer?.invalidate()
         loadTask?.cancel()
+    }
+
+    // MARK: - Autoplay Registry (static)
+    private static var autoplayRegistry: [(url: String, play: () -> Void)] = []
+
+    public static func registerAutoplay(url: String, play: @escaping () -> Void) {
+        autoplayRegistry.removeAll { $0.url == url }
+        autoplayRegistry.append((url: url, play: play))
+    }
+
+    public static func unregisterAutoplay(url: String) {
+        autoplayRegistry.removeAll { $0.url == url }
+    }
+
+    private static func triggerAutoplayNext(afterUrl: String) {
+        guard let idx = autoplayRegistry.firstIndex(where: { $0.url == afterUrl }) else { return }
+        let next = idx + 1
+        guard next < autoplayRegistry.count else { return }
+        autoplayRegistry[next].play()
+    }
+}
+
+// MARK: - AVAudioPlayerDelegate
+extension AudioPlaybackManager: AVAudioPlayerDelegate {
+    nonisolated public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            self.handlePlaybackFinished()
+        }
     }
 }
 
@@ -155,7 +248,7 @@ public struct AudioPlayerView: View {
 
     @StateObject private var player = AudioPlaybackManager()
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var showTranscription = false
+    @State private var showTranscription = true
     @State private var selectedAudioLanguage: String = "orig"
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
@@ -200,6 +293,8 @@ public struct AudioPlayerView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
 
+            transcriptionRequestButton
+
             if !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
                     .padding(.top, 6)
@@ -207,6 +302,15 @@ public struct AudioPlayerView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTranscription)
+        .onAppear {
+            player.attachmentId = attachment.id
+            AudioPlaybackManager.registerAutoplay(url: attachment.fileUrl) { [player] in
+                player.play(urlString: attachment.fileUrl)
+            }
+        }
+        .onDisappear {
+            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+        }
     }
 
     // MARK: - Main Player
@@ -214,11 +318,13 @@ public struct AudioPlayerView: View {
         HStack(spacing: context.isCompact ? 8 : 10) {
             playButton
             VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
-                waveformProgress
+                HStack(spacing: 0) {
+                    waveformProgress
+                    percentageView
+                        .padding(.leading, 6)
+                }
                 timeRow
             }
-            speedButton
-            transcriptionButton
             contextActions
         }
         .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -294,10 +400,19 @@ public struct AudioPlayerView: View {
 
     // MARK: - Time Row
     private var timeRow: some View {
-        HStack {
+        HStack(spacing: 0) {
             Text(formatMediaDuration(player.currentTime))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
+
+            Button { player.cycleSpeed() } label: {
+                Text(player.speed.label)
+                    .font(.system(size: context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(player.speed == .x1_0
+                        ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                        : accent)
+            }
+            .padding(.leading, 4)
 
             Spacer()
 
@@ -307,44 +422,62 @@ public struct AudioPlayerView: View {
         }
     }
 
-    // MARK: - Speed Button
-    private var speedButton: some View {
-        Button { player.cycleSpeed() } label: {
-            Text(player.speed.label)
-                .font(.system(size: context.isCompact ? 10 : 11, weight: .heavy, design: .monospaced))
-                .foregroundColor(player.speed == .x1_0
-                    ? (isDark ? .white.opacity(0.45) : .black.opacity(0.35))
-                    : accent)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(player.speed == .x1_0
-                              ? (isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))
-                              : accent.opacity(0.12))
-                )
-        }
+    // MARK: - Percentage View
+    private var percentageView: some View {
+        let pct = Int(player.progress * 100)
+        return Text("\(pct)%")
+            .font(.system(size: context.isCompact ? 10 : 12, weight: .heavy, design: .monospaced))
+            .foregroundColor(pct == 0
+                ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                : accent)
+            .frame(minWidth: context.isCompact ? 32 : 38)
+            .contentTransition(.numericText())
+            .animation(.easeInOut(duration: 0.15), value: pct)
     }
 
-    // MARK: - Transcription Button
+    // MARK: - Transcription Request Button (bottom bar)
     @ViewBuilder
-    private var transcriptionButton: some View {
-        if transcription != nil || onRequestTranscription != nil {
+    private var transcriptionRequestButton: some View {
+        if transcription != nil {
             Button {
-                if transcription != nil {
-                    withAnimation { showTranscription.toggle() }
-                } else {
-                    onRequestTranscription?()
-                }
+                withAnimation { showTranscription.toggle() }
                 HapticFeedback.light()
             } label: {
-                Image(systemName: transcription != nil
-                      ? (showTranscription ? "text.badge.checkmark" : "text.bubble")
-                      : "text.badge.plus")
-                    .font(.system(size: context.isCompact ? 13 : 14, weight: .medium))
-                    .foregroundColor(showTranscription ? accent : (isDark ? .white.opacity(0.45) : .black.opacity(0.35)))
-                    .frame(width: context.isCompact ? 26 : 30, height: context.isCompact ? 26 : 30)
+                HStack(spacing: 4) {
+                    Image(systemName: showTranscription ? "text.badge.checkmark" : "text.bubble")
+                        .font(.system(size: 10, weight: .medium))
+                    Text(showTranscription ? "Masquer" : "Transcription")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(showTranscription ? accent : (isDark ? .white.opacity(0.45) : .black.opacity(0.35)))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(showTranscription ? accent.opacity(0.12) : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03)))
+                )
             }
+            .padding(.top, 6)
+        } else if let onRequest = onRequestTranscription {
+            Button {
+                onRequest()
+                HapticFeedback.light()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "text.badge.plus")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("Transcrire")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                )
+            }
+            .padding(.top, 6)
         }
     }
 

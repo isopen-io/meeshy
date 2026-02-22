@@ -281,7 +281,11 @@ extension APIMessage {
             senderColor: DynamicColorGenerator.colorForName(sender?.username ?? "?"),
             senderAvatarURL: sender?.avatar,
             deliveryStatus: status,
-            isMe: senderId == currentUserId
+            isMe: senderId == currentUserId,
+            deliveredToAllAt: deliveredToAllAt,
+            readByAllAt: readByAllAt,
+            deliveredCount: deliveredCount ?? 0,
+            readCount: readCount ?? 0
         )
     }
 }

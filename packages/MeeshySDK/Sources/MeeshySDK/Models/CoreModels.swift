@@ -253,6 +253,10 @@ public struct MeeshyMessage: Identifiable {
     public var senderAvatarURL: String?
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
+    public var deliveredToAllAt: Date?
+    public var readByAllAt: Date?
+    public var deliveredCount: Int = 0
+    public var readCount: Int = 0
 
     public enum DeliveryStatus: String {
         case sending   // optimistic, not confirmed
@@ -282,7 +286,9 @@ public struct MeeshyMessage: Identifiable {
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
                 senderName: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
-                deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false) {
+                deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
+                deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
+                deliveredCount: Int = 0, readCount: Int = 0) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.anonymousSenderId = anonymousSenderId; self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
@@ -297,6 +303,8 @@ public struct MeeshyMessage: Identifiable {
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
         self.senderName = senderName; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
+        self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
+        self.deliveredCount = deliveredCount; self.readCount = readCount
     }
 
     public var text: String { content }

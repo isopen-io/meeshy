@@ -589,6 +589,65 @@ export const messageSchema = {
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },
+    replyTo: {
+      type: 'object',
+      nullable: true,
+      description: 'Nested reply-to message details (when include_replies=true)',
+      properties: {
+        id: { type: 'string' },
+        content: { type: 'string' },
+        originalLanguage: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+        senderId: { type: 'string', nullable: true },
+        anonymousSenderId: { type: 'string', nullable: true },
+        validatedMentions: { type: 'array', items: { type: 'string' } },
+        sender: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            displayName: { type: 'string' },
+            avatar: { type: 'string', nullable: true }
+          }
+        },
+        anonymousSender: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' }
+          }
+        },
+        attachments: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              fileName: { type: 'string' },
+              originalName: { type: 'string' },
+              mimeType: { type: 'string' },
+              fileSize: { type: 'number' },
+              fileUrl: { type: 'string' },
+              thumbnailUrl: { type: 'string', nullable: true },
+              width: { type: 'number', nullable: true },
+              height: { type: 'number', nullable: true },
+              duration: { type: 'number', nullable: true }
+            }
+          }
+        },
+        _count: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            reactions: { type: 'number' }
+          }
+        }
+      }
+    },
     forwardedFromId: { type: 'string', nullable: true, description: 'Original message ID if forwarded' },
     forwardedFromConversationId: { type: 'string', nullable: true, description: 'Original conversation ID if forwarded' },
 

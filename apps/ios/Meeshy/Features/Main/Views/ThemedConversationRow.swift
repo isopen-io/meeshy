@@ -89,11 +89,8 @@ struct ThemedConversationRow: View {
                         .foregroundColor(Color(hex: accentColor))
                 }
 
-                // Last message
-                Text(conversation.lastMessagePreview ?? "")
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
+                // Last message with attachment indicators
+                lastMessagePreviewView
             }
 
             // Unread badge
@@ -287,5 +284,94 @@ struct ThemedConversationRow: View {
         if seconds < 3600 { return "\(seconds / 60)m" }
         if seconds < 86400 { return "\(seconds / 3600)h" }
         return "\(seconds / 86400)d"
+    }
+
+    // MARK: - Last Message Preview
+
+    @ViewBuilder
+    private var lastMessagePreviewView: some View {
+        let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let attachments = conversation.lastMessageAttachments
+        let totalCount = conversation.lastMessageAttachmentCount
+
+        if !hasText && !attachments.isEmpty {
+            HStack(spacing: 4) {
+                let att = attachments[0]
+                attachmentIcon(for: att.mimeType)
+                attachmentMeta(for: att)
+                if totalCount > 1 {
+                    Text("+\(totalCount - 1)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            }
+        } else if hasText {
+            HStack(spacing: 4) {
+                if !attachments.isEmpty {
+                    attachmentIcon(for: attachments[0].mimeType)
+                        .font(.system(size: 11))
+                }
+                Text(conversation.lastMessagePreview ?? "")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+        } else {
+            Text("")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
+        }
+    }
+
+    // MARK: - Attachment Helpers
+
+    private func attachmentIcon(for mimeType: String) -> some View {
+        let (icon, color) = attachmentIconInfo(mimeType)
+        return Image(systemName: icon)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(color)
+    }
+
+    private func attachmentIconInfo(_ mimeType: String) -> (String, Color) {
+        if mimeType.hasPrefix("image/") { return ("camera.fill", .blue) }
+        if mimeType.hasPrefix("video/") { return ("video.fill", .red) }
+        if mimeType.hasPrefix("audio/") { return ("waveform", .purple) }
+        if mimeType == "application/pdf" { return ("doc.fill", .orange) }
+        return ("paperclip", .gray)
+    }
+
+    private func attachmentMeta(for attachment: MessageAttachment) -> some View {
+        let mimeType = attachment.mimeType
+        var meta = ""
+
+        if mimeType.hasPrefix("image/") {
+            if let w = attachment.width, let h = attachment.height {
+                meta = "\(w)x\(h)"
+            } else { meta = "Photo" }
+        } else if mimeType.hasPrefix("video/") {
+            if let d = attachment.duration {
+                meta = formatDurationMs(d)
+            } else { meta = "Video" }
+        } else if mimeType.hasPrefix("audio/") {
+            if let d = attachment.duration {
+                meta = formatDurationMs(d)
+            } else { meta = "Audio" }
+        } else if mimeType == "application/pdf" {
+            meta = "PDF"
+        } else {
+            meta = attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
+        }
+
+        return Text(meta)
+            .font(.system(size: 13))
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+    }
+
+    private func formatDurationMs(_ ms: Int) -> String {
+        let totalSec = ms / 1000
+        let mins = totalSec / 60
+        let secs = totalSec % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
