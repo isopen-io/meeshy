@@ -47,7 +47,7 @@ struct MessageOverlayMenu: View {
                 dismissBackground
 
                 VStack(spacing: 0) {
-                    Spacer(minLength: safeTop + 8)
+                    Spacer()
 
                     if !showEmojiPicker {
                         // Emoji quick bar (scrollable, aligned with message)
@@ -62,7 +62,7 @@ struct MessageOverlayMenu: View {
                         .scaleEffect(isVisible ? 1.0 : 0.5)
                         .offset(y: isVisible ? 0 : 20)
 
-                        // Message preview (aligned left/right)
+                        // Message preview anchored just above panel handle
                         ScrollView(.vertical, showsIndicators: false) {
                             HStack {
                                 if message.isMe { Spacer(minLength: 16) }
@@ -71,7 +71,7 @@ struct MessageOverlayMenu: View {
                             }
                         }
                         .frame(maxHeight: max(60, previewAreaH))
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 4)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.6)
                     } else {
@@ -79,6 +79,7 @@ struct MessageOverlayMenu: View {
                         inlineEmojiPicker
                             .frame(maxHeight: max(200, previewAreaH + 60))
                             .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
                             .opacity(isVisible ? 1 : 0)
                             .transition(.opacity)
                     }

@@ -162,6 +162,12 @@ struct MessageDetailSheet: View {
     @State private var reportReason = ""
     @State private var isSubmittingReport = false
 
+    // Translation state
+    @State private var translations: [String: String] = [:]
+    @State private var translatingLanguages: Set<String> = []
+    @State private var selectedLanguageCode: String? = nil
+    @State private var isLoadingTranslations = false
+
     // Delete animation
     @State private var deleteIconScale: CGFloat = 0.5
 
@@ -185,7 +191,7 @@ struct MessageDetailSheet: View {
         self.onReact = onReact
         self.onReport = onReport
         self.onDelete = onDelete
-        _selectedTab = State(initialValue: initialTab)
+        _selectedTab = State(initialValue: initialTab ?? .language)
     }
 
     private var availableTabs: [DetailTab] {
@@ -238,11 +244,13 @@ struct MessageDetailSheet: View {
             if newTab == .reactions { Task { await loadReactionDetails() } }
             if newTab == .forward { Task { await loadConversations() } }
             if newTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
+            if newTab == .language { Task { await loadExistingTranslations() } }
         }
         .onAppear {
             if selectedTab == .reactions { Task { await loadReactionDetails() } }
             if selectedTab == .forward { Task { await loadConversations() } }
             if selectedTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
+            if selectedTab == .language { Task { await loadExistingTranslations() } }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
                 actionGridAppeared = true
             }
@@ -362,65 +370,249 @@ struct MessageDetailSheet: View {
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
 
+    // MARK: - Language Color System (aligned with web V2 theme)
+
+    private static let languageColors: [String: String] = [
+        "fr": "5E60CE", "en": "2A9D8F", "es": "F4A261", "zh": "C1292E",
+        "ja": "F28482", "ar": "E9C46A", "de": "264653", "pt": "2A9D8F",
+        "ru": "5E60CE", "ko": "C1292E", "it": "E76F51", "hi": "F4845F",
+        "tr": "577590", "nl": "43AA8B", "pl": "4D908E", "vi": "90BE6D",
+        "th": "F9C74F", "sv": "277DA1"
+    ]
+    private static let defaultLanguageColor = "6B7280"
+
+    private static func colorForLanguage(_ code: String) -> String {
+        languageColors[code] ?? defaultLanguageColor
+    }
+
+    private static let supportedLanguages: [(code: String, flag: String, name: String)] = [
+        ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
+        ("en", "\u{1F1EC}\u{1F1E7}", "English"),
+        ("es", "\u{1F1EA}\u{1F1F8}", "Espa\u{00f1}ol"),
+        ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
+        ("ar", "\u{1F1F8}\u{1F1E6}", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}"),
+        ("zh", "\u{1F1E8}\u{1F1F3}", "\u{4E2D}\u{6587}"),
+        ("pt", "\u{1F1F5}\u{1F1F9}", "Portugu\u{00EA}s"),
+        ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
+        ("ja", "\u{1F1EF}\u{1F1F5}", "\u{65E5}\u{672C}\u{8A9E}"),
+        ("ko", "\u{1F1F0}\u{1F1F7}", "\u{D55C}\u{AD6D}\u{C5B4}"),
+        ("ru", "\u{1F1F7}\u{1F1FA}", "\u{0420}\u{0443}\u{0441}\u{0441}\u{043A}\u{0438}\u{0439}"),
+        ("hi", "\u{1F1EE}\u{1F1F3}", "\u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"),
+        ("tr", "\u{1F1F9}\u{1F1F7}", "T\u{00FC}rk\u{00e7}e"),
+        ("nl", "\u{1F1F3}\u{1F1F1}", "Nederlands"),
+        ("pl", "\u{1F1F5}\u{1F1F1}", "Polski"),
+        ("vi", "\u{1F1FB}\u{1F1F3}", "Ti\u{1EBF}ng Vi\u{1EC7}t"),
+        ("th", "\u{1F1F9}\u{1F1ED}", "\u{0E44}\u{0E17}\u{0E22}"),
+        ("sv", "\u{1F1F8}\u{1F1EA}", "Svenska")
+    ]
+
     // MARK: - Language Tab Content
 
     private var languageTabContent: some View {
         let originalLang = message.originalLanguage
-        let languages: [(code: String, flag: String, name: String)] = [
-            ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
-            ("en", "\u{1F1EC}\u{1F1E7}", "English"),
-            ("es", "\u{1F1EA}\u{1F1F8}", "Espa\u{00f1}ol"),
-            ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
-            ("ar", "\u{1F1F8}\u{1F1E6}", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}"),
-            ("zh", "\u{1F1E8}\u{1F1F3}", "\u{4E2D}\u{6587}"),
-            ("pt", "\u{1F1F5}\u{1F1F9}", "Portugu\u{00EA}s"),
-            ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
-            ("ja", "\u{1F1EF}\u{1F1F5}", "\u{65E5}\u{672C}\u{8A9E}"),
-            ("ko", "\u{1F1F0}\u{1F1F7}", "\u{D55C}\u{AD6D}\u{C5B4}")
-        ]
+        let originalColor = Color(hex: Self.colorForLanguage(originalLang))
 
-        let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(.system(size: 12, weight: .medium))
-                Text("Langue originale : \(originalLang.uppercased())")
+        return VStack(alignment: .leading, spacing: 14) {
+            // Original language banner
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(originalColor)
+                    .frame(width: 8, height: 8)
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(originalColor)
+                Text("Original \u{2022} \(Self.languageName(for: originalLang))")
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Text(originalLang.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(originalColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(originalColor.opacity(0.12)))
             }
-            .foregroundColor(Color(hex: contactColor))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color(hex: contactColor).opacity(0.12)))
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(originalColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(originalColor.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
 
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(0..<languages.count, id: \.self) { index in
-                    let lang = languages[index]
-                    let isOriginal = lang.code == originalLang
+            // Original content preview
+            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(message.content)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(3)
+                    .padding(.horizontal, 4)
+            }
 
-                    Button {
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(lang.flag)
-                                .font(.system(size: 18))
-                            Text(lang.name)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1)
+            // Selected translation display
+            if let selectedCode = selectedLanguageCode, let translated = translations[selectedCode] {
+                let langColor = Color(hex: Self.colorForLanguage(selectedCode))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(langColor)
+                            .frame(width: 6, height: 6)
+                        Text(Self.languageName(for: selectedCode))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(langColor)
+                        Spacer()
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textMuted)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
-                        )
-                        .opacity(isOriginal ? 0.4 : 1.0)
                     }
-                    .disabled(isOriginal)
+
+                    Text(translated)
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(langColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(langColor.opacity(0.2), lineWidth: 0.5)
+                        )
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Divider
+            Rectangle()
+                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .frame(height: 0.5)
+
+            // Language list
+            ForEach(Self.supportedLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
+                languageRow(lang, originalLang: originalLang)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { Task { await loadExistingTranslations() } }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedLanguageCode)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: translations.count)
+    }
+
+    private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
+        let langColor = Color(hex: Self.colorForLanguage(lang.code))
+        let hasTranslation = translations[lang.code] != nil
+        let isTranslating = translatingLanguages.contains(lang.code)
+        let isSelected = selectedLanguageCode == lang.code
+
+        return Button {
+            HapticFeedback.light()
+            if hasTranslation {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedLanguageCode = isSelected ? nil : lang.code
+                }
+            } else {
+                Task { await translateTo(lang.code, from: originalLang) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                // Color dot
+                Circle()
+                    .fill(langColor)
+                    .frame(width: 8, height: 8)
+
+                // Flag + name
+                Text(lang.flag)
+                    .font(.system(size: 16))
+                Text(lang.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isSelected ? langColor : theme.textPrimary)
+
+                Spacer()
+
+                // Translation preview or action
+                if isTranslating {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(langColor)
+                } else if hasTranslation {
+                    Text(String((translations[lang.code] ?? "").prefix(30)) + (translations[lang.code]?.count ?? 0 > 30 ? "..." : ""))
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                        .frame(maxWidth: 120, alignment: .trailing)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                } else {
+                    Text("Traduire")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(langColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(langColor.opacity(0.12)))
+                }
+            }
+            .padding(.vertical, 9)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected
+                        ? langColor.opacity(theme.mode.isDark ? 0.08 : 0.05)
+                        : Color.clear)
+            )
+        }
+        .disabled(isTranslating)
+    }
+
+    private func translateTo(_ targetLang: String, from sourceLang: String) async {
+        guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        translatingLanguages.insert(targetLang)
+        defer { translatingLanguages.remove(targetLang) }
+
+        do {
+            let response = try await TranslationService.shared.translate(
+                text: message.content,
+                sourceLanguage: sourceLang,
+                targetLanguage: targetLang
+            )
+            translations[targetLang] = response.translatedText
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedLanguageCode = targetLang
+            }
+            HapticFeedback.success()
+        } catch {
+            HapticFeedback.error()
+        }
+    }
+
+    private func loadExistingTranslations() async {
+        guard !isLoadingTranslations else { return }
+        isLoadingTranslations = true
+        defer { isLoadingTranslations = false }
+
+        do {
+            let response: APIResponse<[TranslationData]> = try await APIClient.shared.request(
+                endpoint: "/messages/\(message.id)/translations"
+            )
+            if response.success {
+                for t in response.data {
+                    translations[t.targetLanguage] = t.translatedContent
+                }
+            }
+        } catch { }
+    }
+
+    private static func languageName(for code: String) -> String {
+        supportedLanguages.first { $0.code == code }?.name ?? code.uppercased()
     }
 
     // MARK: - Views Tab Content (Premium Redesign)
