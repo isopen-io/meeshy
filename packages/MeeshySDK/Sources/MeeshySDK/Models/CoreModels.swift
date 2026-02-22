@@ -88,6 +88,9 @@ public struct MeeshyConversation: Identifiable, Hashable {
 
     public var unreadCount: Int = 0
     public var lastMessagePreview: String?
+    public var lastMessageAttachments: [MeeshyMessageAttachment] = []
+    public var lastMessageAttachmentCount: Int = 0
+    public var lastMessageSenderName: String? = nil
     public var tags: [MeeshyConversationTag] = []
 
     public var isAnnouncementChannel: Bool = false
@@ -98,6 +101,8 @@ public struct MeeshyConversation: Identifiable, Hashable {
     public var participantUserId: String? = nil
     public var participantAvatarURL: String? = nil
     public var lastSeenAt: Date? = nil
+
+    public var currentUserRole: String? = nil
 
     public var language: ConversationContext.ConversationLanguage = .french
     public var theme: ConversationContext.ConversationTheme = .general
@@ -142,8 +147,12 @@ public struct MeeshyConversation: Identifiable, Hashable {
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 unreadCount: Int = 0, lastMessagePreview: String? = nil,
+                lastMessageAttachments: [MeeshyMessageAttachment] = [],
+                lastMessageAttachmentCount: Int = 0,
+                lastMessageSenderName: String? = nil,
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                currentUserRole: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general) {
         self.id = id; self.identifier = identifier; self.type = type
@@ -154,7 +163,12 @@ public struct MeeshyConversation: Identifiable, Hashable {
         self.isAnnouncementChannel = isAnnouncementChannel
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
-        self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview; self.tags = tags
+        self.currentUserRole = currentUserRole
+        self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
+        self.lastMessageAttachments = lastMessageAttachments
+        self.lastMessageAttachmentCount = lastMessageAttachmentCount
+        self.lastMessageSenderName = lastMessageSenderName
+        self.tags = tags
         self.language = language; self.theme = theme
     }
 
@@ -485,6 +499,45 @@ public struct MeeshyReactionSummary {
 }
 
 public typealias MeeshyMessageReaction = MeeshyReactionSummary
+
+// MARK: - Enriched Reaction Models
+
+public struct ReactionUserDetail: Codable, Identifiable {
+    public let userId: String
+    public let username: String
+    public let avatar: String?
+    public let createdAt: Date
+
+    public var id: String { userId }
+
+    public init(userId: String, username: String, avatar: String? = nil, createdAt: Date = Date()) {
+        self.userId = userId
+        self.username = username
+        self.avatar = avatar
+        self.createdAt = createdAt
+    }
+}
+
+public struct ReactionGroup: Codable, Identifiable {
+    public let emoji: String
+    public let count: Int
+    public let users: [ReactionUserDetail]
+
+    public var id: String { emoji }
+
+    public init(emoji: String, count: Int, users: [ReactionUserDetail]) {
+        self.emoji = emoji
+        self.count = count
+        self.users = users
+    }
+}
+
+public struct ReactionSyncResponse: Codable {
+    public let messageId: String
+    public let reactions: [ReactionGroup]
+    public let totalCount: Int
+    public let userReactions: [String]
+}
 
 // MARK: - Feed Item Model
 
