@@ -102,7 +102,7 @@ struct ConversationView: View {
     let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     @State var inlineTypingDotPhase: Int = 0
 
-    let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
+    let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
 
     // MARK: - Computed Properties
 
@@ -347,9 +347,34 @@ struct ConversationView: View {
             floatingHeaderSection
 
             if quickReactionMessageId != nil {
-                Color.clear.contentShape(Rectangle())
+                Color.black.opacity(0.001)
                     .onTapGesture { closeReactionBar() }
+                    .allowsHitTesting(true)
                     .zIndex(10)
+            }
+
+            // Floating reaction bar — rendered ABOVE dismiss overlay so taps work
+            if let reactionMsgId = quickReactionMessageId {
+                GeometryReader { geo in
+                    let msgFrame = messageFrames[reactionMsgId] ?? .zero
+                    let containerOrigin = geo.frame(in: .global).origin
+                    let barY = msgFrame.minY - containerOrigin.y - 60
+
+                    let targetMsg = viewModel.messages.first(where: { $0.id == reactionMsgId })
+                    let isMe = targetMsg?.isMe ?? false
+
+                    VStack(spacing: 0) {
+                        HStack {
+                            if isMe { Spacer() }
+                            quickReactionBar(for: reactionMsgId)
+                            if !isMe { Spacer() }
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                    .offset(y: max(60, barY))
+                }
+                .zIndex(15)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
 
             if !isNearBottom {

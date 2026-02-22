@@ -850,6 +850,20 @@ struct EmojiUsageTracker {
         return emojis.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
     }
 
+    static func topEmojis(count: Int, defaults: [String]) -> [String] {
+        let counts = getCounts()
+        let trackedSorted = counts.sorted { $0.value > $1.value }.map(\.key)
+
+        var result: [String] = []
+        for emoji in trackedSorted where result.count < count {
+            result.append(emoji)
+        }
+        for emoji in defaults where result.count < count && !result.contains(emoji) {
+            result.append(emoji)
+        }
+        return result
+    }
+
     private static func getCounts() -> [String: Int] {
         UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
     }

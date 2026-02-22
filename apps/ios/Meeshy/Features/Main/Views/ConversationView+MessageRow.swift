@@ -41,13 +41,6 @@ extension ConversationView {
             }
 
             VStack(spacing: 0) {
-                // Quick reaction bar + action menu (above the bubble)
-                if quickReactionMessageId == msg.id {
-                    quickReactionBar(for: msg.id)
-                        .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
-                        .padding(.bottom, 6)
-                }
-
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
@@ -98,7 +91,7 @@ extension ConversationView {
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 20)
+                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 20)
                     .onChanged { value in
                         // Only allow horizontal swipes
                         guard abs(value.translation.width) > abs(value.translation.height) else { return }
@@ -477,30 +470,49 @@ extension ConversationView {
     // MARK: - Quick Reaction Bar + Actions
 
     func quickReactionBar(for messageId: String) -> some View {
-        VStack(spacing: 8) {
-            // Emoji strip
-            HStack(spacing: 6) {
-                ForEach(quickEmojis, id: \.self) { emoji in
-                    Button {
-                        viewModel.toggleReaction(messageId: messageId, emoji: emoji)
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            quickReactionMessageId = nil
-                        }
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 24))
-                            .frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(EmojiScaleButtonStyle())
-                }
+        let topReactions = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultReactionEmojis)
 
-                // (+) button for full picker
+        return VStack(spacing: 8) {
+            // Emoji strip: 5 visible + scroll for more + (+) button
+            HStack(spacing: 0) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(topReactions, id: \.self) { emoji in
+                            Button {
+                                viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                                EmojiUsageTracker.recordUsage(emoji: emoji)
+                                HapticFeedback.light()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    quickReactionMessageId = nil
+                                }
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 24))
+                                    .frame(width: 36, height: 36)
+                            }
+                            .buttonStyle(EmojiScaleButtonStyle())
+                        }
+                    }
+                    .padding(.leading, 12)
+                    .padding(.trailing, 4)
+                }
+                .frame(maxWidth: 222) // ~5 emojis visible (5*36 + 4*6 + padding)
+
+                // Separator
+                Capsule()
+                    .fill(Color(hex: accentColor).opacity(0.2))
+                    .frame(width: 1, height: 24)
+                    .padding(.horizontal, 4)
+
+                // (+) button → opens detail sheet on react tab
                 Button {
+                    let msg = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
                     closeReactionBar()
-                    detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
-                    detailSheetInitialTab = .react
-                    showMessageDetailSheet = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        detailSheetMessage = msg
+                        detailSheetInitialTab = .react
+                        showMessageDetailSheet = true
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
@@ -515,8 +527,8 @@ extension ConversationView {
                                 )
                         )
                 }
+                .padding(.trailing, 12)
             }
-            .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 Capsule()

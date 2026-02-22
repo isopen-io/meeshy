@@ -233,6 +233,11 @@ struct ThemedMessageBubble: View {
                         }
                     }
                 }
+                .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
+                    reactionsOverlay
+                        .padding(message.isMe ? .trailing : .leading, 8)
+                        .offset(y: 6)
+                }
 
                 // View-once indicator + timestamp
                 HStack(spacing: 3) {
@@ -243,11 +248,6 @@ struct ThemedMessageBubble: View {
                     }
                     messageMetaRow(insideBubble: false)
                 }
-            }
-            .overlay(alignment: .bottomLeading) {
-                reactionsOverlay
-                    .padding(.leading, 8)
-                    .offset(y: 6)
             }
 
             if !message.isMe { Spacer(minLength: 50) }
