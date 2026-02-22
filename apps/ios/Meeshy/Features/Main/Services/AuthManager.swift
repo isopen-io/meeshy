@@ -138,9 +138,7 @@ final class AuthManager: ObservableObject {
             let response = try await APIClient.shared.refreshAuthToken(currentToken: currentToken)
             APIClient.shared.authToken = response.token
             scheduleTokenRefresh()
-        } catch {
-            print("[Auth] Proactive refresh failed, session token will be used as fallback")
-        }
+        } catch { }
     }
 
     // MARK: - JWT Decode

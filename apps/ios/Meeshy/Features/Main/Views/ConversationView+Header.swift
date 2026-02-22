@@ -234,8 +234,6 @@ extension ConversationView {
                 await conversationListViewModel.refresh()
                 router.navigateToConversation(newConv)
             }
-        } catch {
-            print("[ConversationView] Create DM error: \(error)")
-        }
+        } catch { }
     }
 }

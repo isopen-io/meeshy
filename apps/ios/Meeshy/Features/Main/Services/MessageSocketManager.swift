@@ -77,7 +77,6 @@ final class MessageSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[MessageSocket] No auth token, skipping connect")
             return
         }
 
@@ -112,16 +111,13 @@ final class MessageSocketManager: ObservableObject {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = true }
-            print("[MessageSocket] Connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = false }
-            print("[MessageSocket] Disconnected")
         }
 
-        socket.on(clientEvent: .error) { _, args in
-            print("[MessageSocket] Error: \(args)")
+        socket.on(clientEvent: .error) { _, _ in
         }
 
         // --- Message events ---
@@ -208,8 +204,6 @@ final class MessageSocketManager: ObservableObject {
             DispatchQueue.main.async {
                 handler(decoded)
             }
-        } catch {
-            print("[MessageSocket] Decode error for \(type): \(error)")
-        }
+        } catch { }
     }
 }

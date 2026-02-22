@@ -69,7 +69,6 @@ extension ConversationView {
                     let serverOrigin = MeeshyConfig.shared.serverOrigin
                     guard let baseURL = URL(string: serverOrigin),
                           let token = APIClient.shared.authToken else {
-                        print("[Upload] Missing base URL or token")
                         return
                     }
                     let uploader = TusUploadManager(baseURL: baseURL)
@@ -104,7 +103,6 @@ extension ConversationView {
                         )
                     }
                 } catch {
-                    print("[Upload] Failed: \(error)")
                     let conversationId = conversation?.id ?? "temp"
                     let newMsg = Message(
                         conversationId: conversationId,

@@ -162,7 +162,6 @@ class ComposerLocationHelper: NSObject, ObservableObject, CLLocationManagerDeleg
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("ComposerLocationHelper error:", error.localizedDescription)
     }
 }
 

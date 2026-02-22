@@ -137,7 +137,6 @@ final class SocialSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[SocialSocket] No auth token, skipping connect")
             return
         }
 
@@ -183,21 +182,17 @@ final class SocialSocketManager: ObservableObject {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = true }
             self?.subscribeFeed()
-            print("[SocialSocket] Connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = false }
-            print("[SocialSocket] Disconnected")
         }
 
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            print("[SocialSocket] Reconnected -- re-subscribing to feed")
             self?.subscribeFeed()
         }
 
-        socket.on(clientEvent: .error) { _, args in
-            print("[SocialSocket] Error: \(args)")
+        socket.on(clientEvent: .error) { _, _ in
         }
 
         // --- Post events ---
@@ -324,8 +319,6 @@ final class SocialSocketManager: ObservableObject {
             DispatchQueue.main.async {
                 handler(decoded)
             }
-        } catch {
-            print("[SocialSocket] Decode error for \(type): \(error)")
-        }
+        } catch { }
     }
 }

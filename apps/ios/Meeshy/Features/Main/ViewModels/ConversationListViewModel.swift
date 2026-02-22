@@ -131,10 +131,7 @@ class ConversationListViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset = conversations.count
             }
-        } catch {
-            // Keep existing data or empty
-            print("[ConversationListVM] Load error: \(error)")
-        }
+        } catch { }
 
         await categoriesTask
         isLoading = false
@@ -163,9 +160,7 @@ class ConversationListViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset += deduplicated.count
             }
-        } catch {
-            print("[ConversationListVM] Load more error: \(error)")
-        }
+        } catch { }
 
         isLoadingMore = false
     }
@@ -193,9 +188,7 @@ class ConversationListViewModel: ObservableObject {
                 body: ["isPinned": newValue]
             )
         } catch {
-            // Revert on failure
             conversations[index].isPinned = !newValue
-            print("[ConversationListVM] Toggle pin error: \(error)")
         }
     }
 
@@ -214,7 +207,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].isMuted = !newValue
-            print("[ConversationListVM] Toggle mute error: \(error)")
         }
     }
 
@@ -233,7 +225,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].unreadCount = previousCount
-            print("[ConversationListVM] Mark as read error: \(error)")
         }
     }
 
@@ -255,7 +246,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].unreadCount = previousCount
-            print("[ConversationListVM] Mark as unread error: \(error)")
         }
     }
 
@@ -274,7 +264,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].isActive = wasActive
-            print("[ConversationListVM] Archive error: \(error)")
         }
     }
 
@@ -288,7 +277,6 @@ class ConversationListViewModel: ObservableObject {
             let _ = try await api.delete(endpoint: "/conversations/\(conversationId)")
         } catch {
             conversations.insert(removed, at: min(index, conversations.count))
-            print("[ConversationListVM] Delete error: \(error)")
         }
     }
 

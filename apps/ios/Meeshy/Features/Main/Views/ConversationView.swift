@@ -70,7 +70,7 @@ struct ConversationView: View {
     // Detail sheet state
     @State var showMessageDetailSheet = false
     @State var detailSheetMessage: Message? = nil
-    @State var detailSheetInitialTab: DetailTab = .language
+    @State var detailSheetInitialTab: DetailTab? = nil
 
     // Reaction bar state
     @State var quickReactionMessageId: String? = nil
@@ -583,13 +583,7 @@ struct ConversationView: View {
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onReact: { emoji in
-                    if emoji == "+" {
-                        detailSheetMessage = msg
-                        detailSheetInitialTab = .react
-                        showMessageDetailSheet = true
-                    } else {
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                    }
+                    viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },
                 onReport: { type, reason in
                     Task {

@@ -36,6 +36,20 @@ enum DetailTab: String, CaseIterable, Identifiable {
         case .transcription: return "Transcription"
         }
     }
+
+    var color: String {
+        switch self {
+        case .language: return "3498DB"
+        case .views: return "2ECC71"
+        case .reactions: return "F39C12"
+        case .react: return "E91E63"
+        case .report: return "E74C3C"
+        case .delete: return "E74C3C"
+        case .forward: return "9B59B6"
+        case .sentiment: return "1ABC9C"
+        case .transcription: return "8E44AD"
+        }
+    }
 }
 
 // MARK: - Views Sub-Filter
@@ -76,13 +90,48 @@ struct MessageAction: Identifiable {
     let handler: () -> Void
 }
 
+// MARK: - DetailGridItem
+
+enum DetailGridItem: Identifiable {
+    case action(MessageAction)
+    case tab(DetailTab)
+
+    var id: String {
+        switch self {
+        case .action(let action): return "action-\(action.id)"
+        case .tab(let tab): return "tab-\(tab.rawValue)"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .action(let action): return action.icon
+        case .tab(let tab): return tab.icon
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .action(let action): return action.label
+        case .tab(let tab): return tab.label
+        }
+    }
+
+    var color: String {
+        switch self {
+        case .action(let action): return action.color
+        case .tab(let tab): return tab.color
+        }
+    }
+}
+
 // MARK: - MessageDetailSheet
 
 struct MessageDetailSheet: View {
     let message: Message
     let contactColor: String
     let conversationId: String
-    var initialTab: DetailTab = .views
+    var initialTab: DetailTab? = nil
     var canDelete: Bool = false
     var actions: [MessageAction]? = nil
     var onDismissAction: (() -> Void)? = nil
@@ -93,7 +142,7 @@ struct MessageDetailSheet: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var envDismiss
-    @State private var selectedTab: DetailTab
+    @State private var selectedTab: DetailTab?
     @State private var actionGridAppeared = false
 
     // Reaction detail state
@@ -125,7 +174,7 @@ struct MessageDetailSheet: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab = .views, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
@@ -164,14 +213,23 @@ struct MessageDetailSheet: View {
         else { envDismiss() }
     }
 
+    private var gridItems: [DetailGridItem] {
+        var items: [DetailGridItem] = []
+        if let actions {
+            items += actions.map { .action($0) }
+        }
+        items += availableTabs.map { .tab($0) }
+        return items
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let actions, !actions.isEmpty {
-                actionGridSection(actions)
-                    .padding(.top, 4)
+            unifiedGrid
+                .padding(.top, 4)
+
+            if let selectedTab {
+                tabContent(for: selectedTab)
             }
-            tabBar
-            tabContent
         }
         .background(actions != nil ? Color.clear : theme.backgroundPrimary)
         .presentationDetents([.medium, .large])
@@ -191,56 +249,72 @@ struct MessageDetailSheet: View {
         }
     }
 
-    // MARK: - Action Grid
+    // MARK: - Unified Grid
 
-    private func actionGridSection(_ actions: [MessageAction]) -> some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 6),
-            GridItem(.flexible(), spacing: 6),
-            GridItem(.flexible(), spacing: 6),
-            GridItem(.flexible(), spacing: 6)
-        ]
+    private var unifiedGrid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
 
         return LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
-                actionGridButton(action, index: index)
+            ForEach(Array(gridItems.enumerated()), id: \.element.id) { index, item in
+                gridButton(item, index: index)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }
 
-    private func actionGridButton(_ action: MessageAction, index: Int) -> some View {
-        let accent = Color(hex: action.color)
+    private func gridButton(_ item: DetailGridItem, index: Int) -> some View {
+        let accent = Color(hex: item.color)
+        let isActive: Bool = {
+            if case .tab(let tab) = item { return selectedTab == tab }
+            return false
+        }()
+        let fillOpacity = isActive
+            ? (theme.mode.isDark ? 0.40 : 0.35)
+            : (theme.mode.isDark ? 0.25 : 0.15)
+        let trailOpacity = isActive
+            ? (theme.mode.isDark ? 0.25 : 0.18)
+            : (theme.mode.isDark ? 0.12 : 0.06)
 
         return Button {
-            HapticFeedback.medium()
-            action.handler()
+            switch item {
+            case .action(let action):
+                HapticFeedback.medium()
+                action.handler()
+            case .tab(let tab):
+                HapticFeedback.light()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = selectedTab == tab ? nil : tab
+                }
+            }
         } label: {
             VStack(spacing: 5) {
                 ZStack {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [accent.opacity(theme.mode.isDark ? 0.25 : 0.15), accent.opacity(theme.mode.isDark ? 0.12 : 0.06)],
+                                colors: [accent.opacity(fillOpacity), accent.opacity(trailOpacity)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .overlay(
                             Circle()
-                                .stroke(accent.opacity(0.2), lineWidth: 0.5)
+                                .stroke(
+                                    isActive ? accent.opacity(0.5) : accent.opacity(0.2),
+                                    lineWidth: isActive ? 1.5 : 0.5
+                                )
                         )
                         .frame(width: 42, height: 42)
 
-                    Image(systemName: action.icon)
+                    Image(systemName: item.icon)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(accent)
                 }
 
-                Text(action.label)
+                Text(item.label)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isActive ? accent : theme.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, minHeight: 64)
@@ -254,53 +328,12 @@ struct MessageDetailSheet: View {
         .buttonStyle(DetailActionButtonStyle())
     }
 
-    // MARK: - Tab Bar
-
-    private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(availableTabs) { tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTab = tab
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 11, weight: .medium))
-                            Text(tab.label)
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(selectedTab == tab
-                                      ? Color(hex: contactColor).opacity(0.18)
-                                      : theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(selectedTab == tab ? Color(hex: contactColor).opacity(0.3) : Color.clear, lineWidth: 0.5)
-                        )
-                        .foregroundColor(selectedTab == tab
-                                         ? Color(hex: contactColor)
-                                         : theme.textMuted)
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-        }
-    }
-
     // MARK: - Tab Content
 
-    private var tabContent: some View {
+    private func tabContent(for tab: DetailTab) -> some View {
         ScrollView(showsIndicators: false) {
             Group {
-                switch selectedTab {
+                switch tab {
                 case .language:
                     languageTabContent
                 case .views:
@@ -321,7 +354,7 @@ struct MessageDetailSheet: View {
                     transcriptionTabContent
                 }
             }
-            .id(selectedTab)
+            .id(tab)
             .transition(.opacity)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -1115,37 +1148,12 @@ struct MessageDetailSheet: View {
     private var reactTabContent: some View {
         let quickEmojis = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u{1F525}", "\u{1F389}"]
 
-        return VStack(spacing: 16) {
-            VStack(spacing: 8) {
-                Text("Reactions rapides")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 12) {
-                    ForEach(EmojiUsageTracker.sortedEmojis(from: quickEmojis).prefix(5), id: \.self) { emoji in
-                        Button {
-                            EmojiUsageTracker.recordUsage(emoji: emoji)
-                            onReact?(emoji)
-                            performDismiss()
-                        } label: {
-                            Text(emoji)
-                                .font(.system(size: 36))
-                        }
-                        .buttonStyle(EmojiScaleButtonStyle())
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-
-            Divider()
-
-            EmojiPickerView(recentEmojis: quickEmojis) { emoji in
-                onReact?(emoji)
-                performDismiss()
-            }
-            .frame(height: 300)
+        return EmojiPickerView(recentEmojis: quickEmojis) { emoji in
+            EmojiUsageTracker.recordUsage(emoji: emoji)
+            onReact?(emoji)
+            performDismiss()
         }
+        .frame(height: 340)
     }
 
     // MARK: - Delete Tab Content

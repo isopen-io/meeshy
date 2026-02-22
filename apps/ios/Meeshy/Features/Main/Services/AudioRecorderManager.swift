@@ -19,7 +19,6 @@ final class AudioRecorderManager: ObservableObject {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             try session.setActive(true)
         } catch {
-            print("[AudioRecorder] Session error: \(error)")
             return
         }
 
@@ -39,7 +38,6 @@ final class AudioRecorderManager: ObservableObject {
             recorder?.record()
             recordedFileURL = url
         } catch {
-            print("[AudioRecorder] Recorder error: \(error)")
             return
         }
 

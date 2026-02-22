@@ -21,51 +21,72 @@ struct MessageOverlayMenu: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isVisible = false
+    @State private var dragOffset: CGFloat = 0
+    @State private var showEmojiPicker = false
 
     private let previewCharLimit = 500
-    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯"]
+    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
+
+    // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
+    private let gridVisibleHeight: CGFloat = 175
 
     var body: some View {
         GeometryReader { geometry in
-            let panelHeight = geometry.size.height * 0.56 + geometry.safeAreaInsets.bottom
-            let previewMaxH = geometry.size.height - panelHeight - geometry.safeAreaInsets.top - 80
+            let safeTop = geometry.safeAreaInsets.top
+            let safeBottom = geometry.safeAreaInsets.bottom
+            let screenH = geometry.size.height
+            let panelBaseHeight = gridVisibleHeight + safeBottom + 60
+
+            // Drag range: 0 = collapsed (normal), negative = expanded (pull up)
+            let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
+            let clampedDrag = min(0, max(maxExpandUp, dragOffset))
+            let panelHeight = panelBaseHeight - clampedDrag
+            let previewAreaH = screenH - panelHeight - safeTop - 16
 
             ZStack {
                 dismissBackground
 
                 VStack(spacing: 0) {
-                    Spacer(minLength: geometry.safeAreaInsets.top + 8)
+                    Spacer(minLength: safeTop + 8)
 
-                    // Emoji quick bar (aligned with message side)
-                    HStack {
-                        if message.isMe { Spacer() }
-                        emojiQuickBar
-                        if !message.isMe { Spacer() }
-                    }
-                    .padding(.horizontal, 12)
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.5)
-                    .offset(y: isVisible ? 0 : -20)
-
-                    Spacer(minLength: 8)
-
-                    // Message preview (aligned left/right)
-                    ScrollView(.vertical, showsIndicators: false) {
+                    if !showEmojiPicker {
+                        // Emoji quick bar (scrollable, aligned with message)
                         HStack {
-                            if message.isMe { Spacer(minLength: 16) }
-                            messagePreview
-                            if !message.isMe { Spacer(minLength: 16) }
+                            if message.isMe { Spacer() }
+                            emojiQuickBar
+                            if !message.isMe { Spacer() }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.5)
+                        .offset(y: isVisible ? 0 : 20)
+
+                        // Message preview (aligned left/right)
+                        ScrollView(.vertical, showsIndicators: false) {
+                            HStack {
+                                if message.isMe { Spacer(minLength: 16) }
+                                messagePreview
+                                if !message.isMe { Spacer(minLength: 16) }
+                            }
+                        }
+                        .frame(maxHeight: max(60, previewAreaH))
+                        .padding(.bottom, 8)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.6)
+                    } else {
+                        // Inline emoji picker (replaces preview area)
+                        inlineEmojiPicker
+                            .frame(maxHeight: max(200, previewAreaH + 60))
+                            .padding(.horizontal, 12)
+                            .opacity(isVisible ? 1 : 0)
+                            .transition(.opacity)
                     }
-                    .frame(maxHeight: max(60, previewMaxH))
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.6)
 
-                    Spacer(minLength: 8)
-
-                    detailPanel(safeBottom: geometry.safeAreaInsets.bottom)
+                    // Detail panel with drag handle
+                    detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
-                        .offset(y: isVisible ? 0 : panelHeight)
+                        .offset(y: isVisible ? 0 : panelBaseHeight)
                 }
             }
         }
@@ -78,19 +99,22 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    // MARK: - Emoji Quick Bar
+    // MARK: - Emoji Quick Bar (scrollable, 15 emojis)
 
     private var emojiQuickBar: some View {
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultEmojis)
 
-        return HStack(spacing: 4) {
-            ForEach(topEmojis, id: \.self) { emoji in
-                emojiQuickButton(emoji: emoji)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 3) {
+                ForEach(topEmojis, id: \.self) { emoji in
+                    emojiQuickButton(emoji: emoji)
+                }
+                emojiPlusButton
             }
-            emojiPlusButton
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .frame(height: 38)
         .background(emojiBarBackground)
     }
 
@@ -101,10 +125,10 @@ struct MessageOverlayMenu: View {
             dismiss()
         } label: {
             Text(emoji)
-                .font(.system(size: 20))
+                .font(.system(size: 18))
         }
         .buttonStyle(.plain)
-        .frame(width: 34, height: 34)
+        .frame(width: 30, height: 30)
         .contentShape(Circle())
     }
 
@@ -112,14 +136,16 @@ struct MessageOverlayMenu: View {
         let accent = Color(hex: contactColor)
         let isDark = theme.mode.isDark
         return Button {
-            onReact?("+")
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showEmojiPicker.toggle()
+            }
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 13, weight: .semibold))
+            Image(systemName: showEmojiPicker ? "xmark" : "plus")
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(accent)
         }
         .buttonStyle(.plain)
-        .frame(width: 34, height: 34)
+        .frame(width: 30, height: 30)
         .background(
             Circle()
                 .fill(accent.opacity(isDark ? 0.15 : 0.1))
@@ -137,16 +163,60 @@ struct MessageOverlayMenu: View {
             .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
     }
 
+    // MARK: - Inline Emoji Picker (replaces preview when + tapped)
+
+    private var inlineEmojiPicker: some View {
+        let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
+
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Choisir une reaction")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEmojiPicker = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 8)
+
+            EmojiPickerView(recentEmojis: quickEmojis) { emoji in
+                EmojiUsageTracker.recordUsage(emoji: emoji)
+                onReact?(emoji)
+                dismiss()
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(theme.mode.isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.06), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+        )
+    }
+
     // MARK: - Dismiss Background (vibrant with bubble form distinction)
 
     private var dismissBackground: some View {
         ZStack {
-            // Vibrant blur material
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .opacity(isVisible ? 1 : 0)
-
-            // Dark tint for depth
             Color.black
                 .opacity(isVisible ? 0.35 : 0)
         }
@@ -329,24 +399,27 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Detail Panel (replaces compact action menu)
+    // MARK: - Detail Panel (scrollable grid, 2.5 rows visible)
 
     private func detailPanel(safeBottom: CGFloat) -> some View {
         VStack(spacing: 0) {
-            panelHandle
+            panelDragHandle
 
-            MessageDetailSheet(
-                message: message,
-                contactColor: contactColor,
-                conversationId: conversationId,
-                initialTab: .views,
-                canDelete: canDelete,
-                actions: overlayActions,
-                onDismissAction: { dismiss() },
-                onReact: { emoji in onReact?(emoji) },
-                onReport: { type, reason in onReport?(type, reason) },
-                onDelete: { onDelete?() }
-            )
+            // Scrollable grid showing ~2.5 rows
+            ScrollView(.vertical, showsIndicators: false) {
+                MessageDetailSheet(
+                    message: message,
+                    contactColor: contactColor,
+                    conversationId: conversationId,
+                    initialTab: .views,
+                    canDelete: canDelete,
+                    actions: overlayActions,
+                    onDismissAction: { dismiss() },
+                    onReact: { emoji in onReact?(emoji) },
+                    onReport: { type, reason in onReport?(type, reason) },
+                    onDelete: { onDelete?() }
+                )
+            }
 
             Spacer(minLength: safeBottom)
         }
@@ -359,9 +432,10 @@ struct MessageOverlayMenu: View {
                 topTrailingRadius: 20
             )
         )
+        .gesture(panelDragGesture)
     }
 
-    private var panelHandle: some View {
+    private var panelDragHandle: some View {
         VStack(spacing: 0) {
             Capsule()
                 .fill(theme.textMuted.opacity(0.4))
@@ -371,6 +445,30 @@ struct MessageOverlayMenu: View {
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
+    }
+
+    private var panelDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                withAnimation(.interactiveSpring()) {
+                    dragOffset = value.translation.height
+                }
+            }
+            .onEnded { value in
+                let velocity = value.predictedEndTranslation.height - value.translation.height
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    if value.translation.height < -80 || velocity < -200 {
+                        // Expanded: pull up to max
+                        dragOffset = -400
+                    } else if value.translation.height > 80 || velocity > 200 {
+                        // Collapsed: push down to normal
+                        dragOffset = 0
+                    } else {
+                        // Snap back
+                        dragOffset = dragOffset < -100 ? -400 : 0
+                    }
+                }
+            }
     }
 
     private var panelBackground: some View {
@@ -624,74 +722,82 @@ private struct PreviewVideoPlayer: View {
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
 
             if !showThumbnail {
-                HStack(spacing: 8) {
-                    Button { player.toggle(url: attachment.fileUrl) } label: {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(accent)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button { player.skip(seconds: -5) } label: {
-                        Image(systemName: "gobackward.5")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .buttonStyle(.plain)
-
-                    Slider(
-                        value: Binding(
-                            get: { player.progress },
-                            set: { player.seek(to: $0) }
-                        ),
-                        in: 0...1
-                    )
-                    .tint(accent)
-
-                    Button { player.skip(seconds: 5) } label: {
-                        Image(systemName: "goforward.5")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                        .monospacedDigit()
-
-                    Menu {
-                        ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                            Button {
-                                player.setRate(Float(rate))
-                            } label: {
-                                HStack {
-                                    Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
-                                    if abs(Double(player.playbackRate) - rate) < 0.01 {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Text("\(String(format: "%.2g", player.playbackRate))x")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(accent)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(accent.opacity(0.12)))
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
-                        .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-                )
+                videoControls
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .onDisappear { player.stop() }
+    }
+
+    private var videoControls: some View {
+        HStack(spacing: 8) {
+            Button { player.toggle(url: attachment.fileUrl) } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+            .buttonStyle(.plain)
+
+            Button { player.skip(seconds: -5) } label: {
+                Image(systemName: "gobackward.5")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+            .buttonStyle(.plain)
+
+            Slider(
+                value: Binding(
+                    get: { player.progress },
+                    set: { player.seek(to: $0) }
+                ),
+                in: 0...1
+            )
+            .tint(accent)
+
+            Button { player.skip(seconds: 5) } label: {
+                Image(systemName: "goforward.5")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+            .buttonStyle(.plain)
+
+            Text(player.timeLabel(totalDuration: attachment.duration))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .monospacedDigit()
+
+            speedMenu
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+        )
+    }
+
+    private var speedMenu: some View {
+        Menu {
+            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                Button {
+                    player.setRate(Float(rate))
+                } label: {
+                    HStack {
+                        Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
+                        if abs(Double(player.playbackRate) - rate) < 0.01 {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text("\(String(format: "%.2g", player.playbackRate))x")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(accent)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(accent.opacity(0.12)))
+        }
     }
 }
 
