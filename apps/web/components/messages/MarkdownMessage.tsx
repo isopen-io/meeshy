@@ -130,8 +130,9 @@ const normalizeMarkdown = (content: string): string => {
   // Reconstruire et convertir les \n multiples (sauf autour des séparateurs)
   normalized = processedLines.join('\n');
 
-  // Conversion des \n multiples en <br/>, mais pas autour des éléments Markdown
-  // (séparateurs horizontaux et headers)
+  // Conversion des \n simples en <br/> pour préserver les retours à la ligne
+  // (en markdown standard, un seul \n est ignoré, mais en messagerie on veut les garder)
+  // D'abord traiter les \n multiples, puis les simples
   normalized = normalized.replace(/\n{2,}/g, (match, offset) => {
     // Vérifier si on est près d'un séparateur horizontal ou d'un header
     const before = normalized.substring(Math.max(0, offset - 30), offset);
@@ -145,15 +146,24 @@ const normalizeMarkdown = (content: string): string => {
     const hasHeaderBefore = /#{1,6}\s+.+$/.test(before.split('\n').pop() || '');
     const hasHeaderAfter = /^#{1,6}\s+/.test(after);
 
-    // Si on est autour d'un HR ou d'un header, garder 2 \n (un seul saut de ligne vide)
+    // Si on est autour d'un HR ou d'un header, garder les \n via placeholder
+    // (sera restauré après la conversion des \n simples en <br/>)
     if (hasHrBefore || hasHrAfter || hasHeaderBefore || hasHeaderAfter) {
-      return '\n\n'; // Garder pour que ReactMarkdown détecte les éléments
+      return '___MD_NEWLINE___'.repeat(2);
     }
 
     // Sinon, convertir normalement en <br/>
     const count = match.length;
     return '<br/>'.repeat(count);
   });
+
+  // Convertir les \n simples restants en <br/> pour la messagerie
+  // (en markdown standard un \n simple est ignoré, mais les utilisateurs attendent
+  // que chaque retour à la ligne soit préservé dans un chat)
+  normalized = normalized.replace(/\n/g, '<br/>');
+
+  // Restaurer les \n protégés autour des éléments Markdown (HR, headers)
+  normalized = normalized.replace(/___MD_NEWLINE___/g, '\n');
 
   // Restaurer les blocs de code
   normalized = normalized.replace(/___CODE_BLOCK_(\d+)___/g, (_, index) => {
