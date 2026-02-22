@@ -78,6 +78,12 @@ struct APIMessage: Decodable {
     let currentUserReactions: [String]?
     let forwardedFrom: APIForwardedFrom?
     let forwardedFromConversation: APIForwardedFromConversation?
+    let deliveredToAllAt: Date?
+    let readByAllAt: Date?
+    let deliveredCount: Int?
+    let readCount: Int?
+    let isEncrypted: Bool?
+    let encryptionMode: String?
 }
 
 // MARK: - Messages API Response
@@ -238,6 +244,13 @@ extension APIMessage {
             return formatter.date(from: str)
         }()
 
+        let status: Message.DeliveryStatus = {
+            guard senderId == currentUserId else { return .sent }
+            if readByAllAt != nil { return .read }
+            if deliveredToAllAt != nil { return .delivered }
+            return .sent
+        }()
+
         return Message(
             id: id,
             conversationId: conversationId,
@@ -256,6 +269,8 @@ extension APIMessage {
             isBlurred: isBlurred ?? false,
             pinnedAt: parsedPinnedAt,
             pinnedBy: pinnedBy,
+            isEncrypted: isEncrypted ?? false,
+            encryptionMode: encryptionMode,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments,
@@ -265,6 +280,7 @@ extension APIMessage {
             senderName: sender?.displayName ?? sender?.username,
             senderColor: DynamicColorGenerator.colorForName(sender?.username ?? "?"),
             senderAvatarURL: sender?.avatar,
+            deliveryStatus: status,
             isMe: senderId == currentUserId
         )
     }

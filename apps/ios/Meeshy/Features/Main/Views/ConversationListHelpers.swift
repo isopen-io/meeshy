@@ -116,11 +116,12 @@ struct ConversationPreviewView: View {
     private var secondaryColor: String { conversation.colorPalette.secondary }
 
     private func loadRecentMessages() async {
+        let limit = min(max(conversation.unreadCount, 8), 20)
         do {
             let response: MessagesAPIResponse = try await APIClient.shared.request(
                 endpoint: "/conversations/\(conversation.id)/messages",
                 queryItems: [
-                    URLQueryItem(name: "limit", value: "8"),
+                    URLQueryItem(name: "limit", value: "\(limit)"),
                     URLQueryItem(name: "offset", value: "0"),
                 ]
             )

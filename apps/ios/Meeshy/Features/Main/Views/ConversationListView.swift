@@ -68,6 +68,7 @@ struct ConversationListView: View {
     @State var searchText = ""
     @State var selectedFilter: ConversationFilter = .all
     @FocusState var isSearching: Bool
+    @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
     @State private var animateGradient = false
 
@@ -384,19 +385,19 @@ struct ConversationListView: View {
                     }
             )
 
-            // Bottom overlay: Search bar (always) + Communities & Filters (when focused)
+            // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
             VStack(spacing: 0) {
                 Spacer()
 
-                // Communities carousel - only when searching
-                if isSearching {
+                // Communities carousel - only when search overlay is open (loupe tap)
+                if showSearchOverlay {
                     communitiesSection
                         .padding(.vertical, 10)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Category filters - only when searching
-                if isSearching {
+                // Category filters - only when search overlay is open (loupe tap)
+                if showSearchOverlay {
                     categoryFilters
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -409,15 +410,16 @@ struct ConversationListView: View {
             .offset(y: hideSearchBar ? 150 : 0)
             .opacity(hideSearchBar ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
         .onChange(of: hideSearchBar) { newValue in
             isScrollingDown = newValue
-            // Dismiss keyboard when hiding search bar
+            // Dismiss keyboard and overlay when hiding search bar
             if newValue {
                 isSearching = false
+                showSearchOverlay = false
             }
         }
         // Show search bar when returning to this view

@@ -706,3 +706,18 @@ Le mapping complet entre les reponses JSON du gateway et les modeles Swift (API 
 
 ## MeeshySDK
 Le SDK Swift est dans `packages/MeeshySDK/` avec son propre `CLAUDE.md` et `decisions.md`. Voir ces fichiers pour l'architecture dual-target (MeeshySDK core + MeeshyUI), les conventions et les dcisions architecturales du SDK.
+
+### REGLE CRITIQUE : Models et elements SDK
+**Toute modification de models, types, structs, enums ou elements lies au SDK DOIT se faire dans `packages/MeeshySDK/`**, jamais directement dans `apps/ios/`. L'app iOS consomme le SDK comme dependance — elle ne doit pas redefinir ou dupliquer les types du SDK.
+
+- Models API (`APIConversation`, `APIMessage`, `APIReaction`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
+- Models domain (`MeeshyConversation`, `MeeshyMessage`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
+- Extensions de conversion (`.toConversation()`, `.toMessage()`) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
+- Networking (`APIClient`, `APIResponse`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Networking/`
+- Composants UI reutilisables → `packages/MeeshySDK/Sources/MeeshyUI/`
+
+L'app iOS (`apps/ios/`) ne contient que :
+- Les ViewModels specifiques a l'app
+- Les Views/ecrans de l'app
+- Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
+- La navigation, le theming, et la configuration app

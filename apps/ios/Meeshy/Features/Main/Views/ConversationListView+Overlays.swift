@@ -137,7 +137,7 @@ extension ConversationListView {
 
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isSearching = false
+                            showSearchOverlay = false
                         }
                         HapticFeedback.light()
                     } label: {
@@ -189,17 +189,30 @@ extension ConversationListView {
     }
 
     // MARK: - Themed Search Bar
+    private var isActive: Bool { isSearching || showSearchOverlay }
+
     var themedSearchBar: some View {
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(
-                    isSearching ?
-                    AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
-                    AnyShapeStyle(theme.textMuted)
-                )
-                .scaleEffect(isSearching ? 1.15 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSearching)
+            // Magnifying glass: tappable to toggle search overlay (communities + filters)
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showSearchOverlay.toggle()
+                    if showSearchOverlay {
+                        isSearching = true
+                    }
+                }
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(
+                        isActive ?
+                        AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
+                        AnyShapeStyle(theme.textMuted)
+                    )
+                    .scaleEffect(isActive ? 1.15 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
+            }
 
             TextField("Rechercher...", text: $searchText)
                 .focused($isSearching)
@@ -225,13 +238,13 @@ extension ConversationListView {
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(
-                            isSearching ?
+                            isActive ?
                             AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
                             AnyShapeStyle(theme.inputBorder),
-                            lineWidth: isSearching ? 2 : 1
+                            lineWidth: isActive ? 2 : 1
                         )
                 )
-                .shadow(color: isSearching ? Color(hex: "4ECDC4").opacity(0.25) : .clear, radius: 12, y: 5)
+                .shadow(color: isActive ? Color(hex: "4ECDC4").opacity(0.25) : .clear, radius: 12, y: 5)
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
