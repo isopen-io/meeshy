@@ -90,6 +90,8 @@ public struct MeeshyConversation: Identifiable, Hashable {
     public var lastMessagePreview: String?
     public var tags: [MeeshyConversationTag] = []
 
+    public var isAnnouncementChannel: Bool = false
+
     public var isPinned: Bool = false
     public var sectionId: String? = nil
     public var isMuted: Bool = false
@@ -140,7 +142,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 unreadCount: Int = 0, lastMessagePreview: String? = nil,
-                tags: [MeeshyConversationTag] = [], isPinned: Bool = false, sectionId: String? = nil,
+                tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general) {
@@ -149,6 +151,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
         self.lastMessageAt = lastMessageAt; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
+        self.isAnnouncementChannel = isAnnouncementChannel
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview; self.tags = tags

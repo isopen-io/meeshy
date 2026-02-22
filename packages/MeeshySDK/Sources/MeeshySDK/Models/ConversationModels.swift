@@ -50,6 +50,7 @@ public struct APIConversation: Decodable {
     public let communityId: String?
     public let isActive: Bool?
     public let memberCount: Int?
+    public let isAnnouncementChannel: Bool?
     public let lastMessageAt: Date?
     public let members: [APIConversationMember]?
     public let lastMessage: APIConversationLastMessage?
@@ -99,7 +100,8 @@ extension APIConversation {
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content,
-            tags: tags, isPinned: prefs?.isPinned ?? false,
+            tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
+            isPinned: prefs?.isPinned ?? false,
             isMuted: prefs?.isMuted ?? false,
             participantUserId: otherMember?.userId,
             participantAvatarURL: participantAvatar

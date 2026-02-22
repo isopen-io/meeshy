@@ -108,7 +108,7 @@ struct ConversationListView: View {
             case .privee: filterMatch = c.type == .group && c.isActive
             case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
             case .globales: filterMatch = c.type == .global && c.isActive
-            case .channels: filterMatch = c.type == .channel && c.isActive
+            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
             case .archived: filterMatch = !c.isActive
             }
             let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)

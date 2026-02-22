@@ -261,6 +261,7 @@ export function registerCoreRoutes(
           avatar: true,
           communityId: true,
           memberCount: true,
+          isAnnouncementChannel: true,
           members: {
             take: 5,
             where: {
