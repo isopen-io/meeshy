@@ -1,25 +1,15 @@
 import SwiftUI
 import MeeshySDK
 
-// ============================================================================
 // MARK: - Image Viewer View
-// ============================================================================
-///
-/// Reusable image viewer that adapts to context:
-///  - `.messageBubble` — Compact thumbnail, tap to fullscreen
-///  - `.composerAttachment` — Preview tile with delete
-///  - `.feedPost` — Full width, social bar
-///  - `.storyOverlay` — Fullscreen backdrop
-///  - `.fullscreen` — Pinch-to-zoom, pan, swipe-to-dismiss
-///
-struct ImageViewerView: View {
-    let attachment: MessageAttachment
-    let context: MediaPlayerContext
-    var accentColor: String = "08D9D6"
 
-    // Actions
-    var onDelete: (() -> Void)? = nil
-    var onEdit: (() -> Void)? = nil
+public struct ImageViewerView: View {
+    public let attachment: MeeshyMessageAttachment
+    public let context: MediaPlayerContext
+    public var accentColor: String = "08D9D6"
+
+    public var onDelete: (() -> Void)? = nil
+    public var onEdit: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showFullscreen = false
@@ -51,13 +41,17 @@ struct ImageViewerView: View {
         }
     }
 
-    // MARK: - Body
-    var body: some View {
-        ZStack(alignment: context.isEditable ? .topTrailing : .center) {
-            // Image content
-            imageContent
+    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+                accentColor: String = "08D9D6",
+                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
+        self.attachment = attachment; self.context = context; self.accentColor = accentColor
+        self.onDelete = onDelete; self.onEdit = onEdit
+    }
 
-            // Overlays per context
+    // MARK: - Body
+    public var body: some View {
+        ZStack(alignment: context.isEditable ? .topTrailing : .center) {
+            imageContent
             overlays
         }
         .frame(maxWidth: maxWidth, maxHeight: maxHeight)
@@ -98,7 +92,6 @@ struct ImageViewerView: View {
     // MARK: - Overlays
     @ViewBuilder
     private var overlays: some View {
-        // Delete button (composer attachment)
         if context.showsDeleteButton, let onDelete = onDelete {
             VStack {
                 HStack {
@@ -115,7 +108,6 @@ struct ImageViewerView: View {
             }
         }
 
-        // Edit button (composer)
         if context.isEditable, let onEdit = onEdit {
             VStack {
                 Spacer()
@@ -124,7 +116,7 @@ struct ImageViewerView: View {
                         HStack(spacing: 3) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 10, weight: .bold))
-                            Text("Éditer")
+                            Text("\u{00C9}diter")
                                 .font(.system(size: 10, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -138,7 +130,6 @@ struct ImageViewerView: View {
             }
         }
 
-        // File size badge (non-compact)
         if attachment.fileSize > 0, !context.isCompact, !context.isEditable {
             VStack {
                 Spacer()
@@ -169,13 +160,11 @@ struct ImageViewerView: View {
     }
 }
 
-// ============================================================================
 // MARK: - Image Fullscreen View
-// ============================================================================
 
-struct ImageFullscreen: View {
-    let imageUrl: URL?
-    let accentColor: String
+public struct ImageFullscreen: View {
+    public let imageUrl: URL?
+    public let accentColor: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1.0
@@ -187,7 +176,11 @@ struct ImageFullscreen: View {
         case idle, saving, saved, failed
     }
 
-    var body: some View {
+    public init(imageUrl: URL?, accentColor: String) {
+        self.imageUrl = imageUrl; self.accentColor = accentColor
+    }
+
+    public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
                 .onTapGesture {
@@ -237,7 +230,6 @@ struct ImageFullscreen: View {
                 }
             }
 
-            // Close button
             if showControls {
                 VStack {
                     HStack {
@@ -249,10 +241,7 @@ struct ImageFullscreen: View {
                         }
                         Spacer()
 
-                        // Save to Photos
-                        Button {
-                            saveToPhotos()
-                        } label: {
+                        Button { saveToPhotos() } label: {
                             Group {
                                 switch saveState {
                                 case .idle:

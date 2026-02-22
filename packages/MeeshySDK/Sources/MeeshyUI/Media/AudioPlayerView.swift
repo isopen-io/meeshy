@@ -3,30 +3,29 @@ import AVFoundation
 import Combine
 import MeeshySDK
 
-// ============================================================================
-// MARK: - Enhanced Audio Player Manager
-// ============================================================================
+// MARK: - Audio Playback Manager
 
 @MainActor
-class AudioPlaybackManager: ObservableObject {
-    @Published var isPlaying = false
-    @Published var progress: Double = 0 // 0–1
-    @Published var currentTime: TimeInterval = 0
-    @Published var duration: TimeInterval = 0
-    @Published var speed: PlaybackSpeed = .x1_0
-    @Published var isLoading = false
+public class AudioPlaybackManager: ObservableObject {
+    @Published public var isPlaying = false
+    @Published public var progress: Double = 0
+    @Published public var currentTime: TimeInterval = 0
+    @Published public var duration: TimeInterval = 0
+    @Published public var speed: PlaybackSpeed = .x1_0
+    @Published public var isLoading = false
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var loadTask: Task<Void, Never>?
 
+    public init() {}
+
     // MARK: - Play from remote URL (through cache)
-    func play(urlString: String) {
+    public func play(urlString: String) {
         stop()
         guard !urlString.isEmpty else { return }
         isLoading = true
 
-        // Resolve relative URLs before entering the actor
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
         do {
@@ -46,7 +45,7 @@ class AudioPlaybackManager: ObservableObject {
     }
 
     // MARK: - Play from local file
-    func playLocal(url: URL) {
+    public func playLocal(url: URL) {
         stop()
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
@@ -73,7 +72,7 @@ class AudioPlaybackManager: ObservableObject {
     }
 
     // MARK: - Controls
-    func stop() {
+    public func stop() {
         player?.stop()
         player = nil
         timer?.invalidate()
@@ -85,7 +84,7 @@ class AudioPlaybackManager: ObservableObject {
         loadTask = nil
     }
 
-    func togglePlayPause() {
+    public func togglePlayPause() {
         guard let player = player else { return }
         if player.isPlaying {
             player.pause()
@@ -99,7 +98,7 @@ class AudioPlaybackManager: ObservableObject {
         }
     }
 
-    func seek(to fraction: Double) {
+    public func seek(to fraction: Double) {
         guard let player = player else { return }
         let target = fraction * player.duration
         player.currentTime = target
@@ -107,13 +106,13 @@ class AudioPlaybackManager: ObservableObject {
         progress = fraction
     }
 
-    func seekToTime(_ time: Double) {
+    public func seekToTime(_ time: Double) {
         guard let player = player, player.duration > 0 else { return }
         let fraction = time / player.duration
         seek(to: min(1, max(0, fraction)))
     }
 
-    func cycleSpeed() {
+    public func cycleSpeed() {
         speed = speed.next()
         player?.rate = Float(speed.rawValue)
         HapticFeedback.light()
@@ -140,34 +139,20 @@ class AudioPlaybackManager: ObservableObject {
     }
 }
 
-// ============================================================================
 // MARK: - Audio Player View
-// ============================================================================
-///
-/// Reusable audio player that adapts to context:
-///  - `.messageBubble` — Compact waveform, play/pause, speed, optional transcription
-///  - `.composerAttachment` — Editable, with delete, edit, generate transcription
-///  - `.feedPost` — Full width, language selector, social actions
-///  - `.storyOverlay` — Dark style, minimal chrome
-///  - `.fullscreen` — All controls expanded
-///
-struct AudioPlayerView: View {
-    let attachment: MessageAttachment
-    let context: MediaPlayerContext
 
-    // Theme / accent
-    var accentColor: String = "08D9D6"
+public struct AudioPlayerView: View {
+    public let attachment: MeeshyMessageAttachment
+    public let context: MediaPlayerContext
 
-    // Transcription (if available)
-    var transcription: MessageTranscription? = nil
-    var translatedAudios: [MessageTranslatedAudio] = []
+    public var accentColor: String = "08D9D6"
+    public var transcription: MessageTranscription? = nil
+    public var translatedAudios: [MessageTranslatedAudio] = []
 
-    // Actions
-    var onRequestTranscription: (() -> Void)? = nil
-    var onDelete: (() -> Void)? = nil
-    var onEdit: (() -> Void)? = nil
+    public var onRequestTranscription: (() -> Void)? = nil
+    public var onDelete: (() -> Void)? = nil
+    public var onEdit: (() -> Void)? = nil
 
-    // State
     @StateObject private var player = AudioPlaybackManager()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showTranscription = false
@@ -186,12 +171,22 @@ struct AudioPlayerView: View {
         return Double(attachment.duration ?? 0) / 1000.0
     }
 
+    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+                accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+                translatedAudios: [MessageTranslatedAudio] = [],
+                onRequestTranscription: (() -> Void)? = nil,
+                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
+        self.attachment = attachment; self.context = context; self.accentColor = accentColor
+        self.transcription = transcription; self.translatedAudios = translatedAudios
+        self.onRequestTranscription = onRequestTranscription
+        self.onDelete = onDelete; self.onEdit = onEdit
+    }
+
     // MARK: - Body
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
             mainPlayer
 
-            // Transcription panel (expandable)
             if showTranscription, !displaySegments.isEmpty {
                 MediaTranscriptionView(
                     segments: displaySegments,
@@ -205,7 +200,6 @@ struct AudioPlayerView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // Language selector row (for feed / fullscreen with translated audios)
             if !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
                     .padding(.top, 6)
@@ -218,22 +212,13 @@ struct AudioPlayerView: View {
     // MARK: - Main Player
     private var mainPlayer: some View {
         HStack(spacing: context.isCompact ? 8 : 10) {
-            // Play/Pause
             playButton
-
-            // Waveform + time
             VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
                 waveformProgress
                 timeRow
             }
-
-            // Speed control (tap to cycle)
             speedButton
-
-            // Transcription button
             transcriptionButton
-
-            // Context-specific trailing actions
             contextActions
         }
         .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -303,9 +288,7 @@ struct AudioPlayerView: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    // Scrub
-                }
+                .onChanged { _ in }
         )
     }
 
@@ -393,13 +376,13 @@ struct AudioPlayerView: View {
     private var languageSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                audioLanguagePill(flag: "🔊", code: "orig", label: "Original",
+                audioLanguagePill(flag: "\u{1F50A}", code: "orig", label: "Original",
                                   isSelected: selectedAudioLanguage == "orig")
 
                 ForEach(translatedAudios, id: \.id) { audio in
-                    let lang = LanguageOption.defaults.first(where: { $0.code == audio.targetLanguage })
+                    let lang = DetectedLanguage.find(code: audio.targetLanguage)
                     audioLanguagePill(
-                        flag: lang?.flag ?? "🌐",
+                        flag: lang?.flag ?? "\u{1F310}",
                         code: audio.targetLanguage,
                         label: lang?.name ?? audio.targetLanguage,
                         isSelected: selectedAudioLanguage == audio.targetLanguage
@@ -415,7 +398,6 @@ struct AudioPlayerView: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedAudioLanguage = code
             }
-            // Switch audio source if needed
             if code != "orig", let translated = translatedAudios.first(where: { $0.targetLanguage == code }) {
                 player.play(urlString: translated.url)
             }

@@ -2,67 +2,13 @@ import SwiftUI
 import WebKit
 import MeeshySDK
 
-// ============================================================================
-// MARK: - Document Type
-// ============================================================================
-
-enum DocumentMediaType {
-    case pdf, pptx, spreadsheet, generic
-
-    var icon: String {
-        switch self {
-        case .pdf: return "doc.richtext"
-        case .pptx: return "rectangle.on.rectangle.angled"
-        case .spreadsheet: return "tablecells"
-        case .generic: return "doc.fill"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .pdf: return "PDF"
-        case .pptx: return "Présentation"
-        case .spreadsheet: return "Tableur"
-        case .generic: return "Document"
-        }
-    }
-
-    var color: String {
-        switch self {
-        case .pdf: return "EF4444"
-        case .pptx: return "F59E0B"
-        case .spreadsheet: return "22C55E"
-        case .generic: return "3B82F6"
-        }
-    }
-
-    static func detect(from attachment: MessageAttachment) -> DocumentMediaType {
-        let mime = attachment.mimeType.lowercased()
-        let name = attachment.originalName.lowercased()
-        if mime.contains("pdf") || name.hasSuffix(".pdf") { return .pdf }
-        if mime.contains("presentation") || mime.contains("pptx") ||
-            name.hasSuffix(".pptx") || name.hasSuffix(".ppt") { return .pptx }
-        if mime.contains("spreadsheet") || mime.contains("excel") || mime.contains("csv") ||
-            name.hasSuffix(".xlsx") || name.hasSuffix(".xls") || name.hasSuffix(".csv") { return .spreadsheet }
-        return .generic
-    }
-}
-
-// ============================================================================
 // MARK: - Document Viewer View
-// ============================================================================
-///
-/// Reusable document viewer that adapts to context:
-///  - `.messageBubble` — Compact card with icon + name
-///  - `.composerAttachment` — Delete-able card
-///  - `.feedPost` — Rich card with page count
-///  - `.fullscreen` — WKWebView / QuickLook
-///
-struct DocumentViewerView: View {
-    let attachment: MessageAttachment
-    let context: MediaPlayerContext
-    var accentColor: String = "08D9D6"
-    var onDelete: (() -> Void)? = nil
+
+public struct DocumentViewerView: View {
+    public let attachment: MeeshyMessageAttachment
+    public let context: MediaPlayerContext
+    public var accentColor: String = "08D9D6"
+    public var onDelete: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showFullViewer = false
@@ -71,8 +17,14 @@ struct DocumentViewerView: View {
     private var accent: Color { Color(hex: accentColor) }
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
+    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+                accentColor: String = "08D9D6", onDelete: (() -> Void)? = nil) {
+        self.attachment = attachment; self.context = context
+        self.accentColor = accentColor; self.onDelete = onDelete
+    }
+
     // MARK: - Body
-    var body: some View {
+    public var body: some View {
         Button { showFullViewer = true; HapticFeedback.light() } label: {
             if context == .composerAttachment {
                 compactCard
@@ -131,7 +83,6 @@ struct DocumentViewerView: View {
     // MARK: - Rich Card (message, feed)
     private var richCard: some View {
         HStack(spacing: 12) {
-            // Type icon
             ZStack {
                 RoundedRectangle(cornerRadius: context.isCompact ? 10 : 12)
                     .fill(
@@ -152,7 +103,6 @@ struct DocumentViewerView: View {
                     .foregroundColor(.white)
             }
 
-            // File info
             VStack(alignment: .leading, spacing: 3) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
                     .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
@@ -186,7 +136,6 @@ struct DocumentViewerView: View {
                 .font(.system(size: 13))
                 .foregroundColor(isDark ? .white.opacity(0.25) : .black.opacity(0.18))
 
-            // Delete (in attachment mode)
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -208,19 +157,21 @@ struct DocumentViewerView: View {
     }
 }
 
-// ============================================================================
 // MARK: - Document Full Sheet (WebView + QuickLook)
-// ============================================================================
 
-struct DocumentFullSheet: View {
-    let attachment: MessageAttachment
-    let docType: DocumentMediaType
-    let accentColor: String
+public struct DocumentFullSheet: View {
+    public let attachment: MeeshyMessageAttachment
+    public let docType: DocumentMediaType
+    public let accentColor: String
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
 
-    var body: some View {
+    public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String) {
+        self.attachment = attachment; self.docType = docType; self.accentColor = accentColor
+    }
+
+    public var body: some View {
         NavigationView {
             Group {
                 if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
@@ -263,7 +214,7 @@ struct DocumentFullSheet: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Aperçu non disponible")
+            Text("Aper\u{00E7}u non disponible")
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
 
@@ -276,19 +227,21 @@ struct DocumentFullSheet: View {
     }
 }
 
-// ============================================================================
 // MARK: - Document Web View (WKWebView wrapper)
-// ============================================================================
 
-struct DocumentWebView: UIViewRepresentable {
-    let url: URL
+public struct DocumentWebView: UIViewRepresentable {
+    public let url: URL
 
-    func makeUIView(context: Context) -> WKWebView {
+    public init(url: URL) {
+        self.url = url
+    }
+
+    public func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.load(URLRequest(url: url))
         return webView
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    public func updateUIView(_ uiView: WKWebView, context: Context) {}
 }

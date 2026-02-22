@@ -4,18 +4,20 @@ import MeeshySDK
 
 // MARK: - Video Thumbnail View
 
-/// Downloads the first ~1MB of a video via Range header and extracts a frame locally.
-/// Used as a fallback when no server-generated thumbnailUrl is available.
-struct VideoThumbnailView: View {
-    let videoUrlString: String
-    let accentColor: String
+public struct VideoThumbnailView: View {
+    public let videoUrlString: String
+    public let accentColor: String
 
     @State private var thumbnail: UIImage?
     @State private var isLoading = false
 
     private static let thumbnailCache = NSCache<NSString, UIImage>()
 
-    var body: some View {
+    public init(videoUrlString: String, accentColor: String) {
+        self.videoUrlString = videoUrlString; self.accentColor = accentColor
+    }
+
+    public var body: some View {
         Group {
             if let thumbnail {
                 Image(uiImage: thumbnail)
@@ -91,7 +93,7 @@ struct VideoThumbnailView: View {
                 withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
             }
         } catch {
-            // Silently fail - placeholder remains visible
+            // Placeholder remains visible
         }
     }
 }

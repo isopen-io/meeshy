@@ -2,14 +2,6 @@ import Foundation
 import Combine
 import MeeshySDK
 
-// MARK: - Presence State
-
-enum PresenceState: Equatable {
-    case online   // green — lastActive < 5min
-    case away     // orange — lastActive > 5min but isOnline
-    case offline  // no dot
-}
-
 // MARK: - User Presence
 
 struct UserPresence {

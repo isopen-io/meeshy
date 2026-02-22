@@ -2,29 +2,18 @@ import SwiftUI
 import AVKit
 import MeeshySDK
 
-// ============================================================================
 // MARK: - Video Player View
-// ============================================================================
-///
-/// Reusable video player that adapts to context:
-///  - `.messageBubble` — Thumbnail + play overlay, compact
-///  - `.composerAttachment` — Preview with delete/edit
-///  - `.feedPost` — Full width, inline play, social bar
-///  - `.storyOverlay` — Autoplay, immersive dark
-///  - `.fullscreen` — Native AVPlayerViewController
-///
-struct VideoPlayerView: View {
-    let attachment: MessageAttachment
-    let context: MediaPlayerContext
-    var accentColor: String = "08D9D6"
 
-    // Transcription
-    var transcription: MessageTranscription? = nil
-    var onRequestTranscription: (() -> Void)? = nil
+public struct VideoPlayerView: View {
+    public let attachment: MeeshyMessageAttachment
+    public let context: MediaPlayerContext
+    public var accentColor: String = "08D9D6"
 
-    // Actions
-    var onDelete: (() -> Void)? = nil
-    var onEdit: (() -> Void)? = nil
+    public var transcription: MessageTranscription? = nil
+    public var onRequestTranscription: (() -> Void)? = nil
+
+    public var onDelete: (() -> Void)? = nil
+    public var onEdit: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showFullscreen = false
@@ -50,14 +39,21 @@ struct VideoPlayerView: View {
         }
     }
 
+    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+                accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+                onRequestTranscription: (() -> Void)? = nil,
+                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
+        self.attachment = attachment; self.context = context; self.accentColor = accentColor
+        self.transcription = transcription; self.onRequestTranscription = onRequestTranscription
+        self.onDelete = onDelete; self.onEdit = onEdit
+    }
+
     // MARK: - Body
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
-            // Video preview / inline player
             ZStack {
                 if isInlinePlay, context == .feedPost || context == .storyOverlay,
                    !attachment.fileUrl.isEmpty, let url = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                    // Inline AVPlayer for feed/story
                     VideoPlayer(player: {
                         let p = AVPlayer(url: url)
                         p.rate = Float(playbackSpeed.rawValue)
@@ -68,15 +64,12 @@ struct VideoPlayerView: View {
                     playOverlay
                 }
 
-                // Duration badge
                 durationBadge
 
-                // Speed badge
                 if playbackSpeed != .x1_0 {
                     speedOverlayBadge
                 }
 
-                // Delete badge in attachment mode
                 if context.showsDeleteButton, let onDelete = onDelete {
                     VStack {
                         HStack {
@@ -96,16 +89,14 @@ struct VideoPlayerView: View {
             .frame(height: videoHeight)
             .clipShape(RoundedRectangle(cornerRadius: context.cornerRadius))
 
-            // Controls bar (below thumbnail)
             controlsBar
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
 
-            // Transcription panel
             if showTranscription, !displaySegments.isEmpty {
                 MediaTranscriptionView(
                     segments: displaySegments,
-                    currentTime: 0, // Would need player time for sync
+                    currentTime: 0,
                     accentColor: accentColor,
                     maxHeight: context.isCompact ? 120 : 200,
                     onSeek: nil
@@ -238,7 +229,6 @@ struct VideoPlayerView: View {
     // MARK: - Controls Bar
     private var controlsBar: some View {
         HStack(spacing: 10) {
-            // Speed control
             Button { playbackSpeed = playbackSpeed.next(); HapticFeedback.light() } label: {
                 Text(playbackSpeed.label)
                     .font(.system(size: 10, weight: .heavy, design: .monospaced))
@@ -257,7 +247,6 @@ struct VideoPlayerView: View {
 
             Spacer()
 
-            // Transcription button
             if transcription != nil || onRequestTranscription != nil {
                 Button {
                     if transcription != nil {
@@ -279,7 +268,6 @@ struct VideoPlayerView: View {
                 }
             }
 
-            // Edit button (composer)
             if context.isEditable, let onEdit = onEdit {
                 Button { onEdit() } label: {
                     Image(systemName: "slider.horizontal.3")
@@ -292,13 +280,11 @@ struct VideoPlayerView: View {
     }
 }
 
-// ============================================================================
 // MARK: - Video Fullscreen Player
-// ============================================================================
 
-struct VideoFullscreenPlayer: View {
-    let urlString: String
-    let speed: PlaybackSpeed
+public struct VideoFullscreenPlayer: View {
+    public let urlString: String
+    public let speed: PlaybackSpeed
 
     @Environment(\.dismiss) private var dismiss
     @State private var saveState: VideoSaveState = .idle
@@ -307,7 +293,11 @@ struct VideoFullscreenPlayer: View {
         case idle, saving, saved, failed
     }
 
-    var body: some View {
+    public init(urlString: String, speed: PlaybackSpeed) {
+        self.urlString = urlString; self.speed = speed
+    }
+
+    public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
