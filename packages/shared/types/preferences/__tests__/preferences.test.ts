@@ -177,7 +177,13 @@ describe('NotificationPreferenceSchema', () => {
       showPreview: true,
       showSenderName: true,
       groupNotifications: true,
-      notificationBadgeEnabled: true
+      notificationBadgeEnabled: true,
+      postLikeEnabled: true,
+      postCommentEnabled: true,
+      postRepostEnabled: true,
+      storyReactionEnabled: true,
+      commentReplyEnabled: true,
+      commentLikeEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);
