@@ -41,13 +41,6 @@ extension ConversationView {
             }
 
             VStack(spacing: 0) {
-                if quickReactionMessageId == msg.id {
-                    quickReactionBar(for: msg.id)
-                        .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
-                        .padding(.bottom, 6)
-                        .zIndex(100)
-                }
-
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
@@ -99,6 +92,18 @@ extension ConversationView {
                     HapticFeedback.medium()
                 }
                 .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
+
+                // Quick reaction bar (below message)
+                if quickReactionMessageId == msg.id {
+                    HStack {
+                        if msg.isMe { Spacer() }
+                        quickReactionBar(for: msg.id)
+                        if !msg.isMe { Spacer() }
+                    }
+                    .transition(.scale(scale: 0.85, anchor: msg.isMe ? .topTrailing : .topLeading).combined(with: .opacity))
+                    .padding(.top, 4)
+                    .zIndex(100)
+                }
 
                 // Failed message retry bar
                 if msg.deliveryStatus == .failed && msg.isMe {
@@ -493,112 +498,112 @@ extension ConversationView {
     func quickReactionBar(for messageId: String) -> some View {
         let topReactions = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultReactionEmojis)
 
-        return VStack(spacing: 8) {
-            // Emoji strip: 5 visible + scroll for more + (+) button
-            HStack(spacing: 0) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(topReactions, id: \.self) { emoji in
-                            Button {
-                                viewModel.toggleReaction(messageId: messageId, emoji: emoji)
-                                EmojiUsageTracker.recordUsage(emoji: emoji)
-                                HapticFeedback.light()
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    quickReactionMessageId = nil
-                                }
-                            } label: {
-                                Text(emoji)
-                                    .font(.system(size: 24))
-                                    .frame(width: 36, height: 36)
-                            }
-                            .buttonStyle(EmojiScaleButtonStyle())
-                        }
-                    }
-                    .padding(.leading, 12)
-                    .padding(.trailing, 4)
-                }
-                .frame(maxWidth: 222) // ~5 emojis visible (5*36 + 4*6 + padding)
+        return VStack(spacing: 6) {
+            quickReactionEmojiStrip(messageId: messageId, emojis: topReactions)
 
-                // Separator
-                Capsule()
-                    .fill(Color(hex: accentColor).opacity(0.2))
-                    .frame(width: 1, height: 24)
-                    .padding(.horizontal, 4)
-
-                // (+) button → opens detail sheet on react tab
-                Button {
-                    let msg = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
-                    closeReactionBar()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        detailSheetMessage = msg
-                        detailSheetInitialTab = .react
-                        showMessageDetailSheet = true
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Color(hex: accentColor))
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(Color(hex: accentColor).opacity(0.15))
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
-                                )
-                        )
-                }
-                .padding(.trailing, 12)
-            }
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 12, y: 4)
-            )
-
-            // Action buttons row (hidden in emoji-only mode)
             if !emojiOnlyMode {
-                HStack(spacing: 8) {
-                    messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
-                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
-                            triggerReply(for: msg)
-                        }
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
-                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
-                            UIPasteboard.general.string = msg.content
-                        }
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                        forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
-                        deleteConfirmMessageId = messageId
-                        closeReactionBar()
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule()
-                                .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
-                        )
-                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-                )
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                quickReactionActionsRow(messageId: messageId)
             }
         }
+    }
+
+    private func quickReactionEmojiStrip(messageId: String, emojis: [String]) -> some View {
+        let accent = Color(hex: accentColor)
+        return HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(emojis, id: \.self) { emoji in
+                        Button {
+                            viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                            EmojiUsageTracker.recordUsage(emoji: emoji)
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                quickReactionMessageId = nil
+                            }
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 18))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(EmojiScaleButtonStyle())
+                    }
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, 2)
+            }
+            .frame(maxWidth: 166) // ~5 emojis visible (5*28 + 4*4 + 10)
+
+            Capsule()
+                .fill(accent.opacity(0.2))
+                .frame(width: 1, height: 18)
+                .padding(.horizontal, 3)
+
+            quickReactionPlusButton(messageId: messageId, accent: accent)
+                .padding(.trailing, 8)
+        }
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(accent.opacity(0.2), lineWidth: 0.5))
+                .shadow(color: accent.opacity(0.15), radius: 8, y: 3)
+        )
+    }
+
+    private func quickReactionPlusButton(messageId: String, accent: Color) -> some View {
+        Button {
+            let msg = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
+            closeReactionBar()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                detailSheetMessage = msg
+                detailSheetInitialTab = .react
+                showMessageDetailSheet = true
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(accent)
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .fill(accent.opacity(0.15))
+                        .overlay(Circle().stroke(accent.opacity(0.3), lineWidth: 0.5))
+                )
+        }
+    }
+
+    private func quickReactionActionsRow(messageId: String) -> some View {
+        HStack(spacing: 8) {
+            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
+                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                    triggerReply(for: msg)
+                }
+                closeReactionBar()
+            }
+            messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
+                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                    UIPasteboard.general.string = msg.content
+                }
+                closeReactionBar()
+            }
+            messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
+                forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
+                closeReactionBar()
+            }
+            messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
+                deleteConfirmMessageId = messageId
+                closeReactionBar()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        )
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
