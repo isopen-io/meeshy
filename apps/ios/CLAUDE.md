@@ -28,10 +28,11 @@ Meeshy/
 ```
 
 ## Build Commands
-Always use `./apps/ios/meeshy.sh`:
+**TOUJOURS utiliser `./apps/ios/meeshy.sh`** pour builder et lancer l'app. Ne jamais utiliser `xcodebuild` directement.
+Le script utilise le dossier `build/` comme output directory pour les artefacts de compilation.
 ```bash
 ./meeshy.sh build              # Build only (non-blocking)
-./meeshy.sh run                # Build+install+launch+logs (BLOCKS)
+./meeshy.sh run                # Build+install+launch (preferred for dev)
 ./meeshy.sh stop               # Stop running app
 ./meeshy.sh restart            # Stop+build+install+launch
 ./meeshy.sh logs               # Stream simulator logs
