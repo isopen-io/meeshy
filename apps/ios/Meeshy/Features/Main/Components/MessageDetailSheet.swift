@@ -193,7 +193,7 @@ struct MessageDetailSheet: View {
         self.onReport = onReport
         self.onDelete = onDelete
         self.externalTabSelection = externalTabSelection
-        _selectedTab = State(initialValue: initialTab)
+        _selectedTab = State(initialValue: initialTab ?? .language)
     }
 
     private var availableTabs: [DetailTab] {

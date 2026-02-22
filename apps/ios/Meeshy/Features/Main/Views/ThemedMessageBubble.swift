@@ -9,6 +9,7 @@ struct ThemedMessageBubble: View {
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
+    var onToggleReaction: ((String) -> Void)? = nil
     var onShowInfo: (() -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
@@ -236,7 +237,7 @@ struct ThemedMessageBubble: View {
                 .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
                     reactionsOverlay
                         .padding(message.isMe ? .trailing : .leading, 8)
-                        .offset(y: 21)
+                        .offset(y: 16)
                 }
 
                 // View-once indicator + timestamp
@@ -252,7 +253,7 @@ struct ThemedMessageBubble: View {
 
             if !message.isMe { Spacer(minLength: 50) }
         }
-        .padding(.bottom, message.reactions.isEmpty ? 16 : 30)
+        .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
         .alert("Navigation", isPresented: $showProfileAlert) {
             Button("OK") {}
         } message: {
@@ -580,27 +581,37 @@ struct ThemedMessageBubble: View {
     }
 
     // MARK: - Reactions Overlay (themed, accent-aware)
+
+    private let maxVisibleReactions = 4
+
     @ViewBuilder
     private var reactionsOverlay: some View {
         let isDark = theme.mode.isDark
         let accent = Color(hex: contactColor)
         let hasReactions = !reactionSummaries.isEmpty
+        let visible = Array(reactionSummaries.prefix(maxVisibleReactions))
+        let overflowCount = reactionSummaries.count - visible.count
 
         if message.isMe {
-            // Own messages: only show reaction pills (no + button)
             if hasReactions {
-                HStack(spacing: 5) {
-                    ForEach(reactionSummaries, id: \.emoji) { reaction in
+                HStack(spacing: 3) {
+                    ForEach(visible, id: \.emoji) { reaction in
                         reactionPill(reaction: reaction, isDark: isDark, accent: accent)
+                    }
+                    if overflowCount > 0 {
+                        overflowPill(count: overflowCount, isDark: isDark, accent: accent)
                     }
                 }
             }
         } else {
-            // Other's messages: + button before pills
-            HStack(spacing: 5) {
-                addReactionButton(isDark: isDark, accent: accent)
+            HStack(spacing: 3) {
+                if overflowCount > 0 {
+                    overflowPill(count: overflowCount, isDark: isDark, accent: accent)
+                } else {
+                    addReactionButton(isDark: isDark, accent: accent)
+                }
 
-                ForEach(reactionSummaries, id: \.emoji) { reaction in
+                ForEach(visible, id: \.emoji) { reaction in
                     reactionPill(reaction: reaction, isDark: isDark, accent: accent)
                 }
             }
@@ -609,13 +620,14 @@ struct ThemedMessageBubble: View {
 
     private func addReactionButton(isDark: Bool, accent: Color) -> some View {
         Button(action: {
+            HapticFeedback.light()
             onAddReaction?(message.id)
         }) {
             Image(systemName: "face.smiling")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 22, height: 22)
         .background(
             Circle()
                 .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
@@ -623,17 +635,38 @@ struct ThemedMessageBubble: View {
                     Circle()
                         .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
                 )
-                .shadow(color: accent.opacity(0.1), radius: 4, y: 2)
+                .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
+        )
+    }
+
+    private func overflowPill(count: Int, isDark: Bool, accent: Color) -> some View {
+        Button {
+            HapticFeedback.light()
+            onShowReactions?(message.id)
+        } label: {
+            Text("+\(count)")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(accent)
+        }
+        .frame(height: 22)
+        .padding(.horizontal, 6)
+        .background(
+            Capsule()
+                .fill(isDark ? accent.opacity(0.12) : accent.opacity(0.08))
+                .overlay(
+                    Capsule()
+                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
+                )
         )
     }
 
     private func reactionPill(reaction: ReactionSummary, isDark: Bool, accent: Color) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             Text(reaction.emoji)
-                .font(.system(size: 14))
+                .font(.system(size: 11))
             if reaction.count > 1 {
                 Text("\(reaction.count)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundColor(
                         reaction.includesMe
                             ? (isDark ? .white : .white)
@@ -641,15 +674,15 @@ struct ThemedMessageBubble: View {
                     )
             }
         }
-        .padding(.horizontal, reaction.count > 1 ? 8 : 6)
-        .frame(height: 28)
+        .padding(.horizontal, reaction.count > 1 ? 6 : 5)
+        .frame(height: 22)
         .background(
             Capsule()
                 .fill(
                     reaction.includesMe
                         ? (isDark
-                            ? accent.opacity(0.35)
-                            : accent.opacity(0.2))
+                            ? accent.opacity(0.5)
+                            : accent.opacity(0.35))
                         : (isDark
                             ? Color.white.opacity(0.08)
                             : Color.black.opacity(0.04))
@@ -658,19 +691,19 @@ struct ThemedMessageBubble: View {
                     Capsule()
                         .stroke(
                             reaction.includesMe
-                                ? accent.opacity(isDark ? 0.6 : 0.4)
+                                ? accent.opacity(isDark ? 0.8 : 0.6)
                                 : accent.opacity(isDark ? 0.15 : 0.1),
                             lineWidth: reaction.includesMe ? 1.5 : 0.5
                         )
                 )
                 .shadow(
-                    color: reaction.includesMe ? accent.opacity(0.25) : .clear,
+                    color: reaction.includesMe ? accent.opacity(0.3) : .clear,
                     radius: 4, y: 2
                 )
         )
         .onTapGesture {
             HapticFeedback.light()
-            onShowReactions?(message.id)
+            onToggleReaction?(reaction.emoji)
         }
     }
 

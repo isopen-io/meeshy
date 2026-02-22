@@ -54,11 +54,13 @@ extension ConversationView {
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
                     onAddReaction: { messageId in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            emojiOnlyMode = true
-                            quickReactionMessageId = messageId
-                        }
+                        overlayMessageFrame = messageFrames[messageId] ?? .zero
+                        overlayMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        showOverlayMenu = true
                         HapticFeedback.medium()
+                    },
+                    onToggleReaction: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                     },
                     onShowInfo: {
                         detailSheetMessage = msg

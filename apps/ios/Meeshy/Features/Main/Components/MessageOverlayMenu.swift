@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - MessageOverlayMenu
 
@@ -41,38 +42,36 @@ struct MessageOverlayMenu: View {
             let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
             let panelHeight = panelBaseHeight - clampedDrag
-            let previewAreaH = screenH - panelHeight - safeTop - 16
 
             ZStack {
                 dismissBackground
 
                 VStack(spacing: 0) {
-                    Spacer()
+                    // Tappable area above content — fills remaining space, dismisses on tap
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismiss() }
 
-                    // Message preview anchored just above emoji bar
-                    ScrollView(.vertical, showsIndicators: false) {
-                        HStack {
-                            if message.isMe { Spacer(minLength: 16) }
-                            messagePreview
-                            if !message.isMe { Spacer(minLength: 16) }
-                        }
+                    // Message preview tight above emoji bar
+                    HStack {
+                        if message.isMe { Spacer(minLength: 16) }
+                        messagePreview
+                        if !message.isMe { Spacer(minLength: 16) }
                     }
-                    .frame(maxHeight: min(280, max(60, previewAreaH - 50)))
-                    .padding(.bottom, 6)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 4)
                     .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.6)
 
-                    // Emoji quick bar (aligned with message side)
+                    // Emoji quick bar
                     HStack {
                         if message.isMe { Spacer() }
                         emojiQuickBar
                         if !message.isMe { Spacer() }
                     }
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 2)
                     .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.5)
-                    .offset(y: isVisible ? 0 : 20)
 
                     // Detail panel with drag handle
                     detailPanel(safeBottom: safeBottom)
@@ -86,6 +85,7 @@ struct MessageOverlayMenu: View {
             HapticFeedback.medium()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 isVisible = true
+                dragOffset = -400
             }
         }
     }
@@ -176,17 +176,56 @@ struct MessageOverlayMenu: View {
 
     private var messagePreview: some View {
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
-            if !message.isMe, let name = message.senderName {
-                Text(name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: message.senderColor ?? contactColor))
-            }
+            previewSenderHeader
 
             previewContent
         }
         .frame(maxWidth: UIScreen.main.bounds.width * 0.85)
         .padding(.horizontal, 8)
         .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+    }
+
+    private var previewSenderHeader: some View {
+        let isMe = message.isMe
+        let name = isMe ? "Moi" : (message.senderName ?? "?")
+        let color = isMe ? contactColor : (message.senderColor ?? contactColor)
+
+        return HStack(spacing: 6) {
+            if !isMe {
+                MeeshyAvatar(
+                    name: name,
+                    mode: .custom(22),
+                    accentColor: color,
+                    avatarURL: message.senderAvatarURL
+                )
+            }
+
+            Text(name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(hex: color))
+
+            Text("·")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textMuted)
+
+            Text(formatExactDate(message.createdAt))
+                .font(.system(size: 12))
+                .foregroundColor(theme.textMuted)
+        }
+    }
+
+    private func formatExactDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            formatter.dateFormat = "HH:mm"
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "'Hier' HH:mm"
+        } else {
+            formatter.dateFormat = "dd MMM yyyy HH:mm"
+        }
+        return formatter.string(from: date)
     }
 
     @ViewBuilder
@@ -359,7 +398,7 @@ struct MessageOverlayMenu: View {
                     message: message,
                     contactColor: contactColor,
                     conversationId: conversationId,
-                    initialTab: nil,
+                    initialTab: .language,
                     canDelete: canDelete,
                     actions: overlayActions,
                     onDismissAction: { dismiss() },
