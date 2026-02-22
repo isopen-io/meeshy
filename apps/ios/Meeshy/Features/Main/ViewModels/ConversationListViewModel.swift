@@ -3,9 +3,21 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+// MARK: - API Category Model
+
+struct APICategory: Decodable {
+    let id: String
+    let name: String
+    let color: String?
+    let icon: String?
+    let order: Int
+    let isExpanded: Bool?
+}
+
 @MainActor
 class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
+    @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMore = true
@@ -71,12 +83,39 @@ class ConversationListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: - Load Categories
+
+    func loadCategories() async {
+        do {
+            let response: APIResponse<[APICategory]> = try await api.request(
+                endpoint: "/me/preferences/categories"
+            )
+            if response.success {
+                let categories = response.data
+                userCategories = categories.map { cat in
+                    ConversationSection(
+                        id: cat.id,
+                        name: cat.name,
+                        icon: cat.icon ?? "folder.fill",
+                        color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
+                        isExpanded: cat.isExpanded ?? true,
+                        order: cat.order
+                    )
+                }.sorted { $0.order < $1.order }
+            }
+        } catch {
+            // Categories are optional, keep empty
+        }
+    }
+
     // MARK: - Load Conversations
 
     func loadConversations() async {
         guard !isLoading else { return }
         isLoading = true
         currentOffset = 0
+
+        async let categoriesTask: () = loadCategories()
 
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
@@ -97,6 +136,7 @@ class ConversationListViewModel: ObservableObject {
             print("[ConversationListVM] Load error: \(error)")
         }
 
+        await categoriesTask
         isLoading = false
     }
 
@@ -253,12 +293,24 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Move to Section
-    // BACKEND_NEEDED: Section/category mapping between iOS sectionId and backend categoryId
-    // is not yet aligned. For now, update local state only.
 
     func moveToSection(conversationId: String, sectionId: String) {
         guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
-        conversations[index].sectionId = sectionId
+        let previousSectionId = conversations[index].sectionId
+        let newSectionId: String? = sectionId.isEmpty ? nil : sectionId
+        conversations[index].sectionId = newSectionId
+
+        Task {
+            do {
+                let body: [String: String?] = ["categoryId": newSectionId]
+                let _: APIResponse<[String: String]> = try await api.put(
+                    endpoint: "/user-preferences/conversations/\(conversationId)",
+                    body: body
+                )
+            } catch {
+                conversations[index].sectionId = previousSectionId
+            }
+        }
     }
 
     // MARK: - Helpers

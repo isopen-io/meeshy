@@ -63,7 +63,7 @@ public struct MeeshyConversationSection: Identifiable, Hashable {
     public static let family = MeeshyConversationSection(id: "family", name: "Famille", icon: "house.fill", color: "2ECC71", order: 2)
     public static let friends = MeeshyConversationSection(id: "friends", name: "Amis", icon: "person.2.fill", color: "9B59B6", order: 3)
     public static let groups = MeeshyConversationSection(id: "groups", name: "Groupes", icon: "person.3.fill", color: "F8B500", order: 4)
-    public static let other = MeeshyConversationSection(id: "other", name: "Autres", icon: "tray.fill", color: "45B7D1", order: 5)
+    public static let other = MeeshyConversationSection(id: "other", name: "Mes conversations", icon: "tray.fill", color: "45B7D1", order: 5)
 
     public static let allSections: [MeeshyConversationSection] = [.pinned, .work, .family, .friends, .groups, .other]
 }
@@ -507,6 +507,8 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
     case personnel = "Personnel"
     case privee = "Privée"
     case ouvertes = "Ouvertes"
+    case globales = "Globales"
+    case channels = "Channels"
     case archived = "Archivés"
 
     public var id: String { self.rawValue }
@@ -518,6 +520,8 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
         case .personnel: return "3498DB"
         case .privee: return "F8B500"
         case .ouvertes: return "2ECC71"
+        case .globales: return "E74C3C"
+        case .channels: return "1ABC9C"
         case .archived: return "9B59B6"
         }
     }

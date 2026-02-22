@@ -80,8 +80,8 @@ struct ConversationListView: View {
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
-    // Section expansion state
-    @State private var expandedSections: Set<String> = Set(ConversationSection.allSections.map { $0.id })
+    // Section expansion state (pinned + other always expanded, user categories added dynamically)
+    @State private var expandedSections: Set<String> = ["pinned", "other"]
 
     // Preview state for hard press
     @State private var previewConversation: Conversation? = nil
@@ -106,7 +106,9 @@ struct ConversationListView: View {
             case .unread: filterMatch = c.unreadCount > 0
             case .personnel: filterMatch = c.type == .direct && c.isActive
             case .privee: filterMatch = c.type == .group && c.isActive
-            case .ouvertes: filterMatch = (c.type == .public || c.type == .community || c.type == .channel) && c.isActive
+            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
+            case .globales: filterMatch = c.type == .global && c.isActive
+            case .channels: filterMatch = c.type == .channel && c.isActive
             case .archived: filterMatch = !c.isActive
             }
             let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
@@ -114,33 +116,41 @@ struct ConversationListView: View {
         }
     }
 
-    // Group conversations by section
+    // Group conversations by section (user categories from backend + pinned + uncategorized)
     private var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] {
         var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
-        // First: Pinned section (conversations pinned without a section)
+        // First: Pinned section (conversations pinned without a category)
         let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
         if !pinnedOnly.isEmpty {
             result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
         }
 
-        // Then: Other sections with their conversations
-        for section in ConversationSection.allSections where section.id != "pinned" {
-            let sectionConvs = filtered.filter { $0.sectionId == section.id }
+        // Then: User categories from backend (dynamic)
+        let categories = conversationViewModel.userCategories
+        let categoryIds = Set(categories.map(\.id))
+        for category in categories {
+            let sectionConvs = filtered.filter { $0.sectionId == category.id }
             if !sectionConvs.isEmpty {
-                // Sort: pinned first, then by date
                 let sorted = sectionConvs.sorted { a, b in
                     if a.isPinned != b.isPinned { return a.isPinned }
                     return a.lastMessageAt > b.lastMessageAt
                 }
-                result.append((section, sorted))
+                result.append((category, sorted))
             }
         }
 
-        // Finally: Uncategorized ("Autres")
+        // Conversations with unknown sectionId (category deleted or not yet synced)
+        let orphaned = filtered.filter { conv in
+            guard let sid = conv.sectionId else { return false }
+            return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
+        }
+
+        // Finally: Uncategorized ("Mes conversations") — no sectionId + not pinned, plus orphaned
         let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
-        if !uncategorized.isEmpty {
-            result.append((ConversationSection.other, uncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+        let allUncategorized = uncategorized + orphaned
+        if !allUncategorized.isEmpty {
+            result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
         }
 
         return result
@@ -431,6 +441,11 @@ struct ConversationListView: View {
         }
         .task {
             await conversationViewModel.loadConversations()
+        }
+        .onChange(of: conversationViewModel.userCategories) { categories in
+            for cat in categories where cat.isExpanded {
+                expandedSections.insert(cat.id)
+            }
         }
         // Show search bar when filtered list is empty
         .onChange(of: filtered.isEmpty) { isEmpty in

@@ -69,17 +69,24 @@ extension ConversationListView {
 
         Divider()
 
-        // Move to section
-        // BACKEND_NEEDED: Section/category mapping between iOS sectionId and backend
-        // categoryId is not yet aligned. Local-only for now.
+        // Move to category
         Menu {
-            ForEach(ConversationSection.allSections.filter { $0.id != "pinned" }) { section in
+            ForEach(conversationViewModel.userCategories) { category in
                 Button {
                     HapticFeedback.light()
-                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: section.id)
+                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: category.id)
                 } label: {
-                    Label(section.name, systemImage: section.icon)
+                    Label(category.name, systemImage: category.icon)
                 }
+            }
+            if !conversationViewModel.userCategories.isEmpty {
+                Divider()
+            }
+            Button {
+                HapticFeedback.light()
+                conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
+            } label: {
+                Label("Mes conversations", systemImage: "tray.fill")
             }
         } label: {
             Label("Déplacer vers...", systemImage: "folder.fill")
@@ -251,6 +258,11 @@ extension ConversationListView {
         .onChange(of: isSearching) { newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
+            }
+            if newValue && !showSearchOverlay {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showSearchOverlay = true
+                }
             }
         }
         .padding(.horizontal, 16)

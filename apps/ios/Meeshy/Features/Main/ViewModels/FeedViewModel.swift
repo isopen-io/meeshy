@@ -338,6 +338,10 @@ class FeedViewModel: ObservableObject {
 struct AnyCodable: Codable {
     let value: Any
 
+    init(_ value: Any) {
+        self.value = value
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let b = try? container.decode(Bool.self) { value = b }
