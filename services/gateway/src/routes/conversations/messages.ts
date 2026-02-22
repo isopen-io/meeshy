@@ -1696,7 +1696,10 @@ export function registerMessagesRoutes(
             }
           }
         },
-        ...errorResponseSchema
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
       }
     },
     preValidation: [requiredAuth]
@@ -1773,7 +1776,10 @@ export function registerMessagesRoutes(
             success: { type: 'boolean' }
           }
         },
-        ...errorResponseSchema
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
       }
     },
     preValidation: [requiredAuth]

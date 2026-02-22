@@ -12,6 +12,7 @@ Fonctionnalités:
 import os
 import asyncio
 import logging
+import subprocess
 import numpy as np
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -196,6 +197,42 @@ class DiarizationService:
 
         return self._pipeline
 
+    def _ensure_wav_format(self, audio_path: str) -> tuple[str, bool]:
+        """
+        Convertit les formats non supportés par pyannote/librosa (.mp4, .m4a, .aac)
+        en .wav via ffmpeg. Retourne (wav_path, needs_cleanup).
+
+        Les anciens audios sont souvent stockés en .mp4 (conteneur vidéo) que
+        pyannote ne peut pas ouvrir directement.
+        """
+        non_wav_formats = ('.mp4', '.m4a', '.aac', '.ogg', '.webm', '.mp3')
+        if not audio_path.lower().endswith(non_wav_formats):
+            return audio_path, False
+
+        wav_path = audio_path.rsplit('.', 1)[0] + '_diarization.wav'
+
+        if os.path.exists(wav_path):
+            return wav_path, True
+
+        try:
+            result = subprocess.run(
+                ['ffmpeg', '-i', audio_path, '-ar', '16000', '-ac', '1', '-y', wav_path],
+                capture_output=True,
+                timeout=30
+            )
+            if result.returncode == 0:
+                logger.info(f"[DIARIZATION] Converti {Path(audio_path).suffix} → .wav pour diarisation")
+                return wav_path, True
+            else:
+                logger.warning(f"[DIARIZATION] Échec ffmpeg: {result.stderr.decode()[:200]}")
+                return audio_path, False
+        except FileNotFoundError:
+            logger.warning("[DIARIZATION] ffmpeg non trouvé, passage du fichier original")
+            return audio_path, False
+        except subprocess.TimeoutExpired:
+            logger.warning("[DIARIZATION] Timeout ffmpeg (30s)")
+            return audio_path, False
+
     async def detect_speakers(
         self,
         audio_path: str,
@@ -216,6 +253,21 @@ class DiarizationService:
         Returns:
             DiarizationResult avec informations sur les locuteurs
         """
+        wav_path, needs_cleanup = self._ensure_wav_format(audio_path)
+        try:
+            return await self._detect_speakers_internal(wav_path, max_speakers)
+        finally:
+            if needs_cleanup and wav_path != audio_path and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                except OSError:
+                    pass
+
+    async def _detect_speakers_internal(
+        self,
+        audio_path: str,
+        max_speakers: int = 5
+    ) -> DiarizationResult:
         # PRIORITÉ 1: Essayer pyannote SI token fourni
         if self.hf_token:
             pipeline = self._get_pyannote_pipeline()
