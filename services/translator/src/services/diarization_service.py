@@ -197,21 +197,41 @@ class DiarizationService:
 
         return self._pipeline
 
+    def _is_real_wav(self, audio_path: str) -> bool:
+        """Vérifie que le fichier est un vrai WAV/PCM via ses magic bytes."""
+        try:
+            with open(audio_path, 'rb') as f:
+                header = f.read(12)
+            return header[:4] == b'RIFF' and header[8:12] == b'WAVE'
+        except (OSError, IOError):
+            return False
+
+    def _needs_conversion(self, audio_path: str) -> bool:
+        """
+        Détermine si le fichier nécessite une conversion ffmpeg.
+        Détecte par extension ET par magic bytes pour couvrir les fichiers
+        mal nommés (ex: .wav contenant du mp4/aac).
+        """
+        non_wav_extensions = ('.mp4', '.m4a', '.aac', '.ogg', '.webm', '.mp3')
+        if audio_path.lower().endswith(non_wav_extensions):
+            return True
+        if audio_path.lower().endswith('.wav') and not self._is_real_wav(audio_path):
+            logger.info(f"[DIARIZATION] Fichier .wav détecté comme non-PCM (magic bytes incorrects)")
+            return True
+        return False
+
     def _ensure_wav_format(self, audio_path: str) -> tuple[str, bool]:
         """
-        Convertit les formats non supportés par pyannote/librosa (.mp4, .m4a, .aac)
-        en .wav via ffmpeg. Retourne (wav_path, needs_cleanup).
-
-        Les anciens audios sont souvent stockés en .mp4 (conteneur vidéo) que
-        pyannote ne peut pas ouvrir directement.
+        Convertit les formats non supportés par pyannote/librosa en .wav via ffmpeg.
+        Détecte le vrai format par magic bytes, pas seulement par extension.
+        Retourne (wav_path, needs_cleanup).
         """
-        non_wav_formats = ('.mp4', '.m4a', '.aac', '.ogg', '.webm', '.mp3')
-        if not audio_path.lower().endswith(non_wav_formats):
+        if not self._needs_conversion(audio_path):
             return audio_path, False
 
         wav_path = audio_path.rsplit('.', 1)[0] + '_diarization.wav'
 
-        if os.path.exists(wav_path):
+        if os.path.exists(wav_path) and self._is_real_wav(wav_path):
             return wav_path, True
 
         try:
@@ -221,7 +241,7 @@ class DiarizationService:
                 timeout=30
             )
             if result.returncode == 0:
-                logger.info(f"[DIARIZATION] Converti {Path(audio_path).suffix} → .wav pour diarisation")
+                logger.info(f"[DIARIZATION] Converti {Path(audio_path).name} → .wav pour diarisation")
                 return wav_path, True
             else:
                 logger.warning(f"[DIARIZATION] Échec ffmpeg: {result.stderr.decode()[:200]}")
