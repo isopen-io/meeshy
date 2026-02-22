@@ -76,6 +76,10 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
+    /// Detailed reaction data for a specific message (used by reaction detail sheet)
+    @Published var reactionDetails: [ReactionGroup] = []
+    @Published var isLoadingReactions = false
+
     /// ID of the first unread message (set once after initial load, cleared on scroll to bottom)
     @Published var firstUnreadMessageId: String?
 
@@ -396,6 +400,23 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Fetch Reaction Details
+
+    func fetchReactionDetails(messageId: String) async {
+        isLoadingReactions = true
+        defer { isLoadingReactions = false }
+        do {
+            let response: APIResponse<ReactionSyncResponse> = try await APIClient.shared.request(
+                endpoint: "/reactions/\(messageId)"
+            )
+            if response.success {
+                reactionDetails = response.data.reactions
+            }
+        } catch {
+            reactionDetails = []
+        }
+    }
+
     // MARK: - Delete Message
 
     func deleteMessage(messageId: String) async {
@@ -406,10 +427,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/\(messageId)",
-                method: "DELETE"
-            )
+            try await MessageService.shared.delete(conversationId: conversationId, messageId: messageId)
         } catch {
             // Revert on failure
             if let idx = messages.firstIndex(where: { $0.id == messageId }) {
@@ -431,10 +449,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = nil
 
             do {
-                let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
-                    method: "DELETE"
-                )
+                try await MessageService.shared.unpin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = Date()
@@ -447,10 +462,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = AuthManager.shared.currentUser?.id
 
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
-                    method: "PUT"
-                )
+                try await MessageService.shared.pin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = nil
@@ -475,11 +487,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            struct EditBody: Encodable { let content: String }
-            let _: APIResponse<[String: String]> = try await APIClient.shared.put(
-                endpoint: "/messages/\(messageId)",
-                body: EditBody(content: trimmed)
-            )
+            _ = try await MessageService.shared.edit(messageId: messageId, content: trimmed)
         } catch {
             // Revert on failure
             if let idx = messages.firstIndex(where: { $0.id == messageId }),
@@ -488,6 +496,18 @@ class ConversationViewModel: ObservableObject {
                 messages[idx].isEdited = false
             }
             self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: - Report Message
+
+    func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
+        do {
+            try await ReportService.shared.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
         }
     }
 
