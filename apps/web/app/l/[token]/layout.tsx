@@ -1,9 +1,20 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  title: '',
+  description: '',
   robots: 'noindex, nofollow',
-  openGraph: null,
-  twitter: null,
+  openGraph: {
+    title: '',
+    description: '',
+    images: [],
+    siteName: '',
+  },
+  twitter: {
+    title: '',
+    description: '',
+    images: [],
+  },
 };
 
 export default function TrackingRedirectLayout({
