@@ -139,6 +139,7 @@ struct MessageDetailSheet: View {
     var onReact: ((String) -> Void)?
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
+    var externalTabSelection: Binding<DetailTab?>?
 
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var envDismiss
@@ -180,7 +181,7 @@ struct MessageDetailSheet: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
@@ -191,7 +192,8 @@ struct MessageDetailSheet: View {
         self.onReact = onReact
         self.onReport = onReport
         self.onDelete = onDelete
-        _selectedTab = State(initialValue: initialTab ?? .language)
+        self.externalTabSelection = externalTabSelection
+        _selectedTab = State(initialValue: initialTab)
     }
 
     private var availableTabs: [DetailTab] {
@@ -254,6 +256,13 @@ struct MessageDetailSheet: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
                 actionGridAppeared = true
             }
+        }
+        .onChange(of: externalTabSelection?.wrappedValue) { _, newTab in
+            guard let newTab else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedTab = newTab
+            }
+            DispatchQueue.main.async { externalTabSelection?.wrappedValue = nil }
         }
     }
 

@@ -22,7 +22,7 @@ struct MessageOverlayMenu: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isVisible = false
     @State private var dragOffset: CGFloat = 0
-    @State private var showEmojiPicker = false
+    @State private var forceTab: DetailTab? = nil
 
     private let previewCharLimit = 500
     private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
@@ -49,40 +49,30 @@ struct MessageOverlayMenu: View {
                 VStack(spacing: 0) {
                     Spacer()
 
-                    if !showEmojiPicker {
-                        // Emoji quick bar (scrollable, aligned with message)
+                    // Message preview anchored just above emoji bar
+                    ScrollView(.vertical, showsIndicators: false) {
                         HStack {
-                            if message.isMe { Spacer() }
-                            emojiQuickBar
-                            if !message.isMe { Spacer() }
+                            if message.isMe { Spacer(minLength: 16) }
+                            messagePreview
+                            if !message.isMe { Spacer(minLength: 16) }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 6)
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.5)
-                        .offset(y: isVisible ? 0 : 20)
-
-                        // Message preview anchored just above panel handle
-                        ScrollView(.vertical, showsIndicators: false) {
-                            HStack {
-                                if message.isMe { Spacer(minLength: 16) }
-                                messagePreview
-                                if !message.isMe { Spacer(minLength: 16) }
-                            }
-                        }
-                        .frame(maxHeight: max(60, previewAreaH))
-                        .padding(.bottom, 4)
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 1.0 : 0.6)
-                    } else {
-                        // Inline emoji picker (replaces preview area)
-                        inlineEmojiPicker
-                            .frame(maxHeight: max(200, previewAreaH + 60))
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 4)
-                            .opacity(isVisible ? 1 : 0)
-                            .transition(.opacity)
                     }
+                    .frame(maxHeight: min(280, max(60, previewAreaH - 50)))
+                    .padding(.bottom, 6)
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.6)
+
+                    // Emoji quick bar (aligned with message side)
+                    HStack {
+                        if message.isMe { Spacer() }
+                        emojiQuickBar
+                        if !message.isMe { Spacer() }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.5)
+                    .offset(y: isVisible ? 0 : 20)
 
                     // Detail panel with drag handle
                     detailPanel(safeBottom: safeBottom)
@@ -100,22 +90,27 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    // MARK: - Emoji Quick Bar (scrollable, 15 emojis)
+    // MARK: - Emoji Quick Bar (5 visible + scroll, (+) always pinned)
 
     private var emojiQuickBar: some View {
         let topEmojis = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultEmojis)
 
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 3) {
-                ForEach(topEmojis, id: \.self) { emoji in
-                    emojiQuickButton(emoji: emoji)
+        return HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 3) {
+                    ForEach(topEmojis, id: \.self) { emoji in
+                        emojiQuickButton(emoji: emoji)
+                    }
                 }
-                emojiPlusButton
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .frame(maxWidth: 5 * 30 + 4 * 3 + 12) // 5 emojis visible width
+
+            emojiPlusButton
         }
         .frame(height: 38)
+        .padding(.horizontal, 4)
         .background(emojiBarBackground)
     }
 
@@ -137,11 +132,10 @@ struct MessageOverlayMenu: View {
         let accent = Color(hex: contactColor)
         let isDark = theme.mode.isDark
         return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showEmojiPicker.toggle()
-            }
+            HapticFeedback.light()
+            forceTab = .react
         } label: {
-            Image(systemName: showEmojiPicker ? "xmark" : "plus")
+            Image(systemName: "plus")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(accent)
         }
@@ -162,53 +156,6 @@ struct MessageOverlayMenu: View {
             .overlay(Capsule().fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6)))
             .overlay(Capsule().stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.08), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
-    }
-
-    // MARK: - Inline Emoji Picker (replaces preview when + tapped)
-
-    private var inlineEmojiPicker: some View {
-        let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
-
-        return VStack(spacing: 0) {
-            HStack {
-                Text("Choisir une reaction")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
-                Spacer()
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showEmojiPicker = false
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 8)
-
-            EmojiPickerView(recentEmojis: quickEmojis) { emoji in
-                EmojiUsageTracker.recordUsage(emoji: emoji)
-                onReact?(emoji)
-                dismiss()
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(theme.mode.isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.06), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-        )
     }
 
     // MARK: - Dismiss Background (vibrant with bubble form distinction)
@@ -412,13 +359,14 @@ struct MessageOverlayMenu: View {
                     message: message,
                     contactColor: contactColor,
                     conversationId: conversationId,
-                    initialTab: .views,
+                    initialTab: nil,
                     canDelete: canDelete,
                     actions: overlayActions,
                     onDismissAction: { dismiss() },
                     onReact: { emoji in onReact?(emoji) },
                     onReport: { type, reason in onReport?(type, reason) },
-                    onDelete: { onDelete?() }
+                    onDelete: { onDelete?() },
+                    externalTabSelection: $forceTab
                 )
             }
 
