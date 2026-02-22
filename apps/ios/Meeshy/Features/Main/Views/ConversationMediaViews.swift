@@ -250,6 +250,12 @@ struct AudioMediaView: View {
 
     @State private var isCached = false
 
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: message.createdAt)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack {
@@ -266,6 +272,11 @@ struct AudioMediaView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: isCached)
+            .overlay(alignment: .bottomTrailing) {
+                audioTimestampOverlay
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 6)
+            }
             .overlay(alignment: .bottom) {
                 DownloadBadgeView(
                     attachment: attachment,
@@ -293,6 +304,64 @@ struct AudioMediaView: View {
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
+        }
+    }
+
+    private var audioTimestampOverlay: some View {
+        let isDark = theme.mode.isDark
+        return HStack(spacing: 3) {
+            Text(timeString)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))
+
+            if message.isMe {
+                audioDeliveryCheckmark(isDark: isDark)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            Capsule()
+                .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
+        )
+    }
+
+    @ViewBuilder
+    private func audioDeliveryCheckmark(isDark: Bool) -> some View {
+        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
+        switch message.deliveryStatus {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundColor(metaColor)
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(metaColor)
+        case .delivered:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .offset(x: 3)
+            }
+            .foregroundColor(metaColor)
+            .frame(width: 14)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .offset(x: 3)
+            }
+            .foregroundColor(Color(hex: "34B7F1"))
+            .frame(width: 14)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(Color(hex: "FF6B6B"))
         }
     }
 

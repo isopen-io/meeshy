@@ -159,16 +159,31 @@ struct ThemedMessageBubble: View {
                     VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
                         // Grille visuelle (images + vidéos)
                         if !visualAttachments.isEmpty {
+                            let hasVideo = visualAttachments.contains { $0.type == .video }
+                            let mediaTimestampAlignment: Alignment = hasVideo ? .bottomLeading : .bottomTrailing
+
                             if showCarousel {
                                 carouselView
                                     .background(Color.black)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(alignment: mediaTimestampAlignment) {
+                                        if !hasTextOrNonMediaContent {
+                                            mediaTimestampOverlay
+                                                .padding(8)
+                                        }
+                                    }
                                     .transition(.opacity)
                             } else {
                                 visualMediaGrid
                                     .background(Color.black)
                                     .compositingGroup()
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(alignment: mediaTimestampAlignment) {
+                                        if !hasTextOrNonMediaContent {
+                                            mediaTimestampOverlay
+                                                .padding(8)
+                                        }
+                                    }
                                     .transition(.opacity)
                             }
                         }
@@ -191,6 +206,12 @@ struct ThemedMessageBubble: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
+                            .padding(.bottom, 4)
+                            .overlay(alignment: .bottomTrailing) {
+                                messageMetaRow(insideBubble: true)
+                                    .padding(.trailing, 10)
+                                    .padding(.bottom, 6)
+                            }
                             .background(bubbleBackground)
                             .shadow(
                                 color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
@@ -240,14 +261,16 @@ struct ThemedMessageBubble: View {
                         .offset(y: 16)
                 }
 
-                // View-once indicator + timestamp
-                HStack(spacing: 3) {
-                    if message.isViewOnce {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(.orange.opacity(0.8))
+                // View-once indicator + timestamp (only shown externally when no text bubble)
+                if !hasTextOrNonMediaContent {
+                    HStack(spacing: 3) {
+                        if message.isViewOnce {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(.orange.opacity(0.8))
+                        }
+                        messageMetaRow(insideBubble: false)
                     }
-                    messageMetaRow(insideBubble: false)
                 }
             }
 
@@ -351,26 +374,30 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private func messageMetaRow(insideBubble: Bool) -> some View {
+        let metaColor: Color = insideBubble && message.isMe
+            ? .white.opacity(0.7)
+            : theme.textSecondary.opacity(0.6)
+
         HStack(spacing: 3) {
             if message.isEncrypted {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 8))
-                    .foregroundColor(theme.textSecondary.opacity(0.5))
+                    .foregroundColor(metaColor.opacity(0.8))
             }
 
             if message.isEdited {
                 Text("modifié")
                     .font(.system(size: 10, weight: .medium))
                     .italic()
-                    .foregroundColor(theme.textSecondary.opacity(0.6))
+                    .foregroundColor(metaColor)
             }
 
             Text(timeString)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textSecondary.opacity(0.6))
+                .foregroundColor(metaColor)
 
             if message.isMe {
-                deliveryCheckmarks
+                deliveryCheckmarks(insideBubble: insideBubble)
                     .onTapGesture {
                         onShowInfo?()
                     }
@@ -380,8 +407,11 @@ struct ThemedMessageBubble: View {
     }
 
     @ViewBuilder
-    private var deliveryCheckmarks: some View {
-        let metaColor = theme.textSecondary.opacity(0.6)
+    private func deliveryCheckmarks(insideBubble: Bool = false) -> some View {
+        let metaColor: Color = insideBubble && message.isMe
+            ? .white.opacity(0.7)
+            : theme.textSecondary.opacity(0.6)
+
         switch message.deliveryStatus {
         case .sending:
             Image(systemName: "clock")
@@ -409,11 +439,68 @@ struct ThemedMessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .offset(x: 4)
             }
-            .foregroundColor(Color(hex: "34B7F1"))
+            .foregroundColor(insideBubble && message.isMe ? .white : Color(hex: "34B7F1"))
             .frame(width: 16)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(hex: "FF6B6B"))
+        }
+    }
+
+    // MARK: - Media Timestamp Overlay (for visual media grid)
+    private var mediaTimestampOverlay: some View {
+        HStack(spacing: 3) {
+            Text(timeString)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white)
+
+            if message.isMe {
+                mediaDeliveryCheckmark
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.55))
+        )
+    }
+
+    @ViewBuilder
+    private var mediaDeliveryCheckmark: some View {
+        switch message.deliveryStatus {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.8))
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+        case .delivered:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .offset(x: 3)
+            }
+            .foregroundColor(.white.opacity(0.8))
+            .frame(width: 14)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .offset(x: 3)
+            }
+            .foregroundColor(.white)
+            .frame(width: 14)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10, weight: .bold))
                 .foregroundColor(Color(hex: "FF6B6B"))
         }
     }

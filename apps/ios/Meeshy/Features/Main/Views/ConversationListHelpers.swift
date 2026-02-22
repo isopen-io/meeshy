@@ -117,12 +117,11 @@ struct ConversationPreviewView: View {
 
     private func loadRecentMessages() async {
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversation.id)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "3"),
-                    URLQueryItem(name: "offset", value: "0"),
-                ]
+            let response = try await MessageService.shared.list(
+                conversationId: conversation.id,
+                offset: 0,
+                limit: 4,
+                includeReplies: false
             )
             let userId = AuthManager.shared.currentUser?.id ?? ""
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
@@ -229,20 +228,24 @@ struct ConversationPreviewView: View {
                     )
             )
 
-            // Recent messages preview (3 most recent, anchored to bottom)
+            // Recent messages preview (up to 4 most recent, real bubbles)
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
 
                 if isLoading {
-                    VStack(spacing: 8) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(theme.textMuted.opacity(0.12))
-                                .frame(height: 20)
+                    VStack(spacing: 6) {
+                        ForEach(0..<4, id: \.self) { i in
+                            HStack {
+                                if i % 2 == 0 { Spacer(minLength: 40) }
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(theme.textMuted.opacity(0.1))
+                                    .frame(width: CGFloat.random(in: 100...180), height: 28)
+                                if i % 2 != 0 { Spacer(minLength: 40) }
+                            }
+                            .padding(.horizontal, 8)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 8)
                 } else if messages.isEmpty {
                     VStack(spacing: 6) {
                         Image(systemName: "bubble.left.and.bubble.right")
@@ -253,18 +256,24 @@ struct ConversationPreviewView: View {
                             .foregroundColor(theme.textMuted)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 10)
                 } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(messages) { msg in
-                            previewMessageRow(msg)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            ForEach(messages) { msg in
+                                ThemedMessageBubble(
+                                    message: msg,
+                                    contactColor: accentColor,
+                                    showAvatar: !msg.isMe
+                                )
+                                .allowsHitTesting(false)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 4)
                 }
             }
-            .frame(height: 120)
+            .frame(minHeight: 100, maxHeight: 260)
             .background(previewBackground)
         }
         .frame(width: 320)
@@ -284,54 +293,6 @@ struct ConversationPreviewView: View {
         .task {
             await loadRecentMessages()
         }
-    }
-
-    private func previewMessageRow(_ msg: Message) -> some View {
-        HStack(spacing: 6) {
-            Text(msg.senderName ?? "?")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: accentColor))
-                .lineLimit(1)
-                .layoutPriority(1)
-
-            if let att = msg.attachments.first {
-                previewAttachmentIcon(for: att.mimeType)
-            }
-
-            let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            } else if let att = msg.attachments.first {
-                Text(previewAttachmentLabel(for: att.mimeType))
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private func previewAttachmentIcon(for mimeType: String) -> some View {
-        let icon: String
-        let color: Color
-        if mimeType.hasPrefix("image/") { icon = "camera.fill"; color = .blue }
-        else if mimeType.hasPrefix("video/") { icon = "video.fill"; color = .red }
-        else if mimeType.hasPrefix("audio/") { icon = "waveform"; color = .purple }
-        else if mimeType == "application/pdf" { icon = "doc.fill"; color = .orange }
-        else { icon = "paperclip"; color = .gray }
-        return Image(systemName: icon)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(color)
-    }
-
-    private func previewAttachmentLabel(for mimeType: String) -> String {
-        if mimeType.hasPrefix("image/") { return "Photo" }
-        if mimeType.hasPrefix("video/") { return "Video" }
-        if mimeType.hasPrefix("audio/") { return "Audio" }
-        if mimeType == "application/pdf" { return "PDF" }
-        return "Fichier"
     }
 
     private var previewBackground: some View {
