@@ -66,7 +66,7 @@ struct ConversationListView: View {
     @State private var selectedStatusEntry: StatusEntry?
     @State private var moodBadgeAnchor: CGPoint = .zero
     @State var searchText = ""
-    @State var selectedCategory: ConversationCategory = .all
+    @State var selectedFilter: ConversationFilter = .all
     @FocusState var isSearching: Bool
     @State var searchBounce: Bool = false
     @State private var animateGradient = false
@@ -99,17 +99,17 @@ struct ConversationListView: View {
 
     private var filtered: [Conversation] {
         conversationViewModel.conversations.filter { c in
-            let categoryMatch: Bool
-            switch selectedCategory {
-            case .all: categoryMatch = c.isActive
-            case .unread: categoryMatch = c.unreadCount > 0
-            case .personnel: categoryMatch = c.type == .direct && c.isActive
-            case .privee: categoryMatch = c.type == .group && c.isActive
-            case .ouvertes: categoryMatch = (c.type == .public || c.type == .community || c.type == .channel) && c.isActive
-            case .archived: categoryMatch = !c.isActive
+            let filterMatch: Bool
+            switch selectedFilter {
+            case .all: filterMatch = c.isActive
+            case .unread: filterMatch = c.unreadCount > 0
+            case .personnel: filterMatch = c.type == .direct && c.isActive
+            case .privee: filterMatch = c.type == .group && c.isActive
+            case .ouvertes: filterMatch = (c.type == .public || c.type == .community || c.type == .channel) && c.isActive
+            case .archived: filterMatch = !c.isActive
             }
             let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
-            return categoryMatch && searchMatch
+            return filterMatch && searchMatch
         }
     }
 
@@ -411,7 +411,7 @@ struct ConversationListView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedCategory)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
         .onChange(of: hideSearchBar) { newValue in
             isScrollingDown = newValue
@@ -440,7 +440,7 @@ struct ConversationListView: View {
             }
         }
         // Show search bar when category changes
-        .onChange(of: selectedCategory) { _ in
+        .onChange(of: selectedFilter) { _ in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 hideSearchBar = false
                 isScrollingDown = false

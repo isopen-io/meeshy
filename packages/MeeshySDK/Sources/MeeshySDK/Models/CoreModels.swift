@@ -499,9 +499,9 @@ public struct MeeshyFeedItem: Identifiable {
     }
 }
 
-// MARK: - Category Filter
+// MARK: - Conversation Filter
 
-public enum MeeshyConversationCategory: String, CaseIterable, Identifiable {
+public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
     case all = "Tous"
     case unread = "Non lus"
     case personnel = "Personnel"

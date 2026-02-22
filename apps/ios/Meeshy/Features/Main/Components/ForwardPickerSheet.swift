@@ -219,8 +219,11 @@ struct ForwardPickerSheet: View {
             do {
                 let body = SendMessageRequest(
                     content: message.content.isEmpty ? nil : message.content,
+                    originalLanguage: nil,
+                    replyToId: nil,
                     forwardedFromId: message.id,
-                    forwardedFromConversationId: sourceConversationId
+                    forwardedFromConversationId: sourceConversationId,
+                    attachmentIds: nil
                 )
                 let _: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
                     endpoint: "/conversations/\(targetConversation.id)/messages",

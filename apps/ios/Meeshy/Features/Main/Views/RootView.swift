@@ -70,6 +70,9 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
+                    case .newConversation:
+                        NewConversationView()
+                            .navigationBarHidden(true)
                     }
                 }
             }
@@ -137,6 +140,11 @@ struct RootView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
+            if let conversation = notification.object as? Conversation {
+                router.navigateToConversation(conversation)
+            }
+        }
     }
 
     // MARK: - Handle Story Reply
@@ -314,7 +322,7 @@ struct RootView: View {
             // Menu items
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
-                ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
+                ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 (theme.preference.icon, theme.preference.tintColor, {

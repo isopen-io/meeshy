@@ -401,6 +401,15 @@ extension ConversationView {
         isSearchFocused = false
     }
 
+    // MARK: - Search Overlay (combines bar + blur + results)
+
+    var searchOverlay: some View {
+        VStack(spacing: 0) {
+            searchBar
+            searchResultsBlurOverlay
+        }
+    }
+
     // MARK: - Search Results Blur Overlay (extracted for type-checker)
 
     @ViewBuilder

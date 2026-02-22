@@ -171,14 +171,14 @@ extension ConversationListView {
     var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(ConversationCategory.allCases) { category in
+                ForEach(ConversationFilter.allCases) { filter in
                     ThemedFilterChip(
-                        title: category.rawValue,
-                        color: category.color,
-                        isSelected: selectedCategory == category
+                        title: filter.rawValue,
+                        color: filter.color,
+                        isSelected: selectedFilter == filter
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedCategory = category
+                            selectedFilter = filter
                         }
                     }
                 }

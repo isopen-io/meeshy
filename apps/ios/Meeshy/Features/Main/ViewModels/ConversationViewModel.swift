@@ -54,7 +54,9 @@ class ConversationViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
+    @Published var isLoadingNewer = false
     @Published var hasOlderMessages = true
+    @Published var hasNewerMessages = false
     @Published var isSending = false
     @Published var error: String?
 
@@ -268,6 +270,39 @@ class ConversationViewModel: ObservableObject {
         }
 
         isLoadingOlder = false
+    }
+
+    // MARK: - Load Newer Messages (when in jumped state)
+
+    func loadNewerMessages() async {
+        guard hasNewerMessages, !isLoadingNewer, isInJumpedState else { return }
+        guard let newestId = messages.last?.id else { return }
+
+        isLoadingNewer = true
+
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages",
+                queryItems: [
+                    URLQueryItem(name: "after", value: newestId),
+                    URLQueryItem(name: "limit", value: "\(limit)"),
+                    URLQueryItem(name: "include_replies", value: "true"),
+                ]
+            )
+
+            let userId = currentUserId
+            let newerMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+
+            let existingIds = Set(messages.map(\.id))
+            let newMessages = newerMessages.filter { !existingIds.contains($0.id) }
+            messages.append(contentsOf: newMessages)
+
+            hasNewerMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+        } catch {
+            self.error = error.localizedDescription
+        }
+
+        isLoadingNewer = false
     }
 
     // MARK: - Send Message

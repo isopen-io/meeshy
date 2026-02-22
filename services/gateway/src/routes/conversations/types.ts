@@ -38,10 +38,17 @@ export interface MessagesQuery {
   limit?: string;
   offset?: string;
   before?: string; // messageId pour pagination
+  around?: string; // messageId pour charger les messages autour d'un message spécifique
   include_reactions?: string;
   include_translations?: string;
   include_status?: string;
   include_replies?: string;
+}
+
+export interface MessageSearchQuery {
+  q: string;
+  limit?: string;
+  cursor?: string; // messageId for cursor-based pagination
 }
 
 export interface SearchQuery {

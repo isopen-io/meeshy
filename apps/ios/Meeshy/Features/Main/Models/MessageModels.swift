@@ -92,12 +92,12 @@ struct MessagesAPIResponse: Decodable {
 // MARK: - Send Message Request
 
 struct SendMessageRequest: Encodable {
-    let content: String?
-    let originalLanguage: String?
-    let replyToId: String?
-    let forwardedFromId: String?
-    let forwardedFromConversationId: String?
-    let attachmentIds: [String]?
+    var content: String? = nil
+    var originalLanguage: String? = nil
+    var replyToId: String? = nil
+    var forwardedFromId: String? = nil
+    var forwardedFromConversationId: String? = nil
+    var attachmentIds: [String]? = nil
 }
 
 // MARK: - Send Message Response

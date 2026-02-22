@@ -5,6 +5,7 @@ enum Route: Hashable {
     case conversation(Conversation)
     case settings
     case profile
+    case newConversation
 }
 
 @MainActor
