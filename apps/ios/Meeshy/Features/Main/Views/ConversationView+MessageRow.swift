@@ -138,6 +138,11 @@ extension ConversationView {
             )
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+        .onTapGesture {
+            if quickReactionMessageId != nil && quickReactionMessageId != msg.id {
+                closeReactionBar()
+            }
+        }
     }
 
     func triggerReply(for msg: Message) {

@@ -23,11 +23,12 @@ struct MessageOverlayMenu: View {
     @State private var isVisible = false
 
     private let previewCharLimit = 500
+    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯"]
 
     var body: some View {
         GeometryReader { geometry in
             let panelHeight = geometry.size.height * 0.56 + geometry.safeAreaInsets.bottom
-            let previewMaxH = geometry.size.height - panelHeight - geometry.safeAreaInsets.top - 16
+            let previewMaxH = geometry.size.height - panelHeight - geometry.safeAreaInsets.top - 80
 
             ZStack {
                 dismissBackground
@@ -35,8 +36,26 @@ struct MessageOverlayMenu: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: geometry.safeAreaInsets.top + 8)
 
+                    // Emoji quick bar (aligned with message side)
+                    HStack {
+                        if message.isMe { Spacer() }
+                        emojiQuickBar
+                        if !message.isMe { Spacer() }
+                    }
+                    .padding(.horizontal, 12)
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.5)
+                    .offset(y: isVisible ? 0 : -20)
+
+                    Spacer(minLength: 8)
+
+                    // Message preview (aligned left/right)
                     ScrollView(.vertical, showsIndicators: false) {
-                        messagePreview
+                        HStack {
+                            if message.isMe { Spacer(minLength: 16) }
+                            messagePreview
+                            if !message.isMe { Spacer(minLength: 16) }
+                        }
                     }
                     .frame(maxHeight: max(60, previewMaxH))
                     .opacity(isVisible ? 1 : 0)
@@ -59,17 +78,83 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    // MARK: - Dismiss Background
+    // MARK: - Emoji Quick Bar
 
-    private var dismissBackground: some View {
-        Color.black
-            .opacity(isVisible ? 0.5 : 0)
-            .background(.ultraThinMaterial.opacity(isVisible ? 1 : 0))
-            .animation(.easeOut(duration: 0.25), value: isVisible)
-            .onTapGesture { dismiss() }
+    private var emojiQuickBar: some View {
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+
+        return HStack(spacing: 4) {
+            ForEach(topEmojis, id: \.self) { emoji in
+                emojiQuickButton(emoji: emoji)
+            }
+            emojiPlusButton
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(emojiBarBackground)
     }
 
-    // MARK: - Message Preview (CENTER - enlarged)
+    private func emojiQuickButton(emoji: String) -> some View {
+        Button {
+            EmojiUsageTracker.recordUsage(emoji: emoji)
+            onReact?(emoji)
+            dismiss()
+        } label: {
+            Text(emoji)
+                .font(.system(size: 20))
+        }
+        .buttonStyle(.plain)
+        .frame(width: 34, height: 34)
+        .contentShape(Circle())
+    }
+
+    private var emojiPlusButton: some View {
+        let accent = Color(hex: contactColor)
+        let isDark = theme.mode.isDark
+        return Button {
+            onReact?("+")
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(accent)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 34, height: 34)
+        .background(
+            Circle()
+                .fill(accent.opacity(isDark ? 0.15 : 0.1))
+                .overlay(Circle().stroke(accent.opacity(0.25), lineWidth: 0.5))
+        )
+        .contentShape(Circle())
+    }
+
+    private var emojiBarBackground: some View {
+        let isDark = theme.mode.isDark
+        return Capsule()
+            .fill(.ultraThinMaterial)
+            .overlay(Capsule().fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6)))
+            .overlay(Capsule().stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.08), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+    }
+
+    // MARK: - Dismiss Background (vibrant with bubble form distinction)
+
+    private var dismissBackground: some View {
+        ZStack {
+            // Vibrant blur material
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(isVisible ? 1 : 0)
+
+            // Dark tint for depth
+            Color.black
+                .opacity(isVisible ? 0.35 : 0)
+        }
+        .animation(.easeOut(duration: 0.25), value: isVisible)
+        .onTapGesture { dismiss() }
+    }
+
+    // MARK: - Message Preview (aligned left/right)
 
     private var messagePreview: some View {
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
@@ -81,9 +166,9 @@ struct MessageOverlayMenu: View {
 
             previewContent
         }
-        .frame(maxWidth: UIScreen.main.bounds.width * 0.92)
+        .frame(maxWidth: UIScreen.main.bounds.width * 0.85)
         .padding(.horizontal, 8)
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
     }
 
     @ViewBuilder

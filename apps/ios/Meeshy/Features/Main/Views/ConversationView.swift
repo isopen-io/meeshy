@@ -421,12 +421,6 @@ struct ConversationView: View {
                     Color.clear.frame(height: composerHeight).id("bottom_spacer")
                 }
                 .padding(.horizontal, 16)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if quickReactionMessageId != nil {
-                        closeReactionBar()
-                    }
-                }
             }
             .onChange(of: viewModel.isLoadingInitial) { isLoading in
                 if !isLoading, let last = viewModel.messages.last {
@@ -588,7 +582,15 @@ struct ConversationView: View {
                     messageText = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
-                onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
+                onReact: { emoji in
+                    if emoji == "+" {
+                        detailSheetMessage = msg
+                        detailSheetInitialTab = .react
+                        showMessageDetailSheet = true
+                    } else {
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                    }
+                },
                 onReport: { type, reason in
                     Task {
                         let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)

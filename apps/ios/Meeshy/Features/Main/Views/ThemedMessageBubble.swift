@@ -580,24 +580,29 @@ struct ThemedMessageBubble: View {
     }
 
     // MARK: - Reactions Overlay (themed, accent-aware)
+    @ViewBuilder
     private var reactionsOverlay: some View {
         let isDark = theme.mode.isDark
         let accent = Color(hex: contactColor)
+        let hasReactions = !reactionSummaries.isEmpty
 
-        return HStack(spacing: 5) {
-            // Add reaction button BEFORE pills for other's messages
-            if !message.isMe {
-                addReactionButton(isDark: isDark, accent: accent)
+        if message.isMe {
+            // Own messages: only show reaction pills (no + button)
+            if hasReactions {
+                HStack(spacing: 5) {
+                    ForEach(reactionSummaries, id: \.emoji) { reaction in
+                        reactionPill(reaction: reaction, isDark: isDark, accent: accent)
+                    }
+                }
             }
-
-            // Emoji reaction pills
-            ForEach(reactionSummaries, id: \.emoji) { reaction in
-                reactionPill(reaction: reaction, isDark: isDark, accent: accent)
-            }
-
-            // Add reaction button AFTER pills for my messages (right side)
-            if message.isMe {
+        } else {
+            // Other's messages: + button before pills
+            HStack(spacing: 5) {
                 addReactionButton(isDark: isDark, accent: accent)
+
+                ForEach(reactionSummaries, id: \.emoji) { reaction in
+                    reactionPill(reaction: reaction, isDark: isDark, accent: accent)
+                }
             }
         }
     }
