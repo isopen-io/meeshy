@@ -61,8 +61,14 @@ extension ConversationView {
                         HapticFeedback.medium()
                     },
                     onShowInfo: {
-                        infoSheetMessage = msg
-                        showMessageInfoSheet = true
+                        detailSheetMessage = msg
+                        detailSheetInitialTab = .views
+                        showMessageDetailSheet = true
+                    },
+                    onShowReactions: { messageId in
+                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetInitialTab = .reactions
+                        showMessageDetailSheet = true
                     },
                     onReplyTap: { messageId in
                         scrollToMessageId = messageId
@@ -491,7 +497,10 @@ extension ConversationView {
 
                 // (+) button for full picker
                 Button {
-                    showEmojiPickerSheet = true
+                    closeReactionBar()
+                    detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
+                    detailSheetInitialTab = .react
+                    showMessageDetailSheet = true
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))

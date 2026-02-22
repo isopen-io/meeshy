@@ -65,13 +65,15 @@ struct ConversationView: View {
     @State var showOverlayMenu = false
     @State var overlayMessageFrame: CGRect = .zero
     @State var messageFrames: [String: CGRect] = [:]
-    @State var showMessageInfoSheet = false
-    @State var infoSheetMessage: Message? = nil
     @State var longPressEnabled = false
+
+    // Detail sheet state
+    @State var showMessageDetailSheet = false
+    @State var detailSheetMessage: Message? = nil
+    @State var detailSheetInitialTab: DetailTab = .language
 
     // Reaction bar state
     @State var quickReactionMessageId: String? = nil
-    @State var showEmojiPickerSheet = false
     @State var emojiOnlyMode: Bool = false
     @State var deleteConfirmMessageId: String? = nil
 
@@ -82,6 +84,8 @@ struct ConversationView: View {
     @State var scrollToMessageId: String? = nil
     @State var highlightedMessageId: String? = nil
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
+    @StateObject var pendingAudioPlayer = AudioPlayerManager()
+    @State var previewingPendingImage: UIImage? = nil
 
     // Search state
     @State var showSearch = false
@@ -154,6 +158,11 @@ struct ConversationView: View {
             .sorted { $0.value.count > $1.value.count }
             .prefix(3)
             .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
+    }
+
+    private var isCurrentUserAdminOrMod: Bool {
+        let role = conversation?.currentUserRole?.uppercased() ?? ""
+        return ["ADMIN", "MODERATOR", "BIGBOSS"].contains(role)
     }
 
     var composerHeight: CGFloat {
@@ -294,23 +303,34 @@ struct ConversationView: View {
                     deleteConfirmMessageId = nil
                 }
             } message: { Text("Cette action est irréversible.") }
-            .sheet(isPresented: $showEmojiPickerSheet) {
-                EmojiPickerSheet(quickReactions: quickEmojis, onSelect: { emoji in
-                    if let messageId = quickReactionMessageId { viewModel.toggleReaction(messageId: messageId, emoji: emoji) }
-                    showEmojiPickerSheet = false; closeReactionBar()
-                })
-                .presentationDetents([.medium, .large] as Set<PresentationDetent>)
-            }
             .sheet(item: $forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { forwardMessage = nil }
                     .presentationDetents([.medium, .large])
             }
             .onPreferenceChange(MessageFrameKey.self) { frames in messageFrames = frames }
             .overlay { overlayMenuContent }
-            .sheet(isPresented: $showMessageInfoSheet) {
-                if let msg = infoSheetMessage {
-                    MessageInfoSheet(message: msg, contactColor: accentColor)
-                        .presentationDetents([.medium] as Set<PresentationDetent>)
+            .sheet(isPresented: $showMessageDetailSheet) {
+                if let msg = detailSheetMessage {
+                    MessageDetailSheet(
+                        message: msg,
+                        contactColor: conversation?.accentColor ?? "#FF2E63",
+                        conversationId: viewModel.conversationId,
+                        initialTab: detailSheetInitialTab,
+                        canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                        onReact: { emoji in
+                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                        },
+                        onReport: { type, reason in
+                            Task {
+                                let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                                if success { HapticFeedback.success() }
+                                else { HapticFeedback.error() }
+                            }
+                        },
+                        onDelete: {
+                            Task { await viewModel.deleteMessage(messageId: msg.id) }
+                        }
+                    )
                 }
             }
     }
@@ -557,13 +577,13 @@ struct ConversationView: View {
                 isPresented: $showOverlayMenu,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
-                onEdit: { editingMessageId = msg.id; editingOriginalContent = msg.content; messageText = msg.content; isTyping = true; HapticFeedback.light() },
-                onForward: { forwardMessage = msg },
-                onDelete: { deleteConfirmMessageId = msg.id },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
-                onShowInfo: { infoSheetMessage = msg; showMessageInfoSheet = true },
-                onAddReaction: { quickReactionMessageId = msg.id; showEmojiPickerSheet = true }
+                onAddReaction: {
+                    detailSheetMessage = msg
+                    detailSheetInitialTab = .react
+                    showMessageDetailSheet = true
+                }
             )
             .transition(.opacity).zIndex(999)
         }

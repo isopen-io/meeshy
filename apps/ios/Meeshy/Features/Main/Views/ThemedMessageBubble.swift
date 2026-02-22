@@ -10,6 +10,7 @@ struct ThemedMessageBubble: View {
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
     var onShowInfo: (() -> Void)? = nil
+    var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
 
     @State private var showProfileAlert = false
@@ -19,6 +20,7 @@ struct ThemedMessageBubble: View {
     @State var showCarousel: Bool = false // internal for cross-file extension access
     @State var carouselIndex: Int = 0 // internal for cross-file extension access
     @State private var isBlurRevealed: Bool = false
+    @State private var isTextExpanded: Bool = false
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
@@ -183,9 +185,7 @@ struct ThemedMessageBubble: View {
                                 }
 
                                 if !message.content.isEmpty {
-                                    Text(message.content)
-                                        .font(.system(size: 15))
-                                        .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                                    expandableTextView
                                 }
                             }
                             .padding(.horizontal, 14)
@@ -279,6 +279,65 @@ struct ThemedMessageBubble: View {
                 EmptyView()
             }
         }
+    }
+
+    // MARK: - Expandable Text
+
+    private static let textTruncateLimit = 512
+
+    @ViewBuilder
+    private var expandableTextView: some View {
+        let content = message.content
+        let needsTruncation = content.count > Self.textTruncateLimit && !isTextExpanded
+        let textColor = message.isMe ? Color.white : theme.textPrimary
+
+        if needsTruncation {
+            let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(truncated + "...")
+                    .font(.system(size: 15))
+                    .foregroundColor(textColor)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isTextExpanded = true
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(textColor.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 2)
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(content)
+                    .font(.system(size: 15))
+                    .foregroundColor(textColor)
+
+                if isTextExpanded && content.count > Self.textTruncateLimit {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isTextExpanded = false
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(textColor.opacity(0.6))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 2)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func truncateAtWord(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        let prefix = String(text.prefix(limit))
+        guard let lastSpace = prefix.lastIndex(of: " ") else { return prefix }
+        return String(prefix[prefix.startIndex..<lastSpace])
     }
 
     // MARK: - Message Meta (timestamp + delivery status)
@@ -587,6 +646,10 @@ struct ThemedMessageBubble: View {
                             radius: 4, y: 2
                         )
                 )
+                .onTapGesture {
+                    HapticFeedback.light()
+                    onShowReactions?(message.id)
+                }
             }
         }
     }
