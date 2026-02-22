@@ -5,6 +5,7 @@ import MeeshySDK
 
 public struct GlassCard: ViewModifier {
     public var cornerRadius: CGFloat = 20
+    @ObservedObject private var theme = ThemeManager.shared
 
     public func body(content: Content) -> some View {
         content
@@ -12,7 +13,7 @@ public struct GlassCard: ViewModifier {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(MeeshyColors.glassBorderGradient, lineWidth: 1)
+                    .stroke(MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
     }

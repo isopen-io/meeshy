@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Scroll Offset Preference Key
 struct ScrollOffsetPreferenceKey: PreferenceKey {
@@ -274,7 +275,7 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: "archivebox.fill",
                 label: "Archiver",
-                color: Color(hex: "F59E0B")
+                color: MeeshyColors.orange
             ) {
                 Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
             },
@@ -339,7 +340,7 @@ struct ConversationListView: View {
                         HStack {
                             Spacer()
                             ProgressView()
-                                .tint(Color(hex: "08D9D6"))
+                                .tint(MeeshyColors.cyan)
                             Spacer()
                         }
                         .padding(.vertical, 16)
@@ -356,6 +357,10 @@ struct ConversationListView: View {
                 }
             }
             .coordinateSpace(name: "scroll")
+            .refreshable {
+                HapticFeedback.medium()
+                await conversationViewModel.forceRefresh()
+            }
             // Gesture for scroll detection with velocity
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8)

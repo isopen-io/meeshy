@@ -12,6 +12,7 @@
 
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Configuration
 
@@ -40,7 +41,7 @@ struct ConversationBackgroundConfig {
         topLanguages: [String] = [],
         accentHex: String = "FF2E63",
         secondaryHex: String = "08D9D6",
-        isDarkMode: Bool = true,
+        isDarkMode: Bool = ThemeManager.shared.mode.isDark,
         groupEndHex: String? = nil,
         groupColorFadeDuration: Double = 10.0
     ) {
@@ -57,7 +58,7 @@ struct ConversationBackgroundConfig {
     }
 
     /// Create config from a v2 Conversation model
-    init(from conversation: Conversation, isDarkMode: Bool = true, topLanguages: [String] = []) {
+    init(from conversation: Conversation, isDarkMode: Bool = ThemeManager.shared.mode.isDark, topLanguages: [String] = []) {
         self.conversationType = conversation.type
         self.isEncrypted = conversation.encryptionMode != nil
         self.isE2EEncrypted = conversation.encryptionMode == "e2ee"

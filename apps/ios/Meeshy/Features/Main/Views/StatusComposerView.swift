@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 enum StatusVisibility: String, CaseIterable {
     case `public` = "PUBLIC"

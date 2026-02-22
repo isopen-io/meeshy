@@ -1,8 +1,10 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var username = ""
     @State private var password = ""
@@ -13,6 +15,8 @@ struct LoginView: View {
 
     private enum Field { case username, password }
 
+    private var isDark: Bool { theme.mode.isDark }
+
     init() {
         #if DEBUG
         _username = State(initialValue: "atabeth")
@@ -22,48 +26,29 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            // Background (same as splash)
-            LinearGradient(
-                colors: [
-                    Color(hex: "0a0a1a"),
-                    Color(hex: "1a1035"),
-                    Color(hex: "0d1f2d")
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            theme.backgroundGradient
+                .ignoresSafeArea()
 
-            // Ambient orbs
-            Circle()
-                .fill(Color(hex: "08D9D6").opacity(0.15))
-                .frame(width: 200, height: 200)
-                .blur(radius: 60)
-                .offset(x: -80, y: -200)
-                .scaleEffect(glowPulse ? 1.3 : 0.8)
+            // Ambient orbs from theme
+            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
+                Circle()
+                    .fill(Color(hex: orb.color).opacity(orb.opacity))
+                    .frame(width: orb.size, height: orb.size)
+                    .blur(radius: orb.size * 0.2)
+                    .offset(x: orb.offset.x, y: orb.offset.y)
+                    .scaleEffect(glowPulse ? 1.3 - CGFloat(index) * 0.05 : 0.8 + CGFloat(index) * 0.05)
+            }
 
-            Circle()
-                .fill(Color(hex: "FF2E63").opacity(0.12))
-                .frame(width: 160, height: 160)
-                .blur(radius: 50)
-                .offset(x: 90, y: 180)
-                .scaleEffect(glowPulse ? 1.2 : 0.9)
-
-            Circle()
-                .fill(Color(hex: "B24BF3").opacity(0.1))
-                .frame(width: 120, height: 120)
-                .blur(radius: 40)
-                .offset(x: 60, y: -80)
-                .scaleEffect(glowPulse ? 1.1 : 1.0)
-
-            // Content
             VStack(spacing: 0) {
                 Spacer()
 
-                // Logo + Title
-                AnimatedLogoView(color: .white, lineWidth: 10, continuous: false)
-                    .frame(width: 100, height: 100)
-                    .padding(.bottom, 24)
+                AnimatedLogoView(
+                    color: isDark ? .white : Color(hex: "1C1917"),
+                    lineWidth: 10,
+                    continuous: false
+                )
+                .frame(width: 100, height: 100)
+                .padding(.bottom, MeeshySpacing.xxl)
 
                 Text("Meeshy")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -74,13 +59,12 @@ struct LoginView: View {
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: Color(hex: "B24BF3").opacity(0.5), radius: 12, x: 0, y: 4)
+                    .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .padding(.bottom, 48)
 
-                // Login form
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     // Username
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: "person.fill")
                             .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                             .frame(width: 20)
@@ -89,49 +73,49 @@ struct LoginView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .focused($focusedField, equals: .username)
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.textPrimary)
                             .submitLabel(.next)
                             .onSubmit { focusedField = .password }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.md + 2)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.white.opacity(0.08))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .fill(theme.inputBackground)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 14)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                     .stroke(
                                         focusedField == .username
                                             ? Color(hex: "8B5CF6").opacity(0.6)
-                                            : Color.white.opacity(0.1),
+                                            : theme.inputBorder.opacity(0.3),
                                         lineWidth: 1
                                     )
                             )
                     )
 
                     // Password
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: "lock.fill")
                             .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                             .frame(width: 20)
                         SecureField("Mot de passe", text: $password)
                             .textContentType(.password)
                             .focused($focusedField, equals: .password)
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.textPrimary)
                             .submitLabel(.go)
                             .onSubmit { attemptLogin() }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.md + 2)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.white.opacity(0.08))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .fill(theme.inputBackground)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 14)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                     .stroke(
                                         focusedField == .password
                                             ? Color(hex: "8B5CF6").opacity(0.6)
-                                            : Color.white.opacity(0.1),
+                                            : theme.inputBorder.opacity(0.3),
                                         lineWidth: 1
                                     )
                             )
@@ -140,8 +124,8 @@ struct LoginView: View {
                     // Error message
                     if let error = authManager.errorMessage, showError {
                         Text(error)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.coral)
                             .multilineTextAlignment(.center)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
@@ -149,42 +133,41 @@ struct LoginView: View {
                     // Login button
                     Button(action: attemptLogin) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                                        colors: [MeeshyColors.coral, MeeshyColors.cyan],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                                 .frame(height: 52)
-                                .shadow(color: Color(hex: "FF6B6B").opacity(0.4), radius: 12, y: 6)
+                                .shadow(color: MeeshyColors.coral.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
 
                             if authManager.isLoading {
                                 ProgressView()
                                     .tint(.white)
                             } else {
                                 Text("Se connecter")
-                                    .font(.system(size: 17, weight: .bold))
+                                    .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
                                     .foregroundColor(.white)
                             }
                         }
                     }
                     .disabled(authManager.isLoading || username.isEmpty || password.isEmpty)
                     .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
-                    .padding(.top, 8)
+                    .padding(.top, MeeshySpacing.sm)
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
                 .opacity(showFields ? 1 : 0)
                 .offset(y: showFields ? 0 : 30)
 
                 Spacer()
 
-                // Bottom text
                 Text("Pas de compte ? Bientot disponible")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
-                    .padding(.bottom, 32)
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .padding(.bottom, MeeshySpacing.xxxl)
                     .opacity(showFields ? 1 : 0)
             }
         }
@@ -198,7 +181,7 @@ struct LoginView: View {
         }
         .onChange(of: authManager.errorMessage) { newValue in
             if newValue != nil {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                withAnimation(MeeshyAnimation.springDefault) {
                     showError = true
                 }
             }

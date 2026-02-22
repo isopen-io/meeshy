@@ -3,6 +3,7 @@ import MeeshySDK
 
 public struct MeeshyRegisterView: View {
     @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var currentStep = 0
     @State private var animateTransition = false
@@ -44,13 +45,8 @@ public struct MeeshyRegisterView: View {
 
     public var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color(hex: "252538"), Color(hex: "1E2A35"), Color(hex: "1E1E2E")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            theme.backgroundGradient
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header with progress
@@ -87,7 +83,7 @@ public struct MeeshyRegisterView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.textPrimary)
                 }
 
                 Spacer()
@@ -108,7 +104,7 @@ public struct MeeshyRegisterView: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(theme.inputBorder.opacity(0.3))
                         .frame(height: 4)
 
                     RoundedRectangle(cornerRadius: 2)
@@ -277,11 +273,11 @@ public struct MeeshyRegisterView: View {
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color(hex: "2D2D40").opacity(0.6))
+                            .fill(theme.inputBackground)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(theme.inputBorder.opacity(0.3), lineWidth: 1)
                     )
             }
 
@@ -317,7 +313,7 @@ public struct MeeshyRegisterView: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "2D2D40").opacity(0.6))
+                    .fill(theme.inputBackground)
             )
 
             // Terms
@@ -348,7 +344,7 @@ public struct MeeshyRegisterView: View {
     @ViewBuilder
     private var navigationButtons: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(theme.inputBorder.opacity(0.3))
 
             HStack(spacing: 12) {
                 if currentStep > 0 {
@@ -360,9 +356,9 @@ public struct MeeshyRegisterView: View {
                             .padding(.vertical, 14)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                                    .strokeBorder(theme.inputBorder.opacity(0.4), lineWidth: 1)
                             )
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.textPrimary)
                     }
                 }
 
@@ -397,7 +393,7 @@ public struct MeeshyRegisterView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(Color(hex: "1E1E2E").opacity(0.95))
+            .background(theme.backgroundPrimary.opacity(0.95))
         }
     }
 
@@ -455,7 +451,7 @@ public struct MeeshyRegisterView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.title2.weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.textPrimary)
 
             Text(subtitle)
                 .font(.subheadline)
@@ -476,7 +472,7 @@ public struct MeeshyRegisterView: View {
                     .foregroundStyle(.secondary)
                 Text(value)
                     .font(.subheadline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Spacer()

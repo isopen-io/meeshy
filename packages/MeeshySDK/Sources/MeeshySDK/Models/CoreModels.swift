@@ -68,6 +68,25 @@ public struct MeeshyConversationSection: Identifiable, Hashable {
     public static let allSections: [MeeshyConversationSection] = [.pinned, .work, .family, .friends, .groups, .other]
 }
 
+// MARK: - Recent Message Preview
+
+public struct RecentMessagePreview: Identifiable, Hashable {
+    public let id: String
+    public let content: String
+    public let senderName: String
+    public let messageType: String
+    public let createdAt: Date
+    public let attachmentMimeType: String?
+    public let attachmentCount: Int
+
+    public init(id: String, content: String, senderName: String, messageType: String = "text",
+                createdAt: Date = Date(), attachmentMimeType: String? = nil, attachmentCount: Int = 0) {
+        self.id = id; self.content = content; self.senderName = senderName
+        self.messageType = messageType; self.createdAt = createdAt
+        self.attachmentMimeType = attachmentMimeType; self.attachmentCount = attachmentCount
+    }
+}
+
 // MARK: - Conversation Model
 
 public struct MeeshyConversation: Identifiable, Hashable {
@@ -91,6 +110,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
     public var lastMessageAttachments: [MeeshyMessageAttachment] = []
     public var lastMessageAttachmentCount: Int = 0
     public var lastMessageSenderName: String? = nil
+    public var recentMessages: [RecentMessagePreview] = []
     public var tags: [MeeshyConversationTag] = []
 
     public var isAnnouncementChannel: Bool = false
@@ -150,6 +170,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
                 lastMessageAttachments: [MeeshyMessageAttachment] = [],
                 lastMessageAttachmentCount: Int = 0,
                 lastMessageSenderName: String? = nil,
+                recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 currentUserRole: String? = nil,
@@ -168,6 +189,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
         self.lastMessageAttachments = lastMessageAttachments
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
         self.lastMessageSenderName = lastMessageSenderName
+        self.recentMessages = recentMessages
         self.tags = tags
         self.language = language; self.theme = theme
     }

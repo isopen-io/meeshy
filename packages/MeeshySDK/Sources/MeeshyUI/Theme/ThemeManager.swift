@@ -237,6 +237,14 @@ public class ThemeManager: ObservableObject {
     public var glassMaterial: some ShapeStyle {
         .ultraThinMaterial
     }
+
+    // MARK: - Semantic Colors
+
+    public var success: Color { Color(hex: "4ADE80") }
+    public var error: Color { Color(hex: "FF6B6B") }
+    public var warning: Color { Color(hex: "F59E0B") }
+    public var info: Color { Color(hex: "45B7D1") }
+    public var readReceipt: Color { Color(hex: "34B7F1") }
 }
 
 // MARK: - Environment Key

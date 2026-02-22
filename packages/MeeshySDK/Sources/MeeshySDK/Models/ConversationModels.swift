@@ -67,6 +67,7 @@ public struct APIConversation: Decodable {
     public let lastMessageAt: Date?
     public let members: [APIConversationMember]?
     public let lastMessage: APIConversationLastMessage?
+    public let recentMessages: [APIConversationLastMessage]?
     public let userPreferences: [APIConversationPreferences]?
     public let unreadCount: Int?
     public let updatedAt: Date?
@@ -121,6 +122,21 @@ extension APIConversation {
         let lastMsgAttCount = lastMessage?._count?.attachments ?? lastMsgAttachments.count
         let lastMsgSenderName = lastMessage?.sender?.name
 
+        let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in
+            let sName = msg.sender?.name ?? "?"
+            let attMime = msg.attachments?.first?.mimeType
+            let attCount = msg._count?.attachments ?? msg.attachments?.count ?? 0
+            return RecentMessagePreview(
+                id: msg.id,
+                content: msg.content ?? "",
+                senderName: sName,
+                messageType: msg.messageType ?? "text",
+                createdAt: msg.createdAt,
+                attachmentMimeType: attMime,
+                attachmentCount: attCount
+            )
+        }
+
         return MeeshyConversation(
             id: id, identifier: identifier ?? id, type: convType, title: displayName,
             description: description, avatar: convType != .direct ? avatar : nil,
@@ -133,6 +149,7 @@ extension APIConversation {
             lastMessageAttachments: lastMsgAttachments,
             lastMessageAttachmentCount: lastMsgAttCount,
             lastMessageSenderName: lastMsgSenderName,
+            recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
             isPinned: prefs?.isPinned ?? false,
             isMuted: prefs?.isMuted ?? false,

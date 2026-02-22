@@ -72,6 +72,7 @@ class ConversationListViewModel: ObservableObject {
                 guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
 
                 self.conversations[idx].lastMessagePreview = apiMsg.content
+                self.conversations[idx].lastMessageSenderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
                 self.conversations[idx].lastMessageAt = apiMsg.createdAt
 
                 // Move conversation to top if not already
@@ -135,6 +136,17 @@ class ConversationListViewModel: ObservableObject {
 
         await categoriesTask
         isLoading = false
+    }
+
+    // MARK: - Force Refresh (pull-to-refresh)
+
+    func forceRefresh() async {
+        conversations = []
+        userCategories = []
+        isLoading = false
+        hasMore = true
+        currentOffset = 0
+        await loadConversations()
     }
 
     // MARK: - Load More

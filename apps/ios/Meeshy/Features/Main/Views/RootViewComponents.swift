@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from RootView.swift
 
@@ -65,12 +66,12 @@ struct ThemedFloatingButton: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")],
+                                        colors: [MeeshyColors.coral, MeeshyColors.pink],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: Color(hex: "FF6B6B").opacity(0.5), radius: 4)
+                                .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 4)
                         )
                         .offset(x: 16, y: -16)
                 }
@@ -171,7 +172,7 @@ struct ThemedFeedOverlay: View {
                     .floating(range: 20, duration: 5.0)
 
                 Circle()
-                    .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.coral.opacity(theme.mode.isDark ? 0.1 : 0.06))
                     .frame(width: 250, height: 250)
                     .blur(radius: 70)
                     .offset(x: 100, y: 200)
@@ -367,13 +368,13 @@ struct ThemedFeedComposer: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")],
+                                            colors: [MeeshyColors.coral, MeeshyColors.pink],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .frame(width: 32, height: 32)
-                                    .shadow(color: Color(hex: "FF6B6B").opacity(0.5), radius: 6, y: 3)
+                                    .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 6, y: 3)
 
                                 Image(systemName: "paperplane.fill")
                                     .font(.system(size: 13, weight: .semibold))
@@ -419,7 +420,7 @@ struct ThemedFeedComposer: View {
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(theme.mode.isDark ? Color(hex: "1E1E2E").opacity(0.92) : Color.white.opacity(0.92))
+                        .fill(theme.backgroundPrimary.opacity(0.92))
                         .shadow(color: Color.black.opacity(0.2), radius: 12, y: 6)
                 )
                 .offset(x: -8, y: -50)

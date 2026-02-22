@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Feed Sample Data (Global access for ThemedFeedOverlay)
 struct FeedSampleData {
@@ -525,7 +526,7 @@ struct FeedView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, Color(hex: "4ECDC4")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -804,7 +805,7 @@ struct FeedView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                                    colors: [MeeshyColors.coral, Color(hex: "4ECDC4")],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )

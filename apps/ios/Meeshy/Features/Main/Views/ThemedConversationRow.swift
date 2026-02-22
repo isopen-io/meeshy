@@ -296,6 +296,7 @@ struct ThemedConversationRow: View {
 
         if !hasText && !attachments.isEmpty {
             HStack(spacing: 4) {
+                senderLabel
                 let att = attachments[0]
                 attachmentIcon(for: att.mimeType)
                 attachmentMeta(for: att)
@@ -307,6 +308,7 @@ struct ThemedConversationRow: View {
             }
         } else if hasText {
             HStack(spacing: 4) {
+                senderLabel
                 if !attachments.isEmpty {
                     attachmentIcon(for: attachments[0].mimeType)
                         .font(.system(size: 11))
@@ -320,6 +322,17 @@ struct ThemedConversationRow: View {
             Text("")
                 .font(.system(size: 13))
                 .foregroundColor(theme.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var senderLabel: some View {
+        if let name = conversation.lastMessageSenderName, !name.isEmpty {
+            Text(name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .lineLimit(1)
+                .layoutPriority(1)
         }
     }
 
