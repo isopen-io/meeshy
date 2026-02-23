@@ -249,6 +249,7 @@ struct AudioMediaView: View {
     var onShareFile: ((URL) -> Void)?
 
     @State private var isCached = false
+    @State private var isAudioPlaying = false
 
     private var timeString: String {
         let formatter = DateFormatter()
@@ -263,7 +264,12 @@ struct AudioMediaView: View {
                     AudioPlayerView(
                         attachment: attachment,
                         context: .messageBubble,
-                        accentColor: contactColor
+                        accentColor: contactColor,
+                        onPlayingChange: { playing in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isAudioPlaying = playing
+                            }
+                        }
                     )
                     .transition(.opacity)
                 } else {
@@ -280,9 +286,12 @@ struct AudioMediaView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                audioTimestampOverlay
-                    .padding(.trailing, 8)
-                    .padding(.bottom, 6)
+                if !isAudioPlaying {
+                    audioTimestampOverlay
+                        .padding(.trailing, 8)
+                        .padding(.bottom, 6)
+                        .transition(.opacity)
+                }
             }
             .overlay(alignment: .bottom) {
                 DownloadBadgeView(

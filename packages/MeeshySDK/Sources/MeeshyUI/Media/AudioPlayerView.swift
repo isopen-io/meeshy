@@ -245,6 +245,7 @@ public struct AudioPlayerView: View {
     public var onRequestTranscription: (() -> Void)? = nil
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
+    public var onPlayingChange: ((Bool) -> Void)? = nil
 
     @StateObject private var player = AudioPlaybackManager()
     @ObservedObject private var theme = ThemeManager.shared
@@ -269,11 +270,13 @@ public struct AudioPlayerView: View {
                 accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = [],
                 onRequestTranscription: (() -> Void)? = nil,
-                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
+                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
+                onPlayingChange: ((Bool) -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onRequestTranscription = onRequestTranscription
         self.onDelete = onDelete; self.onEdit = onEdit
+        self.onPlayingChange = onPlayingChange
     }
 
     // MARK: - Body
@@ -311,6 +314,9 @@ public struct AudioPlayerView: View {
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+        }
+        .onChange(of: player.isPlaying) { playing in
+            onPlayingChange?(playing)
         }
     }
 
