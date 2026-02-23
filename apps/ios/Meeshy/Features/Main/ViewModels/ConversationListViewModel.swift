@@ -141,8 +141,6 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Force Refresh (pull-to-refresh)
 
     func forceRefresh() async {
-        conversations = []
-        userCategories = []
         isLoading = false
         hasMore = true
         currentOffset = 0
