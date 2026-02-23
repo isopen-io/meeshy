@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import MeeshySDK
 
-// MARK: - Real-time Translation/Transcription/Audio Types
+// MARK: - Real-time Translation Type (text translations, not in SDK)
 
 struct MessageTranslation: Identifiable {
     let id: String
@@ -14,37 +14,8 @@ struct MessageTranslation: Identifiable {
     let confidenceScore: Double?
 }
 
-struct MessageTranscriptionSegment: Identifiable {
-    let id = UUID()
-    let text: String
-    let startTime: Double?
-    let endTime: Double?
-    let speakerId: String?
-}
-
-struct MessageTranscription {
-    let attachmentId: String
-    let text: String
-    let language: String
-    let confidence: Double?
-    let durationMs: Int?
-    let segments: [MessageTranscriptionSegment]
-    let speakerCount: Int?
-}
-
-struct MessageTranslatedAudio: Identifiable {
-    let id: String
-    let attachmentId: String
-    let targetLanguage: String
-    let url: String
-    let transcription: String
-    let durationMs: Int
-    let format: String
-    let cloned: Bool
-    let quality: Double
-    let ttsModel: String
-    let segments: [MessageTranscriptionSegment]
-}
+// MessageTranscription, MessageTranscriptionSegment, MessageTranslatedAudio
+// are defined in MeeshySDK.TranscriptionModels — use those directly.
 
 @MainActor
 class ConversationViewModel: ObservableObject {
@@ -216,6 +187,7 @@ class ConversationViewModel: ObservableObject {
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
 
@@ -261,6 +233,7 @@ class ConversationViewModel: ObservableObject {
 
             let userId = currentUserId
             let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
 
             // Dedup and prepend
             let existingIds = Set(messages.map(\.id))
@@ -891,6 +864,7 @@ class ConversationViewModel: ObservableObject {
 
             let userId = currentUserId
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
             hasNewerMessages = response.hasNewer ?? false
@@ -920,6 +894,7 @@ class ConversationViewModel: ObservableObject {
 
             let userId = currentUserId
             let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
             let existingIds = Set(messages.map(\.id))
             let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
 
@@ -961,5 +936,63 @@ class ConversationViewModel: ObservableObject {
         savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
+    }
+
+    // MARK: - Extract Transcription/Translation Data from REST Responses
+
+    private func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
+        for msg in apiMessages {
+            for att in msg.attachments ?? [] {
+                if let t = att.transcription {
+                    let segments = (t.segments ?? []).map {
+                        MessageTranscriptionSegment(
+                            text: $0.text,
+                            startTime: $0.startTime,
+                            endTime: $0.endTime,
+                            speakerId: $0.speakerId
+                        )
+                    }
+                    messageTranscriptions[msg.id] = MessageTranscription(
+                        attachmentId: att.id,
+                        text: t.resolvedText,
+                        language: t.language ?? "?",
+                        confidence: t.confidence,
+                        durationMs: t.durationMs,
+                        segments: segments,
+                        speakerCount: t.speakerCount
+                    )
+                }
+                if let translations = att.translations {
+                    var audios: [MessageTranslatedAudio] = []
+                    for (lang, trans) in translations {
+                        guard let url = trans.url, !url.isEmpty else { continue }
+                        let segments = (trans.segments ?? []).map {
+                            MessageTranscriptionSegment(
+                                text: $0.text,
+                                startTime: $0.startTime,
+                                endTime: $0.endTime,
+                                speakerId: $0.speakerId
+                            )
+                        }
+                        audios.append(MessageTranslatedAudio(
+                            id: "\(att.id)_\(lang)",
+                            attachmentId: att.id,
+                            targetLanguage: lang,
+                            url: url,
+                            transcription: trans.transcription ?? "",
+                            durationMs: trans.durationMs ?? 0,
+                            format: trans.format ?? "mp3",
+                            cloned: trans.cloned ?? false,
+                            quality: trans.quality ?? 0,
+                            ttsModel: trans.ttsModel ?? "xtts",
+                            segments: segments
+                        ))
+                    }
+                    if !audios.isEmpty {
+                        messageTranslatedAudios[msg.id] = audios
+                    }
+                }
+            }
+        }
     }
 }

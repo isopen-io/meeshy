@@ -44,6 +44,8 @@ extension ConversationView {
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
+                    transcription: viewModel.messageTranscriptions[msg.id],
+                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
                     onAddReaction: { messageId in

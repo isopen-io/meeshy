@@ -83,6 +83,27 @@ public struct TranscriptionSegment: Decodable {
     public let endTime: Double?
     public let speakerId: String?
     public let voiceSimilarityScore: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case text, startMs, endMs, startTime, endTime, speakerId, voiceSimilarityScore
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        speakerId = try c.decodeIfPresent(String.self, forKey: .speakerId)
+        voiceSimilarityScore = try c.decodeIfPresent(Double.self, forKey: .voiceSimilarityScore)
+        if let ms = try c.decodeIfPresent(Double.self, forKey: .startMs) {
+            startTime = ms / 1000.0
+        } else {
+            startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        }
+        if let ms = try c.decodeIfPresent(Double.self, forKey: .endMs) {
+            endTime = ms / 1000.0
+        } else {
+            endTime = try c.decodeIfPresent(Double.self, forKey: .endTime)
+        }
+    }
 }
 
 public struct TranscriptionData: Decodable {

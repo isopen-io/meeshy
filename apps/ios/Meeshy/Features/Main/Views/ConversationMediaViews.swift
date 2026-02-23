@@ -247,6 +247,8 @@ struct AudioMediaView: View {
     let contactColor: String
     let visualAttachments: [MessageAttachment]
     @ObservedObject var theme: ThemeManager
+    var transcription: MessageTranscription? = nil
+    var translatedAudios: [MessageTranslatedAudio] = []
     var onShareFile: ((URL) -> Void)?
 
     @State private var isCached = false
@@ -266,6 +268,8 @@ struct AudioMediaView: View {
                         attachment: attachment,
                         context: .messageBubble,
                         accentColor: contactColor,
+                        transcription: transcription,
+                        translatedAudios: translatedAudios,
                         onPlayingChange: { playing in
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isAudioPlaying = playing

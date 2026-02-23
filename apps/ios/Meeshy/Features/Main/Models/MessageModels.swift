@@ -10,6 +10,30 @@ struct APIMessageSender: Decodable {
     let avatar: String?
 }
 
+struct APIAttachmentTranscription: Decodable {
+    let text: String?
+    let transcribedText: String?
+    let language: String?
+    let confidence: Double?
+    let durationMs: Int?
+    let segments: [TranscriptionSegment]?
+    let speakerCount: Int?
+
+    var resolvedText: String { text ?? transcribedText ?? "" }
+}
+
+struct APIAttachmentTranslation: Decodable {
+    let type: String?
+    let transcription: String?
+    let url: String?
+    let durationMs: Int?
+    let format: String?
+    let cloned: Bool?
+    let quality: Double?
+    let ttsModel: String?
+    let segments: [TranscriptionSegment]?
+}
+
 struct APIMessageAttachment: Decodable {
     let id: String
     let fileName: String?
@@ -23,6 +47,8 @@ struct APIMessageAttachment: Decodable {
     let duration: Int? // ms
     let latitude: Double?
     let longitude: Double?
+    let transcription: APIAttachmentTranscription?
+    let translations: [String: APIAttachmentTranslation]?
 }
 
 struct APIMessageReplyTo: Decodable {

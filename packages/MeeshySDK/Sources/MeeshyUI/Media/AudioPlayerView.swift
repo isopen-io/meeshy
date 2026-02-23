@@ -336,13 +336,10 @@ public struct AudioPlayerView: View {
         HStack(spacing: context.isCompact ? 8 : 10) {
             playButton
             VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
-                HStack(spacing: 0) {
-                    waveformProgress
-                    percentageView
-                        .padding(.leading, 6)
-                }
+                waveformProgress
                 timeRow
             }
+            percentageView
             contextActions
         }
         .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -429,23 +426,14 @@ public struct AudioPlayerView: View {
                     .foregroundColor(player.speed == .x1_0
                         ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
                         : accent)
-                    .frame(width: context.isCompact ? 36 : 42, alignment: .leading)
             }
             .padding(.leading, 4)
+
+            Spacer()
 
             Text(formatMediaDuration(estimatedDuration))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
-                .padding(.leading, 4)
-
-            if transcription != nil || onRequestTranscription != nil {
-                Image(systemName: transcription != nil ? "text.badge.checkmark" : "text.bubble")
-                    .font(.system(size: context.isCompact ? 9 : 10, weight: .medium))
-                    .foregroundColor(transcription != nil ? accent.opacity(0.7) : (isDark ? .white.opacity(0.3) : .black.opacity(0.2)))
-                    .padding(.leading, 3)
-            }
-
-            Spacer()
         }
     }
 

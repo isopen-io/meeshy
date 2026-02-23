@@ -7,6 +7,8 @@ import MeeshyUI
 struct ThemedMessageBubble: View {
     let message: Message
     let contactColor: String
+    var transcription: MessageTranscription? = nil
+    var translatedAudios: [MessageTranslatedAudio] = []
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
@@ -669,7 +671,9 @@ struct ThemedMessageBubble: View {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
-                accentColor: contactColor
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id }
             )
 
         case .file:
@@ -886,6 +890,8 @@ struct ThemedMessageBubble: View {
                 contactColor: contactColor,
                 visualAttachments: visualAttachments,
                 theme: theme,
+                transcription: transcription,
+                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
