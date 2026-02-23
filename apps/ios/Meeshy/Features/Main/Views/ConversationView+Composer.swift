@@ -21,7 +21,7 @@ extension ConversationView {
                     withAnimation { showOptions = false }
                 }
             },
-            onLocationRequest: { addCurrentLocation() },
+            onLocationRequest: { showLocationPicker = true },
             textBinding: $messageText,
             editBanner: editingMessageId != nil
                 ? AnyView(composerEditBanner)
@@ -58,10 +58,40 @@ extension ConversationView {
             handleFileImport(result)
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPickerView { image in
-                handleCameraCapture(image)
+            CameraView { result in
+                switch result {
+                case .photo(let image):
+                    imageToPreview = image
+                case .video(let url):
+                    videoToPreview = url
+                }
             }
             .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { imageToPreview != nil },
+            set: { if !$0 { imageToPreview = nil } }
+        )) {
+            if let image = imageToPreview {
+                ImageCropView(image: image) { croppedImage in
+                    handleCameraCapture(croppedImage)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { videoToPreview != nil },
+            set: { if !$0 { videoToPreview = nil } }
+        )) {
+            if let url = videoToPreview {
+                VideoPreviewView(url: url) {
+                    handleCameraVideo(url)
+                }
+            }
+        }
+        .sheet(isPresented: $showLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { coordinate, address in
+                handleLocationSelection(coordinate: coordinate, address: address)
+            }
         }
         .onChange(of: selectedPhotoItems) { items in
             handlePhotoSelection(items)
@@ -80,14 +110,23 @@ extension ConversationView {
 
     // MARK: - Pending Attachments Row (custom preview for UCB)
     private var pendingAttachmentsRow: some View {
-        HStack(spacing: 0) {
-            pendingAttachmentsPreview
-            if isLoadingMedia {
-                ProgressView()
-                    .tint(Color(hex: accentColor))
-                    .padding(.horizontal, 12)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                pendingAttachmentsPreview
+                if isLoadingMedia {
+                    ProgressView()
+                        .tint(Color(hex: accentColor))
+                        .padding(.horizontal, 12)
+                }
+            }
+            if isUploading, let progress = uploadProgress {
+                UploadProgressBar(progress: progress, accentColor: accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isUploading)
     }
 
     // MARK: - Composer Reply Banner

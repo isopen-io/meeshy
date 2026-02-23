@@ -37,7 +37,6 @@ struct ConversationView: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
-    @StateObject var locationManager = LocationManager()
     @State var messageText = ""
     @State var showOptions = false
     @State var actionAlert: String? = nil
@@ -54,6 +53,9 @@ struct ConversationView: View {
     @State var showFilePicker = false
     @State var selectedPhotoItems: [PhotosPickerItem] = []
     @State var isLoadingLocation = false
+    @State var isUploading = false
+    @State var uploadProgress: UploadQueueProgress?
+    @State var showLocationPicker = false
     @FocusState var isTyping: Bool
     @State var pendingReplyReference: ReplyReference?
     @State var editingMessageId: String?
@@ -87,6 +89,8 @@ struct ConversationView: View {
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
     @StateObject var pendingAudioPlayer = AudioPlayerManager()
     @State var previewingPendingImage: UIImage? = nil
+    @State var imageToPreview: UIImage? = nil
+    @State var videoToPreview: URL? = nil
 
     // Search state
     @State var showSearch = false

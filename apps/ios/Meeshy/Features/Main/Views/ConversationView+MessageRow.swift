@@ -159,6 +159,39 @@ extension ConversationView {
                 closeReactionBar()
             }
         }
+        .onAppear {
+            prefetchNearbyMedia(index: index)
+        }
+    }
+
+    // MARK: - Media Prefetch
+
+    func prefetchNearbyMedia(index: Int) {
+        let messages = viewModel.messages
+        let lookAhead = 5
+        let start = max(0, index - lookAhead)
+        let end = min(messages.count, index + lookAhead + 1)
+
+        for i in start..<end where i != index {
+            let nearby = messages[i]
+            for attachment in nearby.attachments {
+                let urls = [
+                    attachment.thumbnailUrl,
+                    attachment.type == .image ? attachment.fileUrl : nil,
+                ].compactMap { $0 }.filter { !$0.isEmpty }
+
+                for urlStr in urls {
+                    guard let resolved = MeeshyConfig.resolveMediaURL(urlStr) else { continue }
+                    Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+                }
+            }
+
+            if let avatarURL = nearby.senderAvatarURL, !avatarURL.isEmpty {
+                if let resolved = MeeshyConfig.resolveMediaURL(avatarURL) {
+                    Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+                }
+            }
+        }
     }
 
     func triggerReply(for msg: Message) {

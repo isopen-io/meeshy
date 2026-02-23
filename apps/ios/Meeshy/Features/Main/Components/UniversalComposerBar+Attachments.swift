@@ -95,7 +95,6 @@ extension UniversalComposerBar {
             attachLadderButton(icon: "location.fill", color: "2ECC71", delay: 0.08) {
                 closeAttachMenu()
                 HapticFeedback.light()
-                locationHelper.requestLocation()
                 onLocationRequest?()
             }
             // Camera

@@ -2,6 +2,8 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import CoreLocation
+import Combine
 import MeeshySDK
 
 // MARK: - Recording, Sending & Attachment Handlers
@@ -40,69 +42,120 @@ extension ConversationView {
     }
 
     func sendMessageWithAttachments() {
+        guard !isUploading else { return }
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
 
         let replyId = pendingReplyReference?.messageId.isEmpty == false ? pendingReplyReference?.messageId : nil
         let content = text
 
-        // Capture state before clearing
         let attachments = pendingAttachments
         let audioURL = pendingAudioURL
         let mediaFiles = pendingMediaFiles
 
-        // Clear UI state immediately
-        pendingAttachments.removeAll()
-        pendingAudioURL = nil
-        pendingMediaFiles.removeAll()
-        pendingThumbnails.removeAll()
+        let hasFiles = audioURL != nil || !mediaFiles.isEmpty
+        if !hasFiles || attachments.isEmpty {
+            // Text-only send: clear UI immediately
+            pendingAttachments.removeAll()
+            pendingAudioURL = nil
+            pendingMediaFiles.removeAll()
+            pendingThumbnails.removeAll()
+            messageText = ""
+            pendingReplyReference = nil
+            viewModel.stopTypingEmission()
+            HapticFeedback.light()
+            Task { await viewModel.sendMessage(content: content, replyToId: replyId) }
+            return
+        }
+
+        // File upload flow: keep attachments visible, show progress
         messageText = ""
         pendingReplyReference = nil
         viewModel.stopTypingEmission()
+        isUploading = true
         HapticFeedback.light()
 
-        // If we have files to upload (audio, images, videos), do TUS upload
-        let hasFiles = audioURL != nil || !mediaFiles.isEmpty
-        if hasFiles && !attachments.isEmpty {
-            Task {
-                do {
-                    let serverOrigin = MeeshyConfig.shared.serverOrigin
-                    guard let baseURL = URL(string: serverOrigin),
-                          let token = APIClient.shared.authToken else {
-                        return
-                    }
-                    let uploader = TusUploadManager(baseURL: baseURL)
-                    var uploadedIds: [String] = []
+        Task {
+            do {
+                // Reconnect socket if disconnected
+                if !MessageSocketManager.shared.isConnected {
+                    MessageSocketManager.shared.connect()
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                }
 
-                    // Upload audio if present
-                    if let audioURL {
+                let serverOrigin = MeeshyConfig.shared.serverOrigin
+                guard let baseURL = URL(string: serverOrigin),
+                      let token = APIClient.shared.authToken else {
+                    await MainActor.run { isUploading = false }
+                    return
+                }
+
+                let uploader = TusUploadManager(baseURL: baseURL)
+
+                // Subscribe to progress updates
+                var progressCancellable: AnyCancellable?
+                progressCancellable = uploader.progressPublisher
+                    .receive(on: DispatchQueue.main)
+                    .sink { [progressCancellable] progress in
+                        _ = progressCancellable
+                        uploadProgress = progress
+                    }
+
+                var uploadedIds: [String] = []
+
+                if let audioURL {
+                    let result = try await uploader.uploadFile(
+                        fileURL: audioURL, mimeType: "audio/mp4", token: token
+                    )
+                    uploadedIds.append(result.id)
+                    try? FileManager.default.removeItem(at: audioURL)
+                }
+
+                for attachment in attachments where attachment.type != .audio {
+                    if let fileURL = mediaFiles[attachment.id] {
                         let result = try await uploader.uploadFile(
-                            fileURL: audioURL, mimeType: "audio/mp4", token: token
+                            fileURL: fileURL, mimeType: attachment.mimeType, token: token
                         )
                         uploadedIds.append(result.id)
-                        try? FileManager.default.removeItem(at: audioURL)
+                        try? FileManager.default.removeItem(at: fileURL)
                     }
+                }
 
-                    // Upload images/videos/files
-                    for attachment in attachments where attachment.type != .audio {
-                        if let fileURL = mediaFiles[attachment.id] {
-                            let result = try await uploader.uploadFile(
-                                fileURL: fileURL, mimeType: attachment.mimeType, token: token
-                            )
-                            uploadedIds.append(result.id)
-                            try? FileManager.default.removeItem(at: fileURL)
-                        }
-                    }
+                progressCancellable?.cancel()
 
-                    // Send message with all attachment IDs
-                    if !uploadedIds.isEmpty || !content.isEmpty {
-                        await viewModel.sendMessage(
-                            content: content,
-                            replyToId: replyId,
-                            attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds
-                        )
+                // Auto-determine messageType from first attachment
+                let messageType: String? = attachments.first.map { att in
+                    switch att.type {
+                    case .image: return "image"
+                    case .video: return "video"
+                    case .audio: return "audio"
+                    case .location: return "location"
+                    case .file: return "file"
                     }
-                } catch {
+                }
+                _ = messageType
+
+                // Auto-send at 100%
+                if !uploadedIds.isEmpty || !content.isEmpty {
+                    await viewModel.sendMessage(
+                        content: content,
+                        replyToId: replyId,
+                        attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds
+                    )
+                }
+
+                // Clear UI after successful send
+                await MainActor.run {
+                    pendingAttachments.removeAll()
+                    pendingAudioURL = nil
+                    pendingMediaFiles.removeAll()
+                    pendingThumbnails.removeAll()
+                    uploadProgress = nil
+                    isUploading = false
+                    HapticFeedback.success()
+                }
+            } catch {
+                await MainActor.run {
                     let conversationId = conversation?.id ?? "temp"
                     let newMsg = Message(
                         conversationId: conversationId,
@@ -113,17 +166,17 @@ extension ConversationView {
                         isMe: true
                     )
                     viewModel.messages.append(newMsg)
-                    // Clean up temp files on failure too
+                    pendingAttachments.removeAll()
+                    pendingAudioURL = nil
+                    pendingMediaFiles.removeAll()
+                    pendingThumbnails.removeAll()
+                    uploadProgress = nil
+                    isUploading = false
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+                    HapticFeedback.error()
                 }
             }
-            return
-        }
-
-        // Text-only send
-        Task {
-            await viewModel.sendMessage(content: content, replyToId: replyId)
         }
     }
 
@@ -147,27 +200,34 @@ extension ConversationView {
 
                 if isVideo {
                     if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let fileName = "video_\(UUID().uuidString).mp4"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? movieData.write(to: tempURL)
+                        let rawName = "video_raw_\(UUID().uuidString).mp4"
+                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent(rawName)
+                        try? movieData.write(to: rawURL)
 
-                        let fileSize = movieData.count
+                        let compressedURL: URL
+                        do {
+                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
+                            try? FileManager.default.removeItem(at: rawURL)
+                        } catch {
+                            compressedURL = rawURL
+                        }
+
+                        let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? movieData.count
                         let attachmentId = UUID().uuidString
                         let attachment = MessageAttachment(
                             id: attachmentId,
-                            fileName: fileName,
-                            originalName: fileName,
+                            fileName: compressedURL.lastPathComponent,
+                            originalName: compressedURL.lastPathComponent,
                             mimeType: "video/mp4",
                             fileSize: fileSize,
-                            fileUrl: tempURL.absoluteString,
+                            fileUrl: compressedURL.absoluteString,
                             thumbnailColor: "FF6B6B"
                         )
 
-                        // Generate thumbnail from first frame
-                        let thumb = await generateVideoThumbnail(url: tempURL)
+                        let thumb = await generateVideoThumbnail(url: compressedURL)
 
                         await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
+                            pendingMediaFiles[attachmentId] = compressedURL
                             if let thumb { pendingThumbnails[attachmentId] = thumb }
                             pendingAttachments.append(attachment)
                         }
@@ -175,21 +235,18 @@ extension ConversationView {
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let fileName = "photo_\(UUID().uuidString).jpg"
+                        let result = await MediaCompressor.shared.compressImage(uiImage)
+                        let fileName = "photo_\(UUID().uuidString).\(result.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try? result.data.write(to: tempURL)
 
-                        // Compress to JPEG (0.8 quality)
-                        let compressed = uiImage.jpegData(compressionQuality: 0.8) ?? imageData
-                        try? compressed.write(to: tempURL)
-
-                        let fileSize = compressed.count
                         let attachmentId = UUID().uuidString
                         let attachment = MessageAttachment(
                             id: attachmentId,
                             fileName: fileName,
                             originalName: fileName,
-                            mimeType: "image/jpeg",
-                            fileSize: fileSize,
+                            mimeType: result.mimeType,
+                            fileSize: result.data.count,
                             fileUrl: tempURL.absoluteString,
                             width: Int(uiImage.size.width),
                             height: Int(uiImage.size.height),
@@ -284,46 +341,78 @@ extension ConversationView {
     }
 
     func addCurrentLocation() {
-        isLoadingLocation = true
-        locationManager.requestLocation { location in
-            isLoadingLocation = false
-            if let location = location {
-                let attachment = MessageAttachment.location(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude,
-                    color: "2ECC71"
-                )
-                withAnimation {
-                    pendingAttachments.append(attachment)
-                }
-                HapticFeedback.light()
-            } else {
-                actionAlert = "Impossible d'obtenir la position"
+        showLocationPicker = true
+    }
+
+    func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
+        let attachment = MessageAttachment.location(
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            color: "2ECC71"
+        )
+        withAnimation {
+            pendingAttachments.append(attachment)
+        }
+        HapticFeedback.light()
+    }
+
+    func handleCameraVideo(_ url: URL) {
+        Task {
+            let compressedURL: URL
+            do {
+                compressedURL = try await MediaCompressor.shared.compressVideo(url)
+                try? FileManager.default.removeItem(at: url)
+            } catch {
+                compressedURL = url
+            }
+
+            let fileSize = getFileSize(compressedURL)
+            let attachmentId = UUID().uuidString
+            let attachment = MessageAttachment(
+                id: attachmentId,
+                fileName: compressedURL.lastPathComponent,
+                originalName: compressedURL.lastPathComponent,
+                mimeType: "video/mp4",
+                fileSize: fileSize,
+                fileUrl: compressedURL.absoluteString,
+                thumbnailColor: "FF6B6B"
+            )
+
+            let thumb = await generateVideoThumbnail(url: compressedURL)
+            await MainActor.run {
+                pendingMediaFiles[attachmentId] = compressedURL
+                if let thumb { pendingThumbnails[attachmentId] = thumb }
+                pendingAttachments.append(attachment)
+                HapticFeedback.success()
             }
         }
     }
 
     func handleCameraCapture(_ image: UIImage) {
-        let fileName = "camera_\(UUID().uuidString).jpg"
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        guard let compressed = image.jpegData(compressionQuality: 0.8) else { return }
-        try? compressed.write(to: tempURL)
-        let attachmentId = UUID().uuidString
-        let attachment = MessageAttachment(
-            id: attachmentId,
-            fileName: fileName,
-            originalName: fileName,
-            mimeType: "image/jpeg",
-            fileSize: compressed.count,
-            fileUrl: tempURL.absoluteString,
-            width: Int(image.size.width),
-            height: Int(image.size.height),
-            thumbnailColor: accentColor
-        )
-        pendingMediaFiles[attachmentId] = tempURL
-        pendingThumbnails[attachmentId] = image
-        pendingAttachments.append(attachment)
-        HapticFeedback.success()
+        Task {
+            let result = await MediaCompressor.shared.compressImage(image)
+            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            try? result.data.write(to: tempURL)
+            let attachmentId = UUID().uuidString
+            let attachment = MessageAttachment(
+                id: attachmentId,
+                fileName: fileName,
+                originalName: fileName,
+                mimeType: result.mimeType,
+                fileSize: result.data.count,
+                fileUrl: tempURL.absoluteString,
+                width: Int(image.size.width),
+                height: Int(image.size.height),
+                thumbnailColor: accentColor
+            )
+            await MainActor.run {
+                pendingMediaFiles[attachmentId] = tempURL
+                pendingThumbnails[attachmentId] = image
+                pendingAttachments.append(attachment)
+                HapticFeedback.success()
+            }
+        }
     }
 
     func sendMessage() {

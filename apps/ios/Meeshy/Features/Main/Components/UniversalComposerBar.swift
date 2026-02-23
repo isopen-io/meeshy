@@ -1,10 +1,9 @@
 import SwiftUI
 import AVFoundation
-import CoreLocation
 import Combine
 
 // See ComposerModels.swift for: ComposerAttachmentType, ComposerAttachment,
-// LanguageOption, KeyboardObserver, ComposerLocationHelper, ComposerWaveformBar
+// LanguageOption, KeyboardObserver, ComposerWaveformBar
 
 // See UniversalComposerBar+Recording.swift for recording views & logic
 // See UniversalComposerBar+Attachments.swift for attachment views & logic
@@ -162,9 +161,6 @@ struct UniversalComposerBar: View {
     @State var isMinimized: Bool = false
     @State private var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
-
-    // Location
-    @StateObject var locationHelper = ComposerLocationHelper()
 
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
@@ -419,14 +415,6 @@ struct UniversalComposerBar: View {
             if let id = storyId, let draft = getDraft?(id) {
                 text = draft.text
                 attachments = draft.attachments
-            }
-            locationHelper.onLocationReceived = { lat, lng in
-                onAnyInteraction?()
-                let attachment = ComposerAttachment.location(lat: lat, lng: lng)
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    attachments.append(attachment)
-                }
-                onLocationRequest?()
             }
         }
         .onChange(of: selectedLanguage) { newValue in

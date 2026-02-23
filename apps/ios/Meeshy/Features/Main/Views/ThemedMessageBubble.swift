@@ -677,11 +677,20 @@ struct ThemedMessageBubble: View {
             )
 
         case .file:
-            DocumentViewerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
+            if case .code(let lang) = DocumentMediaType.detect(from: attachment) {
+                CodeViewerView(
+                    attachment: attachment,
+                    language: lang,
+                    context: .messageBubble,
+                    accentColor: contactColor
+                )
+            } else {
+                DocumentViewerView(
+                    attachment: attachment,
+                    context: .messageBubble,
+                    accentColor: contactColor
+                )
+            }
 
         case .location:
             RoundedRectangle(cornerRadius: 12)
