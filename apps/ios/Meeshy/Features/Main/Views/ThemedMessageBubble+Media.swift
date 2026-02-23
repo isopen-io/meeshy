@@ -154,7 +154,8 @@ extension ThemedMessageBubble {
     }
 }
 
-// MARK: - Bubble Carousel View (circular + elastic effects)
+// MARK: - Bubble Carousel View (Native Paging + Elegant Transitions)
+
 struct BubbleCarouselView: View {
     let items: [MessageAttachment]
     @Binding var carouselIndex: Int
@@ -162,176 +163,207 @@ struct BubbleCarouselView: View {
     @Binding var fullscreenAttachment: MessageAttachment?
     let contactColor: String
 
-    @State private var carouselDragOffset: CGFloat = 0
-    // Internal index into the extended array (with buffer items for circular scrolling)
-    @State private var internalIndex: Int = 1
+    @State private var currentPageID: String?
+    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
 
-    private var carouselWidth: CGFloat {
-        UIScreen.main.bounds.width - 32
-    }
-
-    private var isCircular: Bool { items.count > 1 }
-
-    // Extended items: [last] + items + [first] for circular scrolling
-    private var extendedItems: [MessageAttachment] {
-        guard isCircular else { return items }
-        return [items[items.count - 1]] + items + [items[0]]
-    }
+    private let carouselHeight: CGFloat = 300
 
     var body: some View {
-        let itemWidth = carouselWidth
-        let totalOffset = -CGFloat(internalIndex) * itemWidth + carouselDragOffset
-
         ZStack(alignment: .top) {
-            HStack(spacing: 0) {
-                ForEach(Array(extendedItems.enumerated()), id: \.offset) { index, attachment in
-                    let distance = abs(CGFloat(index) - CGFloat(internalIndex) - carouselDragOffset / itemWidth)
-                    let scale = max(0.92, 1.0 - distance * 0.08)
-                    let opacity = max(0.7, 1.0 - distance * 0.3)
-                    let rotation = (CGFloat(index) - CGFloat(internalIndex) - carouselDragOffset / itemWidth) * 5
-
-                    ZStack {
-                        Color.black
-                        switch attachment.type {
-                        case .image:
-                            carouselImageCell(attachment)
-                        case .video:
-                            carouselVideoCell(attachment)
-                        default:
-                            EmptyView()
-                        }
-                    }
-                    .frame(width: itemWidth, height: 280)
-                    .clipped()
-                    .scaleEffect(scale)
-                    .opacity(opacity)
-                    .rotation3DEffect(.degrees(Double(rotation)), axis: (x: 0, y: 1, z: 0))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if attachment.type != .video {
-                            fullscreenAttachment = attachment
-                            HapticFeedback.light()
-                        }
+            // Native paging ScrollView
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 0) {
+                    ForEach(items) { attachment in
+                        carouselPage(attachment)
+                            .containerRelativeFrame(.horizontal)
+                            .scrollTransition(.animated(
+                                .spring(response: 0.4, dampingFraction: 0.86)
+                            )) { content, phase in
+                                content
+                                    .scaleEffect(
+                                        x: phase.isIdentity ? 1 : 0.94,
+                                        y: phase.isIdentity ? 1 : 0.94
+                                    )
+                                    .opacity(phase.isIdentity ? 1 : 0.6)
+                                    .blur(radius: phase.isIdentity ? 0 : 1.5)
+                            }
                     }
                 }
+                .scrollTargetLayout()
             }
-            .offset(x: totalOffset)
-            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: internalIndex)
-            .animation(.interactiveSpring(), value: carouselDragOffset)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { value in
-                        if abs(value.translation.width) > abs(value.translation.height) {
-                            carouselDragOffset = value.translation.width
-                        }
-                    }
-                    .onEnded { value in
-                        let threshold: CGFloat = itemWidth * 0.25
-                        let velocity = value.predictedEndTranslation.width - value.translation.width
-                        if value.translation.width < -threshold || velocity < -100 {
-                            internalIndex += 1
-                        } else if value.translation.width > threshold || velocity > 100 {
-                            internalIndex -= 1
-                        }
-                        carouselDragOffset = 0
-                        HapticFeedback.medium()
-                        syncExternalIndex()
-                        handleCircularReset()
-                    }
-            )
-            .frame(width: itemWidth, height: 280)
-            .clipped()
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $currentPageID)
+            .frame(height: carouselHeight)
+            .scrollClipDisabled(false)
 
-            // Top bar: close + dot indicators
-            HStack {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showCarousel = false }
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(Color.black.opacity(0.6)))
-                }
-                .padding(8)
-                Spacer()
-                dotIndicators
-                    .padding(8)
-            }
+            // Top bar: close + page indicator
+            carouselTopBar
         }
         .onAppear {
-            internalIndex = isCircular ? carouselIndex + 1 : carouselIndex
+            let startIndex = max(0, min(carouselIndex, items.count - 1))
+            currentPageID = items[startIndex].id
         }
-        .task {
-            for attachment in items {
-                Task {
-                    _ = try? await MediaCacheManager.shared.image(
-                        for: MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-                    )
+        .onChange(of: currentPageID) { _, newID in
+            guard let newID,
+                  let newIndex = items.firstIndex(where: { $0.id == newID })
+            else { return }
+
+            let oldIndex = carouselIndex
+            carouselIndex = newIndex
+
+            // Auto-pause video when swiping away
+            if oldIndex != newIndex {
+                let oldAttachment = items[oldIndex]
+                if oldAttachment.type == .video && videoManager.activeURL == oldAttachment.fileUrl {
+                    videoManager.pause()
+                }
+                HapticFeedback.light()
+            }
+
+            // Prefetch adjacent pages
+            prefetchAdjacentPages(around: newIndex)
+        }
+    }
+
+    // MARK: - Top Bar
+
+    private var carouselTopBar: some View {
+        HStack(spacing: 0) {
+            // Close button
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showCarousel = false
+                }
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+            }
+
+            Spacer()
+
+            // Page indicator
+            if items.count > 1 {
+                pageIndicator
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+    }
+
+    // MARK: - Adaptive Page Indicator
+
+    @ViewBuilder
+    private var pageIndicator: some View {
+        let accent = Color(hex: contactColor)
+
+        if items.count <= 7 {
+            // Dot indicator for small counts
+            HStack(spacing: 5) {
+                ForEach(0..<items.count, id: \.self) { i in
+                    Circle()
+                        .fill(i == carouselIndex ? accent : Color.white.opacity(0.45))
+                        .frame(
+                            width: i == carouselIndex ? 7 : 5,
+                            height: i == carouselIndex ? 7 : 5
+                        )
+                        .shadow(
+                            color: i == carouselIndex ? accent.opacity(0.6) : .clear,
+                            radius: 4
+                        )
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
                 }
             }
-        }
-    }
-
-    // MARK: - Dot Indicators
-
-    private var dotIndicators: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<items.count, id: \.self) { i in
-                Circle()
-                    .fill(i == carouselIndex ? Color(hex: contactColor) : Color.white.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                    .scaleEffect(i == carouselIndex ? 1.0 : 0.6)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(Color.black.opacity(0.6)))
-    }
-
-    // MARK: - Circular Helpers
-
-    private func syncExternalIndex() {
-        if isCircular {
-            let realIndex = (internalIndex - 1 + items.count) % items.count
-            carouselIndex = realIndex
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial.opacity(0.7))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+            )
         } else {
-            internalIndex = max(0, min(internalIndex, items.count - 1))
-            carouselIndex = internalIndex
+            // Counter for many items
+            Text("\(carouselIndex + 1) / \(items.count)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial.opacity(0.7))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                )
+                .contentTransition(.numericText())
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
         }
     }
 
-    private func handleCircularReset() {
-        guard isCircular else { return }
-        if internalIndex <= 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                withAnimation(.none) { internalIndex = items.count }
+    // MARK: - Carousel Page
+
+    @ViewBuilder
+    private func carouselPage(_ attachment: MessageAttachment) -> some View {
+        ZStack {
+            Color.black
+
+            switch attachment.type {
+            case .image:
+                carouselImageCell(attachment)
+            case .video:
+                carouselVideoCell(attachment)
+            default:
+                EmptyView()
             }
-        } else if internalIndex >= items.count + 1 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                withAnimation(.none) { internalIndex = 1 }
-            }
+        }
+        .frame(height: carouselHeight)
+        .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            fullscreenAttachment = attachment
+            HapticFeedback.medium()
+        }
+        .overlay(alignment: .bottom) {
+            DownloadBadgeView(
+                attachment: attachment,
+                accentColor: contactColor,
+                onShareFile: { _ in }
+            )
+            .padding(.bottom, 8)
         }
     }
 
-    // MARK: - Cells
+    // MARK: - Image Cell
 
     @ViewBuilder
     private func carouselImageCell(_ attachment: MessageAttachment) -> some View {
         let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
         if !urlStr.isEmpty {
             CachedAsyncImage(url: urlStr) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+                if let thumb = attachment.thumbnailUrl, !thumb.isEmpty, thumb != urlStr {
+                    CachedAsyncImage(url: thumb) {
+                        Color(hex: attachment.thumbnailColor).shimmer()
+                    }
+                    .aspectRatio(contentMode: .fill)
+                } else {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
             }
             .aspectRatio(contentMode: .fit)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+                .overlay(
+                    Image(systemName: "photo")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white.opacity(0.4))
+                )
         }
     }
+
+    // MARK: - Video Cell
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
@@ -342,5 +374,21 @@ struct BubbleCarouselView: View {
                 fullscreenAttachment = attachment
             }
         )
+    }
+
+    // MARK: - Prefetch
+
+    private func prefetchAdjacentPages(around index: Int) {
+        let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
+        for i in prefetchRange {
+            let attachment = items[i]
+            let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+            guard !urlStr.isEmpty else { continue }
+            Task {
+                _ = try? await MediaCacheManager.shared.image(
+                    for: MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+                )
+            }
+        }
     }
 }
