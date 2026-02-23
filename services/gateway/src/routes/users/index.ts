@@ -38,6 +38,13 @@ import {
   deleteUserById
 } from './devices';
 
+// Blocking routes
+import {
+  blockUser,
+  unblockUser,
+  getBlockedUsers
+} from './blocking';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -72,6 +79,11 @@ export async function userRoutes(fastify: FastifyInstance) {
   await sendFriendRequest(fastify);
   await respondToFriendRequest(fastify);
   await getAffiliateToken(fastify);
+
+  // Blocking routes
+  await blockUser(fastify);
+  await unblockUser(fastify);
+  await getBlockedUsers(fastify);
 
   // Stub routes
   await getAllUsers(fastify);

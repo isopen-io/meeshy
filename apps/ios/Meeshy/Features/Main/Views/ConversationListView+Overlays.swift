@@ -94,6 +94,17 @@ extension ConversationListView {
             Label("Déplacer vers...", systemImage: "folder.fill")
         }
 
+        // Lock/Unlock
+        Button {
+            HapticFeedback.medium()
+            let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
+            lockSheetMode = isLocked ? .removePassword : .setPassword
+            lockSheetConversation = conversation
+        } label: {
+            let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
+            Label(isLocked ? "Déverrouiller" : "Verrouiller", systemImage: isLocked ? "lock.open.fill" : "lock.fill")
+        }
+
         // Archive
         Button {
             HapticFeedback.medium()
@@ -104,7 +115,18 @@ extension ConversationListView {
 
         Divider()
 
-        // Delete (destructive)
+        // Block (DM only)
+        if conversation.type == .direct, conversation.participantUserId != nil {
+            Button(role: .destructive) {
+                HapticFeedback.heavy()
+                blockTargetConversation = conversation
+                showBlockConfirmation = true
+            } label: {
+                Label("Bloquer", systemImage: "hand.raised.fill")
+            }
+        }
+
+        // Delete (destructive — soft delete for user only)
         Button(role: .destructive) {
             HapticFeedback.heavy()
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }

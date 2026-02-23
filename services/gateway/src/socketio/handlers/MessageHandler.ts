@@ -92,6 +92,27 @@ export class MessageHandler {
         return;
       }
 
+      // Vérifier si l'expéditeur est bloqué par un membre de la conversation (DM uniquement)
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: data.conversationId },
+        select: { type: true, members: { select: { userId: true } } }
+      });
+      if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
+        const otherMemberIds = conversation.members
+          .map(m => m.userId)
+          .filter(id => id !== userId);
+        if (otherMemberIds.length > 0) {
+          const blockers = await this.prisma.user.findMany({
+            where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
+            select: { id: true }
+          });
+          if (blockers.length > 0) {
+            this._sendError(callback, 'You are blocked by this user', socket);
+            return;
+          }
+        }
+      }
+
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, isAnonymous);
 

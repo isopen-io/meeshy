@@ -91,6 +91,12 @@ struct ConversationListView: View {
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
 
+    // Lock & Block state
+    @State var lockSheetConversation: Conversation? = nil
+    @State var lockSheetMode: ConversationLockSheet.Mode = .setPassword
+    @State var showBlockConfirmation = false
+    @State var blockTargetConversation: Conversation? = nil
+
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
@@ -234,7 +240,12 @@ struct ConversationListView: View {
             .onTapGesture {
                 HapticFeedback.light()
                 isSearching = false
-                onSelect(conversation)
+                if ConversationLockManager.shared.isLocked(conversation.id) {
+                    lockSheetMode = .verifyPassword
+                    lockSheetConversation = conversation
+                } else {
+                    onSelect(conversation)
+                }
             }
             .contextMenu {
                 conversationContextMenu(for: conversation)
@@ -517,6 +528,36 @@ struct ConversationListView: View {
             Button("OK") { profileAlertName = nil }
         } message: {
             Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        }
+        .sheet(item: $lockSheetConversation) { conversation in
+            ConversationLockSheet(
+                mode: lockSheetMode,
+                conversationId: conversation.id,
+                conversationName: conversation.name,
+                onSuccess: {
+                    if lockSheetMode == .verifyPassword {
+                        onSelect(conversation)
+                    }
+                }
+            )
+            .environmentObject(theme)
+        }
+        .confirmationDialog(
+            "Bloquer cet utilisateur ?",
+            isPresented: $showBlockConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Bloquer", role: .destructive) {
+                guard let conv = blockTargetConversation,
+                      let targetUserId = conv.participantUserId else { return }
+                Task {
+                    try? await BlockService.shared.blockUser(userId: targetUserId)
+                    HapticFeedback.success()
+                }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette personne ne pourra plus vous envoyer de messages dans cette conversation.")
         }
     }
 

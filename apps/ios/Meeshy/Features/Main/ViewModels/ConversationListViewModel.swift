@@ -284,7 +284,9 @@ class ConversationListViewModel: ObservableObject {
         let removed = conversations.remove(at: index)
 
         do {
-            let _ = try await api.delete(endpoint: "/conversations/\(conversationId)")
+            let _ = try await api.delete(
+                endpoint: "/conversations/\(conversationId)/delete-for-me"
+            )
         } catch {
             conversations.insert(removed, at: min(index, conversations.count))
         }
