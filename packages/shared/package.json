@@ -97,7 +97,7 @@
   "author": "Meeshy Team",
   "license": "UNLICENSED",
   "dependencies": {
-    "@prisma/client": "^6.15.0",
+    "@prisma/client": "^7.4.1",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
