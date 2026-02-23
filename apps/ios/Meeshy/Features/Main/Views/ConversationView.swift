@@ -351,6 +351,23 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
+            // Status bar gradient — from very top edge of screen through status bar
+            VStack(spacing: 0) {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.75), location: 0),
+                        .init(color: Color.black.opacity(0.4), location: 0.55),
+                        .init(color: Color.clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 100)
+                Spacer()
+            }
+            .ignoresSafeArea(edges: .top)
+            .zIndex(99)
+            .allowsHitTesting(false)
 
             if !isNearBottom {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
@@ -508,41 +525,51 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var expandedHeaderBand: some View {
-        VStack(alignment: .leading, spacing: showOptions ? 4 : 0) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 ThemedBackButton(color: accentColor, compactMode: showOptions) { HapticFeedback.light(); dismiss() }
 
                 if showOptions {
-                    HStack(spacing: 4) {
-                        Button { showConversationInfo = true } label: {
-                            Text(conversation?.name ?? "Conversation")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundColor(.white).lineLimit(1)
+                    // Title row: name + tags scroll + search icon
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Button { showConversationInfo = true } label: {
+                                Text(conversation?.name ?? "Conversation")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white).lineLimit(1)
+                                    .fixedSize()
+                            }
+                            if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
+                            Spacer(minLength: 4)
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
+                                isSearchFocused = true
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 28, height: 28)
+                                    .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                            }
                         }
-                        if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
+
+                        // Tags row: aligned with title, scrolls under the search icon
+                        headerTagsRow
+                            .mask(
+                                HStack(spacing: 0) {
+                                    Color.black
+                                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                                        .frame(width: 24)
+                                }
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-                    Spacer(minLength: 4)
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
-                        isSearchFocused = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
-                    }
-                    .transition(.opacity)
                 } else {
                     Spacer()
                 }
 
                 headerAvatarView
-            }
-
-            if showOptions {
-                headerTagsRow.transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.horizontal, showOptions ? 10 : 0)
