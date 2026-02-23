@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift (via ThemedMessageBubble.swift)
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Visual Media Grid & Carousel
 extension ThemedMessageBubble {
@@ -82,13 +83,8 @@ extension ThemedMessageBubble {
                 }
                 HapticFeedback.light()
             } else {
-                Task {
-                    let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
-                    if cached {
-                        fullscreenAttachment = attachment
-                        HapticFeedback.light()
-                    }
-                }
+                fullscreenAttachment = attachment
+                HapticFeedback.light()
             }
         }
         .overlay(alignment: .bottom) {
@@ -137,26 +133,13 @@ extension ThemedMessageBubble {
 
     @ViewBuilder
     func gridVideoCell(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl ?? ""
-        ZStack {
-            if !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else if !attachment.fileUrl.isEmpty {
-                VideoThumbnailView(
-                    videoUrlString: attachment.fileUrl,
-                    accentColor: attachment.thumbnailColor
-                )
-            } else {
-                Color(hex: attachment.thumbnailColor)
+        InlineVideoPlayerView(
+            attachment: attachment,
+            accentColor: contactColor,
+            onExpandFullscreen: {
+                fullscreenAttachment = attachment
             }
-
-            CachedPlayIcon(fileUrl: attachment.fileUrl)
-        }
+        )
     }
 
     func downloadBadge(_ attachment: MessageAttachment) -> some View {
@@ -286,21 +269,12 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl ?? ""
-        ZStack {
-            if !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else if !attachment.fileUrl.isEmpty {
-                VideoThumbnailView(videoUrlString: attachment.fileUrl, accentColor: attachment.thumbnailColor)
-            } else {
-                Color(hex: attachment.thumbnailColor)
+        InlineVideoPlayerView(
+            attachment: attachment,
+            accentColor: contactColor,
+            onExpandFullscreen: {
+                fullscreenAttachment = attachment
             }
-            CachedPlayIcon(fileUrl: attachment.fileUrl)
-        }
+        )
     }
 }

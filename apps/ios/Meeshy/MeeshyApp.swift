@@ -3,6 +3,7 @@ import MeeshySDK
 
 @main
 struct MeeshyApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var authManager = AuthManager.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showSplash = true

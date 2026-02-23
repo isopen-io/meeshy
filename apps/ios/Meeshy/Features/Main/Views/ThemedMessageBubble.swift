@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Themed Message Bubble
 struct ThemedMessageBubble: View {
@@ -293,7 +294,11 @@ struct ThemedMessageBubble: View {
                 )
             case .video:
                 if !attachment.fileUrl.isEmpty {
-                    VideoFullscreenPlayer(urlString: attachment.fileUrl, speed: .x1_0)
+                    VideoFullscreenPlayerView(
+                        urlString: attachment.fileUrl,
+                        accentColor: contactColor,
+                        fileName: attachment.originalName
+                    )
                 }
             default:
                 EmptyView()
