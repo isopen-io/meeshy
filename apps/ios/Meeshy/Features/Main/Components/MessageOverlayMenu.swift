@@ -587,9 +587,15 @@ private struct PreviewAudioPlayer: View {
                         Circle()
                             .fill(accent.opacity(0.2))
                             .frame(width: 40, height: 40)
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(accent)
+                        if player.isLoading {
+                            ProgressView()
+                                .tint(accent)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(accent)
+                        }
                     }
                 }
                 .buttonStyle(.plain)
@@ -647,6 +653,14 @@ private struct PreviewAudioPlayer: View {
                     in: 0...1
                 )
                 .tint(accent)
+
+                // Pourcentage d'avancement
+                Text("\(player.percentInt)%")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
+                    .frame(minWidth: 36)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
@@ -718,21 +732,7 @@ private struct PreviewVideoPlayer: View {
     }
 
     private var videoControls: some View {
-        HStack(spacing: 8) {
-            Button { player.toggle(url: attachment.fileUrl) } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            .buttonStyle(.plain)
-
-            Button { player.skip(seconds: -5) } label: {
-                Image(systemName: "gobackward.5")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-            }
-            .buttonStyle(.plain)
-
+        VStack(spacing: 4) {
             Slider(
                 value: Binding(
                     get: { player.progress },
@@ -742,19 +742,51 @@ private struct PreviewVideoPlayer: View {
             )
             .tint(accent)
 
-            Button { player.skip(seconds: 5) } label: {
-                Image(systemName: "goforward.5")
-                    .font(.system(size: 12, weight: .medium))
+            HStack(spacing: 8) {
+                Button { player.toggle(url: attachment.fileUrl) } label: {
+                    if player.isLoading {
+                        ProgressView()
+                            .tint(accent)
+                            .scaleEffect(0.5)
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(accent)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Button { player.skip(seconds: -5) } label: {
+                    Image(systemName: "gobackward.5")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+
+                Text("\(player.percentInt)%")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
+                    .frame(minWidth: 32)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
+
+                Button { player.skip(seconds: 5) } label: {
+                    Image(systemName: "goforward.5")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(player.timeLabel(totalDuration: attachment.duration))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .monospacedDigit()
+
+                speedMenu
             }
-            .buttonStyle(.plain)
-
-            Text(player.timeLabel(totalDuration: attachment.duration))
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .monospacedDigit()
-
-            speedMenu
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -789,18 +821,23 @@ private struct PreviewVideoPlayer: View {
     }
 }
 
-// MARK: - Overlay Audio Player (AVPlayer wrapper)
+// MARK: - Overlay Audio Player (AVPlayer wrapper with PlaybackCoordinator integration)
 
+@MainActor
 private class OverlayAudioPlayer: ObservableObject {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var playbackRate: Float = 1.0
+    @Published var isLoading = false
 
     private var avPlayer: AVPlayer?
     private var timeObserver: Any?
+    private var statusObservation: NSKeyValueObservation?
     private var currentURL: String?
+
+    var percentInt: Int { Int(progress * 100) }
 
     func toggle(url: String) {
         if isPlaying {
@@ -812,12 +849,27 @@ private class OverlayAudioPlayer: ObservableObject {
         if currentURL != url {
             stop()
             currentURL = url
-            guard let playerURL = URL(string: url) else { return }
-            let item = AVPlayerItem(url: playerURL)
+            guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
+            isLoading = true
+            let item = AVPlayerItem(url: resolved)
             avPlayer = AVPlayer(playerItem: item)
-            avPlayer?.rate = playbackRate
+
+            statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if item.status == .readyToPlay {
+                        self.isLoading = false
+                        self.avPlayer?.rate = self.playbackRate
+                        self.isPlaying = true
+                    } else if item.status == .failed {
+                        self.isLoading = false
+                    }
+                }
+            }
+
             setupTimeObserver()
             observeEnd(item: item)
+            return
         }
 
         avPlayer?.rate = playbackRate
@@ -828,9 +880,12 @@ private class OverlayAudioPlayer: ObservableObject {
         avPlayer?.pause()
         if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
         timeObserver = nil
+        statusObservation?.invalidate()
+        statusObservation = nil
         avPlayer = nil
         currentURL = nil
         isPlaying = false
+        isLoading = false
         progress = 0
         currentTime = 0
         duration = 0
@@ -880,12 +935,14 @@ private class OverlayAudioPlayer: ObservableObject {
     private func setupTimeObserver() {
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = avPlayer?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self, let item = self.avPlayer?.currentItem else { return }
-            let total = item.duration.seconds
-            guard total.isFinite && total > 0 else { return }
-            self.duration = total
-            self.currentTime = time.seconds
-            self.progress = time.seconds / total
+            Task { @MainActor [weak self] in
+                guard let self, let item = self.avPlayer?.currentItem else { return }
+                let total = item.duration.seconds
+                guard total.isFinite && total > 0 else { return }
+                self.duration = total
+                self.currentTime = time.seconds
+                self.progress = time.seconds / total
+            }
         }
     }
 
@@ -894,10 +951,12 @@ private class OverlayAudioPlayer: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item, queue: .main
         ) { [weak self] _ in
-            self?.isPlaying = false
-            self?.progress = 0
-            self?.currentTime = 0
-            self?.avPlayer?.seek(to: .zero)
+            Task { @MainActor [weak self] in
+                self?.isPlaying = false
+                self?.progress = 0
+                self?.currentTime = 0
+                self?.avPlayer?.seek(to: .zero)
+            }
         }
     }
 
