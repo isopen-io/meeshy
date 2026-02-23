@@ -145,8 +145,9 @@ public struct InlineVideoPlayerView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
-                    .padding(6)
             }
+            .padding(.trailing, 6)
+            .padding(.bottom, 28)
         }
     }
 
