@@ -35,7 +35,7 @@
     "@fastify/swagger-ui": "^5.2.4",
     "@fastify/websocket": "^11.2.0",
     "@grpc/grpc-js": "^1.14.3",
-    "@grpc/proto-loader": "^0.7.15",
+    "@grpc/proto-loader": "^0.8.0",
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^7.0.1",
     "@prisma/client": "^6.19.2",
