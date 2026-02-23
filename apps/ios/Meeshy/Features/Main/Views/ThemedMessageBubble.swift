@@ -25,7 +25,6 @@ struct ThemedMessageBubble: View {
     @State private var isBlurRevealed: Bool = false
     @State private var isTextExpanded: Bool = false
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
-    @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
@@ -44,11 +43,6 @@ struct ThemedMessageBubble: View {
 
     private var nonMediaAttachments: [MessageAttachment] {
         message.attachments.filter { ![.image, .audio, .video].contains($0.type) }
-    }
-
-    private var isVideoPlaying: Bool {
-        videoPlayerManager.isPlaying &&
-        visualAttachments.contains(where: { $0.type == .video && $0.fileUrl == videoPlayerManager.activeURL })
     }
 
     private var hasTextOrNonMediaContent: Bool {
@@ -174,13 +168,11 @@ struct ThemedMessageBubble: View {
                                     .background(Color.black)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                                     .overlay(alignment: mediaTimestampAlignment) {
-                                        if !hasTextOrNonMediaContent && !isVideoPlaying {
+                                        if !hasTextOrNonMediaContent {
                                             mediaTimestampOverlay
                                                 .padding(8)
-                                                .transition(.opacity)
                                         }
                                     }
-                                    .animation(.easeInOut(duration: 0.2), value: isVideoPlaying)
                                     .transition(.opacity)
                             } else {
                                 visualMediaGrid
@@ -188,13 +180,11 @@ struct ThemedMessageBubble: View {
                                     .compositingGroup()
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                                     .overlay(alignment: mediaTimestampAlignment) {
-                                        if !hasTextOrNonMediaContent && !isVideoPlaying {
+                                        if !hasTextOrNonMediaContent {
                                             mediaTimestampOverlay
                                                 .padding(8)
-                                                .transition(.opacity)
                                         }
                                     }
-                                    .animation(.easeInOut(duration: 0.2), value: isVideoPlaying)
                                     .transition(.opacity)
                             }
                         }

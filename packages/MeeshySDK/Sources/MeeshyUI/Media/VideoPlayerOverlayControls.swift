@@ -48,7 +48,8 @@ public struct VideoPlayerOverlayControls: View {
                 bottomBar
             }
             .padding(.horizontal, isFullscreen ? 16 : 8)
-            .padding(.vertical, isFullscreen ? 12 : 6)
+            .padding(.top, isFullscreen ? 12 : 6)
+            .padding(.bottom, isFullscreen ? 12 : 24)
         }
     }
 
