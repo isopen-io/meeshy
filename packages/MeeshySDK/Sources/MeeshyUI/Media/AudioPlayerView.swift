@@ -260,8 +260,9 @@ public struct AudioPlayerView: View {
     }
 
     private var estimatedDuration: TimeInterval {
-        if player.duration > 0 { return player.duration }
-        return Double(attachment.duration ?? 0) / 1000.0
+        let metadata = Double(attachment.duration ?? 0) / 1000.0
+        if metadata > 0 { return metadata }
+        return player.duration
     }
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
@@ -411,14 +412,23 @@ public struct AudioPlayerView: View {
                     .foregroundColor(player.speed == .x1_0
                         ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
                         : accent)
+                    .frame(width: context.isCompact ? 36 : 42, alignment: .leading)
             }
             .padding(.leading, 4)
-
-            Spacer()
 
             Text(formatMediaDuration(estimatedDuration))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
+                .padding(.leading, 4)
+
+            if transcription != nil || onRequestTranscription != nil {
+                Image(systemName: transcription != nil ? "text.badge.checkmark" : "text.bubble")
+                    .font(.system(size: context.isCompact ? 9 : 10, weight: .medium))
+                    .foregroundColor(transcription != nil ? accent.opacity(0.7) : (isDark ? .white.opacity(0.3) : .black.opacity(0.2)))
+                    .padding(.leading, 3)
+            }
+
+            Spacer()
         }
     }
 

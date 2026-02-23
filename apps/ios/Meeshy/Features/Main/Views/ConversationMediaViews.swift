@@ -272,6 +272,13 @@ struct AudioMediaView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: isCached)
+            .overlay(alignment: .topTrailing) {
+                if !isCached, let dur = attachment.duration, dur > 0 {
+                    audioDurationBadge(seconds: Double(dur) / 1000.0)
+                        .padding(.trailing, 8)
+                        .padding(.top, 6)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 audioTimestampOverlay
                     .padding(.trailing, 8)
@@ -368,7 +375,6 @@ struct AudioMediaView: View {
     private var audioPlaceholder: some View {
         let accent = Color(hex: contactColor)
         let isDark = theme.mode.isDark
-        let duration = Double(attachment.duration ?? 0) / 1000.0
 
         return HStack(spacing: 8) {
             // Disabled play circle
@@ -392,15 +398,6 @@ struct AudioMediaView: View {
                 }
             }
             .frame(height: 26)
-
-            Spacer()
-
-            // Duration label
-            if duration > 0 {
-                Text(formatDuration(duration))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -418,6 +415,19 @@ struct AudioMediaView: View {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+
+    private func audioDurationBadge(seconds: TimeInterval) -> some View {
+        let isDark = theme.mode.isDark
+        return Text(formatDuration(seconds))
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
+            )
     }
 }
 

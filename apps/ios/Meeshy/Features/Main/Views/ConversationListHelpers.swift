@@ -269,8 +269,9 @@ struct ConversationPreviewView: View {
                                 .allowsHitTesting(false)
                             }
                         }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.bottom, 4)
                 }
             }
             .frame(minHeight: 100, maxHeight: 260)
