@@ -248,7 +248,10 @@ struct StoryViewerView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
-            // === Layer 6: Top UI (progress bars + header) — ALWAYS visible ===
+            // === Layer 6: Gesture overlay (tap left/right, long press) ===
+            gestureOverlay(geometry: geometry)
+
+            // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             VStack(spacing: 0) {
                 progressBars
                     .padding(.top, geometry.safeAreaInsets.top + 8)
@@ -260,9 +263,6 @@ struct StoryViewerView: View {
 
                 Spacer()
             }
-
-            // === Layer 7: Gesture overlay (tap left/right, long press) ===
-            gestureOverlay(geometry: geometry)
 
             // === Layer 8: Right action sidebar ===
             HStack {

@@ -154,7 +154,7 @@ extension ThemedMessageBubble {
     }
 }
 
-// MARK: - Bubble Carousel View (self-contained to hold @State for drag offset)
+// MARK: - Bubble Carousel View (circular + elastic effects)
 struct BubbleCarouselView: View {
     let items: [MessageAttachment]
     @Binding var carouselIndex: Int
@@ -163,18 +163,33 @@ struct BubbleCarouselView: View {
     let contactColor: String
 
     @State private var carouselDragOffset: CGFloat = 0
+    // Internal index into the extended array (with buffer items for circular scrolling)
+    @State private var internalIndex: Int = 1
 
     private var carouselWidth: CGFloat {
         UIScreen.main.bounds.width - 32
     }
 
+    private var isCircular: Bool { items.count > 1 }
+
+    // Extended items: [last] + items + [first] for circular scrolling
+    private var extendedItems: [MessageAttachment] {
+        guard isCircular else { return items }
+        return [items[items.count - 1]] + items + [items[0]]
+    }
+
     var body: some View {
         let itemWidth = carouselWidth
-        let totalOffset = -CGFloat(carouselIndex) * itemWidth + carouselDragOffset
+        let totalOffset = -CGFloat(internalIndex) * itemWidth + carouselDragOffset
 
         ZStack(alignment: .top) {
             HStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, attachment in
+                ForEach(Array(extendedItems.enumerated()), id: \.offset) { index, attachment in
+                    let distance = abs(CGFloat(index) - CGFloat(internalIndex) - carouselDragOffset / itemWidth)
+                    let scale = max(0.92, 1.0 - distance * 0.08)
+                    let opacity = max(0.7, 1.0 - distance * 0.3)
+                    let rotation = (CGFloat(index) - CGFloat(internalIndex) - carouselDragOffset / itemWidth) * 5
+
                     ZStack {
                         Color.black
                         switch attachment.type {
@@ -188,15 +203,20 @@ struct BubbleCarouselView: View {
                     }
                     .frame(width: itemWidth, height: 280)
                     .clipped()
+                    .scaleEffect(scale)
+                    .opacity(opacity)
+                    .rotation3DEffect(.degrees(Double(rotation)), axis: (x: 0, y: 1, z: 0))
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        fullscreenAttachment = attachment
-                        HapticFeedback.light()
+                        if attachment.type != .video {
+                            fullscreenAttachment = attachment
+                            HapticFeedback.light()
+                        }
                     }
                 }
             }
             .offset(x: totalOffset)
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: carouselIndex)
+            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: internalIndex)
             .animation(.interactiveSpring(), value: carouselDragOffset)
             .highPriorityGesture(
                 DragGesture(minimumDistance: 15)
@@ -209,17 +229,20 @@ struct BubbleCarouselView: View {
                         let threshold: CGFloat = itemWidth * 0.25
                         let velocity = value.predictedEndTranslation.width - value.translation.width
                         if value.translation.width < -threshold || velocity < -100 {
-                            carouselIndex = min(carouselIndex + 1, items.count - 1)
+                            internalIndex += 1
                         } else if value.translation.width > threshold || velocity > 100 {
-                            carouselIndex = max(carouselIndex - 1, 0)
+                            internalIndex -= 1
                         }
                         carouselDragOffset = 0
-                        HapticFeedback.light()
+                        HapticFeedback.medium()
+                        syncExternalIndex()
+                        handleCircularReset()
                     }
             )
             .frame(width: itemWidth, height: 280)
             .clipped()
 
+            // Top bar: close + dot indicators
             HStack {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showCarousel = false }
@@ -233,13 +256,12 @@ struct BubbleCarouselView: View {
                 }
                 .padding(8)
                 Spacer()
-                Text("\(carouselIndex + 1)/\(items.count)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                dotIndicators
                     .padding(8)
             }
+        }
+        .onAppear {
+            internalIndex = isCircular ? carouselIndex + 1 : carouselIndex
         }
         .task {
             for attachment in items {
@@ -251,6 +273,50 @@ struct BubbleCarouselView: View {
             }
         }
     }
+
+    // MARK: - Dot Indicators
+
+    private var dotIndicators: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<items.count, id: \.self) { i in
+                Circle()
+                    .fill(i == carouselIndex ? Color(hex: contactColor) : Color.white.opacity(0.4))
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(i == carouselIndex ? 1.0 : 0.6)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.black.opacity(0.6)))
+    }
+
+    // MARK: - Circular Helpers
+
+    private func syncExternalIndex() {
+        if isCircular {
+            let realIndex = (internalIndex - 1 + items.count) % items.count
+            carouselIndex = realIndex
+        } else {
+            internalIndex = max(0, min(internalIndex, items.count - 1))
+            carouselIndex = internalIndex
+        }
+    }
+
+    private func handleCircularReset() {
+        guard isCircular else { return }
+        if internalIndex <= 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                withAnimation(.none) { internalIndex = items.count }
+            }
+        } else if internalIndex >= items.count + 1 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                withAnimation(.none) { internalIndex = 1 }
+            }
+        }
+    }
+
+    // MARK: - Cells
 
     @ViewBuilder
     private func carouselImageCell(_ attachment: MessageAttachment) -> some View {

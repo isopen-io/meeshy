@@ -66,6 +66,18 @@ struct DownloadBadgeView: View {
         }
         .padding(4)
         .task { await downloader.checkCache(attachment.fileUrl) }
+        .task {
+            // Poll cache periodically so badge disappears when file is cached by player
+            while !Task.isCancelled && !downloader.isCached {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else { break }
+                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                if cached {
+                    downloader.isCached = true
+                    break
+                }
+            }
+        }
     }
 
     private var downloadingBadge: some View {

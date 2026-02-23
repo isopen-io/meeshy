@@ -203,6 +203,16 @@ public final class APIClient {
         return try await request(endpoint: endpoint, method: "PUT", body: data)
     }
 
+    // MARK: - PATCH with Encodable body
+
+    public func patch<T: Decodable, U: Encodable>(
+        endpoint: String,
+        body: U
+    ) async throws -> APIResponse<T> {
+        let data = try JSONEncoder().encode(body)
+        return try await request(endpoint: endpoint, method: "PATCH", body: data)
+    }
+
     // MARK: - DELETE
 
     public func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {

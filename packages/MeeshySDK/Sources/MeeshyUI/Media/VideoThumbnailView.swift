@@ -11,8 +11,6 @@ public struct VideoThumbnailView: View {
     @State private var thumbnail: UIImage?
     @State private var isLoading = false
 
-    private static let thumbnailCache = NSCache<NSString, UIImage>()
-
     public init(videoUrlString: String, accentColor: String) {
         self.videoUrlString = videoUrlString; self.accentColor = accentColor
     }
@@ -56,9 +54,13 @@ public struct VideoThumbnailView: View {
         guard thumbnail == nil, !videoUrlString.isEmpty else { return }
         guard let url = MeeshyConfig.resolveMediaURL(videoUrlString) else { return }
 
-        let cacheKey = url.absoluteString as NSString
-        if let cached = Self.thumbnailCache.object(forKey: cacheKey) {
-            self.thumbnail = cached
+        let resolvedUrl = url.absoluteString
+        let thumbKey = "thumb:\(resolvedUrl)"
+
+        // 1. Check MediaCacheManager for persisted thumbnail
+        if let cachedData = try? await MediaCacheManager.shared.cachedData(for: thumbKey),
+           let image = UIImage(data: cachedData) {
+            withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
             return
         }
 
@@ -84,10 +86,13 @@ public struct VideoThumbnailView: View {
             generator.maximumSize = CGSize(width: 300, height: 300)
 
             let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-            let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
+            let (cgImage, _) = try await generator.image(at: time)
             let image = UIImage(cgImage: cgImage)
 
-            Self.thumbnailCache.setObject(image, forKey: cacheKey)
+            // Store JPEG data in MediaCacheManager with thumb: prefix
+            if let jpegData = image.jpegData(compressionQuality: 0.7) {
+                await MediaCacheManager.shared.store(jpegData, for: thumbKey)
+            }
 
             await MainActor.run {
                 withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
