@@ -374,6 +374,7 @@ struct BubbleCarouselView: View {
                 fullscreenAttachment = attachment
             }
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Prefetch

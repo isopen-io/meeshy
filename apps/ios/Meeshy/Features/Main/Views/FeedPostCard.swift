@@ -19,7 +19,7 @@ struct FeedPostCard: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
     @State private var showCommentsSheet = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
 
@@ -68,13 +68,10 @@ struct FeedPostCard: View {
         .sheet(isPresented: $showCommentsSheet) {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -86,10 +83,10 @@ struct FeedPostCard: View {
                 name: post.author,
                 mode: .custom(44),
                 accentColor: accentColor,
-                onViewProfile: { profileAlertName = post.author },
+                onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                        profileAlertName = post.author
+                        selectedProfileUser = .from(feedPost: post)
                     }
                 ]
             )
@@ -359,10 +356,10 @@ struct FeedPostCard: View {
                     name: comment.author,
                     mode: .messageBubble,
                     accentColor: comment.authorColor,
-                    onViewProfile: { profileAlertName = comment.author },
+                    onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = comment.author
+                            selectedProfileUser = .from(feedComment: comment)
                         }
                     ]
                 )

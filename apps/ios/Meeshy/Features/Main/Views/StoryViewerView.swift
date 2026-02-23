@@ -34,7 +34,7 @@ struct StoryViewerView: View {
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @StateObject private var keyboard = KeyboardObserver()
 
@@ -621,10 +621,10 @@ struct StoryViewerView: View {
                     name: group.username,
                     mode: .custom(32),
                     accentColor: group.avatarColor,
-                    onViewProfile: { showProfileAlert = true },
+                    onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            showProfileAlert = true
+                            selectedProfileUser = .from(storyGroup: group)
                         }
                     ]
                 )
@@ -635,7 +635,7 @@ struct StoryViewerView: View {
                         .foregroundColor(.white)
                         .onTapGesture {
                             HapticFeedback.light()
-                            showProfileAlert = true
+                            selectedProfileUser = .from(storyGroup: group)
                         }
 
                     if let story = currentStory {
@@ -670,10 +670,10 @@ struct StoryViewerView: View {
                     .background(Circle().fill(Color.white.opacity(0.2)))
             }
         }
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(currentGroup?.username ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

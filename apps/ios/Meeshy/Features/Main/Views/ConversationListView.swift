@@ -77,7 +77,7 @@ struct ConversationListView: View {
     @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
-    @State private var profileAlertName: String? = nil
+    @State private var selectedProfileUser: ProfileSheetUser? = nil
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
@@ -521,13 +521,10 @@ struct ConversationListView: View {
                 .zIndex(200)
             }
         }
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK") { profileAlertName = nil }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $lockSheetConversation) { conversation in
             ConversationLockSheet(
@@ -579,7 +576,7 @@ struct ConversationListView: View {
 
     // MARK: - Handle Profile View
     private func handleProfileView(_ conversation: Conversation) {
-        profileAlertName = conversation.name
+        selectedProfileUser = .from(conversation: conversation)
     }
 
     // MARK: - Handle Mood Badge Tap (opens status bubble)

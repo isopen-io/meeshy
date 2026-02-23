@@ -17,7 +17,7 @@ struct CommentsSheetView: View {
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
     @State private var commentBounce: Bool = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         NavigationStack {
@@ -79,13 +79,10 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -98,10 +95,10 @@ struct CommentsSheetView: View {
                     name: post.author,
                     mode: .custom(40),
                     accentColor: post.authorColor,
-                    onViewProfile: { profileAlertName = post.author },
+                    onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = post.author
+                            selectedProfileUser = .from(feedPost: post)
                         }
                     ]
                 )
@@ -311,7 +308,7 @@ struct CommentRowView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -320,10 +317,10 @@ struct CommentRowView: View {
                 name: comment.author,
                 mode: .custom(36),
                 accentColor: comment.authorColor,
-                onViewProfile: { showProfileAlert = true },
+                onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                        showProfileAlert = true
+                        selectedProfileUser = .from(feedComment: comment)
                     }
                 ]
             )
@@ -336,7 +333,7 @@ struct CommentRowView: View {
                         .foregroundColor(Color(hex: comment.authorColor))
                         .onTapGesture {
                             HapticFeedback.light()
-                            showProfileAlert = true
+                            selectedProfileUser = .from(feedComment: comment)
                         }
 
                     Text("·")
@@ -407,10 +404,10 @@ struct CommentRowView: View {
                 .frame(height: 1),
             alignment: .bottom
         )
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(comment.author)")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

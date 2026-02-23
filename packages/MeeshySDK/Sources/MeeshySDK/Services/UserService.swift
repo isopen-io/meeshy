@@ -26,4 +26,11 @@ public final class UserService {
         let response: APIResponse<UpdateProfileResponse> = try await api.put(endpoint: "/users/me", body: request)
         return response.data.user
     }
+
+    public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
+        let response: APIResponse<MeeshyUser> = try await api.request(
+            endpoint: "/users/\(idOrUsername)"
+        )
+        return response.data
+    }
 }

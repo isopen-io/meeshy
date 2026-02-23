@@ -254,7 +254,7 @@ struct ThemedFeedComposer: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showAttachmentMenu = false
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     // Attachment options (without mic - mic is the toggle button when expanded)
     private let attachmentOptions: [(icon: String, color: String)] = [
@@ -278,10 +278,16 @@ struct ThemedFeedComposer: View {
                     mode: .custom(40),
                     accentColor: "FF6B6B",
                     secondaryColor: "4ECDC4",
-                    onViewProfile: { showProfileAlert = true },
+                    onViewProfile: {
+                        if let user = authManager.currentUser {
+                            selectedProfileUser = .from(user: user)
+                        }
+                    },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Mon profil", icon: "person.fill") {
-                            showProfileAlert = true
+                            if let user = authManager.currentUser {
+                                selectedProfileUser = .from(user: user)
+                            }
                         }
                     ]
                 )
@@ -440,10 +446,10 @@ struct ThemedFeedComposer: View {
                 }
             }
         }
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers mon profil")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user, isCurrentUser: true)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

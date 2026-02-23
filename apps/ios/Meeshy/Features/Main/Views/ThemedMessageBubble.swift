@@ -18,7 +18,7 @@ struct ThemedMessageBubble: View {
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
 
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
     @State var shareURL: URL? = nil // internal for cross-file extension access
     @State var fullscreenAttachment: MessageAttachment? = nil // internal for cross-file extension access
@@ -129,10 +129,10 @@ struct ThemedMessageBubble: View {
                         accentColor: message.senderColor ?? contactColor,
                         avatarURL: message.senderAvatarURL,
                         presenceState: presenceState,
-                        onViewProfile: { showProfileAlert = true },
+                        onViewProfile: { selectedProfileUser = .from(message: message) },
                         contextMenuItems: [
                             AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                                showProfileAlert = true
+                                selectedProfileUser = .from(message: message)
                             }
                         ]
                     )
@@ -286,10 +286,10 @@ struct ThemedMessageBubble: View {
             if !message.isMe { Spacer(minLength: 50) }
         }
         .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK") {}
-        } message: {
-            Text("Naviguer vers le profil de \(message.senderName ?? "?")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {

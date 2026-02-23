@@ -156,6 +156,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let isOnline: Bool?
     public let lastActiveAt: String?
     public let createdAt: String?
+    public let blockedUserIds: [String]?
 
     public init(
         id: String, username: String, email: String? = nil,
@@ -164,7 +165,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         avatar: String? = nil, role: String? = nil,
         systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: String? = nil,
-        createdAt: String? = nil
+        createdAt: String? = nil, blockedUserIds: [String]? = nil
     ) {
         self.id = id
         self.username = username
@@ -180,6 +181,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt
         self.createdAt = createdAt
+        self.blockedUserIds = blockedUserIds
     }
 }
 

@@ -9,7 +9,7 @@ struct StoryTrayView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
     @State private var addButtonGlow = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,13 +20,10 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 108)
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -118,7 +115,7 @@ struct StoryTrayView: View {
                             onViewStory(index)
                         },
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = group.username
+                            selectedProfileUser = .from(storyGroup: group)
                         }
                     ]
                 )
