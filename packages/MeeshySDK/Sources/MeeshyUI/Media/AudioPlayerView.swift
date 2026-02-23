@@ -32,10 +32,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private(set) var currentUrl: String?
     private var listenStartTime: Date?
 
-    public override init() { super.init() }
+    public override init() {
+        super.init()
+        PlaybackCoordinator.shared.register(self)
+    }
 
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
+        PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         guard !urlString.isEmpty else { return }
         currentUrl = urlString
@@ -61,6 +65,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from local file
     public func playLocal(url: URL) {
+        PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         currentUrl = url.absoluteString
         do {
@@ -115,6 +120,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             timer?.invalidate()
             reportListenProgress(complete: false)
         } else {
+            PlaybackCoordinator.shared.willStartPlaying(audio: self)
             player.rate = Float(speed.rawValue)
             player.play()
             isPlaying = true
@@ -201,6 +207,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     deinit {
         timer?.invalidate()
         loadTask?.cancel()
+    }
+
+    @MainActor func unregisterFromCoordinator() {
+        PlaybackCoordinator.shared.unregister(self)
     }
 
     // MARK: - Autoplay Registry (static)
@@ -314,6 +324,7 @@ public struct AudioPlayerView: View {
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            player.unregisterFromCoordinator()
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)

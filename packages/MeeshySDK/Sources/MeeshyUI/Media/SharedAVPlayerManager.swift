@@ -42,6 +42,7 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     public func play() {
         guard let player else { return }
+        PlaybackCoordinator.shared.willStartPlaying(video: self)
         player.play()
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
