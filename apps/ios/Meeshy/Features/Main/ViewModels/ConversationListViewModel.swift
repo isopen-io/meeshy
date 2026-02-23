@@ -313,6 +313,17 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - React to Last Message
+
+    func reactToLastMessage(conversationId: String, messageId: String, emoji: String) async {
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.post(
+                endpoint: "/conversations/\(conversationId)/messages/\(messageId)/reactions",
+                body: ["emoji": emoji]
+            )
+        } catch { }
+    }
+
     // MARK: - Helpers
 
     private var currentUserId: String {

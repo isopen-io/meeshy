@@ -109,6 +109,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
     public var lastMessagePreview: String?
     public var lastMessageAttachments: [MeeshyMessageAttachment] = []
     public var lastMessageAttachmentCount: Int = 0
+    public var lastMessageId: String? = nil
     public var lastMessageSenderName: String? = nil
     public var recentMessages: [RecentMessagePreview] = []
     public var tags: [MeeshyConversationTag] = []
@@ -169,6 +170,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
                 unreadCount: Int = 0, lastMessagePreview: String? = nil,
                 lastMessageAttachments: [MeeshyMessageAttachment] = [],
                 lastMessageAttachmentCount: Int = 0,
+                lastMessageId: String? = nil,
                 lastMessageSenderName: String? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
@@ -188,6 +190,7 @@ public struct MeeshyConversation: Identifiable, Hashable {
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
+        self.lastMessageId = lastMessageId
         self.lastMessageSenderName = lastMessageSenderName
         self.recentMessages = recentMessages
         self.tags = tags

@@ -25,15 +25,6 @@ extension ConversationListView {
             Label(conversation.isMuted ? "Réactiver les notifications" : "Mettre en silence", systemImage: conversation.isMuted ? "bell.fill" : "bell.slash.fill")
         }
 
-        // Lock/Unlock
-        // BACKEND_NEEDED: No lock/unlock endpoint exists. Requires a new conversation
-        // preference field (isLocked) and biometric/PIN verification on the client.
-        Button {
-            HapticFeedback.medium()
-        } label: {
-            Label("Verrouiller", systemImage: "lock.fill")
-        }
-
         Divider()
 
         // Mark as read/unread
@@ -53,19 +44,20 @@ extension ConversationListView {
             }
         }
 
-        // Add reaction
-        // REST endpoints now exist: POST/DELETE /conversations/:id/messages/:messageId/reactions
-        // TODO: Wire reaction buttons to call the API (requires knowing the last messageId)
-        Menu {
-            ForEach(["❤️", "👍", "😂", "😮", "😢", "🔥", "🎉", "💯"], id: \.self) { emoji in
-                Button {
-                    HapticFeedback.light()
-                } label: {
-                    Text(emoji)
+        // React to last message
+        if let lastMsgId = conversation.lastMessageId {
+            Menu {
+                ForEach(["❤️", "👍", "😂", "😮", "😢", "🔥", "🎉", "💯"], id: \.self) { emoji in
+                    Button {
+                        HapticFeedback.light()
+                        Task { await conversationViewModel.reactToLastMessage(conversationId: conversation.id, messageId: lastMsgId, emoji: emoji) }
+                    } label: {
+                        Text(emoji)
+                    }
                 }
+            } label: {
+                Label("Réagir", systemImage: "face.smiling.fill")
             }
-        } label: {
-            Label("Réagir", systemImage: "face.smiling.fill")
         }
 
         Divider()
@@ -73,11 +65,20 @@ extension ConversationListView {
         // Move to category
         Menu {
             ForEach(conversationViewModel.userCategories) { category in
+                let isCurrentCategory = conversation.sectionId == category.id
                 Button {
                     HapticFeedback.light()
-                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: category.id)
+                    if isCurrentCategory {
+                        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
+                    } else {
+                        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: category.id)
+                    }
                 } label: {
-                    Label(category.name, systemImage: category.icon)
+                    if isCurrentCategory {
+                        Label("\(category.name) ✓", systemImage: category.icon)
+                    } else {
+                        Label(category.name, systemImage: category.icon)
+                    }
                 }
             }
             if !conversationViewModel.userCategories.isEmpty {
@@ -102,15 +103,6 @@ extension ConversationListView {
         }
 
         Divider()
-
-        // Block (destructive style)
-        // BACKEND_NEEDED: No block user/conversation endpoint exists yet.
-        // Requires a new blocking system with user-level block list.
-        Button(role: .destructive) {
-            HapticFeedback.heavy()
-        } label: {
-            Label("Bloquer", systemImage: "hand.raised.fill")
-        }
 
         // Delete (destructive)
         Button(role: .destructive) {
