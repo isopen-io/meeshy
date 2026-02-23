@@ -497,8 +497,9 @@ struct ConversationView: View {
             if showSearch {
                 searchBar.transition(.move(edge: .top).combined(with: .opacity))
             }
+
+            Spacer()
         }
-        .allowsHitTesting(true)
         .zIndex(100)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
