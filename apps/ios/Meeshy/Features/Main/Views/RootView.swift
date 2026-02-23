@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // Components extracted to RootViewComponents.swift:
 // ThemedFloatingButton, ThemedActionButton, ThemedFeedOverlay,
@@ -207,7 +208,7 @@ struct RootView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                                colors: [MeeshyColors.coral, MeeshyColors.teal],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -230,7 +231,7 @@ struct RootView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: showMenu ? [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")] : [Color(hex: "9B59B6"), Color(hex: "4ECDC4")],
+                                colors: showMenu ? [MeeshyColors.coral, MeeshyColors.teal] : [MeeshyColors.purple, MeeshyColors.teal],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )

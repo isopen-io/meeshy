@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Share Sheet
 struct ShareSheet: UIViewControllerRepresentable {
@@ -372,12 +373,12 @@ struct AudioMediaView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .offset(x: 3)
             }
-            .foregroundColor(Color(hex: "34B7F1"))
+            .foregroundColor(MeeshyColors.readReceipt)
             .frame(width: 14)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
         }
     }
 

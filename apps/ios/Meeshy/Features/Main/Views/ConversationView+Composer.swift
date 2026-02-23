@@ -3,6 +3,7 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Composer, Attachments & Recording
 extension ConversationView {
@@ -317,7 +318,7 @@ extension ConversationView {
             }
 
         case "file":
-            replyAttachmentFallbackBadge(icon: "doc.fill", color: Color(hex: "45B7D1"))
+            replyAttachmentFallbackBadge(icon: "doc.fill", color: MeeshyColors.infoBlue)
 
         default:
             EmptyView()
@@ -383,8 +384,8 @@ extension ConversationView {
                     .frame(width: 28, height: 28)
                     .background(
                         Circle()
-                            .fill(Color(hex: "FF6B6B"))
-                            .shadow(color: Color(hex: "FF6B6B").opacity(0.4), radius: 4, y: 2)
+                            .fill(MeeshyColors.coral)
+                            .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 4, y: 2)
                     )
             }
             .padding(.trailing, 8)

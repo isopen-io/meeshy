@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
@@ -60,7 +61,7 @@ struct StoryTrayView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color(hex: "FF2E63").opacity(0.3), Color.clear],
+                            colors: [MeeshyColors.pink.opacity(0.3), Color.clear],
                             center: .center,
                             startRadius: 22,
                             endRadius: 44
@@ -73,13 +74,13 @@ struct StoryTrayView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057"), Color(hex: "08D9D6")],
+                            colors: [MeeshyColors.pink, Color(hex: "E94057"), MeeshyColors.cyan],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 62, height: 62)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 12, y: 4)
+                    .shadow(color: MeeshyColors.pink.opacity(0.45), radius: 12, y: 4)
 
                 // Camera icon
                 Image(systemName: "camera.fill")

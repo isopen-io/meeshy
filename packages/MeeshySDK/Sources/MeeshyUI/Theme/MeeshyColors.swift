@@ -12,6 +12,10 @@ public struct MeeshyColors {
     public static let darkBlue = Color(hex: "0F0C29")
     public static let green = Color(hex: "4ADE80")
     public static let orange = Color(hex: "F59E0B")
+    public static let teal = Color(hex: "4ECDC4")
+    public static let infoBlue = Color(hex: "45B7D1")
+    public static let readReceipt = Color(hex: "34B7F1")
+    public static let pinnedBlue = Color(hex: "3498DB")
 
     // MARK: - Theme-Aware Gradients
 

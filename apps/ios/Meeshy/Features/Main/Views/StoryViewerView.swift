@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 /// Draft state for a single story's composer
 private struct StoryDraft {
@@ -341,7 +342,7 @@ struct StoryViewerView: View {
             // Heart/reaction toggle button — emoji picker floats as overlay
             sidebarButton(
                 icon: "heart.fill",
-                color: showEmojiStrip ? Color(hex: "FF2E63") : .white,
+                color: showEmojiStrip ? MeeshyColors.pink : .white,
                 bgOpacity: showEmojiStrip ? 0.25 : 0.15
             ) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -557,7 +558,7 @@ struct StoryViewerView: View {
                 }
             } else {
                 LinearGradient(
-                    colors: [Color(hex: "0F0C29"), Color(hex: "302B63"), Color(hex: "24243E")],
+                    colors: [MeeshyColors.darkBlue, MeeshyColors.deepPurple, Color(hex: "24243E")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -581,7 +582,7 @@ struct StoryViewerView: View {
                                 .fill(
                                     index == currentStoryIndex ?
                                     AnyShapeStyle(LinearGradient(
-                                        colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B"), Color(hex: "08D9D6")],
+                                        colors: [MeeshyColors.pink, MeeshyColors.coral, MeeshyColors.cyan],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )) :
@@ -589,7 +590,7 @@ struct StoryViewerView: View {
                                 )
                                 .frame(width: w)
                                 .shadow(
-                                    color: index == currentStoryIndex ? Color(hex: "FF2E63").opacity(0.6) : .clear,
+                                    color: index == currentStoryIndex ? MeeshyColors.pink.opacity(0.6) : .clear,
                                     radius: 4, y: 0
                                 )
                         }

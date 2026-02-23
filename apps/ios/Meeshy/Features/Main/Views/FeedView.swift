@@ -526,7 +526,7 @@ struct FeedView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -576,13 +576,13 @@ struct FeedView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 40, height: 40)
-                        .shadow(color: Color(hex: "4ECDC4").opacity(0.4), radius: 8, y: 4)
+                        .shadow(color: MeeshyColors.teal.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .bold))
@@ -664,7 +664,7 @@ struct FeedView: View {
                     // Loading more indicator
                     if viewModel.isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.teal)
                             .padding()
                     }
                 }
@@ -700,12 +700,12 @@ struct FeedView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                        colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: Color(hex: "4ECDC4").opacity(0.5), radius: 12, y: 4)
+                                .shadow(color: MeeshyColors.teal.opacity(0.5), radius: 12, y: 4)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -790,7 +790,7 @@ struct FeedView: View {
                     } label: {
                         Text("Publier")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(composerText.isEmpty ? theme.textMuted : Color(hex: "4ECDC4"))
+                            .foregroundColor(composerText.isEmpty ? theme.textMuted : MeeshyColors.teal)
                     }
                     .disabled(composerText.isEmpty)
                 }
@@ -805,7 +805,7 @@ struct FeedView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [MeeshyColors.coral, Color(hex: "4ECDC4")],
+                                    colors: [MeeshyColors.coral, MeeshyColors.teal],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -889,7 +889,7 @@ struct FeedView: View {
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
-            .shadow(color: Color(hex: "4ECDC4").opacity(0.2), radius: 30, y: 20)
+            .shadow(color: MeeshyColors.teal.opacity(0.2), radius: 30, y: 20)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
         .zIndex(200)

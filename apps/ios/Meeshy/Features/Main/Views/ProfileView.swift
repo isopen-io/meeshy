@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,7 +12,7 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var isSaving = false
 
-    private let accentColor = "9B59B6"
+    private let accentColor = "A855F7"
 
     private var user: MeeshyUser? { authManager.currentUser }
 
@@ -169,10 +170,10 @@ struct ProfileView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.teal)
                 Text("STATISTIQUES")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.teal)
                     .tracking(1.2)
             }
             .padding(.leading, 4)

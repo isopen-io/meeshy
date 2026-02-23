@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
@@ -163,7 +164,7 @@ struct ConversationPreviewView: View {
                         if conversation.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(Color(hex: "FF6B6B"))
+                                .foregroundColor(MeeshyColors.coral)
                         }
 
                         if conversation.isMuted {

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
@@ -128,7 +129,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, MeeshyColors.teal],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -139,7 +140,7 @@ extension ConversationListView {
                     Button {} label: {
                         Text("Voir tout")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.teal)
                     }
 
                     Button {
@@ -152,7 +153,7 @@ extension ConversationListView {
                             .font(.system(size: 18))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color(hex: "FF6B6B"), Color(hex: "FF6B6B").opacity(0.7)],
+                                    colors: [MeeshyColors.coral, MeeshyColors.coral.opacity(0.7)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -214,7 +215,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(
                         isActive ?
-                        AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
+                        AnyShapeStyle(LinearGradient(colors: [MeeshyColors.coral, MeeshyColors.teal], startPoint: .leading, endPoint: .trailing)) :
                         AnyShapeStyle(theme.textMuted)
                     )
                     .scaleEffect(isActive ? 1.15 : 1.0)
@@ -231,7 +232,7 @@ extension ConversationListView {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .foregroundColor(MeeshyColors.coral)
                         .scaleEffect(1.0)
                 }
                 .transition(.scale.combined(with: .opacity))
@@ -246,12 +247,12 @@ extension ConversationListView {
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(
                             isActive ?
-                            AnyShapeStyle(LinearGradient(colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")], startPoint: .leading, endPoint: .trailing)) :
+                            AnyShapeStyle(LinearGradient(colors: [MeeshyColors.coral, MeeshyColors.teal], startPoint: .leading, endPoint: .trailing)) :
                             AnyShapeStyle(theme.inputBorder),
                             lineWidth: isActive ? 2 : 1
                         )
                 )
-                .shadow(color: isActive ? Color(hex: "4ECDC4").opacity(0.25) : .clear, radius: 12, y: 5)
+                .shadow(color: isActive ? MeeshyColors.teal.opacity(0.25) : .clear, radius: 12, y: 5)
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)

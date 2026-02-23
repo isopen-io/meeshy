@@ -2,6 +2,7 @@
 import SwiftUI
 import CoreLocation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Themed Back Button
 struct ThemedBackButton: View {
@@ -27,7 +28,7 @@ struct ThemedBackButton: View {
                         Circle()
                             .stroke(
                                 LinearGradient(
-                                    colors: [Color(hex: color).opacity(0.5), Color(hex: "4ECDC4").opacity(0.5)],
+                                    colors: [Color(hex: color).opacity(0.5), MeeshyColors.teal.opacity(0.5)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
@@ -43,7 +44,7 @@ struct ThemedBackButton: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: color), Color(hex: "4ECDC4")],
+                            colors: [Color(hex: color), MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

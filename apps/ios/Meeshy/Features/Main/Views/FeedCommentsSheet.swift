@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from FeedView.swift
 
@@ -130,7 +131,7 @@ struct CommentsSheetView: View {
                     Text("\(post.likes)")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
 
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
@@ -194,7 +195,7 @@ struct CommentsSheetView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -364,12 +365,12 @@ struct CommentRowView: View {
                         HStack(spacing: 4) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
                                 .font(.system(size: 14))
-                                .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(comment.likes + (isLiked ? 1 : 0))")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
                         }
                     }
 

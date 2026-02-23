@@ -475,12 +475,12 @@ struct ThemedMessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .offset(x: 4)
             }
-            .foregroundColor(insideBubble && message.isMe ? .white : Color(hex: "34B7F1"))
+            .foregroundColor(insideBubble && message.isMe ? .white : MeeshyColors.readReceipt)
             .frame(width: 16)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
         }
     }
 
@@ -537,7 +537,7 @@ struct ThemedMessageBubble: View {
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
         }
     }
 
@@ -546,12 +546,12 @@ struct ThemedMessageBubble: View {
         HStack(spacing: 4) {
             Image(systemName: "pin.fill")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundColor(Color(hex: "3498DB"))
+                .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
             Text("Épinglé")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(hex: "3498DB"))
+                .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
