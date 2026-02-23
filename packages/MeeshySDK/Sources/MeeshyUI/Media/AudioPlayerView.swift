@@ -406,10 +406,16 @@ public struct AudioPlayerView: View {
             .frame(height: 22, alignment: .center)
         }
         .frame(height: 22)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in }
+        .overlay(
+            GeometryReader { geo in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let fraction = max(0, min(1, location.x / geo.size.width))
+                        player.seek(to: fraction)
+                        HapticFeedback.light()
+                    }
+            }
         )
     }
 

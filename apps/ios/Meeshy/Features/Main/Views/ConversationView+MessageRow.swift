@@ -114,12 +114,12 @@ extension ConversationView {
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
             .simultaneousGesture(
-                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 20)
+                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 50)
                     .onChanged { value in
-                        // Only allow horizontal swipes
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        // Only allow clearly horizontal swipes (2:1 ratio minimum)
+                        guard abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
+                        guard abs(value.translation.width) > 30 else { return }
                         swipedMessageId = msg.id
-                        // Elastic resistance after threshold
                         let raw = value.translation.width
                         let clamped = raw > 0 ? min(raw, 80) : max(raw, -80)
                         swipeOffset = clamped
@@ -127,10 +127,8 @@ extension ConversationView {
                     .onEnded { value in
                         let threshold: CGFloat = 60
                         if swipeOffset * replyDirection > threshold {
-                            // Reply action
                             triggerReply(for: msg)
                         } else if swipeOffset * replyDirection < -threshold {
-                            // Forward action (opposite direction)
                             forwardMessage = msg
                         }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

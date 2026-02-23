@@ -8,6 +8,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     @State private var image: UIImage?
     @State private var isLoading = false
     @State private var hasFailed = false
+    @State private var retryCount = 0
 
     public init(url urlString: String?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.urlString = urlString; self.placeholder = placeholder
@@ -17,12 +18,29 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         Group {
             if let image {
                 Image(uiImage: image).resizable()
+            } else if hasFailed {
+                placeholder()
+                    .overlay {
+                        Button {
+                            hasFailed = false
+                            retryCount += 1
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                Text("Retry")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
+                        }
+                    }
             } else {
                 placeholder()
                     .overlay { if isLoading { ProgressView().tint(.white.opacity(0.6)) } }
             }
         }
-        .task(id: urlString) { await loadImage() }
+        .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage() }
     }
 
     private func loadImage() async {
@@ -33,9 +51,16 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if let url = MeeshyConfig.resolveMediaURL(urlString) { resolved = url.absoluteString } else { resolved = urlString }
         do {
             let loaded = try await MediaCacheManager.shared.image(for: resolved)
-            withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
-        } catch { hasFailed = true }
-        isLoading = false
+            if !Task.isCancelled {
+                withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
+            }
+        } catch is CancellationError {
+            // View scrolled out of LazyVStack — don't mark as failed,
+            // next appearance will retry with fresh state
+        } catch {
+            if !Task.isCancelled { hasFailed = true }
+        }
+        if !Task.isCancelled { isLoading = false }
     }
 }
 
