@@ -128,7 +128,11 @@ public struct VideoFullscreenPlayerView: View {
         .offset(y: dismissOffset)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
         .onAppear { OrientationManager.shared.unlock() }
-        .onDisappear { OrientationManager.shared.lockPortrait() }
+        .onDisappear {
+            controlsTimer?.invalidate()
+            controlsTimer = nil
+            OrientationManager.shared.lockPortrait()
+        }
         .statusBarHidden(true)
     }
 
@@ -449,10 +453,10 @@ public struct VideoFullscreenPlayerView: View {
         HapticFeedback.light()
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (tempURL, _) = try await URLSession.shared.download(from: url)
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                try data.write(to: tempFile)
+                try FileManager.default.moveItem(at: tempURL, to: tempFile)
                 let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
                 try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {

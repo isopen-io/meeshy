@@ -42,6 +42,7 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     public func play() {
         guard let player else { return }
+        player.play()
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
     }
@@ -99,7 +100,9 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        player.currentItem?.publisher(for: \.duration)
+        player.publisher(for: \.currentItem)
+            .compactMap { $0 }
+            .flatMap { $0.publisher(for: \.duration) }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] cmDuration in
                 guard let self else { return }

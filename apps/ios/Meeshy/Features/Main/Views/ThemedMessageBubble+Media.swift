@@ -82,7 +82,7 @@ extension ThemedMessageBubble {
                     carouselIndex = 0
                 }
                 HapticFeedback.light()
-            } else {
+            } else if attachment.type != .video {
                 fullscreenAttachment = attachment
                 HapticFeedback.light()
             }

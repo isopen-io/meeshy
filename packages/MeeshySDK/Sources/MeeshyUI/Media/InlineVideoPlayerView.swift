@@ -77,6 +77,8 @@ public struct InlineVideoPlayerView: View {
                 AVPlayerLayerView(player: player)
                     .onTapGesture { toggleControls() }
                     .onDisappear {
+                        controlsTimer?.invalidate()
+                        controlsTimer = nil
                         if manager.activeURL == attachment.fileUrl {
                             manager.pause()
                         }

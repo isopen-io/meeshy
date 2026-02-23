@@ -299,9 +299,11 @@ struct ThemedMessageBubble: View {
                         accentColor: contactColor,
                         fileName: attachment.originalName
                     )
+                } else {
+                    Color.black.onAppear { fullscreenAttachment = nil }
                 }
             default:
-                EmptyView()
+                Color.black.onAppear { fullscreenAttachment = nil }
             }
         }
     }
