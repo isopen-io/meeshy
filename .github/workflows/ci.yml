@@ -222,7 +222,7 @@ jobs:
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           file: ./${{ matrix.package.path }}/coverage/lcov.info
@@ -310,7 +310,7 @@ jobs:
           uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         continue-on-error: true
         with:
           file: services/translator/coverage.xml
