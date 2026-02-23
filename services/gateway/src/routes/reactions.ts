@@ -363,8 +363,19 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           properties: {
             success: { type: 'boolean', example: true },
             data: {
-              type: 'array',
-              items: reactionSummarySchema
+              type: 'object',
+              properties: {
+                messageId: { type: 'string' },
+                reactions: {
+                  type: 'array',
+                  items: reactionSummarySchema
+                },
+                totalCount: { type: 'number' },
+                userReactions: {
+                  type: 'array',
+                  items: { type: 'string' }
+                }
+              }
             }
           }
         },

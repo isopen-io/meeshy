@@ -815,6 +815,10 @@ struct ThemedMessageBubble: View {
             HapticFeedback.light()
             onToggleReaction?(reaction.emoji)
         }
+        .onLongPressGesture(minimumDuration: 0.4) {
+            HapticFeedback.medium()
+            onShowReactions?(message.id)
+        }
     }
 
     // MARK: - Bubble Background

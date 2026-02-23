@@ -1496,11 +1496,21 @@ export const reactionSummarySchema = {
   properties: {
     emoji: { type: 'string', description: 'Emoji character' },
     count: { type: 'number', description: 'Number of reactions with this emoji' },
-    userReacted: { type: 'boolean', description: 'Whether current user reacted with this emoji' },
+    hasCurrentUser: { type: 'boolean', description: 'Whether current user reacted with this emoji' },
+    userIds: { type: 'array', items: { type: 'string' }, description: 'User IDs who reacted' },
+    anonymousIds: { type: 'array', items: { type: 'string' }, description: 'Anonymous IDs who reacted' },
     users: {
       type: 'array',
-      items: userMinimalSchema,
-      description: 'Users who reacted (limited)'
+      items: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string', description: 'User ID' },
+          username: { type: 'string', description: 'Username or display name' },
+          avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+          createdAt: { type: 'string', description: 'Reaction timestamp' }
+        }
+      },
+      description: 'Users who reacted with details'
     }
   }
 } as const;
