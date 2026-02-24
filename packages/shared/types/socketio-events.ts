@@ -91,6 +91,7 @@ export const SERVER_EVENTS = {
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
   READ_STATUS_UPDATED: 'read-status:updated',
+  MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
@@ -322,6 +323,18 @@ export interface ReadStatusUpdatedEventData {
   readonly updatedAt: Date;
 }
 
+/**
+ * Données pour l'événement de consommation d'un message view-once
+ */
+export interface MessageConsumedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly viewOnceCount: number;
+  readonly maxViewOnceCount: number;
+  readonly isFullyConsumed: boolean;
+}
+
 // Import unified TranslatedAudioData from translated-audio.ts
 import type { TranslatedAudioData } from './translated-audio.js';
 // Import TranscriptionSegment for real-time audio synchronization
@@ -438,6 +451,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: CallMediaToggleEvent) => void;
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
