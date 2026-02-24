@@ -175,13 +175,15 @@ struct DeleteAccountView: View {
                         .fill(theme.surfaceGradient(tint: "F59E0B"))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            confirmationText == requiredPhrase
-                                ? Color(hex: "4ADE80").opacity(0.5)
-                                : theme.border(tint: "F59E0B"),
-                            lineWidth: 1
-                        )
+                    Group {
+                        if confirmationText == requiredPhrase {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color(hex: "4ADE80").opacity(0.5), lineWidth: 1)
+                        } else {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.border(tint: "F59E0B"), lineWidth: 1)
+                        }
+                    }
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: confirmationText == requiredPhrase)
             }

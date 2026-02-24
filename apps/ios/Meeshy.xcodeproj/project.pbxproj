@@ -114,6 +114,15 @@
 		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
 		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
+		ABTV002A002A002A002A0002 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTV001A001A001A001A0001 /* AboutView.swift */; };
+		PPOL002A002A002A002A0002 /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */; };
+		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
+		LICV002A002A002A002A0002 /* LicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LICV001A001A001A001A0001 /* LicensesView.swift */; };
+		SUPV002A002A002A002A0002 /* SupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SUPV001A001A001A001A0001 /* SupportView.swift */; };
+		RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RPTU001A001A001A001A0001 /* ReportUserView.swift */; };
+		DELA002A002A002A002A0002 /* DeleteAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DELA001A001A001A001A0001 /* DeleteAccountView.swift */; };
+		DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSTV001A001A001A001A0001 /* DataStorageView.swift */; };
+		DEXV002A002A002A002A0002 /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEXV001A001A001A001A0001 /* DataExportView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -225,6 +234,15 @@
 		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 		WP3500000000001F35 /* WidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviewView.swift; sourceTree = "<group>"; };
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+		ABTV001A001A001A001A0001 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
+		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
+		LICV001A001A001A001A0001 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
+		SUPV001A001A001A001A0001 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
+		RPTU001A001A001A001A0001 /* ReportUserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportUserView.swift; sourceTree = "<group>"; };
+		DELA001A001A001A001A0001 /* DeleteAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAccountView.swift; sourceTree = "<group>"; };
+		DSTV001A001A001A001A0001 /* DataStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStorageView.swift; sourceTree = "<group>"; };
+		DEXV001A001A001A001A0001 /* DataExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -320,6 +338,15 @@
 				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
 				CHPW001A001A001A001A0001 /* ChangePasswordView.swift */,
 				SECV001A001A001A001A0001 /* SecurityView.swift */,
+				ABTV001A001A001A001A0001 /* AboutView.swift */,
+				PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */,
+				TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */,
+				LICV001A001A001A001A0001 /* LicensesView.swift */,
+				SUPV001A001A001A001A0001 /* SupportView.swift */,
+				RPTU001A001A001A001A0001 /* ReportUserView.swift */,
+				DELA001A001A001A001A0001 /* DeleteAccountView.swift */,
+				DSTV001A001A001A001A0001 /* DataStorageView.swift */,
+				DEXV001A001A001A001A0001 /* DataExportView.swift */,
 				BLKU001A001A001A001A0001 /* BlockedUsersView.swift */,
 				NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */,
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
@@ -540,6 +567,15 @@
 				EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */,
 				CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */,
 				SECV002A002A002A002A0002 /* SecurityView.swift in Sources */,
+				ABTV002A002A002A002A0002 /* AboutView.swift in Sources */,
+				PPOL002A002A002A002A0002 /* PrivacyPolicyView.swift in Sources */,
+				TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */,
+				LICV002A002A002A002A0002 /* LicensesView.swift in Sources */,
+				SUPV002A002A002A002A0002 /* SupportView.swift in Sources */,
+				RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */,
+				DELA002A002A002A002A0002 /* DeleteAccountView.swift in Sources */,
+				DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */,
+				DEXV002A002A002A002A0002 /* DataExportView.swift in Sources */,
 				BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */,
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
