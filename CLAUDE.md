@@ -112,6 +112,32 @@ Each increment leaves the codebase in a working state.
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
 
+## Parallel Worktree Strategy
+
+Pour les larges feature sets, utiliser git worktrees pour le travail agent parallele:
+
+### Setup
+```bash
+git worktree add ../v2_meeshy-{branch-name} -b {branch-name} main
+```
+
+### Regles
+1. Chaque worktree possede des fichiers specifiques -- JAMAIS deux worktrees sur le meme fichier
+2. project.pbxproj: gere par le DERNIER worktree a merger uniquement
+3. Ordre de merge: branches pure-UI d'abord, branches avec fichiers partages en dernier
+4. Chaque agent lance `./apps/ios/meeshy.sh build` dans son worktree pour verifier
+5. Apres tous les merges, clean build depuis main pour catcher les problemes d'integration
+
+### Convention de nommage
+```
+feat/{area}-{feature}  ex: feat/settings-legal, feat/settings-account
+```
+
+### Worktree Directory
+```
+../v2_meeshy-{branch-name}  (sibling du repo principal)
+```
+
 ## Task Management
 1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
 2. **Verify Plan**: Check in before starting implementation
