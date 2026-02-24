@@ -217,7 +217,7 @@ struct RootView: View {
                 .presentationDetents([.medium, .large])
             }
         }
-        .onChange(of: router.pendingShareContent != nil) { hasContent in
+        .onChange(of: router.pendingShareContent != nil) { _, hasContent in
             if hasContent {
                 showSharePicker = true
             }

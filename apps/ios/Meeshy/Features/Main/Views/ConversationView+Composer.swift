@@ -114,7 +114,7 @@ extension ConversationView {
                 onCancel: { showContactPicker = false }
             )
         }
-        .onChange(of: selectedPhotoItems) { items in
+        .onChange(of: selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         .fullScreenCover(isPresented: Binding(

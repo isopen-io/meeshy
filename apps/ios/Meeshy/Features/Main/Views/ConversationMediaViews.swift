@@ -507,7 +507,7 @@ struct AnimatedWaveformBar: View {
                 guard isRecording else { return }
                 startAnimating()
             }
-            .onChange(of: isRecording) { recording in
+            .onChange(of: isRecording) { _, recording in
                 if recording {
                     startAnimating()
                 } else {

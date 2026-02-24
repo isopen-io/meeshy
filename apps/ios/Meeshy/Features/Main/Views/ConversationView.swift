@@ -309,12 +309,12 @@ struct ConversationView: View {
                 if let context = replyContext { pendingReplyReference = context.toReplyReference }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { longPressEnabled = true }
             }
-            .onChange(of: isNearBottom) { _ in
+            .onChange(of: isNearBottom) { _, _ in
                 if showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
                 }
             }
-            .onChange(of: isTyping) { focused in
+            .onChange(of: isTyping) { _, focused in
                 if focused && showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
                 }
@@ -523,7 +523,7 @@ struct ConversationView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .onChange(of: viewModel.isLoadingInitial) { isLoading in
+            .onChange(of: viewModel.isLoadingInitial) { _, isLoading in
                 if !isLoading, let last = viewModel.messages.last {
                     viewModel.markProgrammaticScroll()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -531,31 +531,31 @@ struct ConversationView: View {
                     }
                 }
             }
-            .onChange(of: viewModel.newMessageAppended) { _ in
+            .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard let lastMsg = viewModel.messages.last else { return }
                 if isNearBottom || lastMsg.isMe {
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
                 } else { unreadBadgeCount += 1 }
             }
-            .onChange(of: viewModel.isLoadingOlder) { isLoading in
+            .onChange(of: viewModel.isLoadingOlder) { _, isLoading in
                 if !isLoading, let anchorId = viewModel.scrollAnchorId {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         proxy.scrollTo(anchorId, anchor: .top); viewModel.scrollAnchorId = nil
                     }
                 }
             }
-            .onChange(of: pendingAttachments.count) { _ in
+            .onChange(of: pendingAttachments.count) { _, _ in
                 if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
-            .onChange(of: audioRecorder.isRecording) { _ in
+            .onChange(of: audioRecorder.isRecording) { _, _ in
                 if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
-            .onChange(of: scrollToBottomTrigger) { _ in
+            .onChange(of: scrollToBottomTrigger) { _, _ in
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
             }
-            .onChange(of: scrollToMessageId) { targetId in
+            .onChange(of: scrollToMessageId) { _, targetId in
                 guard let targetId else { return }
                 scrollToMessageId = nil
                 scrollToAndHighlight(targetId, proxy: proxy)
