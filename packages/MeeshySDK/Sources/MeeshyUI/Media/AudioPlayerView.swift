@@ -255,6 +255,7 @@ public struct AudioPlayerView: View {
     public var transcription: MessageTranscription? = nil
     public var translatedAudios: [MessageTranslatedAudio] = []
 
+    public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
@@ -282,12 +283,13 @@ public struct AudioPlayerView: View {
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = [],
+                onFullscreen: (() -> Void)? = nil,
                 onRequestTranscription: (() -> Void)? = nil,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onPlayingChange: ((Bool) -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
-        self.onRequestTranscription = onRequestTranscription
+        self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
     }
@@ -547,6 +549,15 @@ public struct AudioPlayerView: View {
                         : accent)
             }
             .padding(.leading, 4)
+
+            if let onFullscreen = onFullscreen {
+                Button { onFullscreen() } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
+                }
+                .padding(.leading, 4)
+            }
 
             Spacer()
 

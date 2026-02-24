@@ -103,6 +103,7 @@
 		F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83758F8E8BD422CF1E9551E /* ConversationListView.swift */; };
 		FEEDATT0B0B0B0B0B0B00002 /* FeedView+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */; };
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
+		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
 		GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */; };
 		GS3200000000002F32 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3200000000001F32 /* GlobalSearchView.swift */; };
 		GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3300000000001F33 /* GlobalSearchViewModel.swift */; };
@@ -265,6 +266,7 @@
 		F712AE637B0876483E53AA3C /* MeeshyWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MeeshyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedView+Attachments.swift"; sourceTree = "<group>"; };
 		FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModel.swift; sourceTree = "<group>"; };
+		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
 		GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationMediaGalleryView.swift; sourceTree = "<group>"; };
 		GS3200000000001F32 /* GlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchView.swift; sourceTree = "<group>"; };
 		GS3300000000001F33 /* GlobalSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchViewModel.swift; sourceTree = "<group>"; };
@@ -478,6 +480,7 @@
 				161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */,
+				AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */,
 				2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */,
 				PP2500000000001F25 /* ParticipantsView.swift */,
 				GS3200000000001F32 /* GlobalSearchView.swift */,
@@ -828,6 +831,7 @@
 				CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */,
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
+				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,
 				E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */,
 				PP2500000000002F25 /* ParticipantsView.swift in Sources */,
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,

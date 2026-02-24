@@ -348,7 +348,8 @@ struct ConversationView: View {
                     allAttachments: viewModel.allVisualAttachments,
                     startAttachmentId: startAttachment.id,
                     accentColor: accentColor,
-                    captionMap: viewModel.mediaCaptionMap
+                    captionMap: viewModel.mediaCaptionMap,
+                    senderInfoMap: viewModel.mediaSenderInfoMap
                 )
             }
             .sheet(isPresented: $showMessageDetailSheet) {

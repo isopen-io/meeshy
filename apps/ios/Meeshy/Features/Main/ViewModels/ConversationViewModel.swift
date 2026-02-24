@@ -84,6 +84,29 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Conversation-Wide Media
 
+    struct MediaSenderInfo {
+        let senderName: String
+        let senderAvatarURL: String?
+        let senderColor: String
+        let sentAt: Date
+    }
+
+    var mediaSenderInfoMap: [String: MediaSenderInfo] {
+        var map: [String: MediaSenderInfo] = [:]
+        for msg in messages {
+            let info = MediaSenderInfo(
+                senderName: msg.senderName ?? "?",
+                senderAvatarURL: msg.senderAvatarURL,
+                senderColor: msg.senderColor ?? "#999",
+                sentAt: msg.createdAt
+            )
+            for att in msg.attachments {
+                map[att.id] = info
+            }
+        }
+        return map
+    }
+
     /// All visual attachments (images + videos) across every loaded message, in chronological order.
     var allVisualAttachments: [MessageAttachment] {
         messages.flatMap { msg in
@@ -993,20 +1016,7 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, query: trimmed, limit: 20
             )
 
-            searchResults = response.data.map { apiMsg in
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-                let content = apiMsg.content ?? ""
-                return SearchResultItem(
-                    id: apiMsg.id,
-                    conversationId: apiMsg.conversationId,
-                    content: content,
-                    matchedText: content,
-                    matchType: "content",
-                    senderName: senderName,
-                    senderAvatar: apiMsg.sender?.avatar,
-                    createdAt: apiMsg.createdAt
-                )
-            }
+            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             searchNextCursor = response.cursorPagination?.nextCursor
             searchHasMore = response.cursorPagination?.hasMore ?? false
         } catch {
@@ -1025,20 +1035,7 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, query: query, cursor: cursor
             )
 
-            let newResults = response.data.map { apiMsg in
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-                let content = apiMsg.content ?? ""
-                return SearchResultItem(
-                    id: apiMsg.id,
-                    conversationId: apiMsg.conversationId,
-                    content: content,
-                    matchedText: content,
-                    matchType: "content",
-                    senderName: senderName,
-                    senderAvatar: apiMsg.sender?.avatar,
-                    createdAt: apiMsg.createdAt
-                )
-            }
+            let newResults = response.data.map { buildSearchResult($0, query: query) }
             searchResults.append(contentsOf: newResults)
             searchNextCursor = response.cursorPagination?.nextCursor
             searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -1047,6 +1044,39 @@ class ConversationViewModel: ObservableObject {
         }
 
         isSearching = false
+    }
+
+    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
+        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
+        let content = apiMsg.content ?? ""
+        let queryLower = query.lowercased()
+
+        // Check if the match is in original content
+        if content.lowercased().contains(queryLower) {
+            return SearchResultItem(
+                id: apiMsg.id, conversationId: apiMsg.conversationId,
+                content: content, matchedText: content, matchType: "content",
+                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+            )
+        }
+
+        // Match is in a translation — find which one
+        if let translations = apiMsg.translations {
+            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
+                return SearchResultItem(
+                    id: apiMsg.id, conversationId: apiMsg.conversationId,
+                    content: content, matchedText: t.translatedContent, matchType: "translation",
+                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+                )
+            }
+        }
+
+        // Fallback (shouldn't happen but safe)
+        return SearchResultItem(
+            id: apiMsg.id, conversationId: apiMsg.conversationId,
+            content: content, matchedText: content, matchType: "content",
+            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+        )
     }
 
     // MARK: - Jump to Message (load messages around a specific message)
@@ -1188,16 +1218,30 @@ class ConversationViewModel: ObservableObject {
             return override  // nil means user chose "original"
         }
 
-        // Automatic resolution
+        // Automatic resolution — mirrors gateway resolveUserLanguage() logic
         guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
         let user = AuthManager.shared.currentUser
 
-        let preferred: [String] = [
-            user?.customDestinationLanguage,
-            user?.systemLanguage,
-            user?.regionalLanguage,
-            Locale.current.language.languageCode?.identifier
-        ].compactMap { $0 }
+        // Build priority list respecting boolean preferences (same as packages/shared resolveUserLanguage)
+        var preferred: [String] = []
+
+        if user?.useCustomDestination == true, let custom = user?.customDestinationLanguage {
+            preferred.append(custom)
+        }
+        if user?.translateToSystemLanguage == true, let sys = user?.systemLanguage {
+            preferred.append(sys)
+        }
+        if user?.translateToRegionalLanguage == true, let reg = user?.regionalLanguage {
+            preferred.append(reg)
+        }
+        // Fallback: systemLanguage (unconditional), then device locale
+        if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
+            preferred.append(sys)
+        }
+        if let deviceLang = Locale.current.language.languageCode?.identifier,
+           !preferred.contains(where: { $0.lowercased() == deviceLang.lowercased() }) {
+            preferred.append(deviceLang)
+        }
 
         for lang in preferred {
             if let match = translations.first(where: { $0.targetLanguage.lowercased() == lang.lowercased() }) {

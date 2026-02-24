@@ -12,6 +12,8 @@ struct ConversationMediaGalleryView: View {
     let accentColor: String
     /// Maps attachment.id → caption text (message content or attachment caption)
     var captionMap: [String: String] = [:]
+    /// Maps attachment.id → sender info (name, avatar, color, date)
+    var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
     @Environment(\.dismiss) private var dismiss
     @State private var currentPageID: String?
@@ -327,40 +329,61 @@ struct ConversationMediaGalleryView: View {
 
             Spacer()
 
-            // Bottom info bar (filename + size)
+            // Bottom metadata overlay (author + dimensions)
             if currentIndex < allAttachments.count {
                 let att = allAttachments[currentIndex]
                 let hasCaption = captionMap[att.id]?.isEmpty == false
                 if !hasCaption {
-                    bottomInfoBar(att)
+                    bottomMetadataOverlay(att)
                 }
             }
         }
     }
 
-    private func bottomInfoBar(_ att: MessageAttachment) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: att.type == .video ? "video.fill" : "photo")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
-
-            if !att.originalName.isEmpty {
-                Text(att.originalName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .lineLimit(1)
+    private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
+        let info = senderInfoMap[att.id]
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                MeeshyAvatar(
+                    name: info?.senderName ?? "?",
+                    mode: .custom(36),
+                    accentColor: info?.senderColor ?? accentColor,
+                    avatarURL: info?.senderAvatarURL
+                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(info?.senderName ?? "")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                    if let sentAt = info?.sentAt {
+                        Text(sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                }
+                Spacer()
             }
-
-            if att.fileSize > 0 {
-                Text(att.fileSizeFormatted)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 8) {
+                Image(systemName: att.type == .video ? "video.fill" : "photo")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.6))
+                if let w = att.width, let h = att.height, w > 0, h > 0 {
+                    Text("\(w) \u{00D7} \(h)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                if att.fileSize > 0 {
+                    Text(att.fileSizeFormatted)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
             }
-
-            Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(.vertical, 12)
+        .background(
+            LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+        )
     }
 
     // MARK: - Actions

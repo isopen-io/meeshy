@@ -269,6 +269,8 @@ struct AudioMediaView: View {
 
     @State private var isCached = false
     @State private var isAudioPlaying = false
+    @State private var showAudioFullscreen = false
+    @StateObject private var downloader = AttachmentDownloader()
 
     private var timeString: String {
         let formatter = DateFormatter()
@@ -286,6 +288,7 @@ struct AudioMediaView: View {
                         accentColor: contactColor,
                         transcription: transcription,
                         translatedAudios: translatedAudios,
+                        onFullscreen: { showAudioFullscreen = true },
                         onPlayingChange: { playing in
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isAudioPlaying = playing
@@ -331,6 +334,15 @@ struct AudioMediaView: View {
                     .padding(.leading, 4)
                     .padding(.top, 2)
             }
+        }
+        .fullScreenCover(isPresented: $showAudioFullscreen) {
+            AudioFullscreenView(
+                attachment: attachment,
+                message: message,
+                contactColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios
+            )
         }
         .task {
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
@@ -408,16 +420,26 @@ struct AudioMediaView: View {
         let isDark = theme.mode.isDark
 
         return HStack(spacing: 8) {
-            // Disabled play circle
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.3))
-                    .frame(width: 34, height: 34)
-                Image(systemName: "play.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.3))
-                    .offset(x: 1)
+            // Play circle — triggers download
+            Button {
+                HapticFeedback.medium()
+                downloader.start(attachment: attachment, onShare: nil)
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(downloader.isDownloading ? 0.5 : 0.3))
+                        .frame(width: 34, height: 34)
+                    if downloader.isDownloading {
+                        ProgressView().tint(.white).scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .offset(x: 1)
+                    }
+                }
             }
+            .disabled(downloader.isDownloading)
 
             // Static waveform placeholder
             HStack(spacing: 2) {
