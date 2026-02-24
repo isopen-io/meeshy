@@ -1925,6 +1925,117 @@ export function registerMessagesRoutes(
     }
   });
 
+  // ============================================================================
+  // CONSUME VIEW-ONCE MESSAGE
+  // ============================================================================
+
+  fastify.post<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/consume', {
+    schema: {
+      description: 'Consume a view-once message (increment view count)',
+      tags: ['conversations', 'messages'],
+      summary: 'Consume view-once message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to consume' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                messageId: { type: 'string' },
+                viewOnceCount: { type: 'number' },
+                maxViewOnceCount: { type: 'number' },
+                isFullyConsumed: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+      }
+
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!hasAccess) {
+        return reply.status(403).send({ success: false, error: 'Access denied' });
+      }
+
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId }
+      });
+      if (!message) {
+        return reply.status(404).send({ success: false, error: 'Message not found' });
+      }
+
+      if (!message.isViewOnce) {
+        return reply.status(400).send({ success: false, error: 'Message is not view-once' });
+      }
+
+      const now = new Date();
+
+      const updated = await prisma.message.update({
+        where: { id: messageId },
+        data: { viewOnceCount: { increment: 1 } }
+      });
+
+      const maxViewOnceCount = (message as any).maxViewOnceCount ?? 1;
+      const newViewOnceCount = updated.viewOnceCount ?? 1;
+      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
+
+      // Update status entry for this user
+      await prisma.messageStatusEntry.updateMany({
+        where: { messageId, userId },
+        data: { viewedOnceAt: now, revealedAt: now }
+      });
+
+      logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
+
+      // Broadcast consume event via Socket.IO
+      if (socketIOHandler) {
+        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:consumed', {
+          messageId,
+          conversationId,
+          userId,
+          viewOnceCount: newViewOnceCount,
+          maxViewOnceCount,
+          isFullyConsumed
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed }
+      });
+    } catch (error) {
+      logger.error('Error consuming view-once message', error);
+      reply.status(500).send({ success: false, error: 'Error consuming view-once message' });
+    }
+  });
+
   // ===== SEARCH MESSAGES IN CONVERSATION =====
 
   fastify.get<{
