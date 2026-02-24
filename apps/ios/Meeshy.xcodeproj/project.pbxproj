@@ -18,6 +18,7 @@
 		542025BAEF06C3FB0578E670 /* ConversationListView+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CC3F2F25BE7ED204EC43B5 /* ConversationListView+Overlays.swift */; };
 		63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
+		FEEDATT0B0B0B0B0B0B00002 /* FeedView+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
 		75F796AFDAAFB88DFFB87706 /* ConversationView+Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB514257655035123C7AD2F8 /* ConversationView+Composer.swift */; };
 		9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */; };
@@ -108,6 +109,7 @@
 		67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
 		694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMenu.swift; sourceTree = "<group>"; };
 		6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
+		FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedView+Attachments.swift"; sourceTree = "<group>"; };
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedMessageBubble.swift; sourceTree = "<group>"; };
@@ -260,6 +262,7 @@
 				AA00BB11CC22DD33EE440031 /* FeedPostCard.swift */,
 				AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
+				FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */,
 				EE44FF55AA66BB77CC880033 /* LoginView.swift */,
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
@@ -437,6 +440,7 @@
 				AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */,
 				AA00BB11CC22DD33EE440022 /* FeedPostCard+Media.swift in Sources */,
 				6E75FBB8A88317499B405448 /* FeedView.swift in Sources */,
+				FEEDATT0B0B0B0B0B0B00002 /* FeedView+Attachments.swift in Sources */,
 				470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */,
 				009B4248B90F6AC8EE19E3B7 /* AppDelegate.swift in Sources */,
 				MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */,

@@ -156,7 +156,22 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let isOnline: Bool?
     public let lastActiveAt: String?
     public let createdAt: String?
+    public let updatedAt: String?
     public let blockedUserIds: [String]?
+
+    // Account status
+    public let isActive: Bool?
+    public let deactivatedAt: String?
+    public let isAnonymous: Bool?
+    public let isMeeshyer: Bool?
+    public let phoneNumber: String?
+
+    // Translation preferences (from GET /users/:id)
+    public let customDestinationLanguage: String?
+    public let autoTranslateEnabled: Bool?
+    public let translateToSystemLanguage: Bool?
+    public let translateToRegionalLanguage: Bool?
+    public let useCustomDestination: Bool?
 
     public init(
         id: String, username: String, email: String? = nil,
@@ -165,7 +180,16 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         avatar: String? = nil, role: String? = nil,
         systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: String? = nil,
-        createdAt: String? = nil, blockedUserIds: [String]? = nil
+        createdAt: String? = nil, updatedAt: String? = nil,
+        blockedUserIds: [String]? = nil,
+        isActive: Bool? = nil, deactivatedAt: String? = nil,
+        isAnonymous: Bool? = nil, isMeeshyer: Bool? = nil,
+        phoneNumber: String? = nil,
+        customDestinationLanguage: String? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        translateToSystemLanguage: Bool? = nil,
+        translateToRegionalLanguage: Bool? = nil,
+        useCustomDestination: Bool? = nil
     ) {
         self.id = id
         self.username = username
@@ -181,7 +205,18 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
         self.blockedUserIds = blockedUserIds
+        self.isActive = isActive
+        self.deactivatedAt = deactivatedAt
+        self.isAnonymous = isAnonymous
+        self.isMeeshyer = isMeeshyer
+        self.phoneNumber = phoneNumber
+        self.customDestinationLanguage = customDestinationLanguage
+        self.autoTranslateEnabled = autoTranslateEnabled
+        self.translateToSystemLanguage = translateToSystemLanguage
+        self.translateToRegionalLanguage = translateToRegionalLanguage
+        self.useCustomDestination = useCustomDestination
     }
 }
 

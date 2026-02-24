@@ -8,7 +8,10 @@ import {
   updateUserPassword,
   updateUsername,
   getUserByUsername,
-  getUserById
+  getUserById,
+  getUserByEmail,
+  getUserByIdDedicated,
+  getUserByPhone
 } from './profile';
 
 // Contact change routes (email/phone with verification)
@@ -61,6 +64,9 @@ export async function userRoutes(fastify: FastifyInstance) {
   await updateUsername(fastify);
   await getUserByUsername(fastify);
   await getUserById(fastify);
+  await getUserByEmail(fastify);
+  await getUserByIdDedicated(fastify);
+  await getUserByPhone(fastify);
 
   // Contact change routes (email/phone with verification)
   await initiateEmailChange(fastify);

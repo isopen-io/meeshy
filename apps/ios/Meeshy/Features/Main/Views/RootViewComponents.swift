@@ -157,6 +157,8 @@ struct ThemedFeedOverlay: View {
     @State private var showStoryViewer = false
     @State private var selectedGroupIndex = 0
     @State private var showStatusComposer = false
+    @State private var showFullComposer = false
+    @State private var pendingAttachmentType: String?
 
     var body: some View {
         ZStack {
@@ -196,7 +198,14 @@ struct ThemedFeedOverlay: View {
                     })
 
                     // Composer (padding is included in the component)
-                    ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
+                    ThemedFeedComposer(
+                        text: $composerText,
+                        isFocused: _isComposerFocused,
+                        onOpenComposerWithAttachment: { type in
+                            pendingAttachmentType = type
+                            showFullComposer = true
+                        }
+                    )
 
                     // Feed posts with infinite scroll
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
@@ -244,6 +253,18 @@ struct ThemedFeedOverlay: View {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
         }
+        .fullScreenCover(isPresented: $showFullComposer) {
+            FeedComposerSheet(
+                viewModel: viewModel,
+                initialText: composerText,
+                pendingAttachmentType: pendingAttachmentType,
+                onDismiss: {
+                    showFullComposer = false
+                    pendingAttachmentType = nil
+                    composerText = ""
+                }
+            )
+        }
     }
 }
 
@@ -251,17 +272,18 @@ struct ThemedFeedOverlay: View {
 struct ThemedFeedComposer: View {
     @Binding var text: String
     @FocusState var isFocused: Bool
+    var onOpenComposerWithAttachment: ((String) -> Void)?
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showAttachmentMenu = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     // Attachment options (without mic - mic is the toggle button when expanded)
-    private let attachmentOptions: [(icon: String, color: String)] = [
-        ("photo.on.rectangle.angled", "9B59B6"),
-        ("camera.fill", "FF6B6B"),
-        ("doc.fill", "3498DB"),
-        ("location.fill", "2ECC71")
+    private let attachmentOptions: [(icon: String, color: String, type: String)] = [
+        ("photo.on.rectangle.angled", "9B59B6", "photo"),
+        ("camera.fill", "FF6B6B", "camera"),
+        ("doc.fill", "3498DB", "file"),
+        ("location.fill", "2ECC71", "location")
     ]
 
     private var hasTextToPublish: Bool {
@@ -334,8 +356,10 @@ struct ThemedFeedComposer: View {
                     Button {
                         HapticFeedback.light()
                         if showAttachmentMenu {
-                            // Mic action when menu is open
-                            // TODO: Start voice recording
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showAttachmentMenu = false
+                            }
+                            onOpenComposerWithAttachment?("voice")
                         } else {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showAttachmentMenu = true
@@ -409,10 +433,10 @@ struct ThemedFeedComposer: View {
                     ForEach(attachmentOptions, id: \.icon) { option in
                         Button {
                             HapticFeedback.light()
-                            // TODO: Handle attachment selection
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 showAttachmentMenu = false
                             }
+                            onOpenComposerWithAttachment?(option.type)
                         } label: {
                             Image(systemName: option.icon)
                                 .font(.system(size: 18, weight: .medium))
@@ -638,3 +662,4 @@ struct FeedAction: View {
     let count: Int
     var body: some View { FeedActionButton(icon: icon, color: "4ECDC4", count: count) }
 }
+

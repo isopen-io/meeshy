@@ -28,8 +28,41 @@ public final class UserService {
     }
 
     public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
+        let encoded = idOrUsername.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? idOrUsername
         let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/users/\(idOrUsername)"
+            endpoint: "/users/\(encoded)"
+        )
+        return response.data
+    }
+
+    public func getPublicProfile(username: String) async throws -> MeeshyUser {
+        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let response: APIResponse<MeeshyUser> = try await api.request(
+            endpoint: "/u/\(encoded)"
+        )
+        return response.data
+    }
+
+    public func getProfileByEmail(_ email: String) async throws -> MeeshyUser {
+        let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email
+        let response: APIResponse<MeeshyUser> = try await api.request(
+            endpoint: "/users/email/\(encoded)"
+        )
+        return response.data
+    }
+
+    public func getProfileById(_ id: String) async throws -> MeeshyUser {
+        let response: APIResponse<MeeshyUser> = try await api.request(
+            endpoint: "/users/id/\(id)"
+        )
+        return response.data
+    }
+
+    public func getProfileByPhone(_ phone: String) async throws -> MeeshyUser {
+        let digits = phone.replacingOccurrences(of: "+", with: "")
+        let encoded = digits.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? digits
+        let response: APIResponse<MeeshyUser> = try await api.request(
+            endpoint: "/users/phone/\(encoded)"
         )
         return response.data
     }

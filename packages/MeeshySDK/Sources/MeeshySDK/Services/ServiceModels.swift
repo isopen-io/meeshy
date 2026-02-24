@@ -38,10 +38,14 @@ public struct CreatePostRequest: Encodable {
     public let visibility: String
     public let moodEmoji: String?
     public let visibilityUserIds: [String]?
+    public let mediaIds: [String]?
+    public let audioUrl: String?
+    public let audioDuration: Int?
 
-    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil) {
+    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
+        self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
     }
 }
 

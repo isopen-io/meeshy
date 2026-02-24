@@ -96,13 +96,21 @@ extension ProfileSheetUser {
             guard let str = user.lastActiveAt else { return nil }
             let fmt = ISO8601DateFormatter()
             fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return fmt.date(from: str)
+            return fmt.date(from: str) ?? {
+                fmt.formatOptions = [.withInternetDateTime]
+                return fmt.date(from: str)
+            }()
+        }()
+
+        let resolvedDisplayName: String? = user.displayName ?? {
+            let parts = [user.firstName, user.lastName].compactMap { $0 }.filter { !$0.isEmpty }
+            return parts.isEmpty ? nil : parts.joined(separator: " ")
         }()
 
         return ProfileSheetUser(
             userId: user.id,
             username: user.username,
-            displayName: user.displayName,
+            displayName: resolvedDisplayName,
             avatarURL: user.avatar,
             accentColor: "",
             bio: user.bio,

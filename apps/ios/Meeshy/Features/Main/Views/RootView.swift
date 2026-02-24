@@ -114,6 +114,16 @@ struct RootView: View {
                 menuLadder
             }
         }
+        .environment(\.openURL, OpenURLAction { url in
+            let destination = DeepLinkRouter.parse(url)
+            switch destination {
+            case .external:
+                return .systemAction
+            default:
+                router.handleDeepLink(url)
+                return .handled
+            }
+        })
         .environmentObject(router)
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
@@ -150,8 +160,7 @@ struct RootView: View {
             router.handleDeepLink(url)
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
+            ProfileFetchingSheet(user: user)
         }
     }
 
@@ -363,6 +372,77 @@ struct RootView: View {
         .ignoresSafeArea()
         .zIndex(showMenu ? 151 : -1)
         .allowsHitTesting(showMenu)
+    }
+}
+
+// MARK: - Profile Fetching Sheet
+
+private struct ProfileFetchingSheet: View {
+    let user: ProfileSheetUser
+    @State private var isLoading = true
+    @State private var fullUser: MeeshyUser?
+    @State private var fetchError: String?
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Group {
+            if let fetchError {
+                errorView(fetchError)
+            } else {
+                UserProfileSheet(
+                    user: user,
+                    isLoading: isLoading,
+                    fullUser: fullUser
+                )
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .task {
+            do {
+                let fetched = try await UserService.shared.getProfile(idOrUsername: user.username)
+                if fetched.isActive == false {
+                    fetchError = "Ce compte a ete desactive."
+                    return
+                }
+                fullUser = fetched
+            } catch let error as APIError {
+                switch error {
+                case .serverError(404, _):
+                    fetchError = "Utilisateur introuvable."
+                case .networkError:
+                    fetchError = "Erreur reseau. Verifiez votre connexion."
+                default:
+                    fetchError = "Impossible de charger ce profil."
+                }
+            } catch {
+                fetchError = "Impossible de charger ce profil."
+            }
+            isLoading = false
+        }
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            Image(systemName: "person.crop.circle.badge.questionmark")
+                .font(.system(size: 48))
+                .foregroundColor(theme.textMuted)
+
+            Text(message)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Text("@\(user.username)")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textMuted)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(theme.backgroundPrimary)
     }
 }
 
