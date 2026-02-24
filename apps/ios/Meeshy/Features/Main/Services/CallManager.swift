@@ -588,5 +588,5 @@ extension Notification.Name {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let calls = Logger(subsystem: "com.meeshy.app", category: "calls")
+    static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }

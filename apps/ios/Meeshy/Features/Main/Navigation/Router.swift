@@ -16,7 +16,7 @@ final class Router: ObservableObject {
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "router")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
 
     var isInConversation: Bool { !path.isEmpty }
 

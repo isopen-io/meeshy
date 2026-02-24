@@ -10,6 +10,8 @@ struct ThemedMessageBubble: View {
     let contactColor: String
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
+    var textTranslations: [MessageTranslation] = []
+    var preferredTranslation: MessageTranslation? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
     var onAddReaction: ((String) -> Void)? = nil
@@ -20,7 +22,10 @@ struct ThemedMessageBubble: View {
     var onReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    var onRequestTranslation: ((String, String) -> Void)? = nil
+    var onShowTranslationDetail: ((String) -> Void)? = nil
 
+    @State private var showingOriginal = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
     @State var shareURL: URL? = nil // internal for cross-file extension access
@@ -40,6 +45,17 @@ struct ThemedMessageBubble: View {
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
+
+    private var effectiveContent: String {
+        if let translation = preferredTranslation, !showingOriginal {
+            return translation.translatedContent
+        }
+        return message.content
+    }
+
+    private var isDisplayingTranslation: Bool {
+        preferredTranslation != nil && !showingOriginal
+    }
 
     private var bubbleColor: String {
         message.isMe ? contactColor : contactColor
@@ -486,7 +502,7 @@ struct ThemedMessageBubble: View {
 
     @ViewBuilder
     private var expandableTextView: some View {
-        let content = message.content
+        let content = effectiveContent
         let needsTruncation = content.count > Self.textTruncateLimit && !isTextExpanded
         let textColor = message.isMe ? Color.white : theme.textPrimary
 
@@ -509,6 +525,10 @@ struct ThemedMessageBubble: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 2)
                 }
+
+                if isDisplayingTranslation {
+                    translatedBadge(textColor: textColor)
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -530,8 +550,37 @@ struct ThemedMessageBubble: View {
                             .padding(.top, 2)
                     }
                 }
+
+                if isDisplayingTranslation {
+                    translatedBadge(textColor: textColor)
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private func translatedBadge(textColor: Color) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showingOriginal.toggle()
+            }
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "translate")
+                    .font(.system(size: 9, weight: .medium))
+                Text(showingOriginal ? "Voir traduction" : "Voir l'original")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .foregroundColor(textColor.opacity(0.5))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(textColor.opacity(0.08))
+            )
+        }
+        .accessibilityLabel(showingOriginal ? "Voir la traduction" : "Voir le texte original")
     }
 
     private static func truncateAtWord(_ text: String, limit: Int) -> String {
@@ -567,6 +616,16 @@ struct ThemedMessageBubble: View {
             : theme.textSecondary.opacity(0.6)
 
         HStack(spacing: 3) {
+            if !textTranslations.isEmpty {
+                Image(systemName: "translate")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .onTapGesture {
+                        onShowTranslationDetail?(message.id)
+                    }
+                    .accessibilityLabel("Traduction disponible")
+            }
+
             Text(timeString)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(metaColor)

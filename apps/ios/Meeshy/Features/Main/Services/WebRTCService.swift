@@ -180,5 +180,5 @@ final class WebRTCService {
 // MARK: - Logger Extension
 
 private extension Logger {
-    static let webrtc = Logger(subsystem: "com.meeshy.app", category: "webrtc")
+    static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
 }

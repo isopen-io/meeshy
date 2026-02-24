@@ -12,7 +12,7 @@ struct BlockedUsersView: View {
     @State private var userToUnblock: BlockedUser?
     @State private var isUnblocking = false
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "blocked-users")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "blocked-users")
     private let accentColor = "FF6B6B"
 
     var body: some View {

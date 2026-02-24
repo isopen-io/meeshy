@@ -10,71 +10,61 @@ extension ConversationView {
 
     // MARK: - Themed Composer (powered by UniversalComposerBar)
     var themedComposer: some View {
-        VStack(spacing: 0) {
-            // Ephemeral duration picker (shown when active)
-            if showEphemeralPicker {
-                ephemeralDurationPicker
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            UniversalComposerBar(
-                style: .light,
-                mode: .message,
-                accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : accentColor,
-                secondaryColor: secondaryColor,
-                onFocusChange: { focused in
-                    isTyping = focused
-                    if focused {
-                        withAnimation { showOptions = false }
-                    }
-                },
-                onLocationRequest: { showLocationPicker = true },
-                textBinding: $messageText,
-                editBanner: editingMessageId != nil
-                    ? AnyView(composerEditBanner)
-                    : nil,
-                replyBanner: pendingReplyReference != nil && editingMessageId == nil
-                    ? AnyView(composerReplyBanner(pendingReplyReference!))
-                    : nil,
-                customAttachmentsPreview: (!pendingAttachments.isEmpty || isLoadingMedia)
-                    ? AnyView(pendingAttachmentsRow)
-                    : nil,
-                isEditMode: editingMessageId != nil,
-                onCustomSend: {
-                    if editingMessageId != nil {
-                        submitEdit()
-                    } else if audioRecorder.isRecording {
-                        stopAndSendRecording()
-                    } else {
-                        sendMessageWithAttachments()
-                    }
-                },
-                onTextChange: { viewModel.onTextChanged($0) },
-                onStartRecording: { startRecording() },
-                onStopRecording: { stopAndPreviewRecording() },
-                externalIsRecording: audioRecorder.isRecording,
-                externalRecordingDuration: audioRecorder.duration,
-                externalAudioLevels: audioRecorder.audioLevels,
-                externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
-                onPhotoLibrary: { showPhotoPicker = true },
-                onCamera: { showCamera = true },
-                onFilePicker: { showFilePicker = true },
-                onRequestTextEmoji: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showTextEmojiPicker.toggle()
-                    }
-                },
-                injectedEmoji: $emojiToInject
-            )
-            .overlay(alignment: .topLeading) {
-                // Ephemeral mode button + indicator
-                ephemeralModeButton
-                    .padding(.leading, 8)
-                    .padding(.top, 4)
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
+        UniversalComposerBar(
+            style: .light,
+            mode: .message,
+            accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : accentColor,
+            secondaryColor: secondaryColor,
+            onFocusChange: { focused in
+                isTyping = focused
+                if focused {
+                    withAnimation { showOptions = false }
+                }
+            },
+            onLocationRequest: { showLocationPicker = true },
+            textBinding: $messageText,
+            editBanner: editingMessageId != nil
+                ? AnyView(composerEditBanner)
+                : nil,
+            replyBanner: pendingReplyReference != nil && editingMessageId == nil
+                ? AnyView(composerReplyBanner(pendingReplyReference!))
+                : nil,
+            customAttachmentsPreview: (!pendingAttachments.isEmpty || isLoadingMedia)
+                ? AnyView(pendingAttachmentsRow)
+                : nil,
+            isEditMode: editingMessageId != nil,
+            onCustomSend: {
+                if editingMessageId != nil {
+                    submitEdit()
+                } else if audioRecorder.isRecording {
+                    stopAndSendRecording()
+                } else {
+                    sendMessageWithAttachments()
+                }
+            },
+            onTextChange: { viewModel.onTextChanged($0) },
+            onStartRecording: { startRecording() },
+            onStopRecording: { stopAndPreviewRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showPhotoPicker = true },
+            onCamera: { showCamera = true },
+            onFilePicker: { showFilePicker = true },
+            onRequestTextEmoji: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showTextEmojiPicker.toggle()
+                }
+            },
+            injectedEmoji: $emojiToInject,
+            ephemeralDuration: $viewModel.ephemeralDuration,
+            hideEphemeral: editingMessageId != nil,
+            isBlurEnabled: $viewModel.isBlurEnabled,
+            hideBlur: editingMessageId != nil
+        )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
@@ -137,120 +127,6 @@ extension ConversationView {
                 }
             }
         }
-    }
-
-    // MARK: - Ephemeral Mode Button
-
-    @ViewBuilder
-    private var ephemeralModeButton: some View {
-        if editingMessageId == nil {
-            Button {
-                HapticFeedback.light()
-                if viewModel.ephemeralDuration != nil {
-                    // Toggle off
-                    viewModel.ephemeralDuration = nil
-                    withAnimation { showEphemeralPicker = false }
-                } else {
-                    withAnimation { showEphemeralPicker.toggle() }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: viewModel.ephemeralDuration != nil ? "flame.fill" : "timer.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(viewModel.ephemeralDuration != nil ? Color(hex: "FF6B6B") : theme.textMuted)
-
-                    if let duration = viewModel.ephemeralDuration {
-                        Text(duration.label)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(hex: "FF6B6B"))
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(viewModel.ephemeralDuration != nil
-                              ? Color(hex: "FF6B6B").opacity(0.15)
-                              : Color.clear)
-                        .overlay(
-                            Capsule()
-                                .stroke(viewModel.ephemeralDuration != nil
-                                        ? Color(hex: "FF6B6B").opacity(0.3)
-                                        : Color.clear,
-                                        lineWidth: 0.5)
-                        )
-                )
-            }
-            .accessibilityLabel(viewModel.ephemeralDuration != nil
-                                ? "Mode ephemere actif: \(viewModel.ephemeralDuration!.displayLabel)"
-                                : "Activer le mode ephemere")
-        }
-    }
-
-    // MARK: - Ephemeral Duration Picker
-
-    private var ephemeralDurationPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // "Off" pill
-                Button {
-                    HapticFeedback.light()
-                    viewModel.ephemeralDuration = nil
-                    withAnimation { showEphemeralPicker = false }
-                } label: {
-                    Text("Off")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(viewModel.ephemeralDuration == nil ? .white : theme.textMuted)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(viewModel.ephemeralDuration == nil
-                                      ? Color(hex: accentColor)
-                                      : theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-                        )
-                }
-
-                ForEach(EphemeralDuration.allCases) { duration in
-                    Button {
-                        HapticFeedback.light()
-                        viewModel.ephemeralDuration = duration
-                        withAnimation { showEphemeralPicker = false }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 10))
-                            Text(duration.label)
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(viewModel.ephemeralDuration == duration ? .white : Color(hex: "FF6B6B"))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(viewModel.ephemeralDuration == duration
-                                      ? Color(hex: "FF6B6B")
-                                      : Color(hex: "FF6B6B").opacity(0.1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
-                                )
-                        )
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "FF6B6B").opacity(0.2), lineWidth: 0.5)
-                )
-        )
-        .padding(.horizontal, 8)
     }
 
     // MARK: - Contact Selection Handler

@@ -30,7 +30,7 @@ struct SharePickerView: View {
     @State private var sentToIds: Set<String> = []
     @State private var sendingToId: String? = nil
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "share")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "share")
 
     private var filteredConversations: [Conversation] {
         let active = conversations.filter { $0.isActive }

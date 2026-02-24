@@ -14,7 +14,7 @@ struct WidgetPreviewView: View {
     @State private var animatedUnreadCount: Int = 0
     @State private var showCards = false
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "widget")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "widget")
 
     private var totalUnread: Int {
         conversationListViewModel.totalUnreadCount

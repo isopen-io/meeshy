@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import MeeshySDK
 
 // See ComposerModels.swift for: ComposerAttachmentType, ComposerAttachment,
 // LanguageOption, KeyboardObserver, ComposerWaveformBar
@@ -112,6 +113,22 @@ struct UniversalComposerBar: View {
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
 
+    // MARK: - Ephemeral mode
+
+    /// Binding to the ephemeral duration (nil = off). Parent owns the state.
+    var ephemeralDuration: Binding<EphemeralDuration?> = .constant(nil)
+
+    /// When true, the ephemeral toggle is hidden (e.g. in edit mode)
+    var hideEphemeral: Bool = false
+
+    // MARK: - Blur mode
+
+    /// Binding to blur state. When true, next message is sent blurred (tap to reveal).
+    var isBlurEnabled: Binding<Bool> = .constant(false)
+
+    /// When true, the blur toggle is hidden (e.g. in edit mode)
+    var hideBlur: Bool = false
+
     // MARK: - External attachment injection
 
     /// Parent can set this to add attachments from outside (e.g. photo picker result)
@@ -161,6 +178,9 @@ struct UniversalComposerBar: View {
     @State var isMinimized: Bool = false
     @State private var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
+
+    // Ephemeral picker
+    @State var showEphemeralPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
@@ -363,7 +383,13 @@ struct UniversalComposerBar: View {
                     swipeHandle
                 }
 
-                // Top toolbar (sentiment, language, recording indicator, char counter)
+                // Ephemeral duration picker (slides up from toolbar)
+                if showEphemeralPicker {
+                    ephemeralDurationPicker
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // Top toolbar (ephemeral, sentiment, language, recording indicator, char counter)
                 topToolbar
                     .padding(.horizontal, 8)
                     .padding(.top, 6)
@@ -405,6 +431,7 @@ struct UniversalComposerBar: View {
             }
             .background(composerBackground)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .onChange(of: attachments.count) { _ in notifyContentChange() }
         .onChange(of: effectiveIsRecording) { _ in notifyContentChange() }
@@ -506,6 +533,16 @@ struct UniversalComposerBar: View {
 
     private var topToolbar: some View {
         HStack(spacing: 6) {
+            // Ephemeral mode toggle
+            if !hideEphemeral {
+                ephemeralToggleButton
+            }
+
+            // Blur mode toggle
+            if !hideBlur {
+                blurToggleButton
+            }
+
             // Sentiment indicator
             Button {
                 onAnyInteraction?()
@@ -752,5 +789,179 @@ struct UniversalComposerBar: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 2)
+    }
+
+    // ========================================================================
+    // MARK: - Ephemeral Toggle Button
+    // ========================================================================
+
+    @ViewBuilder
+    private var ephemeralToggleButton: some View {
+        let isActive = ephemeralDuration.wrappedValue != nil
+
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            if isActive {
+                ephemeralDuration.wrappedValue = nil
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEphemeralPicker = false
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEphemeralPicker.toggle()
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "flame.fill" : "timer.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: "FF6B6B") : mutedColor)
+
+                if let duration = ephemeralDuration.wrappedValue {
+                    Text(duration.label)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: "FF6B6B"))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: "FF6B6B").opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: "FF6B6B").opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "Mode ephemere actif: \(ephemeralDuration.wrappedValue!.displayLabel)"
+                            : "Activer le mode ephemere")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - Ephemeral Duration Picker
+    // ========================================================================
+
+    private var ephemeralDurationPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button {
+                    HapticFeedback.light()
+                    ephemeralDuration.wrappedValue = nil
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEphemeralPicker = false
+                    }
+                } label: {
+                    Text("Off")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(ephemeralDuration.wrappedValue == nil
+                                      ? Color(hex: accentColor)
+                                      : style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                        )
+                }
+
+                ForEach(EphemeralDuration.allCases) { duration in
+                    Button {
+                        HapticFeedback.light()
+                        ephemeralDuration.wrappedValue = duration
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showEphemeralPicker = false
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 10))
+                            Text(duration.label)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : Color(hex: "FF6B6B"))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(ephemeralDuration.wrappedValue == duration
+                                      ? Color(hex: "FF6B6B")
+                                      : Color(hex: "FF6B6B").opacity(0.1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
+                                )
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(style == .dark ? Color.black.opacity(0.3) : theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(hex: "FF6B6B").opacity(0.2), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 8)
+    }
+
+    // ========================================================================
+    // MARK: - Blur Toggle Button
+    // ========================================================================
+
+    @ViewBuilder
+    private var blurToggleButton: some View {
+        let isActive = isBlurEnabled.wrappedValue
+
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isBlurEnabled.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "eye.slash.fill" : "eye.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: "A855F7") : mutedColor)
+
+                if isActive {
+                    Text("Blur")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: "A855F7"))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: "A855F7").opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: "A855F7").opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "Mode flou actif"
+                            : "Activer le mode flou")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 }

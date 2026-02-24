@@ -83,16 +83,13 @@ struct AboutView: View {
 
     private var appHeaderSection: some View {
         VStack(spacing: 12) {
-            Image(systemName: "message.circle.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: "08D9D6"), Color(hex: "FF2E63")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .accessibilityHidden(true)
+            AnimatedLogoView(
+                color: theme.mode.isDark ? .white : Color(hex: "1C1917"),
+                lineWidth: 10,
+                continuous: true
+            )
+            .frame(width: 80, height: 80)
+            .accessibilityHidden(true)
 
             Text("Meeshy")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -115,7 +112,7 @@ struct AboutView: View {
 
             VStack(spacing: 0) {
                 infoRow(icon: "apple.logo", title: "Plateforme", value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
-                infoRow(icon: "shippingbox.fill", title: "Bundle ID", value: Bundle.main.bundleIdentifier ?? "com.meeshy.app", color: accentColor)
+                infoRow(icon: "shippingbox.fill", title: "Bundle ID", value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
                 infoRow(icon: "wrench.and.screwdriver.fill", title: "SDK Version", value: "1.0.0", color: accentColor)
             }
             .background(sectionBackground(tint: accentColor))

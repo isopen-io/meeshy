@@ -53,7 +53,7 @@ struct ConversationInfoSheet: View {
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "conversation-info")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"

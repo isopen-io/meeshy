@@ -178,7 +178,7 @@ class ShareViewController: UIViewController {
     }
 
     private func saveSharedContent(contactId: String) {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return
         }
 
@@ -211,7 +211,7 @@ class ShareViewController: UIViewController {
     }
 
     private func saveImageToSharedContainer(_ image: UIImage) -> String? {
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.meeshy.app"),
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.me.meeshy.app"),
               let imageData = image.jpegData(compressionQuality: 0.8) else {
             return nil
         }
@@ -359,7 +359,7 @@ struct ShareContentView: View {
     }
 
     private func loadRecentContacts() {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let data = sharedDefaults.data(forKey: "recent_contacts"),
               let contacts = try? JSONDecoder().decode([ContactPreview].self, from: data) else {
             // Fallback sample data

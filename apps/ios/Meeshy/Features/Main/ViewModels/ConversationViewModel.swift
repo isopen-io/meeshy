@@ -62,6 +62,9 @@ class ConversationViewModel: ObservableObject {
     /// Selected ephemeral duration for next message
     @Published var ephemeralDuration: EphemeralDuration?
 
+    /// When true, next message will be sent with blur (recipient must tap to reveal)
+    @Published var isBlurEnabled: Bool = false
+
     // MARK: - Search State
 
     @Published var searchResults: [SearchResultItem] = []
@@ -230,19 +233,15 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "offset", value: "0"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
+            let response = try await MessageService.shared.list(
+                conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
             )
 
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
             extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
 
@@ -290,18 +289,14 @@ class ConversationViewModel: ObservableObject {
         var lastError: Error?
         for attempt in 1...Self.paginationRetryCount {
             do {
-                let response: MessagesAPIResponse = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages",
-                    queryItems: [
-                        URLQueryItem(name: "limit", value: "\(limit)"),
-                        URLQueryItem(name: "before", value: beforeValue),
-                        URLQueryItem(name: "include_replies", value: "true"),
-                    ]
+                let response = try await MessageService.shared.listBefore(
+                    conversationId: conversationId, before: beforeValue, limit: limit, includeReplies: true
                 )
 
                 let userId = currentUserId
                 let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
                 extractAttachmentTranscriptions(from: response.data)
+                extractTextTranslations(from: response.data)
 
                 // Dedup and prepend
                 let existingIds = Set(messages.map(\.id))
@@ -331,7 +326,7 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil) async {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isBlurred: Bool? = nil) async {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
 
@@ -340,6 +335,9 @@ class ConversationViewModel: ObservableObject {
 
         // Resolve ephemeral: use explicit param or ViewModel state
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
+
+        // Resolve blur: use explicit param or ViewModel state
+        let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
 
         isSending = true
 
@@ -381,6 +379,8 @@ class ConversationViewModel: ObservableObject {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: resolvedExpiresAt,
+            isViewOnce: false, maxViewOnceCount: nil, viewOnceCount: 0,
+            isBlurred: resolvedBlur == true,
             createdAt: Date(),
             updatedAt: Date(),
             replyTo: replyRef,
@@ -391,33 +391,33 @@ class ConversationViewModel: ObservableObject {
         newMessageAppended += 1
 
         do {
-            var body = SendMessageRequest(
+            let body = SendMessageRequest(
                 content: text.isEmpty ? nil : text,
                 originalLanguage: nil,
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                expiresAt: resolvedExpiresAt,
+                isBlurred: resolvedBlur
             )
-            if let resolvedExpiresAt {
-                body.expiresAt = resolvedExpiresAt
-            }
-            let response: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
-                endpoint: "/conversations/\(conversationId)/messages",
-                body: body
+            let responseData = try await MessageService.shared.send(
+                conversationId: conversationId, request: body
             )
 
             // Replace temp message with server version
             if let idx = messages.firstIndex(where: { $0.id == tempId }) {
                 messages[idx] = Message(
-                    id: response.data.id,
+                    id: responseData.id,
                     conversationId: conversationId,
                     senderId: currentUserId,
                     content: text,
                     replyToId: replyToId,
                     expiresAt: resolvedExpiresAt,
-                    createdAt: response.data.createdAt,
-                    updatedAt: response.data.createdAt,
+                    isViewOnce: false, maxViewOnceCount: nil, viewOnceCount: 0,
+                    isBlurred: resolvedBlur == true,
+                    createdAt: responseData.createdAt,
+                    updatedAt: responseData.createdAt,
                     replyTo: replyRef,
                     deliveryStatus: .sent,
                     isMe: true
@@ -427,6 +427,10 @@ class ConversationViewModel: ObservableObject {
             // Clear ephemeral duration after successful send
             if ephemeralDuration != nil {
                 ephemeralDuration = nil
+            }
+            // Clear blur after successful send
+            if isBlurEnabled {
+                isBlurEnabled = false
             }
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
@@ -481,11 +485,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.userId == userId }
             // API call
             Task {
-                let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
-                    endpoint: "/reactions/\(messageId)/\(encoded)",
-                    method: "DELETE"
-                )
+                try? await ReactionService.shared.remove(messageId: messageId, emoji: emoji)
             }
         } else {
             // Optimistic add
@@ -493,14 +493,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.append(reaction)
             // API call
             Task {
-                struct AddReactionBody: Encodable {
-                    let messageId: String
-                    let emoji: String
-                }
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                    endpoint: "/reactions",
-                    body: AddReactionBody(messageId: messageId, emoji: emoji)
-                )
+                try? await ReactionService.shared.add(messageId: messageId, emoji: emoji)
             }
         }
     }
@@ -511,12 +504,8 @@ class ConversationViewModel: ObservableObject {
         isLoadingReactions = true
         defer { isLoadingReactions = false }
         do {
-            let response: APIResponse<ReactionSyncResponse> = try await APIClient.shared.request(
-                endpoint: "/reactions/\(messageId)"
-            )
-            if response.success {
-                reactionDetails = response.data.reactions
-            }
+            let result = try await ReactionService.shared.fetchDetails(messageId: messageId)
+            reactionDetails = result.reactions
         } catch {
             reactionDetails = []
         }
@@ -655,10 +644,7 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         Task {
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/mark-as-read",
-                method: "POST"
-            )
+            try? await ConversationService.shared.markRead(conversationId: conversationId)
         }
     }
 
@@ -961,18 +947,14 @@ class ConversationViewModel: ObservableObject {
         guard let lastMessage = messages.last else { return }
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "50"),
-                    URLQueryItem(name: "offset", value: "0"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
+            let response = try await MessageService.shared.list(
+                conversationId: conversationId, offset: 0, limit: 50, includeReplies: true
             )
 
             let userId = currentUserId
             let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
             extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
 
             let existingIds = Set(messages.map(\.id))
             let newMessages = fetchedMessages.filter { !existingIds.contains($0.id) }
@@ -1003,12 +985,8 @@ class ConversationViewModel: ObservableObject {
         searchNextCursor = nil
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: trimmed),
-                    URLQueryItem(name: "limit", value: "20"),
-                ]
+            let response = try await MessageService.shared.search(
+                conversationId: conversationId, query: trimmed, limit: 20
             )
 
             searchResults = response.data.map { apiMsg in
@@ -1039,13 +1017,8 @@ class ConversationViewModel: ObservableObject {
         isSearching = true
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: query),
-                    URLQueryItem(name: "limit", value: "20"),
-                    URLQueryItem(name: "cursor", value: cursor),
-                ]
+            let response = try await MessageService.shared.searchWithCursor(
+                conversationId: conversationId, query: query, cursor: cursor
             )
 
             let newResults = response.data.map { apiMsg in
@@ -1083,18 +1056,14 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "around", value: messageId),
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
+            let response = try await MessageService.shared.listAround(
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
             )
 
             let userId = currentUserId
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
             extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
             hasNewerMessages = response.hasNewer ?? false
@@ -1118,18 +1087,14 @@ class ConversationViewModel: ObservableObject {
         var lastError: Error?
         for attempt in 1...Self.paginationRetryCount {
             do {
-                let response: MessagesAPIResponse = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages",
-                    queryItems: [
-                        URLQueryItem(name: "limit", value: "\(limit)"),
-                        URLQueryItem(name: "include_replies", value: "true"),
-                        URLQueryItem(name: "around", value: lastMsg.id),
-                    ]
+                let response = try await MessageService.shared.listAround(
+                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
                 )
 
                 let userId = currentUserId
                 let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
                 extractAttachmentTranscriptions(from: response.data)
+                extractTextTranslations(from: response.data)
                 let existingIds = Set(messages.map(\.id))
                 let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
 
@@ -1181,6 +1146,51 @@ class ConversationViewModel: ObservableObject {
         savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
+    }
+
+    // MARK: - Extract Text Translations from REST Responses
+
+    private func extractTextTranslations(from apiMessages: [APIMessage]) {
+        for msg in apiMessages {
+            guard let translations = msg.translations, !translations.isEmpty else { continue }
+            var existing = messageTranslations[msg.id] ?? []
+            for t in translations {
+                let mt = MessageTranslation(
+                    id: t.id,
+                    messageId: t.messageId,
+                    sourceLanguage: t.sourceLanguage ?? msg.originalLanguage ?? "auto",
+                    targetLanguage: t.targetLanguage,
+                    translatedContent: t.translatedContent,
+                    translationModel: t.translationModel,
+                    confidenceScore: t.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msg.id] = existing
+        }
+    }
+
+    func preferredTranslation(for messageId: String) -> MessageTranslation? {
+        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+        let user = AuthManager.shared.currentUser
+
+        let preferred: [String] = [
+            user?.customDestinationLanguage,
+            user?.systemLanguage,
+            user?.regionalLanguage,
+            Locale.current.language.languageCode?.identifier
+        ].compactMap { $0 }
+
+        for lang in preferred {
+            if let match = translations.first(where: { $0.targetLanguage.lowercased() == lang.lowercased() }) {
+                return match
+            }
+        }
+        return translations.first
     }
 
     // MARK: - Extract Transcription/Translation Data from REST Responses

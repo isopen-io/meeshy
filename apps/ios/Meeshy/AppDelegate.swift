@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "com.meeshy.app", category: "push")
+private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
 class AppDelegate: NSObject, UIApplicationDelegate {
 

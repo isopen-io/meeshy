@@ -56,7 +56,7 @@ struct ConversationProvider: TimelineProvider {
 
     private func loadConversations() -> [Conversation] {
         // Load from shared container
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return ConversationEntry.sampleConversations
         }
 
@@ -69,7 +69,7 @@ struct ConversationProvider: TimelineProvider {
     }
 
     private func getUnreadCount() -> Int {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return 0
         }
         return sharedDefaults.integer(forKey: "unread_count")
@@ -540,7 +540,7 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     private func loadFavorites() -> [FavoriteContact] {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let data = sharedDefaults.data(forKey: "favorite_contacts"),
               let contacts = try? JSONDecoder().decode([FavoriteContact].self, from: data) else {
             return FavoriteContactsEntry.sampleContacts

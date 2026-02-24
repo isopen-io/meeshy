@@ -107,9 +107,12 @@ struct ConversationView: View {
     @State var swipedMessageId: String? = nil
     @State var swipeOffset: CGFloat = 0
 
-    // Ephemeral & contact picker state
-    @State var showEphemeralPicker = false
+    // Contact picker state
     @State var showContactPicker = false
+
+    // Translation detail sheet
+    @State var showTranslationDetail = false
+    @State var translationDetailMessageId: String? = nil
 
     // Emoji picker state
     @State var showTextEmojiPicker = false
@@ -372,6 +375,21 @@ struct ConversationView: View {
                         },
                         onDelete: {
                             Task { await viewModel.deleteMessage(messageId: msg.id) }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showTranslationDetail) {
+                if let msgId = translationDetailMessageId,
+                   let msg = viewModel.messages.first(where: { $0.id == msgId }) {
+                    TranslationDetailSheet(
+                        messageId: msg.id,
+                        originalContent: msg.content,
+                        originalLanguage: msg.originalLanguage,
+                        translations: viewModel.messageTranslations[msg.id] ?? [],
+                        accentColor: conversation?.accentColor ?? "#FF2E63",
+                        onRequestTranslation: { messageId, lang in
+                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
                         }
                     )
                 }

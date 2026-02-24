@@ -8,7 +8,7 @@ class ConversationLockManager: ObservableObject {
 
     @Published private(set) var lockedConversationIds: Set<String> = []
 
-    private let keychainService = "com.meeshy.app.conversation-locks"
+    private let keychainService = "me.meeshy.app.conversation-locks"
 
     private init() {
         loadLockedIds()

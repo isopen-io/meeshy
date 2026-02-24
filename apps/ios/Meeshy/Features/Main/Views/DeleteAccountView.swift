@@ -11,6 +11,7 @@ struct DeleteAccountView: View {
     @State private var showFinalAlert = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
+    @State private var showEmailConfirmation = false
 
     private let requiredPhrase = "SUPPRIMER MON COMPTE"
     private let accentColor = "EF4444"
@@ -19,9 +20,13 @@ struct DeleteAccountView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
+            if showEmailConfirmation {
+                emailConfirmationView
+            } else {
+                VStack(spacing: 0) {
+                    header
+                    scrollContent
+                }
             }
         }
         .alert("Confirmation finale", isPresented: $showFinalAlert) {
@@ -236,15 +241,83 @@ struct DeleteAccountView: View {
             do {
                 try await AccountService.shared.deleteAccount(confirmationPhrase: requiredPhrase)
                 HapticFeedback.success()
-                authManager.logout()
-                MessageSocketManager.shared.disconnect()
-                dismiss()
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    showEmailConfirmation = true
+                }
+                isDeleting = false
             } catch {
                 HapticFeedback.error()
                 errorMessage = "Erreur lors de la suppression du compte. Veuillez reessayer."
                 isDeleting = false
             }
         }
+    }
+
+    // MARK: - Email Confirmation View
+
+    private var emailConfirmationView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(spacing: 16) {
+                Image(systemName: "envelope.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "6366F1"), Color(hex: "8B5CF6")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Text("Un email de confirmation vous a ete envoye")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text("Verifiez votre boite de reception pour confirmer la suppression de votre compte.")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color(hex: "6366F1").opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 24)
+
+            Button {
+                HapticFeedback.light()
+                dismiss()
+            } label: {
+                Text("Compris")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "6366F1"), Color(hex: "8B5CF6")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+            }
+            .padding(.horizontal, 24)
+            .accessibilityLabel("Compris")
+
+            Spacer()
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     // MARK: - Helpers

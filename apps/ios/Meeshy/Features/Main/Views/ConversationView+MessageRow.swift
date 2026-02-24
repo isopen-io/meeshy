@@ -46,6 +46,8 @@ extension ConversationView {
                     contactColor: accentColor,
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                    preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
                     onAddReaction: { messageId in
@@ -89,6 +91,13 @@ extension ConversationView {
                             let success = await viewModel.consumeViewOnce(messageId: messageId)
                             completion(success)
                         }
+                    },
+                    onRequestTranslation: { messageId, targetLang in
+                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
+                    },
+                    onShowTranslationDetail: { messageId in
+                        translationDetailMessageId = messageId
+                        showTranslationDetail = true
                     }
                 )
                 .background(

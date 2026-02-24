@@ -723,6 +723,9 @@ struct PasswordStrengthBar: View {
 struct StepLanguageView: View {
     @ObservedObject var viewModel: RegistrationViewModel
     @State private var searchText = ""
+    @State private var editingTarget: LanguageTarget = .system
+
+    enum LanguageTarget { case system, regional }
 
     private let languages = LanguageSelector.defaultLanguages
 
@@ -734,10 +737,25 @@ struct StepLanguageView: View {
         }
     }
 
+    private var selectedSystemLang: MeeshyUI.LanguageOption? {
+        languages.first { $0.id == viewModel.systemLanguage }
+    }
+
+    private var selectedRegionalLang: MeeshyUI.LanguageOption? {
+        languages.first { $0.id == viewModel.regionalLanguage }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 StepIllustration(iconName: viewModel.currentStep.iconName, accentColor: viewModel.currentStep.accentColor)
+
+                languageSummaryCards
+
+                HStack(spacing: 10) {
+                    languageTargetTab("Langue principale", target: .system, icon: "globe")
+                    languageTargetTab("Langue regionale", target: .regional, icon: "map")
+                }
 
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundColor(.secondary)
@@ -766,12 +784,81 @@ struct StepLanguageView: View {
         }
     }
 
+    private var languageSummaryCards: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "globe")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(viewModel.currentStep.accentColor)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Langue principale").font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+                    Text("\(selectedSystemLang?.flag ?? "") \(selectedSystemLang?.name ?? viewModel.systemLanguage)")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Spacer()
+                Text("Detectee").font(.system(size: 10, weight: .medium))
+                    .foregroundColor(viewModel.currentStep.accentColor)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Capsule().fill(viewModel.currentStep.accentColor.opacity(0.15)))
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(viewModel.currentStep.accentColor.opacity(0.08)))
+
+            HStack(spacing: 12) {
+                Image(systemName: "map")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.orange)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Langue regionale").font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+                    Text("\(selectedRegionalLang?.flag ?? "") \(selectedRegionalLang?.name ?? viewModel.regionalLanguage)")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Spacer()
+                Text("Detectee").font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Capsule().fill(Color.orange.opacity(0.15)))
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.08)))
+        }
+    }
+
+    private func languageTargetTab(_ title: String, target: LanguageTarget, icon: String) -> some View {
+        let isActive = editingTarget == target
+        let color: Color = target == .system ? viewModel.currentStep.accentColor : .orange
+        return Button(action: {
+            withAnimation(.spring(response: 0.3)) { editingTarget = target }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 12, weight: .medium))
+                Text(title).font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(isActive ? .white : color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isActive ? color : color.opacity(0.12))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     private func languageCard(_ lang: MeeshyUI.LanguageOption) -> some View {
-        let isSelected = viewModel.systemLanguage == lang.id
+        let currentId = editingTarget == .system ? viewModel.systemLanguage : viewModel.regionalLanguage
+        let isSelected = currentId == lang.id
+        let color: Color = editingTarget == .system ? viewModel.currentStep.accentColor : .orange
         return Button(action: {
             withAnimation(.spring(response: 0.3)) {
-                viewModel.systemLanguage = lang.id
-                viewModel.regionalLanguage = lang.id
+                if editingTarget == .system {
+                    viewModel.systemLanguage = lang.id
+                } else {
+                    viewModel.regionalLanguage = lang.id
+                }
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }) {
@@ -783,14 +870,14 @@ struct StepLanguageView: View {
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundColor(viewModel.currentStep.accentColor)
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundColor(color)
                 }
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? viewModel.currentStep.accentColor.opacity(0.15) : Color(.systemBackground).opacity(0.8))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? viewModel.currentStep.accentColor : Color(.systemGray4).opacity(0.4), lineWidth: isSelected ? 2 : 1))
+                    .fill(isSelected ? color.opacity(0.15) : Color(.systemBackground).opacity(0.8))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? color : Color(.systemGray4).opacity(0.4), lineWidth: isSelected ? 2 : 1))
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -833,7 +920,7 @@ struct StepLanguageView: View {
                     Spacer()
                 }
 
-                Text("Tu recois le message original + la traduction dans ta langue (\(selectedLanguageName))")
+                Text("Tu recois le message original + la traduction dans ta langue principale (\(selectedSystemLangName))")
                     .font(.system(size: 11)).foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -862,7 +949,7 @@ struct StepLanguageView: View {
         }
     }
 
-    private var selectedLanguageName: String {
+    private var selectedSystemLangName: String {
         languages.first { $0.id == viewModel.systemLanguage }?.name ?? viewModel.systemLanguage
     }
 }

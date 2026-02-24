@@ -24,7 +24,7 @@ struct OnboardingView: View {
     @State private var currentPage = 0
     @State private var animateIcon = false
 
-    private let logger = Logger(subsystem: "com.meeshy.app", category: "onboarding")
+    private let logger = Logger(subsystem: "me.meeshy.app", category: "onboarding")
 
     private var isDark: Bool { theme.mode.isDark }
 
@@ -194,7 +194,7 @@ struct OnboardingView: View {
                         lineWidth: 10,
                         continuous: false
                     )
-                    .frame(width: 80, height: 80)
+                    .frame(width: 120, height: 120)
                 } else {
                     Image(systemName: page.icon)
                         .font(.system(size: 80, weight: .light))

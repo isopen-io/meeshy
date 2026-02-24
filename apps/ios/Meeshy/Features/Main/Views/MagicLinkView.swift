@@ -18,7 +18,7 @@ struct MagicLinkView: View {
     @State private var linkExpired = false
     @FocusState private var isEmailFocused: Bool
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "magic-link")
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
 
     private enum Step {
         case emailInput
