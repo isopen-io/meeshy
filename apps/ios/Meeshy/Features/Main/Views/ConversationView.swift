@@ -111,6 +111,10 @@ struct ConversationView: View {
     @State var showEphemeralPicker = false
     @State var showContactPicker = false
 
+    // Emoji picker state
+    @State var showTextEmojiPicker = false
+    @State var emojiToInject = ""
+
     // Typing dot state
     @State var typingDotPhase: Int = 0
     let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -306,6 +310,16 @@ struct ConversationView: View {
                 if let context = replyContext { pendingReplyReference = context.toReplyReference }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { longPressEnabled = true }
             }
+            .onChange(of: isNearBottom) { _ in
+                if showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+                }
+            }
+            .onChange(of: isTyping) { focused in
+                if focused && showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+                }
+            }
             .fullScreenCover(isPresented: $showStoryViewerFromHeader) {
                 if storyGroupIndexForHeader < storyViewModel.storyGroups.count {
                     StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[storyGroupIndexForHeader]], currentGroupIndex: 0, isPresented: $showStoryViewerFromHeader)
@@ -411,7 +425,22 @@ struct ConversationView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
             }
 
-            VStack { Spacer(); themedComposer }.zIndex(50)
+            VStack {
+                Spacer()
+                if showTextEmojiPicker {
+                    EmojiKeyboardPanel(
+                        style: theme.mode.isDark ? .dark : .light,
+                        onSelect: { emoji in
+                            emojiToInject = emoji
+                        }
+                    )
+                    .frame(height: 260)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                themedComposer
+            }
+            .zIndex(50)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
 
             searchResultsBlurOverlay
             returnToLatestButton

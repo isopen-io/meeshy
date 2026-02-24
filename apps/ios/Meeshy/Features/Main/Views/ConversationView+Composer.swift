@@ -58,7 +58,13 @@ extension ConversationView {
                 externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
                 onPhotoLibrary: { showPhotoPicker = true },
                 onCamera: { showCamera = true },
-                onFilePicker: { showFilePicker = true }
+                onFilePicker: { showFilePicker = true },
+                onRequestTextEmoji: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTextEmojiPicker.toggle()
+                    }
+                },
+                injectedEmoji: $emojiToInject
             )
             .overlay(alignment: .topLeading) {
                 // Ephemeral mode button + indicator
