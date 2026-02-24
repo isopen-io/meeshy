@@ -116,7 +116,8 @@ export class PasswordResetService {
           passwordResetAttempts: true,
           lastPasswordResetAttempt: true,
           firstName: true,
-          lastName: true
+          lastName: true,
+          systemLanguage: true
         }
       });
 
@@ -211,7 +212,8 @@ export class PasswordResetService {
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
           resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
-          expiryMinutes: TOKEN_EXPIRY_MINUTES
+          expiryMinutes: TOKEN_EXPIRY_MINUTES,
+          language: user.systemLanguage || 'en'
         });
 
       } finally {
@@ -274,7 +276,8 @@ export class PasswordResetService {
               lastName: true,
               password: true,
               twoFactorSecret: true,
-              twoFactorEnabledAt: true
+              twoFactorEnabledAt: true,
+              systemLanguage: true
             }
           }
         }
@@ -367,7 +370,8 @@ export class PasswordResetService {
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
           alertType: 'Suspicious password reset detected',
-          details: anomaly.reason || 'Anomaly detected'
+          details: anomaly.reason || 'Anomaly detected',
+          language: user.systemLanguage || 'en'
         });
       }
 
@@ -432,7 +436,8 @@ export class PasswordResetService {
         name: `${user.firstName} ${user.lastName}`,
         timestamp: new Date().toISOString(),
         ipAddress,
-        location: geoData?.location || 'Unknown'
+        location: geoData?.location || 'Unknown',
+        language: user.systemLanguage || 'en'
       });
 
       return {

@@ -10,6 +10,7 @@
  * i18n: Emails sent in user's preferred language (systemLanguage)
  */
 
+import crypto from 'crypto';
 import axios from 'axios';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
@@ -26,6 +27,8 @@ export interface EmailData {
   subject: string;
   html: string;
   text: string;
+  trackingType?: string;
+  trackingLang?: string;
 }
 
 export interface EmailProviderConfig {
@@ -130,6 +133,23 @@ export interface FriendAcceptedEmailData {
   accepterName: string;
   accepterAvatar?: string | null;
   conversationUrl: string;
+  language?: string;
+}
+
+export interface AccountDeletionConfirmEmailData {
+  to: string;
+  name: string;
+  confirmLink: string;
+  cancelLink: string;
+  language?: string;
+}
+
+export interface AccountDeletionReminderEmailData {
+  to: string;
+  name: string;
+  deleteNowLink: string;
+  cancelLink: string;
+  gracePeriodEndDate: string;
   language?: string;
 }
 
@@ -609,11 +629,60 @@ export class EmailService {
     return locales[lang];
   }
 
+  private getSlogan(lang?: string): string {
+    const normalized = this.normalizeLanguage(lang);
+    const slogans: Record<SupportedLanguage, string> = {
+      fr: 'Fais avec \u2764\ufe0f par Services.ceo pour - Briser les barri\u00e8res linguistiques, une conversation \u00e0 la fois',
+      en: 'Made with \u2764\ufe0f by Services.ceo to - Break language barriers, one conversation at a time',
+      es: 'Hecho con \u2764\ufe0f por Services.ceo para - Romper las barreras ling\u00fc\u00edsticas, una conversaci\u00f3n a la vez',
+      pt: 'Feito com \u2764\ufe0f pela Services.ceo para - Quebrar as barreiras lingu\u00edsticas, uma conversa de cada vez',
+      it: 'Fatto con \u2764\ufe0f da Services.ceo per - Abbattere le barriere linguistiche, una conversazione alla volta',
+      de: 'Gemacht mit \u2764\ufe0f von Services.ceo f\u00fcr - Sprachbarrieren \u00fcberwinden, ein Gespr\u00e4ch nach dem anderen',
+    };
+    return slogans[normalized];
+  }
+
+  private getFooterContentHtml(lang?: string): string {
+    const normalized = this.normalizeLanguage(lang);
+    const year = new Date().getFullYear().toString();
+    const copyright = translations[normalized].common.copyright.replace('{year}', year);
+    const copyrightWithLink = copyright.replace(
+      'Meeshy',
+      `<a href="${this.frontendUrl}" style="color:inherit;text-decoration:underline">Meeshy</a>`
+    );
+    const slogan = this.getSlogan(normalized);
+    return `<p style="font-size:11px;color:#9ca3af;margin:15px 0 5px;font-style:italic">${slogan}</p><p style="margin:0">${copyrightWithLink}</p>`;
+  }
+
+  private getFooterContentText(lang?: string): string {
+    const normalized = this.normalizeLanguage(lang);
+    const year = new Date().getFullYear().toString();
+    const copyright = translations[normalized].common.copyright.replace('{year}', year);
+    const slogan = this.getSlogan(normalized);
+    return `${slogan}\n\n${copyright}`;
+  }
+
+  private getTrackingPixelHtml(emailType: string, lang?: string): string {
+    const id = crypto.randomUUID();
+    const params = new URLSearchParams({
+      id,
+      object: emailType,
+      date: new Date().toISOString(),
+    });
+    if (lang) params.set('lang', lang);
+    return `<img src="${this.frontendUrl}/l/meeshy-emails?${params.toString()}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
+  }
+
   getProviders(): string[] {
     return this.providers.map(p => p.name);
   }
 
   private async sendEmail(data: EmailData): Promise<EmailResult> {
+    if (data.trackingType) {
+      const pixel = this.getTrackingPixelHtml(data.trackingType, data.trackingLang);
+      data.html = data.html.replace('</body>', `${pixel}\n</body>`);
+    }
+
     const { to, subject, html, text } = data;
 
     if (this.providers.length === 0) {
@@ -749,88 +818,80 @@ export class EmailService {
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
     const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }
 
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
     const expiry = t.passwordReset.expiry.replace('{minutes}', data.expiryMinutes.toString());
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.passwordReset.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordReset.intro}\n\n${data.resetLink}\n\n${expiry}\n\n${t.passwordReset.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.passwordReset.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordReset.intro}\n\n${data.resetLink}\n\n${expiry}\n\n${t.passwordReset.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.passwordReset.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.passwordReset.subject, html, text, trackingType: 'password_reset', trackingLang: data.language });
   }
 
   async sendPasswordChangedEmail(data: PasswordChangedEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
     const dateFormatted = new Date(data.timestamp).toLocaleString(this.getLocale(data.language));
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>✓ ${t.passwordChanged.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordChanged.intro}</p><div class="success"><ul style="margin:10px 0;padding-left:20px"><li><strong>Date:</strong> ${dateFormatted}</li><li><strong>IP:</strong> ${data.ipAddress}</li><li><strong>Location:</strong> ${data.location}</li></ul></div><div class="warning"><strong>⚠️</strong> ${t.passwordChanged.warning}</div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.passwordChanged.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordChanged.intro}\n\nDate: ${dateFormatted}\nIP: ${data.ipAddress}\nLocation: ${data.location}\n\n${t.passwordChanged.warning}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>✓ ${t.passwordChanged.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordChanged.intro}</p><div class="success"><ul style="margin:10px 0;padding-left:20px"><li><strong>Date:</strong> ${dateFormatted}</li><li><strong>IP:</strong> ${data.ipAddress}</li><li><strong>Location:</strong> ${data.location}</li></ul></div><div class="warning"><strong>⚠️</strong> ${t.passwordChanged.warning}</div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.passwordChanged.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordChanged.intro}\n\nDate: ${dateFormatted}\nIP: ${data.ipAddress}\nLocation: ${data.location}\n\n${t.passwordChanged.warning}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.passwordChanged.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.passwordChanged.subject, html, text, trackingType: 'password_changed', trackingLang: data.language });
   }
 
   async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)"><h1>🚨 ${t.securityAlert.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="warning"><strong>${data.alertType}</strong><br>${data.details}</div><p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)"><h1>🚨 ${t.securityAlert.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><div class="warning"><strong>${data.alertType}</strong><br>${data.details}</div><p><strong>${t.securityAlert.actions}</strong></p><ul><li>${t.securityAlert.action1}</li><li>${t.securityAlert.action2}</li><li>${t.securityAlert.action3}</li></ul><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `🚨 ${t.securityAlert.title}\n\n${t.common.greeting} ${data.name},\n\n${data.alertType}\n${data.details}\n\n${t.securityAlert.actions}\n- ${t.securityAlert.action1}\n- ${t.securityAlert.action2}\n- ${t.securityAlert.action3}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.securityAlert.subject, html, text, trackingType: 'security_alert', trackingLang: data.language });
   }
 
   async sendEmailChangeVerification(data: EmailChangeVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
     const expiry = t.emailChange.expiry.replace('{hours}', data.expiryHours.toString());
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>📧 ${t.emailChange.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.emailChange.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.emailChange.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.emailChange.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.emailChange.title}\n\n${t.common.greeting} ${data.name},\n\n${t.emailChange.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.emailChange.ignoreNote}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>📧 ${t.emailChange.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.emailChange.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.emailChange.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.emailChange.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.emailChange.title}\n\n${t.common.greeting} ${data.name},\n\n${t.emailChange.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.emailChange.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.emailChange.subject, html, text, trackingType: 'email_change', trackingLang: data.language });
   }
 
   async sendFriendRequestEmail(data: FriendRequestEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
     const intro = t.friendRequest.intro.replace('{sender}', data.senderName);
     const avatarHtml = data.senderAvatar
       ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>👋 ${t.friendRequest.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.viewRequestUrl}" class="button">${t.friendRequest.buttonText}</a></div><div class="info"><p style="margin:0">${t.friendRequest.footer}</p></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.friendRequest.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendRequest.buttonText}: ${data.viewRequestUrl}\n\n${t.friendRequest.footer}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>👋 ${t.friendRequest.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.viewRequestUrl}" class="button">${t.friendRequest.buttonText}</a></div><div class="info"><p style="margin:0">${t.friendRequest.footer}</p></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.friendRequest.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendRequest.buttonText}: ${data.viewRequestUrl}\n\n${t.friendRequest.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.friendRequest.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.friendRequest.subject, html, text, trackingType: 'friend_request', trackingLang: data.language });
   }
 
   async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const copyright = t.common.copyright.replace('{year}', new Date().getFullYear().toString());
     const intro = t.friendAccepted.intro.replace('{accepter}', data.accepterName);
     const avatarHtml = data.accepterAvatar
       ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>🎉 ${t.friendAccepted.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.conversationUrl}" class="button">${t.friendAccepted.buttonText}</a></div><div class="success"><p style="margin:0">${t.friendAccepted.footer}</p></div><p>${t.common.footer}</p></div><div class="footer"><p>${copyright}</p></div></div></body></html>`;
-    const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${copyright}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>🎉 ${t.friendAccepted.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.conversationUrl}" class="button">${t.friendAccepted.buttonText}</a></div><div class="success"><p style="margin:0">${t.friendAccepted.footer}</p></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
-    return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text, trackingType: 'friend_accepted', trackingLang: data.language });
   }
 
   async sendMagicLinkEmail(data: MagicLinkEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const copyright = `© ${new Date().getFullYear()} Meeshy. All rights reserved.`;
     const dateFormatted = new Date().toLocaleString(this.getLocale(lang));
 
     const content = this.getMagicLinkTranslations(lang);
@@ -852,7 +913,7 @@ export class EmailService {
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
       </a>
-      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">🔐 ${content.title}</h1>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${content.title}</h1>
       <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
     </div>
 
@@ -901,7 +962,7 @@ export class EmailService {
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
       </a>
-      <p style="margin:15px 0 0">${copyright}</p>
+      ${this.getFooterContentHtml(lang)}
       <p style="font-size:11px;margin:10px 0 0">
         <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">${content.privacy}</a> •
         <a href="${this.frontendUrl}/terms" class="link-text" style="text-decoration:none">${content.terms}</a>
@@ -910,16 +971,16 @@ export class EmailService {
   </div>
 </body>
 </html>`;
-    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${copyright}`;
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
 
-    return this.sendEmail({ to: data.to, subject: content.subject, html, text });
+    return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'magic_link', trackingLang: lang });
   }
 
   private getMagicLinkTranslations(language: string): Record<string, string> {
     const translations: Record<string, Record<string, string>> = {
       fr: {
         subject: '🔐 Votre lien de connexion Meeshy',
-        title: 'Connexion Meeshy',
+        title: 'Connexion immédiate à Meeshy',
         subtitle: 'Connexion sécurisée en un clic',
         greeting: 'Bonjour',
         intro: 'Cliquez sur le bouton ci-dessous pour vous connecter instantanément à votre compte Meeshy. Ce lien est valide pendant 1 minute seulement.',
@@ -936,7 +997,7 @@ export class EmailService {
       },
       en: {
         subject: '🔐 Your Meeshy login link',
-        title: 'Meeshy Login',
+        title: 'Instant Login to Meeshy',
         subtitle: 'Secure one-click sign in',
         greeting: 'Hello',
         intro: 'Click the button below to instantly sign in to your Meeshy account. This link is valid for 1 minute only.',
@@ -953,7 +1014,7 @@ export class EmailService {
       },
       es: {
         subject: '🔐 Tu enlace de inicio de sesión de Meeshy',
-        title: 'Inicio de sesión en Meeshy',
+        title: 'Inicio de sesión inmediato en Meeshy',
         subtitle: 'Inicio de sesión seguro con un clic',
         greeting: 'Hola',
         intro: 'Haz clic en el botón de abajo para iniciar sesión instantáneamente en tu cuenta Meeshy. Este enlace es válido solo por 1 minuto.',
@@ -970,7 +1031,7 @@ export class EmailService {
       },
       pt: {
         subject: '🔐 Seu link de login Meeshy',
-        title: 'Login Meeshy',
+        title: 'Login imediato no Meeshy',
         subtitle: 'Login seguro com um clique',
         greeting: 'Olá',
         intro: 'Clique no botão abaixo para entrar instantaneamente na sua conta Meeshy. Este link é válido por apenas 1 minuto.',
@@ -987,7 +1048,7 @@ export class EmailService {
       },
       it: {
         subject: '🔐 Il tuo link di accesso Meeshy',
-        title: 'Accesso Meeshy',
+        title: 'Accesso immediato a Meeshy',
         subtitle: 'Accesso sicuro con un clic',
         greeting: 'Ciao',
         intro: 'Clicca il pulsante qui sotto per accedere istantaneamente al tuo account Meeshy. Questo link è valido solo per 1 minuto.',
@@ -1004,7 +1065,7 @@ export class EmailService {
       },
       de: {
         subject: '🔐 Dein Meeshy-Anmeldelink',
-        title: 'Meeshy-Anmeldung',
+        title: 'Sofortige Anmeldung bei Meeshy',
         subtitle: 'Sichere Anmeldung mit einem Klick',
         greeting: 'Hallo',
         intro: 'Klicke auf den Button unten, um dich sofort bei deinem Meeshy-Konto anzumelden. Dieser Link ist nur 1 Minute gültig.',
@@ -1024,12 +1085,332 @@ export class EmailService {
   }
 
   // ==========================================================================
+  // ACCOUNT DELETION EMAILS
+  // ==========================================================================
+
+  async sendAccountDeletionConfirmEmail(data: AccountDeletionConfirmEmailData): Promise<EmailResult> {
+    const lang = data.language || 'en';
+    const content = this.getAccountDeletionConfirmTranslations(lang);
+
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${content.subject}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);border-radius:12px 12px 0 0">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
+      </a>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${content.title}</h1>
+      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
+    </div>
+
+    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
+      <p>${content.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
+      <p>${content.intro}</p>
+
+      <div class="warning">
+        <strong>${content.warningTitle}</strong>
+        <p style="margin:8px 0 0;font-size:14px">${content.warningText}</p>
+      </div>
+
+      <div class="info">
+        <strong>${content.gracePeriodTitle}</strong>
+        <p style="margin:8px 0 0;font-size:14px">${content.gracePeriodText}</p>
+      </div>
+
+      <div style="text-align:center;margin:30px 0">
+        <a href="${data.confirmLink}" style="display:inline-block;background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);color:white!important;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
+          ${content.confirmButton}
+        </a>
+      </div>
+
+      <div style="text-align:center;margin:10px 0 30px">
+        <a href="${data.cancelLink}" style="display:inline-block;background:#6b7280;color:white!important;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:14px">
+          ${content.cancelButton}
+        </a>
+      </div>
+
+      <p style="font-size:13px;margin-top:25px;padding-top:20px">
+        ${content.notYou}
+      </p>
+
+      <p style="font-size:14px;margin-top:20px">${content.footer}</p>
+    </div>
+
+    <div class="footer">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
+      </a>
+      ${this.getFooterContentHtml(lang)}
+    </div>
+  </div>
+</body>
+</html>`;
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${content.warningTitle}: ${content.warningText}\n\n${content.gracePeriodTitle}: ${content.gracePeriodText}\n\n${content.confirmButton}: ${data.confirmLink}\n${content.cancelButton}: ${data.cancelLink}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
+
+    return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'deletion_confirm', trackingLang: lang });
+  }
+
+  async sendAccountDeletionReminderEmail(data: AccountDeletionReminderEmailData): Promise<EmailResult> {
+    const lang = data.language || 'en';
+    const content = this.getAccountDeletionReminderTranslations(lang);
+
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${content.subject}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-radius:12px 12px 0 0">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
+      </a>
+      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${content.title}</h1>
+      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
+    </div>
+
+    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
+      <p>${content.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
+      <p>${content.intro.replace('{date}', data.gracePeriodEndDate)}</p>
+
+      <div class="warning">
+        <strong>${content.reminderTitle}</strong>
+        <p style="margin:8px 0 0;font-size:14px">${content.reminderText}</p>
+      </div>
+
+      <div style="text-align:center;margin:30px 0">
+        <a href="${data.cancelLink}" style="display:inline-block;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:white!important;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
+          ${content.cancelButton}
+        </a>
+      </div>
+
+      <div style="text-align:center;margin:10px 0 30px">
+        <a href="${data.deleteNowLink}" style="display:inline-block;background:#dc2626;color:white!important;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:14px">
+          ${content.deleteNowButton}
+        </a>
+      </div>
+
+      <p style="font-size:13px;margin-top:25px;padding-top:20px">
+        ${content.cancelNote}
+      </p>
+
+      <p style="font-size:14px;margin-top:20px">${content.footer}</p>
+    </div>
+
+    <div class="footer">
+      <a href="${this.frontendUrl}" style="text-decoration:none">
+        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
+      </a>
+      ${this.getFooterContentHtml(lang)}
+    </div>
+  </div>
+</body>
+</html>`;
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro.replace('{date}', data.gracePeriodEndDate)}\n\n${content.reminderTitle}: ${content.reminderText}\n\n${content.cancelButton}: ${data.cancelLink}\n${content.deleteNowButton}: ${data.deleteNowLink}\n\n${content.cancelNote}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
+
+    return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'deletion_reminder', trackingLang: lang });
+  }
+
+  private getAccountDeletionConfirmTranslations(language: string): Record<string, string> {
+    const translations: Record<string, Record<string, string>> = {
+      fr: {
+        subject: '\u26a0\ufe0f Confirmez la suppression de votre compte Meeshy',
+        title: 'Suppression de compte',
+        subtitle: 'Action irr\u00e9versible',
+        greeting: 'Bonjour',
+        intro: 'Vous avez demand\u00e9 la suppression de votre compte Meeshy. Pour confirmer cette action, veuillez cliquer sur le bouton ci-dessous.',
+        warningTitle: '\u26a0\ufe0f Attention',
+        warningText: 'Cette action est irr\u00e9versible. Toutes vos conversations, messages, m\u00e9dias et contacts seront d\u00e9finitivement supprim\u00e9s.',
+        gracePeriodTitle: '\ud83d\udcc5 P\u00e9riode de gr\u00e2ce',
+        gracePeriodText: 'Apr\u00e8s confirmation, votre compte restera actif pendant 3 mois. Pendant cette p\u00e9riode, vous pourrez annuler la suppression \u00e0 tout moment.',
+        confirmButton: 'Confirmer la suppression',
+        cancelButton: 'Annuler la demande',
+        notYou: 'Si vous n\'avez pas demand\u00e9 cette suppression, cliquez sur "Annuler" ou ignorez cet email. Votre compte reste prot\u00e9g\u00e9.',
+        footer: 'L\'\u00e9quipe Meeshy',
+      },
+      en: {
+        subject: '\u26a0\ufe0f Confirm your Meeshy account deletion',
+        title: 'Account Deletion',
+        subtitle: 'Irreversible action',
+        greeting: 'Hello',
+        intro: 'You have requested the deletion of your Meeshy account. To confirm this action, please click the button below.',
+        warningTitle: '\u26a0\ufe0f Warning',
+        warningText: 'This action is irreversible. All your conversations, messages, media, and contacts will be permanently deleted.',
+        gracePeriodTitle: '\ud83d\udcc5 Grace Period',
+        gracePeriodText: 'After confirmation, your account will remain active for 3 months. During this period, you can cancel the deletion at any time.',
+        confirmButton: 'Confirm deletion',
+        cancelButton: 'Cancel request',
+        notYou: 'If you did not request this deletion, click "Cancel" or ignore this email. Your account remains protected.',
+        footer: 'The Meeshy Team',
+      },
+      es: {
+        subject: '\u26a0\ufe0f Confirma la eliminaci\u00f3n de tu cuenta Meeshy',
+        title: 'Eliminaci\u00f3n de cuenta',
+        subtitle: 'Acci\u00f3n irreversible',
+        greeting: 'Hola',
+        intro: 'Has solicitado la eliminaci\u00f3n de tu cuenta Meeshy. Para confirmar esta acci\u00f3n, haz clic en el bot\u00f3n de abajo.',
+        warningTitle: '\u26a0\ufe0f Advertencia',
+        warningText: 'Esta acci\u00f3n es irreversible. Todas tus conversaciones, mensajes, medios y contactos se eliminar\u00e1n permanentemente.',
+        gracePeriodTitle: '\ud83d\udcc5 Per\u00edodo de gracia',
+        gracePeriodText: 'Despu\u00e9s de la confirmaci\u00f3n, tu cuenta permanecer\u00e1 activa durante 3 meses. Durante este per\u00edodo, puedes cancelar la eliminaci\u00f3n en cualquier momento.',
+        confirmButton: 'Confirmar eliminaci\u00f3n',
+        cancelButton: 'Cancelar solicitud',
+        notYou: 'Si no solicitaste esta eliminaci\u00f3n, haz clic en "Cancelar" o ignora este correo. Tu cuenta permanece protegida.',
+        footer: 'El equipo de Meeshy',
+      },
+      pt: {
+        subject: '\u26a0\ufe0f Confirme a exclus\u00e3o da sua conta Meeshy',
+        title: 'Exclus\u00e3o de conta',
+        subtitle: 'A\u00e7\u00e3o irrevers\u00edvel',
+        greeting: 'Ol\u00e1',
+        intro: 'Voc\u00ea solicitou a exclus\u00e3o da sua conta Meeshy. Para confirmar esta a\u00e7\u00e3o, clique no bot\u00e3o abaixo.',
+        warningTitle: '\u26a0\ufe0f Aten\u00e7\u00e3o',
+        warningText: 'Esta a\u00e7\u00e3o \u00e9 irrevers\u00edvel. Todas as suas conversas, mensagens, m\u00eddias e contatos ser\u00e3o permanentemente exclu\u00eddos.',
+        gracePeriodTitle: '\ud83d\udcc5 Per\u00edodo de carência',
+        gracePeriodText: 'Ap\u00f3s a confirma\u00e7\u00e3o, sua conta permanecer\u00e1 ativa por 3 meses. Durante este per\u00edodo, voc\u00ea pode cancelar a exclus\u00e3o a qualquer momento.',
+        confirmButton: 'Confirmar exclus\u00e3o',
+        cancelButton: 'Cancelar solicita\u00e7\u00e3o',
+        notYou: 'Se voc\u00ea n\u00e3o solicitou esta exclus\u00e3o, clique em "Cancelar" ou ignore este email. Sua conta permanece protegida.',
+        footer: 'A equipe Meeshy',
+      },
+      it: {
+        subject: '\u26a0\ufe0f Conferma l\'eliminazione del tuo account Meeshy',
+        title: 'Eliminazione account',
+        subtitle: 'Azione irreversibile',
+        greeting: 'Ciao',
+        intro: 'Hai richiesto l\'eliminazione del tuo account Meeshy. Per confermare questa azione, clicca sul pulsante qui sotto.',
+        warningTitle: '\u26a0\ufe0f Attenzione',
+        warningText: 'Questa azione \u00e8 irreversibile. Tutte le tue conversazioni, messaggi, media e contatti saranno eliminati permanentemente.',
+        gracePeriodTitle: '\ud83d\udcc5 Periodo di grazia',
+        gracePeriodText: 'Dopo la conferma, il tuo account rester\u00e0 attivo per 3 mesi. Durante questo periodo, puoi annullare l\'eliminazione in qualsiasi momento.',
+        confirmButton: 'Conferma eliminazione',
+        cancelButton: 'Annulla richiesta',
+        notYou: 'Se non hai richiesto questa eliminazione, clicca su "Annulla" o ignora questa email. Il tuo account rimane protetto.',
+        footer: 'Il team Meeshy',
+      },
+      de: {
+        subject: '\u26a0\ufe0f Best\u00e4tige die L\u00f6schung deines Meeshy-Kontos',
+        title: 'Kontol\u00f6schung',
+        subtitle: 'Unwiderrufliche Aktion',
+        greeting: 'Hallo',
+        intro: 'Du hast die L\u00f6schung deines Meeshy-Kontos angefordert. Um diese Aktion zu best\u00e4tigen, klicke auf den Button unten.',
+        warningTitle: '\u26a0\ufe0f Warnung',
+        warningText: 'Diese Aktion ist unwiderruflich. Alle deine Unterhaltungen, Nachrichten, Medien und Kontakte werden dauerhaft gel\u00f6scht.',
+        gracePeriodTitle: '\ud83d\udcc5 Karenzzeit',
+        gracePeriodText: 'Nach der Best\u00e4tigung bleibt dein Konto 3 Monate lang aktiv. In dieser Zeit kannst du die L\u00f6schung jederzeit r\u00fcckg\u00e4ngig machen.',
+        confirmButton: 'L\u00f6schung best\u00e4tigen',
+        cancelButton: 'Anfrage abbrechen',
+        notYou: 'Wenn du diese L\u00f6schung nicht angefordert hast, klicke auf "Abbrechen" oder ignoriere diese E-Mail. Dein Konto bleibt gesch\u00fctzt.',
+        footer: 'Das Meeshy-Team',
+      },
+    };
+    return translations[language] || translations['en'];
+  }
+
+  private getAccountDeletionReminderTranslations(language: string): Record<string, string> {
+    const translations: Record<string, Record<string, string>> = {
+      fr: {
+        subject: '\u23f0 Rappel : Votre compte Meeshy sera bient\u00f4t supprim\u00e9',
+        title: 'Rappel de suppression',
+        subtitle: 'Votre compte est en attente de suppression',
+        greeting: 'Bonjour',
+        intro: 'Votre compte Meeshy est pr\u00e9vu pour \u00eatre supprim\u00e9 le {date}. Si vous souhaitez conserver votre compte, vous pouvez annuler cette demande.',
+        reminderTitle: '\u23f0 Rappel',
+        reminderText: 'La p\u00e9riode de gr\u00e2ce a expir\u00e9. Votre compte sera supprim\u00e9 d\u00e9finitivement si vous ne l\'annulez pas.',
+        cancelButton: 'Annuler la suppression',
+        deleteNowButton: 'Supprimer maintenant',
+        cancelNote: 'Cliquez sur "Annuler la suppression" pour conserver votre compte et toutes vos donn\u00e9es.',
+        footer: 'L\'\u00e9quipe Meeshy',
+      },
+      en: {
+        subject: '\u23f0 Reminder: Your Meeshy account will be deleted soon',
+        title: 'Deletion Reminder',
+        subtitle: 'Your account is pending deletion',
+        greeting: 'Hello',
+        intro: 'Your Meeshy account is scheduled to be deleted on {date}. If you wish to keep your account, you can cancel this request.',
+        reminderTitle: '\u23f0 Reminder',
+        reminderText: 'The grace period has expired. Your account will be permanently deleted unless you cancel.',
+        cancelButton: 'Cancel deletion',
+        deleteNowButton: 'Delete now',
+        cancelNote: 'Click "Cancel deletion" to keep your account and all your data.',
+        footer: 'The Meeshy Team',
+      },
+      es: {
+        subject: '\u23f0 Recordatorio: Tu cuenta Meeshy ser\u00e1 eliminada pronto',
+        title: 'Recordatorio de eliminaci\u00f3n',
+        subtitle: 'Tu cuenta est\u00e1 pendiente de eliminaci\u00f3n',
+        greeting: 'Hola',
+        intro: 'Tu cuenta Meeshy est\u00e1 programada para ser eliminada el {date}. Si deseas conservar tu cuenta, puedes cancelar esta solicitud.',
+        reminderTitle: '\u23f0 Recordatorio',
+        reminderText: 'El per\u00edodo de gracia ha expirado. Tu cuenta ser\u00e1 eliminada permanentemente a menos que la canceles.',
+        cancelButton: 'Cancelar eliminaci\u00f3n',
+        deleteNowButton: 'Eliminar ahora',
+        cancelNote: 'Haz clic en "Cancelar eliminaci\u00f3n" para conservar tu cuenta y todos tus datos.',
+        footer: 'El equipo de Meeshy',
+      },
+      pt: {
+        subject: '\u23f0 Lembrete: Sua conta Meeshy ser\u00e1 exclu\u00edda em breve',
+        title: 'Lembrete de exclus\u00e3o',
+        subtitle: 'Sua conta est\u00e1 pendente de exclus\u00e3o',
+        greeting: 'Ol\u00e1',
+        intro: 'Sua conta Meeshy est\u00e1 programada para ser exclu\u00edda em {date}. Se deseja manter sua conta, pode cancelar esta solicita\u00e7\u00e3o.',
+        reminderTitle: '\u23f0 Lembrete',
+        reminderText: 'O per\u00edodo de carência expirou. Sua conta ser\u00e1 permanentemente exclu\u00edda se voc\u00ea n\u00e3o cancelar.',
+        cancelButton: 'Cancelar exclus\u00e3o',
+        deleteNowButton: 'Excluir agora',
+        cancelNote: 'Clique em "Cancelar exclus\u00e3o" para manter sua conta e todos os seus dados.',
+        footer: 'A equipe Meeshy',
+      },
+      it: {
+        subject: '\u23f0 Promemoria: Il tuo account Meeshy sar\u00e0 eliminato presto',
+        title: 'Promemoria eliminazione',
+        subtitle: 'Il tuo account \u00e8 in attesa di eliminazione',
+        greeting: 'Ciao',
+        intro: 'Il tuo account Meeshy \u00e8 programmato per essere eliminato il {date}. Se desideri mantenere il tuo account, puoi annullare questa richiesta.',
+        reminderTitle: '\u23f0 Promemoria',
+        reminderText: 'Il periodo di grazia \u00e8 scaduto. Il tuo account sar\u00e0 eliminato permanentemente se non annulli.',
+        cancelButton: 'Annulla eliminazione',
+        deleteNowButton: 'Elimina ora',
+        cancelNote: 'Clicca su "Annulla eliminazione" per mantenere il tuo account e tutti i tuoi dati.',
+        footer: 'Il team Meeshy',
+      },
+      de: {
+        subject: '\u23f0 Erinnerung: Dein Meeshy-Konto wird bald gel\u00f6scht',
+        title: 'L\u00f6scherinnerung',
+        subtitle: 'Dein Konto wartet auf L\u00f6schung',
+        greeting: 'Hallo',
+        intro: 'Dein Meeshy-Konto ist f\u00fcr die L\u00f6schung am {date} geplant. Wenn du dein Konto behalten m\u00f6chtest, kannst du diese Anfrage stornieren.',
+        reminderTitle: '\u23f0 Erinnerung',
+        reminderText: 'Die Karenzzeit ist abgelaufen. Dein Konto wird dauerhaft gel\u00f6scht, wenn du nicht stornierst.',
+        cancelButton: 'L\u00f6schung abbrechen',
+        deleteNowButton: 'Jetzt l\u00f6schen',
+        cancelNote: 'Klicke auf "L\u00f6schung abbrechen", um dein Konto und alle deine Daten zu behalten.',
+        footer: 'Das Meeshy-Team',
+      },
+    };
+    return translations[language] || translations['en'];
+  }
+
+  // ==========================================================================
   // NOTIFICATION DIGEST EMAIL
   // ==========================================================================
 
   async sendNotificationDigestEmail(data: NotificationDigestEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const copyright = `© ${new Date().getFullYear()} Meeshy. All rights reserved.`;
     const t = this.getDigestTranslations(lang);
 
     const notifListHtml = data.notifications.map(n => {
@@ -1088,7 +1469,7 @@ export class EmailService {
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
       </a>
-      <p style="margin:15px 0 0">${copyright}</p>
+      ${this.getFooterContentHtml(lang)}
       <p style="font-size:11px;margin:10px 0 0">
         <a href="${data.settingsUrl}" class="link-text" style="text-decoration:none">${t.managePrefs}</a> &bull;
         <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">${t.privacy}</a>
@@ -1099,13 +1480,15 @@ export class EmailService {
 </html>`;
 
     const notifListText = data.notifications.map(n => `- ${n.actorName}: ${n.content}`).join('\n');
-    const text = `${countText}\n\n${t.greeting} ${data.name},\n\n${t.intro.replace('{count}', data.unreadCount.toString())}\n\n${notifListText}\n\n${t.buttonText}: ${data.markAllReadUrl}\n\n${t.managePrefs}: ${data.settingsUrl}\n\n${t.footer}\n\n${copyright}`;
+    const text = `${countText}\n\n${t.greeting} ${data.name},\n\n${t.intro.replace('{count}', data.unreadCount.toString())}\n\n${notifListText}\n\n${t.buttonText}: ${data.markAllReadUrl}\n\n${t.managePrefs}: ${data.settingsUrl}\n\n${t.footer}\n\n${this.getFooterContentText(lang)}`;
 
     return this.sendEmail({
       to: data.to,
       subject: t.subject.replace('{count}', data.unreadCount.toString()),
       html,
       text,
+      trackingType: 'notification_digest',
+      trackingLang: lang,
     });
   }
 
@@ -1217,7 +1600,6 @@ export class EmailService {
 
   async sendBroadcastEmail(data: BroadcastEmailData): Promise<EmailResult> {
     const lang = data.language || 'en';
-    const copyright = `\u00a9 ${new Date().getFullYear()} Meeshy. All rights reserved.`;
 
     // Convert plain text body to HTML paragraphs
     const bodyHtml = data.body
@@ -1273,7 +1655,7 @@ export class EmailService {
       <a href="${this.frontendUrl}" style="text-decoration:none">
         <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
       </a>
-      <p style="margin:15px 0 0">${copyright}</p>
+      ${this.getFooterContentHtml(lang)}
       <p style="font-size:11px;margin:10px 0 0">
         <a href="${data.unsubscribeUrl}" class="link-text" style="text-decoration:none">${manage}</a> &bull;
         <a href="${this.frontendUrl}/privacy" class="link-text" style="text-decoration:none">Privacy</a>
@@ -1283,13 +1665,15 @@ export class EmailService {
 </body>
 </html>`;
 
-    const text = `${greeting} ${data.recipientName},\n\n${data.body}\n\n${team}\n\n${copyright}\n\n${manage}: ${data.unsubscribeUrl}`;
+    const text = `${greeting} ${data.recipientName},\n\n${data.body}\n\n${team}\n\n${this.getFooterContentText(lang)}\n\n${manage}: ${data.unsubscribeUrl}`;
 
     return this.sendEmail({
       to: data.to,
       subject: data.subject,
       html,
       text,
+      trackingType: 'broadcast',
+      trackingLang: lang,
     });
   }
 }
