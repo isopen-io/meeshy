@@ -4,6 +4,7 @@ import AVFoundation
 import CoreLocation
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Feed Attachment Handlers
 extension FeedView {
@@ -475,8 +476,10 @@ struct FeedComposerSheet: View {
     let onDismiss: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
+    @State private var editingAttachmentId: String?
 
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var pendingMediaFiles: [String: URL] = [:]
@@ -540,22 +543,14 @@ struct FeedComposerSheet: View {
 
                 // User row
                 HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [MeeshyColors.coral, MeeshyColors.teal],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-                        Text("M")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                    MeeshyAvatar(
+                        name: getUserDisplayName(authManager.currentUser, fallback: "M"),
+                        mode: .custom(40),
+                        accentColor: "FF6B6B",
+                        secondaryColor: "4ECDC4"
+                    )
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Moi")
+                        Text(getUserDisplayName(authManager.currentUser, fallback: "Moi"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                         Text("Public")
@@ -653,6 +648,43 @@ struct FeedComposerSheet: View {
                 handleLocationSelection(coordinate: coordinate, address: address)
             }
         }
+        .fullScreenCover(item: Binding<EditingAttachmentItem?>(
+            get: {
+                guard let id = editingAttachmentId, let image = pendingThumbnails[id] else { return nil }
+                return EditingAttachmentItem(id: id, image: image)
+            },
+            set: { editingAttachmentId = $0?.id }
+        )) { item in
+            ImageCropView(image: item.image) { editedImage in
+                pendingThumbnails[item.id] = editedImage
+                Task {
+                    let result = await MediaCompressor.shared.compressImage(editedImage)
+                    let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                    try? result.data.write(to: tempURL)
+                    await MainActor.run {
+                        if let oldURL = pendingMediaFiles[item.id] {
+                            try? FileManager.default.removeItem(at: oldURL)
+                        }
+                        pendingMediaFiles[item.id] = tempURL
+                        if let idx = pendingAttachments.firstIndex(where: { $0.id == item.id }) {
+                            pendingAttachments[idx] = MessageAttachment(
+                                id: item.id,
+                                fileName: fileName,
+                                originalName: fileName,
+                                mimeType: result.mimeType,
+                                fileSize: result.data.count,
+                                fileUrl: tempURL.absoluteString,
+                                width: Int(editedImage.size.width),
+                                height: Int(editedImage.size.height),
+                                thumbnailColor: pendingAttachments[idx].thumbnailColor
+                            )
+                        }
+                    }
+                }
+            }
+            .ignoresSafeArea()
+        }
         .onChange(of: selectedPhotoItems) { items in
             handlePhotoSelection(items)
         }
@@ -693,66 +725,80 @@ struct FeedComposerSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .frame(height: 100)
+        .frame(height: 116)
     }
 
     private func sheetAttachmentTile(_ attachment: MessageAttachment) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    let id = attachment.id
-                    pendingAttachments.removeAll { $0.id == id }
-                    if let url = pendingMediaFiles.removeValue(forKey: id) {
-                        try? FileManager.default.removeItem(at: url)
-                    }
-                    pendingThumbnails.removeValue(forKey: id)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.coral))
-            }
-            .padding(.trailing, 8)
+        VStack(spacing: 4) {
+            ZStack {
+                if let thumb = pendingThumbnails[attachment.id] {
+                    Image(uiImage: thumb)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .onTapGesture {
+                            if attachment.type == .image {
+                                editingAttachmentId = attachment.id
+                            }
+                        }
 
-            VStack(spacing: 4) {
-                ZStack {
-                    if let thumb = pendingThumbnails[attachment.id] {
-                        Image(uiImage: thumb)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else if attachment.type == .location {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(LinearGradient(colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 56, height: 56)
-                            .overlay(
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white, .white.opacity(0.3))
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 56, height: 56)
-                            .overlay(
-                                Image(systemName: sheetIconForType(attachment.type))
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.white)
-                            )
+                    if attachment.type == .video {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white, .black.opacity(0.4))
                     }
+                } else if attachment.type == .location {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(LinearGradient(colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 72, height: 72)
+                        .overlay(
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(.white, .white.opacity(0.3))
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 72, height: 72)
+                        .overlay(
+                            Image(systemName: sheetIconForType(attachment.type))
+                                .font(.system(size: 26))
+                                .foregroundColor(.white)
+                        )
                 }
-                .frame(width: 56, height: 56)
-
-                Text(sheetLabelForAttachment(attachment))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 60)
             }
+            .frame(width: 72, height: 72)
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        let id = attachment.id
+                        pendingAttachments.removeAll { $0.id == id }
+                        if let url = pendingMediaFiles.removeValue(forKey: id) {
+                            try? FileManager.default.removeItem(at: url)
+                        }
+                        pendingThumbnails.removeValue(forKey: id)
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.coral)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        )
+                }
+                .offset(x: 6, y: -6)
+            }
+
+            Text(sheetLabelForAttachment(attachment))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 72)
         }
     }
 
@@ -984,4 +1030,9 @@ struct FeedComposerSheet: View {
         case .location: return "Position"
         }
     }
+}
+
+private struct EditingAttachmentItem: Identifiable {
+    let id: String
+    let image: UIImage
 }

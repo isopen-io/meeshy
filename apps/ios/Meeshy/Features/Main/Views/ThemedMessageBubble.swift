@@ -168,21 +168,30 @@ struct ThemedMessageBubble: View {
 
                 ZStack {
                     VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                        // Grille visuelle (images + vidéos)
+                        // Grille visuelle (images + vidéos) ou carrousel inline
                         if !visualAttachments.isEmpty {
                             let mediaTimestampAlignment: Alignment = .bottomTrailing
 
-                            visualMediaGrid
-                                .background(Color.black)
-                                .compositingGroup()
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .overlay(alignment: mediaTimestampAlignment) {
-                                    if !hasTextOrNonMediaContent {
-                                        mediaTimestampOverlay
-                                            .padding(8)
-                                            .transition(.opacity)
+                            if showCarousel {
+                                carouselView
+                                    .background(Color.black)
+                                    .compositingGroup()
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            } else {
+                                visualMediaGrid
+                                    .background(Color.black)
+                                    .compositingGroup()
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(alignment: mediaTimestampAlignment) {
+                                        if !hasTextOrNonMediaContent {
+                                            mediaTimestampOverlay
+                                                .padding(8)
+                                                .transition(.opacity)
+                                        }
                                     }
-                                }
+                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            }
                         }
 
                         // Audio standalone

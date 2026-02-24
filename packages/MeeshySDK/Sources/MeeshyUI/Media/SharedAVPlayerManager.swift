@@ -1,4 +1,5 @@
 import AVFoundation
+import AVKit
 import Combine
 import SwiftUI
 import MeeshySDK
@@ -15,9 +16,12 @@ public final class SharedAVPlayerManager: ObservableObject {
     @Published public var duration: Double = 0
     @Published public var playbackSpeed: PlaybackSpeed = .x1_0
     @Published public var activeURL: String = ""
+    @Published public var isPipActive = false
 
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+    private var pipController: AVPictureInPictureController?
+    private var pipDelegate: PipDelegate?
 
     private init() {}
 
@@ -30,6 +34,10 @@ public final class SharedAVPlayerManager: ObservableObject {
         cleanup()
 
         guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+
+        // Audio session for PIP + background playback
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
 
         activeURL = urlString
         let newPlayer = AVPlayer(url: url)
@@ -79,8 +87,43 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     public func stop() {
+        stopPip()
         cleanup()
         activeURL = ""
+    }
+
+    // MARK: - Picture-in-Picture
+
+    /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
+    public func configurePip(playerLayer: AVPlayerLayer) {
+        guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
+        guard pipController?.playerLayer !== playerLayer else { return }
+        pipController?.invalidatePlaybackState()
+        let controller = AVPictureInPictureController(playerLayer: playerLayer)
+        controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        let delegate = PipDelegate { [weak self] in
+            Task { @MainActor [weak self] in self?.isPipActive = true }
+        } onStop: { [weak self] in
+            Task { @MainActor [weak self] in self?.isPipActive = false }
+        } onRestore: { [weak self] completion in
+            Task { @MainActor [weak self] in
+                _ = self // The player is already shared — nothing to restore
+                completion(true)
+            }
+        }
+        controller?.delegate = delegate
+        self.pipController = controller
+        self.pipDelegate = delegate
+    }
+
+    public func startPip() {
+        guard let pipController, pipController.isPictureInPicturePossible else { return }
+        pipController.startPictureInPicture()
+    }
+
+    public func stopPip() {
+        pipController?.stopPictureInPicture()
+        isPipActive = false
     }
 
     // MARK: - Observers
@@ -136,5 +179,34 @@ public final class SharedAVPlayerManager: ObservableObject {
         currentTime = 0
         duration = 0
         playbackSpeed = .x1_0
+        pipController = nil
+        pipDelegate = nil
+    }
+}
+
+// MARK: - PIP Delegate
+
+private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate {
+    let onStart: () -> Void
+    let onStop: () -> Void
+    let onRestore: (@escaping (Bool) -> Void) -> Void
+
+    init(onStart: @escaping () -> Void, onStop: @escaping () -> Void, onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
+        self.onStart = onStart
+        self.onStop = onStop
+        self.onRestore = onRestore
+    }
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        onStart()
+    }
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        onStop()
+    }
+
+    func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completion: @escaping (Bool) -> Void) {
+        onRestore(completion)
     }
 }

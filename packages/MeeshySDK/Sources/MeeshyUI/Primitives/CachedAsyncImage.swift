@@ -12,6 +12,11 @@ public struct CachedAsyncImage<Placeholder: View>: View {
 
     public init(url urlString: String?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.urlString = urlString; self.placeholder = placeholder
+        // Synchronous lookup — instant display if image was loaded before (no actor hop)
+        if let urlString, !urlString.isEmpty {
+            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+            _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        }
     }
 
     public var body: some View {
@@ -80,6 +85,10 @@ public struct CachedAvatarImage: View {
 
     public init(urlString: String?, name: String, size: CGFloat, accentColor: String) {
         self.urlString = urlString; self.name = name; self.size = size; self.accentColor = accentColor
+        if let urlString, !urlString.isEmpty {
+            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+            _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        }
     }
 
     public var body: some View {
@@ -120,6 +129,10 @@ public struct CachedBannerImage: View {
 
     public init(urlString: String?, fallbackColor: String, height: CGFloat) {
         self.urlString = urlString; self.fallbackColor = fallbackColor; self.height = height
+        if let urlString, !urlString.isEmpty {
+            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+            _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        }
     }
 
     public var body: some View {

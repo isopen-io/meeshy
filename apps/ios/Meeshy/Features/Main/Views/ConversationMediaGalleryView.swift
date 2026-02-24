@@ -141,7 +141,53 @@ struct ConversationMediaGalleryView: View {
             .padding(.bottom, 60)
     }
 
-    // MARK: - Image Page (pinch-to-zoom, drag-to-dismiss)
+    // MARK: - Vertical-only drag gesture (does not capture horizontal → ScrollView paging works)
+
+    private var verticalDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                // Only respond to primarily vertical drags
+                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                if scale <= 1.0 {
+                    offset = CGSize(width: 0, height: value.translation.height)
+                }
+            }
+            .onEnded { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else {
+                    withAnimation(.spring()) { offset = .zero }
+                    return
+                }
+                if scale <= 1.0 && abs(value.translation.height) > 150 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    private func videoDismissGesture(_ attachment: MessageAttachment) -> some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else {
+                    withAnimation(.spring()) { offset = .zero }
+                    return
+                }
+                if abs(value.translation.height) > 150 {
+                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
+                        videoManager.startPip()
+                    }
+                    dismiss()
+                } else {
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    // MARK: - Image Page (pinch-to-zoom, vertical drag-to-dismiss)
 
     @ViewBuilder
     private func galleryImagePage(_ attachment: MessageAttachment) -> some View {
@@ -163,21 +209,7 @@ struct ConversationMediaGalleryView: View {
                         }
                     }
             )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        if scale <= 1.0 {
-                            offset = value.translation
-                        }
-                    }
-                    .onEnded { value in
-                        if scale <= 1.0 && abs(value.translation.height) > 200 {
-                            dismiss()
-                        } else {
-                            withAnimation(.spring()) { offset = .zero }
-                        }
-                    }
-            )
+            .gesture(verticalDismissGesture)
             .onTapGesture(count: 2) {
                 withAnimation(.spring()) {
                     scale = scale > 1 ? 1 : 2.5
@@ -207,8 +239,8 @@ struct ConversationMediaGalleryView: View {
 
             if isActive || (videoManager.activeURL == attachment.fileUrl) {
                 if let player = videoManager.player {
-                    VideoPlayer(player: player)
-                        .disabled(true)
+                    FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
+                        .ignoresSafeArea()
                 }
             }
 
@@ -235,18 +267,7 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         }
-        .gesture(
-            DragGesture()
-                .onChanged { value in offset = value.translation }
-                .onEnded { value in
-                    if abs(value.translation.height) > 200 {
-                        if videoManager.activeURL == attachment.fileUrl { videoManager.pause() }
-                        dismiss()
-                    } else {
-                        withAnimation(.spring()) { offset = .zero }
-                    }
-                }
-        )
+        .gesture(videoDismissGesture(attachment))
         .offset(y: offset.height)
     }
 

@@ -91,7 +91,15 @@ extension ThemedMessageBubble {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            fullscreenAttachment = attachment
+            if overflowCount > 0 {
+                let items = visualAttachments
+                carouselIndex = items.firstIndex(where: { $0.id == attachment.id }) ?? 0
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    showCarousel = true
+                }
+            } else {
+                fullscreenAttachment = attachment
+            }
             HapticFeedback.light()
         }
         .overlay(alignment: .bottom) {

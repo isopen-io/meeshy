@@ -6,6 +6,41 @@ import UIKit
 public actor MediaCacheManager {
     public static let shared = MediaCacheManager()
 
+    // MARK: - Synchronous UIImage Cache (static, no actor hop needed)
+
+    /// Static UIImage cache for instant synchronous access from SwiftUI view inits.
+    /// Thread-safe via NSCache. Populated by `image(for:)` after successful decode.
+    private static let _imageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 150
+        cache.totalCostLimit = 80 * 1024 * 1024
+        return cache
+    }()
+
+    /// Synchronous memory-only image lookup — no actor hop, no async.
+    /// Returns nil if image is not in the in-memory UIImage cache.
+    /// Safe to call from any thread (NSCache is thread-safe).
+    public nonisolated static func cachedImage(for urlString: String) -> UIImage? {
+        let key = makeCacheKey(for: urlString)
+        return _imageCache.object(forKey: key as NSString)
+    }
+
+    /// Store a UIImage in the static sync cache.
+    private func storeInImageCache(_ image: UIImage, for urlString: String) {
+        let key = Self.makeCacheKey(for: urlString)
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
+    }
+
+    /// Pure cache key computation — no actor state, safe as static.
+    nonisolated private static func makeCacheKey(for urlString: String) -> String {
+        let hash = urlString.utf8.reduce(into: UInt64(5381)) { result, byte in
+            result = result &* 33 &+ UInt64(byte)
+        }
+        let ext = URL(string: urlString)?.pathExtension ?? ""
+        return ext.isEmpty ? "\(hash)" : "\(hash).\(ext)"
+    }
+
     // MARK: - Memory Cache
 
     private let memoryCache = NSCache<NSString, NSData>()
@@ -110,8 +145,14 @@ public actor MediaCacheManager {
     /// Convenience: load a UIImage from a URL string.
     /// Validates decoded image; evicts corrupted cache entries and re-downloads once.
     public func image(for urlString: String) async throws -> UIImage {
+        // Check static sync cache first (no actor hop needed for the lookup)
+        if let cached = Self.cachedImage(for: urlString) { return cached }
+
         let data = try await data(for: urlString)
-        if let image = UIImage(data: data) { return image }
+        if let image = UIImage(data: data) {
+            storeInImageCache(image, for: urlString)
+            return image
+        }
 
         // Data exists but can't decode as image — corrupted cache entry
         let key = cacheKey(for: urlString)
@@ -124,6 +165,7 @@ public actor MediaCacheManager {
         guard let image = UIImage(data: freshData) else {
             throw URLError(.cannotDecodeContentData)
         }
+        storeInImageCache(image, for: urlString)
         return image
     }
 

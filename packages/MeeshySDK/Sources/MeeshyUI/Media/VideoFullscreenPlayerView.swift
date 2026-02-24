@@ -4,26 +4,39 @@ import MeeshySDK
 
 // MARK: - Fullscreen AVPlayerLayer View (UIViewRepresentable)
 
-struct FullscreenAVPlayerLayerView: UIViewRepresentable {
-    let player: AVPlayer
-    let gravity: AVLayerVideoGravity
+public struct FullscreenAVPlayerLayerView: UIViewRepresentable {
+    public let player: AVPlayer
+    public let gravity: AVLayerVideoGravity
+    public var configurePip: Bool = true
 
-    func makeUIView(context: Context) -> FullscreenPlayerUIView {
+    public init(player: AVPlayer, gravity: AVLayerVideoGravity, configurePip: Bool = true) {
+        self.player = player
+        self.gravity = gravity
+        self.configurePip = configurePip
+    }
+
+    public func makeUIView(context: Context) -> FullscreenPlayerUIView {
         let view = FullscreenPlayerUIView()
         view.playerLayer.videoGravity = gravity
         view.playerLayer.player = player
+        if configurePip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+        }
         return view
     }
 
-    func updateUIView(_ uiView: FullscreenPlayerUIView, context: Context) {
+    public func updateUIView(_ uiView: FullscreenPlayerUIView, context: Context) {
         uiView.updatePlayer(player)
         uiView.updateGravity(gravity)
+        if configurePip {
+            SharedAVPlayerManager.shared.configurePip(playerLayer: uiView.playerLayer)
+        }
     }
 
-    final class FullscreenPlayerUIView: UIView {
-        let playerLayer = AVPlayerLayer()
+    public final class FullscreenPlayerUIView: UIView {
+        public let playerLayer = AVPlayerLayer()
 
-        override init(frame: CGRect) {
+        public override init(frame: CGRect) {
             super.init(frame: frame)
             layer.addSublayer(playerLayer)
         }
@@ -31,17 +44,17 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError() }
 
-        override func layoutSubviews() {
+        public override func layoutSubviews() {
             super.layoutSubviews()
             playerLayer.frame = bounds
         }
 
-        func updatePlayer(_ player: AVPlayer) {
+        public func updatePlayer(_ player: AVPlayer) {
             guard playerLayer.player !== player else { return }
             playerLayer.player = player
         }
 
-        func updateGravity(_ gravity: AVLayerVideoGravity) {
+        public func updateGravity(_ gravity: AVLayerVideoGravity) {
             guard playerLayer.videoGravity != gravity else { return }
             playerLayer.videoGravity = gravity
         }
@@ -399,7 +412,7 @@ public struct VideoFullscreenPlayerView: View {
     // MARK: - Gestures
 
     private var swipeDownGesture: some Gesture {
-        DragGesture()
+        DragGesture(minimumDistance: 30)
             .onChanged { value in
                 let translation = value.translation.height
                 guard translation > 0 else { return }
@@ -407,6 +420,9 @@ public struct VideoFullscreenPlayerView: View {
             }
             .onEnded { value in
                 if value.translation.height > 150 {
+                    if manager.isPlaying {
+                        manager.startPip()
+                    }
                     closePlayer()
                 } else {
                     dismissOffset = 0
