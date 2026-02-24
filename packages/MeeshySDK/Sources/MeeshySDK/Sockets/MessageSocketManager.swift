@@ -1,6 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
+import os
 
 // MARK: - Message Socket Event Data
 
@@ -215,7 +216,7 @@ public final class MessageSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[MessageSocket] No auth token, skipping connect")
+            Logger.socket.warning("No auth token, skipping connect")
             return
         }
 
@@ -250,14 +251,14 @@ public final class MessageSocketManager: ObservableObject {
         guard !joinedConversations.contains(conversationId) else { return }
         socket?.emit("conversation:join", ["conversationId": conversationId])
         joinedConversations.insert(conversationId)
-        print("[MessageSocket] Joined conversation:\(conversationId)")
+        Logger.socket.info("Joined conversation: \(conversationId)")
     }
 
     public func leaveConversation(_ conversationId: String) {
         guard joinedConversations.contains(conversationId) else { return }
         socket?.emit("conversation:leave", ["conversationId": conversationId])
         joinedConversations.remove(conversationId)
-        print("[MessageSocket] Left conversation:\(conversationId)")
+        Logger.socket.info("Left conversation: \(conversationId)")
     }
 
     // MARK: - Typing Emission
@@ -282,16 +283,16 @@ public final class MessageSocketManager: ObservableObject {
             for convId in self.joinedConversations {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
-            print("[MessageSocket] Connected")
+            Logger.socket.info("MessageSocket connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = false }
-            print("[MessageSocket] Disconnected")
+            Logger.socket.info("MessageSocket disconnected")
         }
 
         socket.on(clientEvent: .error) { _, args in
-            print("[MessageSocket] Error: \(args)")
+            Logger.socket.error("MessageSocket error: \(args)")
         }
 
         // --- Message events ---
@@ -429,7 +430,7 @@ public final class MessageSocketManager: ObservableObject {
                 handler(decoded)
             }
         } catch {
-            print("[MessageSocket] Decode error for \(type): \(error)")
+            Logger.socket.error("Decode error for \(String(describing: type)): \(error)")
         }
     }
 }

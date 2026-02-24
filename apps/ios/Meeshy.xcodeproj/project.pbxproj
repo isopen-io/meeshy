@@ -88,6 +88,8 @@
 		DL1100000000002F01 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DL1100000000001F01 /* DeepLinkRouter.swift */; };
 		NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */; };
 		MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */ = {isa = PBXBuildFile; fileRef = MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */; };
+		PRIV002A002A002A002A0002 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */; };
+		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -103,6 +105,8 @@
 		GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationMediaGalleryView.swift; sourceTree = "<group>"; };
 		5832205F0A09E149C8B976A8 /* Meeshy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Meeshy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		SETT001A001A001A001A0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
+		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		PROF001A001A001A001A0001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+MessageRow.swift"; sourceTree = "<group>"; };
@@ -258,6 +262,8 @@
 				60EE19EAAF10B595D04E99F8 /* ConversationView.swift */,
 				PROF001A001A001A001A0001 /* ProfileView.swift */,
 				SETT001A001A001A001A0001 /* SettingsView.swift */,
+				PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */,
+				NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */,
 				NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */,
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
@@ -437,6 +443,8 @@
 				F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */,
 				2E46EEA2DA493728930C87D8 /* ConversationView.swift in Sources */,
 				SETT002A002A002A002A0002 /* SettingsView.swift in Sources */,
+				PRIV002A002A002A002A0002 /* PrivacySettingsView.swift in Sources */,
+				NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */,
 				PROF002A002A002A002A0002 /* ProfileView.swift in Sources */,
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,

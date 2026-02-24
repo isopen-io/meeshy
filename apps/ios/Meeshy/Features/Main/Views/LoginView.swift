@@ -11,6 +11,8 @@ struct LoginView: View {
     @State private var glowPulse = false
     @State private var showFields = false
     @State private var showError = false
+    @State private var showRegister = false
+    @State private var showForgotPassword = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case username, password }
@@ -157,6 +159,13 @@ struct LoginView: View {
                     .disabled(authManager.isLoading || username.isEmpty || password.isEmpty)
                     .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
                     .padding(.top, MeeshySpacing.sm)
+
+                    Button { showForgotPassword = true } label: {
+                        Text("Mot de passe oublie ?")
+                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .padding(.top, MeeshySpacing.xs)
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
                 .opacity(showFields ? 1 : 0)
@@ -164,12 +173,33 @@ struct LoginView: View {
 
                 Spacer()
 
-                Text("Pas de compte ? Bientot disponible")
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .padding(.bottom, MeeshySpacing.xxxl)
-                    .opacity(showFields ? 1 : 0)
+                Button { showRegister = true } label: {
+                    HStack(spacing: 4) {
+                        Text("Pas de compte ?")
+                            .foregroundColor(theme.textMuted)
+                        Text("Creer un compte")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                }
+                .padding(.bottom, MeeshySpacing.xxxl)
+                .opacity(showFields ? 1 : 0)
             }
+        }
+        .sheet(isPresented: $showForgotPassword) {
+            MeeshyForgotPasswordView()
+        }
+        .fullScreenCover(isPresented: $showRegister) {
+            MeeshyRegisterView(
+                onRegisterSuccess: { showRegister = false },
+                onBack: { showRegister = false }
+            )
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {

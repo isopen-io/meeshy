@@ -1,6 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
+import os
 
 // MARK: - Socket.IO Event Data Models
 
@@ -136,7 +137,7 @@ public final class SocialSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[SocialSocket] No auth token, skipping connect")
+            Logger.socket.warning("No auth token, skipping SocialSocket connect")
             return
         }
 
@@ -182,21 +183,21 @@ public final class SocialSocketManager: ObservableObject {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = true }
             self?.subscribeFeed()
-            print("[SocialSocket] Connected")
+            Logger.socket.info("SocialSocket connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = false }
-            print("[SocialSocket] Disconnected")
+            Logger.socket.info("SocialSocket disconnected")
         }
 
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            print("[SocialSocket] Reconnected -- re-subscribing to feed")
+            Logger.socket.info("SocialSocket reconnected -- re-subscribing to feed")
             self?.subscribeFeed()
         }
 
         socket.on(clientEvent: .error) { _, args in
-            print("[SocialSocket] Error: \(args)")
+            Logger.socket.error("SocialSocket error: \(args)")
         }
 
         // --- Post events ---
@@ -324,7 +325,7 @@ public final class SocialSocketManager: ObservableObject {
                 handler(decoded)
             }
         } catch {
-            print("[SocialSocket] Decode error for \(type): \(error)")
+            Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
         }
     }
 }

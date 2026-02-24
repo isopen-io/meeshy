@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - API Response Types
 
@@ -77,16 +78,26 @@ final class APIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
 
-    // Auth token — set after login
     var authToken: String? {
-        get { UserDefaults.standard.string(forKey: "meeshy_auth_token") }
-        set { UserDefaults.standard.set(newValue, forKey: "meeshy_auth_token") }
+        get { KeychainManager.shared.load(forKey: "meeshy_auth_token") }
+        set {
+            if let newValue {
+                try? KeychainManager.shared.save(newValue, forKey: "meeshy_auth_token")
+            } else {
+                KeychainManager.shared.delete(forKey: "meeshy_auth_token")
+            }
+        }
     }
 
-    // Session token — persisted for trusted device refresh (365 days)
     var sessionToken: String? {
-        get { UserDefaults.standard.string(forKey: "meeshy_session_token") }
-        set { UserDefaults.standard.set(newValue, forKey: "meeshy_session_token") }
+        get { KeychainManager.shared.load(forKey: "meeshy_session_token") }
+        set {
+            if let newValue {
+                try? KeychainManager.shared.save(newValue, forKey: "meeshy_session_token")
+            } else {
+                KeychainManager.shared.delete(forKey: "meeshy_session_token")
+            }
+        }
     }
 
     private init() {

@@ -1,18 +1,18 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var router: Router
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var prefs = UserPreferencesManager.shared
     @Environment(\.colorScheme) private var systemColorScheme
 
     @State private var showLogoutConfirm = false
-    @State private var notificationsEnabled = true
-    @State private var soundEnabled = true
-    @State private var vibrationEnabled = true
-
-    @AppStorage("preferredLanguage") private var preferredLanguage = "fr"
+    @State private var showPrivacySettings = false
+    @State private var showNotificationSettings = false
 
     private let accentColor = "08D9D6"
 
@@ -34,6 +34,13 @@ struct SettingsView: View {
         } message: {
             Text("Voulez-vous vraiment vous déconnecter ?")
         }
+        .sheet(isPresented: $showPrivacySettings) {
+            PrivacySettingsView()
+        }
+        .sheet(isPresented: $showNotificationSettings) {
+            NotificationSettingsView()
+        }
+        .task { await prefs.fetchFromBackend() }
     }
 
     // MARK: - Header
@@ -86,22 +93,33 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         settingsSection(title: "Compte", icon: "person.circle.fill", color: "9B59B6") {
-            settingsRow(icon: "person.fill", title: "Profil", color: "9B59B6") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                router.push(.profile)
+            } label: {
+                settingsRow(icon: "person.fill", title: "Profil", color: "9B59B6") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
 
-            settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showPrivacySettings = true
+            } label: {
+                settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
 
             settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(theme.textMuted)
+                    .opacity(0.4)
             }
         }
     }
@@ -119,6 +137,7 @@ struct SettingsView: View {
                                 theme.preference = pref
                                 theme.syncWithSystem(systemColorScheme)
                             }
+                            syncThemeToPrefs(pref)
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: pref.icon)
@@ -145,21 +164,41 @@ struct SettingsView: View {
     private var notificationsSection: some View {
         settingsSection(title: "Notifications", icon: "bell.fill", color: "FF6B6B") {
             settingsRow(icon: "bell.badge.fill", title: "Notifications", color: "FF6B6B") {
-                Toggle("", isOn: $notificationsEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.pushEnabled },
+                    set: { val in prefs.updateNotification { $0.pushEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
             }
 
             settingsRow(icon: "speaker.wave.2.fill", title: "Sons", color: "4ECDC4") {
-                Toggle("", isOn: $soundEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.soundEnabled },
+                    set: { val in prefs.updateNotification { $0.soundEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
             }
 
             settingsRow(icon: "iphone.radiowaves.left.and.right", title: "Vibrations", color: "9B59B6") {
-                Toggle("", isOn: $vibrationEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.vibrationEnabled },
+                    set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
+            }
+
+            Button {
+                HapticFeedback.light()
+                showNotificationSettings = true
+            } label: {
+                settingsRow(icon: "slider.horizontal.3", title: "Plus d'options", color: "FF6B6B") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
         }
     }
@@ -172,10 +211,10 @@ struct SettingsView: View {
             ForEach(languages, id: \.0) { code, name in
                 Button {
                     HapticFeedback.light()
-                    preferredLanguage = code
+                    prefs.updateApplication { $0.interfaceLanguage = code }
                 } label: {
-                    settingsRow(icon: "flag.fill", title: name, color: preferredLanguage == code ? accentColor : "6B7280") {
-                        if preferredLanguage == code {
+                    settingsRow(icon: "flag.fill", title: name, color: prefs.application.interfaceLanguage == code ? accentColor : "6B7280") {
+                        if prefs.application.interfaceLanguage == code {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 18))
                                 .foregroundColor(Color(hex: accentColor))
@@ -235,6 +274,17 @@ struct SettingsView: View {
                     )
             )
         }
+    }
+
+    // MARK: - Theme Sync
+
+    private func syncThemeToPrefs(_ pref: ThemePreference) {
+        let appTheme: AppThemeMode = switch pref {
+        case .system: .auto
+        case .light: .light
+        case .dark: .dark
+        }
+        prefs.updateApplication { $0.theme = appTheme }
     }
 
     // MARK: - Reusable Components

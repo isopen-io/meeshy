@@ -21,12 +21,18 @@ public final class AuthManager: ObservableObject {
 
     private init() {}
 
+    private let keychain = KeychainManager.shared
+
     // MARK: - Token Access
 
     public var authToken: String? {
-        get { UserDefaults.standard.string(forKey: tokenKey) }
+        get { keychain.load(forKey: tokenKey) }
         set {
-            UserDefaults.standard.set(newValue, forKey: tokenKey)
+            if let newValue {
+                try? keychain.save(newValue, forKey: tokenKey)
+            } else {
+                keychain.delete(forKey: tokenKey)
+            }
             APIClient.shared.authToken = newValue
         }
     }
@@ -128,7 +134,7 @@ public final class AuthManager: ObservableObject {
     public func logout() {
         Task { await authService.logout() }
         authToken = nil
-        UserDefaults.standard.removeObject(forKey: userKey)
+        keychain.delete(forKey: userKey)
         currentUser = nil
         isAuthenticated = false
     }
@@ -136,25 +142,27 @@ public final class AuthManager: ObservableObject {
     // MARK: - Check Existing Session
 
     public func checkExistingSession() async {
+        keychain.migrateFromUserDefaults(keys: [tokenKey, userKey])
+
         guard authToken != nil else { return }
 
-        // Load cached user for instant display
-        if let userData = UserDefaults.standard.data(forKey: userKey),
+        if let userJSON = keychain.load(forKey: userKey),
+           let userData = userJSON.data(using: .utf8),
            let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
             currentUser = user
         }
 
-        // Verify token with server
         do {
             let user = try await authService.me()
             currentUser = user
-            if let encoded = try? JSONEncoder().encode(user) {
-                UserDefaults.standard.set(encoded, forKey: userKey)
+            if let encoded = try? JSONEncoder().encode(user),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                try? keychain.save(jsonString, forKey: userKey)
             }
             isAuthenticated = true
         } catch {
             authToken = nil
-            UserDefaults.standard.removeObject(forKey: userKey)
+            keychain.delete(forKey: userKey)
             currentUser = nil
             isAuthenticated = false
         }
@@ -164,7 +172,7 @@ public final class AuthManager: ObservableObject {
 
     public func handleUnauthorized() {
         authToken = nil
-        UserDefaults.standard.removeObject(forKey: userKey)
+        keychain.delete(forKey: userKey)
         currentUser = nil
         isAuthenticated = false
     }
@@ -173,8 +181,9 @@ public final class AuthManager: ObservableObject {
 
     private func applySession(token: String, user: MeeshyUser) {
         authToken = token
-        if let encoded = try? JSONEncoder().encode(user) {
-            UserDefaults.standard.set(encoded, forKey: userKey)
+        if let encoded = try? JSONEncoder().encode(user),
+           let jsonString = String(data: encoded, encoding: .utf8) {
+            try? keychain.save(jsonString, forKey: userKey)
         }
         currentUser = user
         isAuthenticated = true
