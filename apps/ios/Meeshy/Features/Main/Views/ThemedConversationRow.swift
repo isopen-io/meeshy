@@ -78,6 +78,7 @@ struct ThemedConversationRow: View {
                         // Type badge
                         if conversation.type != .direct {
                             typeBadge
+                                .accessibilityHidden(true)
                         }
                     }
 
@@ -96,6 +97,7 @@ struct ThemedConversationRow: View {
             // Unread badge
             if conversation.unreadCount > 0 {
                 unreadBadge
+                    .accessibilityHidden(true)
             }
         }
         .padding(14)
@@ -119,6 +121,8 @@ struct ThemedConversationRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
         .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
+        .accessibilityHint("Ouvre la conversation")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var conversationAccessibilityLabel: String {
@@ -128,6 +132,9 @@ struct ThemedConversationRow: View {
             parts.append("dernier message: \(preview)")
         }
         parts.append(timeAgo(conversation.lastMessageAt))
+        if conversation.unreadCount > 0 {
+            parts.append("\(conversation.unreadCount) non lus")
+        }
         if conversation.isMuted { parts.append("en silence") }
         if conversation.isPinned { parts.append("epingle") }
         return parts.joined(separator: ", ")
@@ -238,6 +245,7 @@ struct ThemedConversationRow: View {
                     )
                     .offset(x: 0, y: -34)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityHidden(true)
             }
         }
     }

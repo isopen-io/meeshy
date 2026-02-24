@@ -69,6 +69,9 @@ extension ThemedMessageBubble {
 
     @ViewBuilder
     private func gridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> some View {
+        let attachmentIsProtected = attachment.isViewOnce || attachment.isBlurred
+        let isRevealed = revealedAttachmentIds.contains(attachment.id)
+
         ZStack {
             Color.black
 
@@ -87,10 +90,52 @@ extension ThemedMessageBubble {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
             }
+
+            // Per-attachment view-once / blur overlay
+            if attachmentIsProtected && !isRevealed {
+                AttachmentBlurOverlayView(
+                    isViewOnce: attachment.isViewOnce,
+                    onReveal: {
+                        HapticFeedback.medium()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            _ = revealedAttachmentIds.insert(attachment.id)
+                        }
+                        if attachment.isViewOnce {
+                            let attachmentId = attachment.id
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                withAnimation(.easeOut(duration: 0.5)) {
+                                    _ = revealedAttachmentIds.remove(attachmentId)
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            // View count badge (top-trailing)
+            if attachment.isViewOnce && attachment.viewOnceCount > 0 {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text("\(attachment.viewOnceCount)")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                Circle()
+                                    .fill(Color(hex: "FF6B6B").opacity(0.85))
+                            )
+                    }
+                    .padding(6)
+                    Spacer()
+                }
+                .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
+            }
         }
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
+            guard !attachmentIsProtected || isRevealed else { return }
             if overflowCount > 0 {
                 let items = visualAttachments
                 carouselIndex = items.firstIndex(where: { $0.id == attachment.id }) ?? 0
@@ -103,8 +148,10 @@ extension ThemedMessageBubble {
             HapticFeedback.light()
         }
         .overlay(alignment: .bottom) {
-            downloadBadge(attachment)
-                .padding(.bottom, 6)
+            if !attachmentIsProtected || isRevealed {
+                downloadBadge(attachment)
+                    .padding(.bottom, 6)
+            }
         }
     }
 
@@ -135,7 +182,7 @@ extension ThemedMessageBubble {
         }
     }
 
-    // MARK: - Grid Video Thumbnail (no inline player — tap opens gallery)
+    // MARK: - Grid Video Thumbnail (no inline player -- tap opens gallery)
 
     @ViewBuilder
     private func gridVideoThumbnail(_ attachment: MessageAttachment, solo: Bool = false) -> some View {
@@ -198,6 +245,41 @@ extension ThemedMessageBubble {
                 showShareSheet = true
             }
         )
+    }
+}
+
+// MARK: - Attachment Blur Overlay (standalone struct to avoid type-checker ambiguity)
+
+private struct AttachmentBlurOverlayView: View {
+    let isViewOnce: Bool
+    let onReveal: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .background(.ultraThinMaterial)
+
+            VStack(spacing: 5) {
+                Image(systemName: "eye.slash.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+
+                Text(isViewOnce ? "Voir une fois" : "Contenu masque")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text("Maintenir pour voir")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isViewOnce ? "Media a voir une fois" : "Media masque")
+        .accessibilityHint("Maintenir pour reveler le contenu")
+        .onLongPressGesture(minimumDuration: 0.3) {
+            onReveal()
+        }
     }
 }
 

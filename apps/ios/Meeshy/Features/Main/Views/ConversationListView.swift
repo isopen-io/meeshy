@@ -272,14 +272,18 @@ struct ConversationListView: View {
         [
             SwipeAction(
                 icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned ? "D\u{00e9}s\u{00e9}pingler" : "\u{00c9}pingler",
+                label: conversation.isPinned
+                    ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
+                    : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
                 color: Color(hex: "3B82F6")
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
                 icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.isMuted ? "Son" : "Silence",
+                label: conversation.isMuted
+                    ? String(localized: "swipe.unmute", defaultValue: "Son")
+                    : String(localized: "swipe.mute", defaultValue: "Silence"),
                 color: Color(hex: "6B7280")
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
@@ -291,14 +295,14 @@ struct ConversationListView: View {
         [
             SwipeAction(
                 icon: "archivebox.fill",
-                label: "Archiver",
+                label: String(localized: "swipe.archive", defaultValue: "Archiver"),
                 color: MeeshyColors.orange
             ) {
                 Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
             },
             SwipeAction(
                 icon: "trash.fill",
-                label: "Supprimer",
+                label: String(localized: "swipe.delete", defaultValue: "Supprimer"),
                 color: Color(hex: "EF4444")
             ) {
                 Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
@@ -367,9 +371,9 @@ struct ConversationListView: View {
                     } else if filtered.isEmpty {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
-                            title: "Aucune conversation",
-                            subtitle: "Commencez a discuter avec vos amis ou rejoignez une communaute",
-                            actionTitle: "Commencer une discussion"
+                            title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
+                            subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
+                            actionTitle: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion")
                         ) {
                             NotificationCenter.default.post(
                                 name: Notification.Name("navigateToNewConversation"),
@@ -589,11 +593,11 @@ struct ConversationListView: View {
                 .environmentObject(router)
         }
         .confirmationDialog(
-            "Bloquer cet utilisateur ?",
+            String(localized: "block.confirm.title", defaultValue: "Bloquer cet utilisateur ?"),
             isPresented: $showBlockConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Bloquer", role: .destructive) {
+            Button(String(localized: "action.block", defaultValue: "Bloquer"), role: .destructive) {
                 guard let conv = blockTargetConversation,
                       let targetUserId = conv.participantUserId else { return }
                 Task {
@@ -601,9 +605,9 @@ struct ConversationListView: View {
                     HapticFeedback.success()
                 }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "action.cancel", defaultValue: "Annuler"), role: .cancel) {}
         } message: {
-            Text("Cette personne ne pourra plus vous envoyer de messages dans cette conversation.")
+            Text(String(localized: "block.confirm.message", defaultValue: "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."))
         }
     }
 

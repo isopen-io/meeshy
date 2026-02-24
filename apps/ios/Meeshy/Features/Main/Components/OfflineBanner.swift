@@ -10,13 +10,13 @@ struct OfflineBanner: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text("Hors ligne")
+            Text(String(localized: "connection.offline", defaultValue: "Hors ligne"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
 
             Spacer()
 
-            Text("Les messages seront envoyes a la reconnexion")
+            Text(String(localized: "connection.offline.subtitle", defaultValue: "Les messages seront envoyes a la reconnexion"))
                 .font(.system(size: 10, weight: .regular))
                 .foregroundColor(.white.opacity(0.8))
                 .lineLimit(1)

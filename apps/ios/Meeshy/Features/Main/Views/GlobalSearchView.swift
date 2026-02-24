@@ -50,7 +50,7 @@ struct GlobalSearchView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "accessibility.back", defaultValue: "Retour"))
 
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
@@ -62,8 +62,9 @@ struct GlobalSearchView: View {
                             endPoint: .trailing
                         )
                     )
+                    .accessibilityHidden(true)
 
-                TextField("Rechercher partout...", text: $viewModel.searchText)
+                TextField(String(localized: "search.global.placeholder", defaultValue: "Rechercher partout..."), text: $viewModel.searchText)
                     .focused($isSearchFieldFocused)
                     .foregroundColor(theme.textPrimary)
                     .font(.system(size: 15))
@@ -75,6 +76,7 @@ struct GlobalSearchView: View {
                             viewModel.addToRecentSearches(trimmed)
                         }
                     }
+                    .accessibilityLabel(String(localized: "accessibility.global_search_field", defaultValue: "Recherche globale"))
 
                 if !viewModel.searchText.isEmpty {
                     Button {
@@ -85,6 +87,7 @@ struct GlobalSearchView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(MeeshyColors.coral)
                     }
+                    .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -137,7 +140,7 @@ struct GlobalSearchView: View {
                 HStack(spacing: 4) {
                     Image(systemName: tab.icon)
                         .font(.system(size: 12, weight: .medium))
-                    Text(tab.rawValue)
+                    Text(tab.localizedName)
                         .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                     if count > 0 {
                         Text("\(count)")
@@ -174,7 +177,8 @@ struct GlobalSearchView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .accessibilityLabel("\(tab.rawValue), \(count) resultats")
+        .accessibilityLabel("\(tab.localizedName), \(count) " + String(localized: "accessibility.results", defaultValue: "resultats"))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func tabCount(for tab: SearchTab) -> Int {
@@ -222,11 +226,13 @@ struct GlobalSearchView: View {
             ProgressView()
                 .tint(MeeshyColors.cyan)
                 .scaleEffect(1.2)
-            Text("Recherche en cours...")
+            Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "accessibility.searching", defaultValue: "Recherche en cours"))
     }
 
     // MARK: - Empty Results
@@ -243,16 +249,19 @@ struct GlobalSearchView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-            Text("Aucun resultat")
+                .accessibilityHidden(true)
+            Text(String(localized: "search.no_results", defaultValue: "Aucun resultat"))
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(theme.textPrimary)
-            Text("Essayez avec d'autres termes de recherche")
+            Text(String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
                 .font(.system(size: 13))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun resultat") + ". " + String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
     }
 
     // MARK: - Recent Searches
@@ -271,7 +280,8 @@ struct GlobalSearchView: View {
                                     endPoint: .trailing
                                 )
                             )
-                        Text("Recherches recentes")
+                            .accessibilityHidden(true)
+                        Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
 
@@ -283,10 +293,11 @@ struct GlobalSearchView: View {
                             }
                             HapticFeedback.light()
                         } label: {
-                            Text("Effacer")
+                            Text(String(localized: "action.clear", defaultValue: "Effacer"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(MeeshyColors.coral)
                         }
+                        .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches recentes"))
                     }
                     .padding(.horizontal, 4)
 
@@ -307,14 +318,17 @@ struct GlobalSearchView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    Text("Rechercher dans Meeshy")
+                        .accessibilityHidden(true)
+                    Text(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
-                    Text("Messages, conversations, utilisateurs")
+                    Text(String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs"))
                         .font(.system(size: 13))
                         .foregroundColor(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy") + ". " + String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs"))
             }
         }
     }
@@ -324,6 +338,7 @@ struct GlobalSearchView: View {
             Image(systemName: "clock")
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             Text(query)
                 .font(.system(size: 14))
@@ -342,6 +357,7 @@ struct GlobalSearchView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes") + ": \(query)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -355,6 +371,10 @@ struct GlobalSearchView: View {
             viewModel.addToRecentSearches(query)
             HapticFeedback.light()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche recente") + ": \(query)")
+        .accessibilityHint(String(localized: "accessibility.recent_search_hint", defaultValue: "Relance la recherche"))
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Messages Results
@@ -370,7 +390,8 @@ struct GlobalSearchView: View {
     }
 
     private func messageResultRow(_ result: GlobalSearchMessageResult) -> some View {
-        HStack(spacing: 12) {
+        let label = messageResultAccessibilityLabel(result)
+        return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.conversationName,
                 mode: .messageBubble,
@@ -411,6 +432,10 @@ struct GlobalSearchView: View {
                         .stroke(theme.inputBorder, lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+        .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation"))
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Conversations Results
@@ -426,7 +451,8 @@ struct GlobalSearchView: View {
     }
 
     private func conversationResultRow(_ result: GlobalSearchConversationResult) -> some View {
-        HStack(spacing: 12) {
+        let label = conversationResultAccessibilityLabel(result)
+        return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.name,
                 mode: .messageBubble,
@@ -465,7 +491,7 @@ struct GlobalSearchView: View {
                         .foregroundColor(theme.textMuted)
 
                     if result.memberCount > 2 {
-                        Text("\(result.memberCount) membres")
+                        Text("\(result.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -488,6 +514,10 @@ struct GlobalSearchView: View {
                         .stroke(theme.inputBorder, lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+        .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation"))
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Users Results
@@ -503,7 +533,8 @@ struct GlobalSearchView: View {
     }
 
     private func userResultRow(_ result: GlobalSearchUserResult) -> some View {
-        HStack(spacing: 12) {
+        let label = userResultAccessibilityLabel(result)
+        return HStack(spacing: 12) {
             MeeshyAvatar(
                 name: result.displayName ?? result.username,
                 mode: .messageBubble,
@@ -526,7 +557,7 @@ struct GlobalSearchView: View {
             Spacer()
 
             if result.isOnline {
-                Text("En ligne")
+                Text(String(localized: "status.online", defaultValue: "En ligne"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(MeeshyColors.green)
             }
@@ -540,6 +571,45 @@ struct GlobalSearchView: View {
                         .stroke(theme.inputBorder, lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+        .accessibilityHint(String(localized: "accessibility.view_profile", defaultValue: "Voir le profil"))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Accessibility Label Helpers
+
+    private func messageResultAccessibilityLabel(_ result: GlobalSearchMessageResult) -> String {
+        let messageFrom = String(localized: "accessibility.message_from", defaultValue: "Message de")
+        let inConversation = String(localized: "accessibility.in_conversation", defaultValue: "dans")
+        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(formatTimeAgo(result.createdAt))"
+    }
+
+    private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
+        let membersUnit = String(localized: "unit.members", defaultValue: "membres")
+        let unreadUnit = String(localized: "unit.unread", defaultValue: "non lus")
+        let lastMessageLabel = String(localized: "accessibility.last_message", defaultValue: "dernier message")
+
+        var parts = [result.name, conversationTypeLabel(result.type)]
+        if result.memberCount > 2 {
+            parts.append("\(result.memberCount) \(membersUnit)")
+        }
+        if result.unreadCount > 0 {
+            parts.append("\(result.unreadCount) \(unreadUnit)")
+        }
+        if let preview = result.lastMessagePreview, !preview.isEmpty {
+            parts.append("\(lastMessageLabel): \(preview)")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private func userResultAccessibilityLabel(_ result: GlobalSearchUserResult) -> String {
+        let displayName = result.displayName ?? result.username
+        var label = "\(displayName), @\(result.username)"
+        if result.isOnline {
+            label += ", " + String(localized: "status.online", defaultValue: "En ligne").lowercased()
+        }
+        return label
     }
 
     // MARK: - Navigation Handlers
@@ -605,13 +675,13 @@ struct GlobalSearchView: View {
 
     private func conversationTypeLabel(_ type: MeeshyConversation.ConversationType) -> String {
         switch type {
-        case .direct: return "Direct"
-        case .group: return "Groupe"
-        case .public: return "Public"
-        case .global: return "Global"
-        case .community: return "Communaute"
-        case .channel: return "Channel"
-        case .bot: return "Bot"
+        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct")
+        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe")
+        case .public: return String(localized: "conversation.type.public", defaultValue: "Public")
+        case .global: return String(localized: "conversation.type.global", defaultValue: "Global")
+        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute")
+        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel")
+        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot")
         }
     }
 }

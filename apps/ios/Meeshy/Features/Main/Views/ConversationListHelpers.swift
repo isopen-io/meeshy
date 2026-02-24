@@ -127,7 +127,7 @@ struct ConversationPreviewView: View {
             let userId = AuthManager.shared.currentUser?.id ?? ""
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
         } catch {
-            // Silent fail — preview is best-effort
+            // Silent fail -- preview is best-effort
         }
         isLoading = false
     }
@@ -179,7 +179,7 @@ struct ConversationPreviewView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                     .font(.system(size: 9))
-                                Text("\(conversation.memberCount) membres")
+                                Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
                                     .font(.system(size: 11, weight: .medium))
                             }
                             .foregroundColor(Color(hex: accentColor))
@@ -187,7 +187,7 @@ struct ConversationPreviewView: View {
                             Circle()
                                 .fill(Color(hex: "2ECC71"))
                                 .frame(width: 8, height: 8)
-                            Text("En ligne")
+                            Text(String(localized: "status.online", defaultValue: "En ligne"))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(Color(hex: "2ECC71"))
                         }
@@ -252,7 +252,7 @@ struct ConversationPreviewView: View {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .font(.system(size: 22))
                             .foregroundColor(theme.textMuted.opacity(0.3))
-                        Text("Aucun message")
+                        Text(String(localized: "preview.no_messages", defaultValue: "Aucun message"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }

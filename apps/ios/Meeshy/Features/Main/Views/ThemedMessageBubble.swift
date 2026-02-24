@@ -28,6 +28,7 @@ struct ThemedMessageBubble: View {
     @State var carouselIndex: Int = 0 // internal for cross-file extension access
     @State private var isBlurRevealed: Bool = false
     @State private var isTextExpanded: Bool = false
+    @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
     @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
 
@@ -563,6 +564,7 @@ struct ThemedMessageBubble: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 8))
                     .foregroundColor(metaColor.opacity(0.8))
+                    .accessibilityLabel("Message chiffre")
             }
 
             Text(timeString)
@@ -642,6 +644,13 @@ struct ThemedMessageBubble: View {
     // MARK: - Media Timestamp Overlay (for visual media grid)
     private var mediaTimestampOverlay: some View {
         HStack(spacing: 3) {
+            if message.isEncrypted {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(.white.opacity(0.8))
+                    .accessibilityLabel("Message chiffre")
+            }
+
             Text(timeString)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white)

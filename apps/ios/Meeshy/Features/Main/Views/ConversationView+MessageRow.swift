@@ -106,7 +106,7 @@ extension ConversationView {
                 if let replyCount = replyCountFor(messageId: msg.id), replyCount > 0 {
                     HStack {
                         if msg.isMe { Spacer() }
-                        replyCountPill(count: replyCount, isMe: msg.isMe)
+                        replyCountPill(count: replyCount, isMe: msg.isMe, parentMessageId: msg.id)
                         if !msg.isMe { Spacer() }
                     }
                     .padding(.top, 2)
@@ -738,11 +738,14 @@ extension ConversationView {
         return count > 0 ? count : nil
     }
 
-    func replyCountPill(count: Int, isMe: Bool) -> some View {
+    func replyCountPill(count: Int, isMe: Bool, parentMessageId: String) -> some View {
         let accent = Color(hex: accentColor)
         let label = count == 1 ? "1 reponse" : "\(count) reponses"
         return Button {
             HapticFeedback.light()
+            if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
+                scrollToMessageId = firstReply.id
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "arrowshape.turn.up.left.2.fill")
@@ -763,6 +766,6 @@ extension ConversationView {
             )
         }
         .accessibilityLabel(label)
-        .accessibilityHint("Voir les reponses a ce message")
+        .accessibilityHint("Aller a la premiere reponse de ce message")
     }
 }

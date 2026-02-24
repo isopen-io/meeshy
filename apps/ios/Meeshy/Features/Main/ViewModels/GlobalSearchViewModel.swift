@@ -12,6 +12,14 @@ enum SearchTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var localizedName: String {
+        switch self {
+        case .messages: return String(localized: "tab.messages", defaultValue: "Messages")
+        case .conversations: return String(localized: "tab.conversations", defaultValue: "Conversations")
+        case .users: return String(localized: "tab.users", defaultValue: "Utilisateurs")
+        }
+    }
+
     var icon: String {
         switch self {
         case .messages: return "text.bubble.fill"

@@ -20,7 +20,7 @@ struct ConnectionBanner: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(0.7)
 
-                Text("Reconnexion en cours\(animatedDots)")
+                Text(String(localized: "connection.reconnecting", defaultValue: "Reconnexion en cours") + animatedDots)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)

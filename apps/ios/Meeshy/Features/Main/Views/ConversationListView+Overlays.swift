@@ -14,7 +14,12 @@ extension ConversationListView {
             HapticFeedback.medium()
             Task { await conversationViewModel.togglePin(for: conversation.id) }
         } label: {
-            Label(conversation.isPinned ? "Désépingler" : "Épingler", systemImage: conversation.isPinned ? "pin.slash.fill" : "pin.fill")
+            Label(
+                conversation.isPinned
+                    ? String(localized: "context.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
+                    : String(localized: "context.pin", defaultValue: "\u{00c9}pingler"),
+                systemImage: conversation.isPinned ? "pin.slash.fill" : "pin.fill"
+            )
         }
 
         // Mute/Unmute
@@ -22,7 +27,12 @@ extension ConversationListView {
             HapticFeedback.light()
             Task { await conversationViewModel.toggleMute(for: conversation.id) }
         } label: {
-            Label(conversation.isMuted ? "Réactiver les notifications" : "Mettre en silence", systemImage: conversation.isMuted ? "bell.fill" : "bell.slash.fill")
+            Label(
+                conversation.isMuted
+                    ? String(localized: "context.unmute", defaultValue: "R\u{00e9}activer les notifications")
+                    : String(localized: "context.mute", defaultValue: "Mettre en silence"),
+                systemImage: conversation.isMuted ? "bell.fill" : "bell.slash.fill"
+            )
         }
 
         Divider()
@@ -33,14 +43,14 @@ extension ConversationListView {
                 HapticFeedback.light()
                 Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
             } label: {
-                Label("Marquer comme lu", systemImage: "envelope.open.fill")
+                Label(String(localized: "context.mark_read", defaultValue: "Marquer comme lu"), systemImage: "envelope.open.fill")
             }
         } else {
             Button {
                 HapticFeedback.light()
                 Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
             } label: {
-                Label("Marquer comme non lu", systemImage: "envelope.badge.fill")
+                Label(String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu"), systemImage: "envelope.badge.fill")
             }
         }
 
@@ -56,7 +66,7 @@ extension ConversationListView {
                     }
                 }
             } label: {
-                Label("Réagir", systemImage: "face.smiling.fill")
+                Label(String(localized: "context.react", defaultValue: "R\u{00e9}agir"), systemImage: "face.smiling.fill")
             }
         }
 
@@ -75,7 +85,7 @@ extension ConversationListView {
                     }
                 } label: {
                     if isCurrentCategory {
-                        Label("\(category.name) ✓", systemImage: category.icon)
+                        Label("\(category.name) \u{2713}", systemImage: category.icon)
                     } else {
                         Label(category.name, systemImage: category.icon)
                     }
@@ -88,10 +98,10 @@ extension ConversationListView {
                 HapticFeedback.light()
                 conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
             } label: {
-                Label("Mes conversations", systemImage: "tray.fill")
+                Label(String(localized: "context.my_conversations", defaultValue: "Mes conversations"), systemImage: "tray.fill")
             }
         } label: {
-            Label("Déplacer vers...", systemImage: "folder.fill")
+            Label(String(localized: "context.move_to", defaultValue: "D\u{00e9}placer vers..."), systemImage: "folder.fill")
         }
 
         // Lock/Unlock
@@ -102,7 +112,12 @@ extension ConversationListView {
             lockSheetConversation = conversation
         } label: {
             let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
-            Label(isLocked ? "Déverrouiller" : "Verrouiller", systemImage: isLocked ? "lock.open.fill" : "lock.fill")
+            Label(
+                isLocked
+                    ? String(localized: "context.unlock", defaultValue: "D\u{00e9}verrouiller")
+                    : String(localized: "context.lock", defaultValue: "Verrouiller"),
+                systemImage: isLocked ? "lock.open.fill" : "lock.fill"
+            )
         }
 
         // Archive
@@ -110,7 +125,7 @@ extension ConversationListView {
             HapticFeedback.medium()
             Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
         } label: {
-            Label("Archiver", systemImage: "archivebox.fill")
+            Label(String(localized: "context.archive", defaultValue: "Archiver"), systemImage: "archivebox.fill")
         }
 
         Divider()
@@ -122,16 +137,16 @@ extension ConversationListView {
                 blockTargetConversation = conversation
                 showBlockConfirmation = true
             } label: {
-                Label("Bloquer", systemImage: "hand.raised.fill")
+                Label(String(localized: "context.block", defaultValue: "Bloquer"), systemImage: "hand.raised.fill")
             }
         }
 
-        // Delete (destructive — soft delete for user only)
+        // Delete (destructive -- soft delete for user only)
         Button(role: .destructive) {
             HapticFeedback.heavy()
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
         } label: {
-            Label("Supprimer", systemImage: "trash.fill")
+            Label(String(localized: "context.delete", defaultValue: "Supprimer"), systemImage: "trash.fill")
         }
     }
 
@@ -139,7 +154,7 @@ extension ConversationListView {
     var communitiesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Communautés")
+                Text(String(localized: "communities.title", defaultValue: "Communaut\u{00e9}s"))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
@@ -152,10 +167,11 @@ extension ConversationListView {
 
                 HStack(spacing: 12) {
                     Button {} label: {
-                        Text("Voir tout")
+                        Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(MeeshyColors.teal)
                     }
+                    .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
 
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -173,7 +189,7 @@ extension ConversationListView {
                                 )
                             )
                     }
-                    .accessibilityLabel("Fermer les communautes")
+                    .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautes"))
                 }
             }
             .padding(.horizontal, 16)
@@ -236,13 +252,14 @@ extension ConversationListView {
                     .scaleEffect(isActive ? 1.15 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
             }
-            .accessibilityLabel("Rechercher")
-            .accessibilityHint("Ouvre les filtres et la recherche de conversations")
+            .accessibilityLabel(String(localized: "accessibility.search", defaultValue: "Rechercher"))
+            .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
 
-            TextField("Rechercher...", text: $searchText)
+            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $searchText)
                 .focused($isSearching)
                 .foregroundColor(theme.textPrimary)
                 .font(.system(size: 15))
+                .accessibilityLabel("Rechercher des conversations")
 
             if !searchText.isEmpty {
                 Button {
@@ -252,7 +269,7 @@ extension ConversationListView {
                         .foregroundColor(MeeshyColors.coral)
                         .scaleEffect(1.0)
                 }
-                .accessibilityLabel("Effacer la recherche")
+                .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
                 .transition(.scale.combined(with: .opacity))
             }
 
@@ -271,8 +288,8 @@ extension ConversationListView {
                         )
                     )
             }
-            .accessibilityLabel("Tableau de bord")
-            .accessibilityHint("Ouvre le tableau de bord avec les widgets")
+            .accessibilityLabel(String(localized: "accessibility.dashboard", defaultValue: "Tableau de bord"))
+            .accessibilityHint(String(localized: "accessibility.dashboard.hint", defaultValue: "Ouvre le tableau de bord avec les widgets"))
 
             // Global search button
             Button {
@@ -289,8 +306,8 @@ extension ConversationListView {
                         )
                     )
             }
-            .accessibilityLabel("Recherche globale")
-            .accessibilityHint("Rechercher dans tous les messages, conversations et utilisateurs")
+            .accessibilityLabel(String(localized: "accessibility.global_search", defaultValue: "Recherche globale"))
+            .accessibilityHint(String(localized: "accessibility.global_search.hint", defaultValue: "Rechercher dans tous les messages, conversations et utilisateurs"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
