@@ -198,6 +198,7 @@ model User {
   magicLinkTokens          MagicLinkToken[]
   passwordHistory          PasswordHistory[]
   securityEvents           SecurityEvent[]
+  accountDeletionRequests  AccountDeletionRequest[]
   sessions                 UserSession[]
   pushTokens               PushToken[]
 
@@ -2764,4 +2765,35 @@ model PostBookmark {
 
   @@unique([postId, userId])
   @@index([userId, createdAt])
+}
+
+/// Statut d'une demande de suppression de compte
+enum DeletionRequestStatus {
+  PENDING_EMAIL_CONFIRMATION
+  CONFIRMED
+  GRACE_PERIOD_EXPIRED
+  CANCELLED
+  COMPLETED
+}
+
+/// Demande de suppression de compte avec flow email + période de grâce
+model AccountDeletionRequest {
+  id                String                @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String                @db.ObjectId
+  user              User                  @relation(fields: [userId], references: [id])
+  status            DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
+  confirmTokenHash  String                @unique
+  cancelTokenHash   String                @unique
+  confirmedAt       DateTime?
+  cancelledAt       DateTime?
+  gracePeriodEndsAt DateTime?
+  lastReminderAt    DateTime?
+  reminderCount     Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([gracePeriodEndsAt])
+  @@map("account_deletion_requests")
 }
