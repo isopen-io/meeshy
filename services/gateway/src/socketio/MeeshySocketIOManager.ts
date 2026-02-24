@@ -16,6 +16,7 @@ import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
+import { EmailService } from '../services/EmailService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { validateMessageLength } from '../config/message-limits';
@@ -94,7 +95,8 @@ export class MeeshySocketIOManager {
 
     // Créer l'AttachmentService pour le cleanup automatique
     const attachmentService = new AttachmentService(prisma);
-    this.maintenanceService = new MaintenanceService(prisma, attachmentService);
+    const emailService = new EmailService();
+    this.maintenanceService = new MaintenanceService(prisma, attachmentService, emailService);
 
     // Initialiser StatusService pour throttling des updates lastActiveAt
     this.statusService = new StatusService(prisma);
@@ -1484,12 +1486,41 @@ export class MeeshySocketIOManager {
         this.stats.translations_sent++;
         
       } else {
-        socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
-          messageId: data.messageId,
-          targetLanguage: data.targetLanguage,
-          error: 'Translation not available'
-        });
-        
+        // No cached translation — trigger on-demand translation via ZMQ
+        try {
+          const message = await this.prisma.message.findUnique({
+            where: { id: data.messageId },
+            select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
+          });
+
+          if (!message || !message.content) {
+            socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
+              messageId: data.messageId,
+              targetLanguage: data.targetLanguage,
+              error: 'Message not found or empty'
+            });
+            return;
+          }
+
+          await this.translationService.handleNewMessage({
+            id: message.id,
+            conversationId: message.conversationId,
+            senderId: message.senderId ?? undefined,
+            content: message.content,
+            originalLanguage: message.originalLanguage ?? 'auto',
+            targetLanguage: data.targetLanguage,
+            encryptionMode: message.encryptionMode as MessageData['encryptionMode'],
+          });
+
+          logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
+        } catch (translationError) {
+          logger.error(`❌ On-demand translation failed: ${translationError}`);
+          socket.emit(SERVER_EVENTS.TRANSLATION_ERROR, {
+            messageId: data.messageId,
+            targetLanguage: data.targetLanguage,
+            error: 'Translation request failed'
+          });
+        }
       }
       
     } catch (error) {

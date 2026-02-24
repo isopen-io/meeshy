@@ -6,6 +6,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
+import { EmailService } from './EmailService';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -19,9 +20,12 @@ export class MaintenanceService {
   private statusBroadcastCallback: ((userId: string, isOnline: boolean, isAnonymous: boolean) => void) | null = null;
   private lastDailyCleanup: Date | null = null;
 
-  constructor(prisma: PrismaClient, attachmentService: AttachmentService) {
+  private emailService?: EmailService;
+
+  constructor(prisma: PrismaClient, attachmentService: AttachmentService, emailService?: EmailService) {
     this.prisma = prisma;
     this.attachmentService = attachmentService;
+    this.emailService = emailService;
   }
 
   /**
@@ -302,6 +306,9 @@ export class MaintenanceService {
         // Nettoyer les sessions et données expirées
         await this.cleanupExpiredData();
 
+        // Traiter les demandes de suppression de compte
+        await this.processAccountDeletionRequests();
+
         this.lastDailyCleanup = now;
         logger.info('✅ [DAILY CLEANUP] Nettoyage journalier terminé avec succès');
       } catch (error) {
@@ -407,6 +414,111 @@ export class MaintenanceService {
 
     } catch (error) {
       logger.error('❌ Erreur lors du nettoyage des données expirées:', error);
+    }
+  }
+
+  /**
+   * Traiter les demandes de suppression de compte :
+   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
+   * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
+   */
+  private async processAccountDeletionRequests(): Promise<void> {
+    try {
+      const now = new Date();
+
+      // 1. Expiration des grace periods
+      const expiredRequests = await this.prisma.accountDeletionRequest.findMany({
+        where: {
+          status: 'CONFIRMED',
+          gracePeriodEndsAt: { lt: now }
+        }
+      });
+
+      if (expiredRequests.length > 0) {
+        await this.prisma.accountDeletionRequest.updateMany({
+          where: {
+            id: { in: expiredRequests.map(r => r.id) }
+          },
+          data: { status: 'GRACE_PERIOD_EXPIRED' }
+        });
+        logger.info(`🗑️  [DELETION] ${expiredRequests.length} grace periods expired`);
+      }
+
+      // 2. Rappels hebdomadaires
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const reminderRequests = await this.prisma.accountDeletionRequest.findMany({
+        where: {
+          status: 'GRACE_PERIOD_EXPIRED',
+          OR: [
+            { lastReminderAt: null },
+            { lastReminderAt: { lt: sevenDaysAgo } }
+          ]
+        },
+        include: {
+          user: {
+            select: { email: true, displayName: true, firstName: true, systemLanguage: true }
+          }
+        }
+      });
+
+      if (reminderRequests.length > 0 && this.emailService) {
+        for (const req of reminderRequests) {
+          try {
+            const user = req.user;
+            if (!user?.email) continue;
+
+            const name = user.displayName || user.firstName || 'Utilisateur';
+            const baseUrl = process.env.GATEWAY_URL || process.env.API_URL || 'https://gate.meeshy.me';
+
+            // We need the raw tokens to build links, but we only store hashes.
+            // The reminder email uses confirmTokenHash for delete-now and cancelTokenHash for cancel.
+            // Since we can't reverse hashes, we pass the hash directly — the links will use a
+            // special hash-based lookup. Actually, the routes expect raw tokens that get hashed.
+            // So for reminders, we generate new tokens and update the hashes.
+            const crypto = await import('crypto');
+            const newConfirmToken = crypto.randomBytes(32).toString('base64url');
+            const newCancelToken = crypto.randomBytes(32).toString('base64url');
+            const newConfirmHash = crypto.createHash('sha256').update(newConfirmToken).digest('hex');
+            const newCancelHash = crypto.createHash('sha256').update(newCancelToken).digest('hex');
+
+            await this.prisma.accountDeletionRequest.update({
+              where: { id: req.id },
+              data: {
+                confirmTokenHash: newConfirmHash,
+                cancelTokenHash: newCancelHash,
+                lastReminderAt: now,
+                reminderCount: { increment: 1 },
+              }
+            });
+
+            const deleteNowLink = `${baseUrl}/api/v1/me/delete-account/delete-now?token=${newConfirmToken}`;
+            const cancelLink = `${baseUrl}/api/v1/me/delete-account/cancel?token=${newCancelToken}`;
+            const gracePeriodEndDate = req.gracePeriodEndsAt
+              ? req.gracePeriodEndsAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+              : 'N/A';
+
+            await this.emailService.sendAccountDeletionReminderEmail({
+              to: user.email,
+              name,
+              deleteNowLink,
+              cancelLink,
+              gracePeriodEndDate,
+              language: user.systemLanguage || 'en',
+            });
+
+            logger.info(`📧 [DELETION] Reminder sent to user=${req.userId} (reminder #${req.reminderCount + 1})`);
+          } catch (error) {
+            logger.error(`❌ [DELETION] Failed to send reminder for request=${req.id}:`, error);
+          }
+        }
+      }
+
+      if (expiredRequests.length === 0 && reminderRequests.length === 0) {
+        logger.debug('✅ [DELETION] No account deletion requests to process');
+      }
+    } catch (error) {
+      logger.error('❌ [DELETION] Error processing account deletion requests:', error);
     }
   }
 

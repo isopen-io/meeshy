@@ -1079,7 +1079,9 @@ export function registerMessagesRoutes(
         encryptionMode,
         encryptionMetadata,
         isEncrypted,
-        attachmentIds
+        attachmentIds,
+        isBlurred,
+        expiresAt
       } = request.body;
       const userId = authRequest.authContext.userId;
 
@@ -1180,6 +1182,16 @@ export function registerMessagesRoutes(
         forwardedFromId,
         forwardedFromConversationId
       };
+
+      // Add blur flag if specified
+      if (isBlurred === true) {
+        messageData.isBlurred = true;
+      }
+
+      // Add expiration if specified
+      if (expiresAt) {
+        messageData.expiresAt = new Date(expiresAt);
+      }
 
       // Add encryption fields if message is encrypted
       if (isEncrypted) {
