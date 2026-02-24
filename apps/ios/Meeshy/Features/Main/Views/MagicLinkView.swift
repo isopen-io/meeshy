@@ -14,7 +14,8 @@ struct MagicLinkView: View {
     @State private var step: Step = .emailInput
     @State private var errorMessage: String?
     @State private var isLoading = false
-    @State private var cooldownRemaining = 0
+    @State private var countdownRemaining = 0
+    @State private var linkExpired = false
     @FocusState private var isEmailFocused: Bool
 
     private static let logger = Logger(subsystem: "com.meeshy.app", category: "magic-link")
@@ -207,28 +208,38 @@ struct MagicLinkView: View {
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(MeeshyColors.cyan)
 
-            Text("Ouvrez votre email et cliquez sur le lien")
-                .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.top, MeeshySpacing.sm)
+            if linkExpired {
+                Text("Lien expire, renvoyez-en un nouveau")
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(MeeshyColors.coral)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, MeeshySpacing.sm)
+            } else {
+                Text("Ouvrez votre email et cliquez sur le lien")
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, MeeshySpacing.sm)
 
-            // Resend button with cooldown
+                if countdownRemaining > 0 {
+                    Text(formattedCountdown)
+                        .font(.system(size: MeeshyFont.titleSize, weight: .bold).monospacedDigit())
+                        .foregroundColor(MeeshyColors.purple)
+                        .padding(.top, MeeshySpacing.sm)
+                }
+            }
+
+            // Resend button
             Button(action: sendMagicLink) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-
-                    if cooldownRemaining > 0 {
-                        Text("Renvoyer (\(cooldownRemaining)s)")
-                    } else {
-                        Text("Renvoyer")
-                    }
+                    Text("Renvoyer")
                 }
                 .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(cooldownRemaining > 0 ? theme.textMuted : MeeshyColors.cyan)
+                .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.cyan)
             }
-            .disabled(cooldownRemaining > 0 || isLoading)
+            .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)
 
             // Cancel button
@@ -251,22 +262,29 @@ struct MagicLinkView: View {
 
     // MARK: - Actions
 
+    private var formattedCountdown: String {
+        let minutes = countdownRemaining / 60
+        let seconds = countdownRemaining % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
     private func sendMagicLink() {
         guard isValidEmail else { return }
 
         isLoading = true
         errorMessage = nil
+        linkExpired = false
 
         Task {
             do {
-                try await AuthService.shared.requestMagicLink(email: email)
+                let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
 
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false
                 }
 
-                startCooldown()
+                startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
             } catch let error as APIError {
                 errorMessage = error.errorDescription
@@ -280,14 +298,16 @@ struct MagicLinkView: View {
         }
     }
 
-    private func startCooldown() {
-        cooldownRemaining = 60
+    private func startCountdown(_ seconds: Int) {
+        countdownRemaining = seconds
+        linkExpired = false
         Task {
-            while cooldownRemaining > 0 {
+            while countdownRemaining > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                cooldownRemaining -= 1
+                countdownRemaining -= 1
             }
+            linkExpired = true
         }
     }
 }

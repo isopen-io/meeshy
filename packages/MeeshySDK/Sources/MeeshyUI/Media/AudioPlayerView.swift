@@ -297,6 +297,8 @@ public struct AudioPlayerView: View {
         VStack(spacing: 0) {
             mainPlayer
 
+            transcriptionToggle
+
             if showTranscription, !displaySegments.isEmpty {
                 MediaTranscriptionView(
                     segments: displaySegments,
@@ -305,12 +307,9 @@ public struct AudioPlayerView: View {
                     maxHeight: context.isCompact ? 150 : 250,
                     onSeek: { time in player.seekToTime(time) }
                 )
-                .padding(.top, 4)
                 .padding(.horizontal, context.isCompact ? 0 : 4)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
-
-            transcriptionRequestButton
 
             if !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
@@ -459,29 +458,20 @@ public struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.15), value: pct)
     }
 
-    // MARK: - Transcription Request Button (bottom bar)
+    // MARK: - Transcription Toggle (chevron)
     @ViewBuilder
-    private var transcriptionRequestButton: some View {
+    private var transcriptionToggle: some View {
         if transcription != nil {
             Button {
                 withAnimation { showTranscription.toggle() }
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: showTranscription ? "text.badge.checkmark" : "text.bubble")
-                        .font(.system(size: 10, weight: .medium))
-                    Text(showTranscription ? "Masquer" : "Transcription")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(showTranscription ? accent : (isDark ? .white.opacity(0.45) : .black.opacity(0.35)))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(showTranscription ? accent.opacity(0.12) : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03)))
-                )
+                Image(systemName: showTranscription ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 16)
             }
-            .padding(.top, 6)
         } else if let onRequest = onRequestTranscription {
             Button {
                 onRequest()
