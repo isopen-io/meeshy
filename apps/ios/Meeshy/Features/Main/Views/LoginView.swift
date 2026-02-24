@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var showError = false
     @State private var showRegister = false
     @State private var showForgotPassword = false
+    @State private var showMagicLink = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case username, password }
@@ -160,10 +161,27 @@ struct LoginView: View {
                     .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
                     .padding(.top, MeeshySpacing.sm)
 
-                    Button { showForgotPassword = true } label: {
-                        Text("Mot de passe oublie ?")
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                    HStack(spacing: MeeshySpacing.lg) {
+                        Button { showForgotPassword = true } label: {
+                            Text("Mot de passe oublie ?")
+                                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                                .foregroundColor(theme.textMuted)
+                        }
+
+                        Text("·")
+                            .foregroundColor(theme.textMuted.opacity(0.5))
+
+                        Button { showMagicLink = true } label: {
+                            Text("Connexion sans mot de passe")
+                                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color(hex: "A855F7"), MeeshyColors.cyan],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
                     }
                     .padding(.top, MeeshySpacing.xs)
                 }
@@ -194,6 +212,10 @@ struct LoginView: View {
         }
         .sheet(isPresented: $showForgotPassword) {
             MeeshyForgotPasswordView()
+        }
+        .sheet(isPresented: $showMagicLink) {
+            MagicLinkView()
+                .environmentObject(authManager)
         }
         .fullScreenCover(isPresented: $showRegister) {
             MeeshyRegisterView(

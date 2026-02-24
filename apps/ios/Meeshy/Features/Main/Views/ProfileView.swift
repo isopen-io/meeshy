@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import MeeshySDK
 import MeeshyUI
 
@@ -7,14 +8,32 @@ struct ProfileView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
 
-    @State private var displayName: String = ""
-    @State private var bio: String = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var displayName = ""
+    @State private var bio = ""
+    @State private var email = ""
+    @State private var phoneNumber = ""
+    @State private var systemLanguage = ""
+    @State private var regionalLanguage = ""
+    @State private var customDestinationLanguage = ""
+
     @State private var isEditing = false
     @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
 
     private let accentColor = "A855F7"
 
     private var user: MeeshyUser? { authManager.currentUser }
+
+    private let languages = [
+        ("", "Aucune"), ("fr", "Français"), ("en", "English"), ("es", "Español"),
+        ("ar", "العربية"), ("de", "Deutsch"), ("it", "Italiano"), ("pt", "Português"),
+        ("zh", "中文"), ("ja", "日本語"), ("ko", "한국어"), ("ru", "Русский"),
+        ("tr", "Türkçe"), ("nl", "Nederlands"), ("hi", "हिन्दी"), ("sw", "Kiswahili")
+    ]
 
     var body: some View {
         ZStack {
@@ -24,10 +43,30 @@ struct ProfileView: View {
                 header
                 scrollContent
             }
+
+            if let errorMessage {
+                VStack {
+                    Spacer()
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .padding(.bottom, 24)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation { self.errorMessage = nil }
+                    }
+                }
+            }
         }
-        .onAppear {
-            displayName = user?.displayName ?? user?.username ?? ""
-            bio = user?.bio ?? ""
+        .onAppear { loadUserData() }
+        .onChange(of: avatarItem) { _, newItem in
+            guard let newItem else { return }
+            handleAvatarSelection(newItem)
         }
     }
 
@@ -37,9 +76,14 @@ struct ProfileView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                if isEditing {
+                    isEditing = false
+                    loadUserData()
+                } else {
+                    dismiss()
+                }
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: isEditing ? "xmark" : "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
@@ -52,17 +96,22 @@ struct ProfileView: View {
 
             Spacer()
 
-            Button {
-                HapticFeedback.light()
-                if isEditing {
-                    saveProfile()
-                } else {
-                    isEditing = true
+            if isSaving || isUploadingAvatar {
+                ProgressView()
+                    .tint(Color(hex: accentColor))
+            } else {
+                Button {
+                    HapticFeedback.light()
+                    if isEditing {
+                        saveProfile()
+                    } else {
+                        isEditing = true
+                    }
+                } label: {
+                    Text(isEditing ? "Enregistrer" : "Modifier")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
                 }
-            } label: {
-                Text(isEditing ? "Enregistrer" : "Modifier")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
             }
         }
         .padding(.horizontal, 16)
@@ -75,8 +124,11 @@ struct ProfileView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 avatarSection
-                infoSection
+                identitySection
+                contactSection
+                languagesSection
                 statsSection
+                memberSinceSection
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -88,13 +140,25 @@ struct ProfileView: View {
 
     private var avatarSection: some View {
         VStack(spacing: 12) {
-            MeeshyAvatar(
-                name: user?.displayName ?? user?.username ?? "?",
-                mode: .custom(90),
-                accentColor: accentColor,
-                secondaryColor: "4ECDC4",
-                avatarURL: user?.avatar
-            )
+            ZStack(alignment: .bottomTrailing) {
+                MeeshyAvatar(
+                    name: user?.displayName ?? user?.username ?? "?",
+                    mode: .custom(90),
+                    accentColor: accentColor,
+                    secondaryColor: "4ECDC4",
+                    avatarURL: user?.avatar
+                )
+
+                if isEditing {
+                    PhotosPicker(selection: $avatarItem, matching: .images) {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(Color(hex: accentColor))
+                            .background(Circle().fill(theme.textPrimary.opacity(0.1)))
+                    }
+                    .offset(x: 4, y: 4)
+                }
+            }
 
             if !isEditing {
                 VStack(spacing: 4) {
@@ -112,54 +176,103 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Info Section
+    // MARK: - Identity Section
 
-    private var infoSection: some View {
+    private var identitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-                Text("INFORMATIONS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: accentColor))
-                    .tracking(1.2)
-            }
-            .padding(.leading, 4)
+            sectionHeader(icon: "person.text.rectangle.fill", title: "IDENTITÉ", color: accentColor)
 
             VStack(spacing: 0) {
-                profileField(
-                    icon: "person.fill",
-                    title: "Nom d'affichage",
-                    value: $displayName,
-                    placeholder: "Votre nom"
-                )
-
-                profileField(
-                    icon: "text.quote",
-                    title: "Bio",
-                    value: $bio,
-                    placeholder: "Parlez de vous..."
-                )
-
-                if let email = user?.email {
-                    profileInfoRow(icon: "envelope.fill", title: "Email", value: email)
-                }
-
-                profileInfoRow(
-                    icon: "calendar",
-                    title: "Membre depuis",
-                    value: user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—"
-                )
+                profileField(icon: "person.fill", title: "Prénom", value: $firstName, placeholder: "Prénom")
+                profileField(icon: "person.fill", title: "Nom", value: $lastName, placeholder: "Nom")
+                profileInfoRow(icon: "at", title: "Pseudo", value: "@\(user?.username ?? "—")")
+                profileField(icon: "person.crop.rectangle.fill", title: "Nom d'affichage", value: $displayName, placeholder: "Nom d'affichage")
+                profileField(icon: "text.quote", title: "Bio", value: $bio, placeholder: "Parlez de vous...", isMultiline: true)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: accentColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                    )
-            )
+            .background(sectionBackground)
+        }
+    }
+
+    // MARK: - Contact Section
+
+    private var contactSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(icon: "envelope.fill", title: "CONTACT", color: "4ECDC4")
+
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    fieldIcon("envelope.fill")
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Email")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+
+                        if isEditing {
+                            TextField("email@exemple.com", text: $email)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                        } else {
+                            Text(email.isEmpty ? "—" : email)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(email.isEmpty ? theme.textMuted : theme.textPrimary)
+                        }
+                    }
+
+                    Spacer()
+
+                    verificationBadge(verified: user?.emailVerifiedAt != nil)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                HStack(spacing: 12) {
+                    fieldIcon("phone.fill")
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Téléphone")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+
+                        if isEditing {
+                            TextField("+33 6 12 34 56 78", text: $phoneNumber)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                                .textContentType(.telephoneNumber)
+                                .keyboardType(.phonePad)
+                        } else {
+                            Text(phoneNumber.isEmpty ? "—" : phoneNumber)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(phoneNumber.isEmpty ? theme.textMuted : theme.textPrimary)
+                        }
+                    }
+
+                    Spacer()
+
+                    verificationBadge(verified: user?.phoneVerifiedAt != nil)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+            .background(sectionBackground)
+        }
+    }
+
+    // MARK: - Languages Section
+
+    private var languagesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(icon: "globe", title: "LANGUES", color: "FF6B6B")
+
+            VStack(spacing: 0) {
+                languageRow(title: "Langue principale", selection: $systemLanguage)
+                languageRow(title: "Langue régionale", selection: $regionalLanguage)
+                languageRow(title: "Langue personnalisée", selection: $customDestinationLanguage)
+            }
+            .background(sectionBackground)
         }
     }
 
@@ -167,16 +280,7 @@ struct ProfileView: View {
 
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(MeeshyColors.teal)
-                Text("STATISTIQUES")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(MeeshyColors.teal)
-                    .tracking(1.2)
-            }
-            .padding(.leading, 4)
+            sectionHeader(icon: "chart.bar.fill", title: "STATISTIQUES", color: "4ECDC4")
 
             HStack(spacing: 12) {
                 statCard(value: "—", label: "Messages", color: "FF6B6B")
@@ -186,23 +290,68 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: - Member Since
+
+    private var memberSinceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(icon: "calendar", title: "MEMBRE DEPUIS", color: "9B59B6")
+
+            HStack {
+                Text(user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(sectionBackground)
+        }
+    }
+
     // MARK: - Components
+
+    private func sectionHeader(icon: String, title: String, color: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(hex: color))
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: color))
+                .tracking(1.2)
+        }
+        .padding(.leading, 4)
+    }
+
+    private var sectionBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(theme.surfaceGradient(tint: accentColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(theme.border(tint: accentColor), lineWidth: 1)
+            )
+    }
+
+    private func fieldIcon(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(Color(hex: accentColor))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(hex: accentColor).opacity(0.12))
+            )
+    }
 
     private func profileField(
         icon: String,
         title: String,
         value: Binding<String>,
-        placeholder: String
+        placeholder: String,
+        isMultiline: Bool = false
     ) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: accentColor).opacity(0.12))
-                )
+            fieldIcon(icon)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -210,9 +359,16 @@ struct ProfileView: View {
                     .foregroundColor(theme.textMuted)
 
                 if isEditing {
-                    TextField(placeholder, text: value)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                    if isMultiline {
+                        TextField(placeholder, text: value, axis: .vertical)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(3...6)
+                    } else {
+                        TextField(placeholder, text: value)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                    }
                 } else {
                     Text(value.wrappedValue.isEmpty ? placeholder : value.wrappedValue)
                         .font(.system(size: 14, weight: .medium))
@@ -228,14 +384,7 @@ struct ProfileView: View {
 
     private func profileInfoRow(icon: String, title: String, value: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: accentColor).opacity(0.12))
-                )
+            fieldIcon(icon)
 
             Text(title)
                 .font(.system(size: 14, weight: .medium))
@@ -250,6 +399,43 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private func languageRow(title: String, selection: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            fieldIcon("globe")
+
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            if isEditing {
+                Picker("", selection: selection) {
+                    ForEach(languages, id: \.0) { code, name in
+                        Text(name).tag(code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color(hex: accentColor))
+            } else {
+                Text(languageName(for: selection.wrappedValue))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private func verificationBadge(verified: Bool) -> some View {
+        Text(verified ? "Vérifié" : "Non vérifié")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(verified ? Color(hex: "4ADE80") : Color(hex: "F59E0B")))
     }
 
     private func statCard(value: String, label: String, color: String) -> some View {
@@ -274,30 +460,79 @@ struct ProfileView: View {
         )
     }
 
+    // MARK: - Helpers
+
+    private func languageName(for code: String) -> String {
+        languages.first(where: { $0.0 == code })?.1 ?? (code.isEmpty ? "Aucune" : code)
+    }
+
+    private func loadUserData() {
+        firstName = user?.firstName ?? ""
+        lastName = user?.lastName ?? ""
+        displayName = user?.displayName ?? user?.username ?? ""
+        bio = user?.bio ?? ""
+        email = user?.email ?? ""
+        phoneNumber = user?.phoneNumber ?? ""
+        systemLanguage = user?.systemLanguage ?? ""
+        regionalLanguage = user?.regionalLanguage ?? ""
+        customDestinationLanguage = user?.customDestinationLanguage ?? ""
+    }
+
     // MARK: - Actions
 
     private func saveProfile() {
         isSaving = true
         Task {
             do {
-                struct UpdateProfileBody: Encodable {
-                    let displayName: String?
-                    let bio: String?
-                }
-                let body = UpdateProfileBody(
+                let request = UpdateProfileRequest(
+                    firstName: firstName.isEmpty ? nil : firstName,
+                    lastName: lastName.isEmpty ? nil : lastName,
                     displayName: displayName.isEmpty ? nil : displayName,
-                    bio: bio.isEmpty ? nil : bio
+                    bio: bio.isEmpty ? nil : bio,
+                    systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
+                    regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
+                    email: email.isEmpty ? nil : email,
+                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
+                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
                 )
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.put(
-                    endpoint: "/users/me",
-                    body: body
-                )
+                let updatedUser = try await UserService.shared.updateProfile(request)
+                authManager.currentUser = updatedUser
+                HapticFeedback.success()
+                isEditing = false
+            } catch {
+                HapticFeedback.error()
+                withAnimation { errorMessage = error.localizedDescription }
+            }
+            isSaving = false
+        }
+    }
+
+    private func handleAvatarSelection(_ item: PhotosPickerItem) {
+        isUploadingAvatar = true
+        Task {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    isUploadingAvatar = false
+                    return
+                }
+
+                guard let uiImage = UIImage(data: data),
+                      let jpegData = uiImage.jpegData(compressionQuality: 0.8) else {
+                    isUploadingAvatar = false
+                    return
+                }
+
+                let base64 = jpegData.base64EncodedString()
+                let dataUri = "data:image/jpeg;base64,\(base64)"
+                let updatedUser = try await UserService.shared.updateAvatar(url: dataUri)
+                authManager.currentUser = updatedUser
                 HapticFeedback.success()
             } catch {
                 HapticFeedback.error()
+                withAnimation { errorMessage = "Erreur lors du changement d'avatar" }
             }
-            isSaving = false
-            isEditing = false
+            isUploadingAvatar = false
+            avatarItem = nil
         }
     }
 

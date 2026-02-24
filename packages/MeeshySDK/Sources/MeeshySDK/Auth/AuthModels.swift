@@ -150,6 +150,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let bio: String?
     public let avatar: String?
+    public let banner: String?
     public let role: String?
     public let systemLanguage: String?
     public let regionalLanguage: String?
@@ -165,6 +166,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let isAnonymous: Bool?
     public let isMeeshyer: Bool?
     public let phoneNumber: String?
+    public let emailVerifiedAt: String?
+    public let phoneVerifiedAt: String?
 
     // Translation preferences (from GET /users/:id)
     public let customDestinationLanguage: String?
@@ -177,7 +180,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
         displayName: String? = nil, bio: String? = nil,
-        avatar: String? = nil, role: String? = nil,
+        avatar: String? = nil, banner: String? = nil, role: String? = nil,
         systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: String? = nil,
         createdAt: String? = nil, updatedAt: String? = nil,
@@ -185,6 +188,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         isActive: Bool? = nil, deactivatedAt: String? = nil,
         isAnonymous: Bool? = nil, isMeeshyer: Bool? = nil,
         phoneNumber: String? = nil,
+        emailVerifiedAt: String? = nil, phoneVerifiedAt: String? = nil,
         customDestinationLanguage: String? = nil,
         autoTranslateEnabled: Bool? = nil,
         translateToSystemLanguage: Bool? = nil,
@@ -199,6 +203,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.displayName = displayName
         self.bio = bio
         self.avatar = avatar
+        self.banner = banner
         self.role = role
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
@@ -212,6 +217,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.isAnonymous = isAnonymous
         self.isMeeshyer = isMeeshyer
         self.phoneNumber = phoneNumber
+        self.emailVerifiedAt = emailVerifiedAt
+        self.phoneVerifiedAt = phoneVerifiedAt
         self.customDestinationLanguage = customDestinationLanguage
         self.autoTranslateEnabled = autoTranslateEnabled
         self.translateToSystemLanguage = translateToSystemLanguage

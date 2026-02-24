@@ -27,6 +27,14 @@ public final class UserService {
         return response.data.user
     }
 
+    public func updateAvatar(url: String) async throws -> MeeshyUser {
+        struct Body: Encodable { let avatar: String }
+        let response: APIResponse<UpdateProfileResponse> = try await api.patch(
+            endpoint: "/users/me/avatar", body: Body(avatar: url)
+        )
+        return response.data.user
+    }
+
     public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
         let encoded = idOrUsername.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? idOrUsername
         let response: APIResponse<MeeshyUser> = try await api.request(

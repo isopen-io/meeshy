@@ -7,6 +7,7 @@ enum DeepLinkDestination {
     case ownProfile
     case userProfile(username: String)
     case conversation(id: String)
+    case magicLink(token: String)
     case external(URL)
 }
 
@@ -52,12 +53,22 @@ enum DeepLinkRouter {
     // MARK: - Private
 
     private static func parseCustomScheme(_ url: URL) -> DeepLinkDestination {
-        // meeshy://me, meeshy://u/username, meeshy://c/id
+        // meeshy://me, meeshy://u/username, meeshy://c/id, meeshy://auth/magic-link?token=xxx
         let path = url.host ?? url.path
         let components = path.split(separator: "/").map(String.init)
 
         if path == "me" || components.first == "me" {
             return .ownProfile
+        }
+
+        // meeshy://auth/magic-link?token=xxx
+        if path == "auth" || components.first == "auth" {
+            let subPath = components.dropFirst()
+            if subPath.first == "magic-link",
+               let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+               let token = queryItems.first(where: { $0.name == "token" })?.value {
+                return .magicLink(token: token)
+            }
         }
 
         if components.count >= 2 {
@@ -76,6 +87,13 @@ enum DeepLinkRouter {
 
         if components.first == "me" {
             return .ownProfile
+        }
+
+        // https://meeshy.me/auth/magic-link?token=xxx
+        if components.count >= 2, components[0] == "auth", components[1] == "magic-link",
+           let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+           let token = queryItems.first(where: { $0.name == "token" })?.value {
+            return .magicLink(token: token)
         }
 
         if components.count >= 2 {

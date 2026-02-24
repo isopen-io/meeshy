@@ -1,10 +1,12 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 @main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var toastManager = ToastManager.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showSplash = true
     @State private var hasCheckedSession = false
@@ -33,12 +35,43 @@ struct MeeshyApp: App {
                         .zIndex(1)
                     }
                 }
+                .overlay(alignment: .top) {
+                    if let toast = toastManager.currentToast {
+                        ToastView(toast: toast)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .padding(.top, MeeshySpacing.xxl)
+                            .onTapGesture {
+                                toastManager.dismiss()
+                            }
+                            .zIndex(999)
+                    }
+                }
+                .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
                 .environmentObject(authManager)
                 .preferredColorScheme(theme.preferredColorScheme)
+                .onOpenURL { url in
+                    handleAppLevelDeepLink(url)
+                }
                 .task {
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
                 }
+            }
+        }
+    }
+    // MARK: - App-Level Deep Link (handles magic link when not authenticated)
+
+    private func handleAppLevelDeepLink(_ url: URL) {
+        let destination = DeepLinkRouter.parse(url)
+        guard case .magicLink(let token) = destination else { return }
+
+        Task {
+            await authManager.validateMagicLink(token: token)
+
+            if authManager.isAuthenticated {
+                toastManager.showSuccess("Connexion reussie !")
+            } else {
+                toastManager.showError(authManager.errorMessage ?? "Lien invalide ou expire")
             }
         }
     }

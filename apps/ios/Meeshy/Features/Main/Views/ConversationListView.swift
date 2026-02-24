@@ -343,8 +343,23 @@ struct ConversationListView: View {
                         onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
                     }
 
-                    // Sectioned conversation list
-                    sectionsContent
+                    // Sectioned conversation list (or empty state)
+                    if filtered.isEmpty && !conversationViewModel.isLoading {
+                        EmptyStateView(
+                            icon: "bubble.left.and.bubble.right",
+                            title: "Aucune conversation",
+                            subtitle: "Commencez a discuter avec vos amis ou rejoignez une communaute",
+                            actionTitle: "Commencer une discussion"
+                        ) {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("navigateToNewConversation"),
+                                object: nil
+                            )
+                        }
+                        .padding(.top, 60)
+                    } else {
+                        sectionsContent
+                    }
 
                     // Loading more indicator
                     if conversationViewModel.isLoadingMore {

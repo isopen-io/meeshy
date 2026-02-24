@@ -8,6 +8,7 @@ import MeeshyUI
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
+    @StateObject private var toastManager = ToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
@@ -113,6 +114,21 @@ struct RootView: View {
             if !router.isInConversation {
                 menuLadder
             }
+
+            // 7. Toast overlay
+            VStack {
+                if let toast = toastManager.currentToast {
+                    ToastView(toast: toast)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .padding(.top, MeeshySpacing.xxl)
+                        .onTapGesture {
+                            toastManager.dismiss()
+                        }
+                }
+                Spacer()
+            }
+            .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+            .zIndex(200)
         }
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkRouter.parse(url)

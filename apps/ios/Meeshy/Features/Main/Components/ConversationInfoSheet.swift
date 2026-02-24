@@ -48,6 +48,7 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
+    @State private var showParticipantsView = false
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
@@ -87,6 +88,13 @@ struct ConversationInfoSheet: View {
         .background(sheetBackground)
         .presentationDragIndicator(.visible)
         .task { await loadParticipants() }
+        .fullScreenCover(isPresented: $showParticipantsView) {
+            ParticipantsView(
+                conversationId: conversation.id,
+                accentColor: accentColor,
+                currentUserRole: conversation.currentUserRole
+            )
+        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 appearAnimation = true
@@ -279,6 +287,10 @@ struct ConversationInfoSheet: View {
 
     private var membersSection: some View {
         VStack(spacing: 0) {
+            if conversation.type != .direct {
+                manageMembersButton
+            }
+
             if isLoadingParticipants {
                 VStack(spacing: 12) {
                     ForEach(0..<3, id: \.self) { _ in
@@ -299,6 +311,34 @@ struct ConversationInfoSheet: View {
             }
         }
         .padding(.bottom, 32)
+    }
+
+    private var manageMembersButton: some View {
+        Button {
+            HapticFeedback.light()
+            showParticipantsView = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.2.badge.gearshape")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Gerer les membres")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .foregroundColor(accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .accessibilityLabel("Gerer les membres du groupe")
     }
 
     private func memberRow(_ participant: ConversationParticipant) -> some View {

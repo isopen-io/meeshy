@@ -90,6 +90,12 @@
 		MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */ = {isa = PBXBuildFile; fileRef = MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */; };
 		PRIV002A002A002A002A0002 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */; };
 		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
+		PP2500000000002F25 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2500000000001F25 /* ParticipantsView.swift */; };
+		PP2600000000002F26 /* AddParticipantSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2600000000001F26 /* AddParticipantSheet.swift */; };
+		EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDIT001A001A001A001A0001 /* EditProfileView.swift */; };
+		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
+		ML2700000000002F27 /* MagicLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ML2700000000001F27 /* MagicLinkView.swift */; };
+		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -108,6 +114,8 @@
 		PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		PROF001A001A001A001A0001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		EDIT001A001A001A001A0001 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+MessageRow.swift"; sourceTree = "<group>"; };
 		67CC3F2F25BE7ED204EC43B5 /* ConversationListView+Overlays.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationListView+Overlays.swift"; sourceTree = "<group>"; };
@@ -177,6 +185,10 @@
 		DL1100000000001F01 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationView.swift; sourceTree = "<group>"; };
 		MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyUIExports.swift; sourceTree = "<group>"; };
+		PP2500000000001F25 /* ParticipantsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantsView.swift; sourceTree = "<group>"; };
+		PP2600000000001F26 /* AddParticipantSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddParticipantSheet.swift; sourceTree = "<group>"; };
+		ML2700000000001F27 /* MagicLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicLinkView.swift; sourceTree = "<group>"; };
+		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,6 +226,7 @@
 				CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */,
 				CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */,
 				CC2300000000001F23 /* ConversationLockSheet.swift */,
+				PP2600000000001F26 /* AddParticipantSheet.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -264,6 +277,8 @@
 				SETT001A001A001A001A0001 /* SettingsView.swift */,
 				PRIV001A001A001A001A0001 /* PrivacySettingsView.swift */,
 				NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */,
+				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
+				CHPW001A001A001A001A0001 /* ChangePasswordView.swift */,
 				NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */,
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
@@ -272,6 +287,7 @@
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
 				FEEDATT0A0A0A0A0A0A00001 /* FeedView+Attachments.swift */,
 				EE44FF55AA66BB77CC880033 /* LoginView.swift */,
+				ML2700000000001F27 /* MagicLinkView.swift */,
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
 				AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */,
@@ -293,6 +309,7 @@
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */,
 				2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */,
+				PP2500000000001F25 /* ParticipantsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -306,6 +323,7 @@
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				BB8000000000001FB8 /* ImageFilterEngine.swift */,
+				TM2800000000001F28 /* ToastManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -446,6 +464,8 @@
 				PRIV002A002A002A002A0002 /* PrivacySettingsView.swift in Sources */,
 				NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */,
 				PROF002A002A002A002A0002 /* ProfileView.swift in Sources */,
+				EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */,
+				CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */,
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */,
@@ -519,6 +539,10 @@
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */,
+				PP2500000000002F25 /* ParticipantsView.swift in Sources */,
+				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
+				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
+				TM2800000000002F28 /* ToastManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

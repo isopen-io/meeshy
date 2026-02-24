@@ -1,6 +1,7 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
+import os
 
 enum Route: Hashable {
     case conversation(Conversation)
@@ -13,6 +14,8 @@ enum Route: Hashable {
 final class Router: ObservableObject {
     @Published var path = NavigationPath()
     @Published var deepLinkProfileUser: ProfileSheetUser?
+
+    private static let logger = Logger(subsystem: "com.meeshy.app", category: "router")
 
     var isInConversation: Bool { !path.isEmpty }
 
@@ -55,9 +58,29 @@ final class Router: ObservableObject {
                 // TODO: fetch conversation by ID and navigate
                 break
 
+            case .magicLink(let token):
+                Self.logger.info("Deep link magic link received")
+                Task { [weak self] in
+                    await self?.handleMagicLinkToken(token)
+                }
+
             case .external:
                 break // handled by DeepLinkRouter.open before calling this closure
             }
+        }
+    }
+
+    // MARK: - Magic Link Validation
+
+    private func handleMagicLinkToken(_ token: String) async {
+        await AuthManager.shared.validateMagicLink(token: token)
+
+        if AuthManager.shared.isAuthenticated {
+            ToastManager.shared.showSuccess("Connexion reussie !")
+            Self.logger.info("Magic link validated successfully")
+        } else {
+            ToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
+            Self.logger.error("Magic link validation failed")
         }
     }
 }

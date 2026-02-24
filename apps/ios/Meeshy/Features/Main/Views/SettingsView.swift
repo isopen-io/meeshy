@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var showLogoutConfirm = false
     @State private var showPrivacySettings = false
     @State private var showNotificationSettings = false
+    @State private var showEditProfile = false
+    @State private var showChangePassword = false
 
     private let accentColor = "08D9D6"
 
@@ -39,6 +41,12 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showNotificationSettings) {
             NotificationSettingsView()
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView()
+        }
+        .sheet(isPresented: $showChangePassword) {
+            ChangePasswordView()
         }
         .task { await prefs.fetchFromBackend() }
     }
@@ -106,6 +114,17 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
+                showEditProfile = true
+            } label: {
+                settingsRow(icon: "pencil.circle.fill", title: "Modifier le profil", color: "08D9D6") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
                 showPrivacySettings = true
             } label: {
                 settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
@@ -115,11 +134,15 @@ struct SettingsView: View {
                 }
             }
 
-            settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .opacity(0.4)
+            Button {
+                HapticFeedback.light()
+                showChangePassword = true
+            } label: {
+                settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
         }
     }
