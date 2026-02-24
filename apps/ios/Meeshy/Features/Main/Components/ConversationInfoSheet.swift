@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 // MARK: - Participant Model
 
@@ -49,6 +50,10 @@ struct ConversationInfoSheet: View {
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
     @State private var showParticipantsView = false
+    @State private var showBlockConfirm = false
+    @State private var isBlocking = false
+
+    private static let logger = Logger(subsystem: "com.meeshy.app", category: "conversation-info")
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
@@ -57,6 +62,8 @@ struct ConversationInfoSheet: View {
     }
 
     private var accent: Color { Color(hex: accentColor) }
+    private var isDirect: Bool { conversation.type == .direct }
+    private var otherUserId: String? { conversation.participantUserId }
 
     private var pinnedMessages: [Message] {
         messages.filter { $0.pinnedAt != nil }
@@ -82,6 +89,9 @@ struct ConversationInfoSheet: View {
         VStack(spacing: 0) {
             headerBar
             conversationHeader
+            if isDirect, otherUserId != nil {
+                blockUserButton
+            }
             tabSelector
             tabContent
         }
@@ -94,6 +104,14 @@ struct ConversationInfoSheet: View {
                 accentColor: accentColor,
                 currentUserRole: conversation.currentUserRole
             )
+        }
+        .alert("Bloquer cet utilisateur", isPresented: $showBlockConfirm) {
+            Button("Annuler", role: .cancel) { }
+            Button("Bloquer", role: .destructive) {
+                blockOtherUser()
+            }
+        } message: {
+            Text("Vous ne recevrez plus de messages de \(conversation.name). Vous pourrez le debloquer dans les reglages.")
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -650,6 +668,63 @@ struct ConversationInfoSheet: View {
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM yyyy"
         return formatter
+    }
+
+    // MARK: - Block Button
+
+    private var blockUserButton: some View {
+        Button {
+            HapticFeedback.medium()
+            showBlockConfirm = true
+        } label: {
+            HStack(spacing: 8) {
+                if isBlocking {
+                    ProgressView()
+                        .tint(Color(hex: "EF4444"))
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "exclamationmark.shield")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                Text("Bloquer cet utilisateur")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(Color(hex: "EF4444"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(hex: "EF4444").opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(hex: "EF4444").opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(isBlocking)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .accessibilityLabel("Bloquer \(conversation.name)")
+    }
+
+    // MARK: - Block Action
+
+    private func blockOtherUser() {
+        guard let userId = otherUserId else { return }
+        isBlocking = true
+        Task { [weak blockService = BlockService.shared] in
+            do {
+                try await blockService?.blockUser(userId: userId)
+                HapticFeedback.success()
+                ToastManager.shared.showSuccess("Utilisateur bloque")
+                dismiss()
+            } catch {
+                HapticFeedback.error()
+                ToastManager.shared.showError("Erreur lors du blocage")
+                Self.logger.error("Failed to block user: \(error.localizedDescription)")
+            }
+            isBlocking = false
+        }
     }
 
     // MARK: - API

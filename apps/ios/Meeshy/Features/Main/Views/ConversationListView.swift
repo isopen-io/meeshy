@@ -343,8 +343,17 @@ struct ConversationListView: View {
                         onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
                     }
 
-                    // Sectioned conversation list (or empty state)
-                    if filtered.isEmpty && !conversationViewModel.isLoading {
+                    // Sectioned conversation list (skeleton → content → empty)
+                    if conversationViewModel.isLoading && filtered.isEmpty {
+                        LazyVStack(spacing: 8) {
+                            ForEach(0..<8, id: \.self) { index in
+                                SkeletonConversationRow()
+                                    .staggeredAppear(index: index, baseDelay: 0.04)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .transition(.opacity)
+                    } else if filtered.isEmpty {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
                             title: "Aucune conversation",
@@ -357,8 +366,10 @@ struct ConversationListView: View {
                             )
                         }
                         .padding(.top, 60)
+                        .transition(.opacity)
                     } else {
                         sectionsContent
+                            .transition(.opacity)
                     }
 
                     // Loading more indicator

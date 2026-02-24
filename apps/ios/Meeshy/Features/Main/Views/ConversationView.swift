@@ -421,6 +421,14 @@ struct ConversationView: View {
 
                     Color.clear.frame(height: 70)
 
+                    if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+                        ForEach(0..<6, id: \.self) { index in
+                            SkeletonMessageBubble(index: index)
+                                .staggeredAppear(index: index, baseDelay: 0.04)
+                        }
+                        .transition(.opacity)
+                    }
+
                     ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
                         if shouldShowDateSection(at: index) { dateSectionView(for: msg.createdAt) }
                         if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }

@@ -10,6 +10,23 @@ public struct RegisterDeviceTokenRequest: Encodable {
     }
 }
 
+public struct UnregisterDeviceTokenRequest: Encodable {
+    public let token: String
+
+    public init(token: String) {
+        self.token = token
+    }
+}
+
+public struct RegisterDeviceTokenResponse: Decodable {
+    public let id: String?
+    public let type: String?
+    public let platform: String?
+    public let deviceName: String?
+    public let isNew: Bool?
+    public let message: String?
+}
+
 public struct NotificationPreferences: Codable {
     public var pushEnabled: Bool
     public var messageNotifications: Bool

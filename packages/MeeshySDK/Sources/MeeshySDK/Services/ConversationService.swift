@@ -9,6 +9,13 @@ public final class ConversationService {
         try await api.offsetPaginatedRequest(endpoint: "/conversations", offset: offset, limit: limit)
     }
 
+    public func getById(_ conversationId: String) async throws -> APIConversation {
+        let response: APIResponse<APIConversation> = try await api.request(
+            endpoint: "/conversations/\(conversationId)"
+        )
+        return response.data
+    }
+
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
         let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
         let response: APIResponse<CreateConversationResponse> = try await api.post(endpoint: "/conversations", body: body)

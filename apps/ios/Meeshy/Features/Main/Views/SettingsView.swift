@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showNotificationSettings = false
     @State private var showEditProfile = false
     @State private var showChangePassword = false
+    @State private var showBlockedUsers = false
 
     private let accentColor = "08D9D6"
 
@@ -47,6 +48,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showChangePassword) {
             ChangePasswordView()
+        }
+        .sheet(isPresented: $showBlockedUsers) {
+            BlockedUsersView()
         }
         .task { await prefs.fetchFromBackend() }
     }
@@ -139,6 +143,17 @@ struct SettingsView: View {
                 showChangePassword = true
             } label: {
                 settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showBlockedUsers = true
+            } label: {
+                settingsRow(icon: "lock.shield", title: "Utilisateurs bloques", color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)

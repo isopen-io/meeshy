@@ -54,9 +54,10 @@ final class Router: ObservableObject {
             case .userProfile(let username):
                 deepLinkProfileUser = ProfileSheetUser(username: username)
 
-            case .conversation:
-                // TODO: fetch conversation by ID and navigate
-                break
+            case .conversation(let id):
+                Task { [weak self] in
+                    await self?.handleConversationDeepLink(id)
+                }
 
             case .magicLink(let token):
                 Self.logger.info("Deep link magic link received")
@@ -67,6 +68,21 @@ final class Router: ObservableObject {
             case .external:
                 break // handled by DeepLinkRouter.open before calling this closure
             }
+        }
+    }
+
+    // MARK: - Conversation Deep Link
+
+    private func handleConversationDeepLink(_ conversationId: String) async {
+        do {
+            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+            let apiConversation = try await ConversationService.shared.getById(conversationId)
+            let conversation = apiConversation.toConversation(currentUserId: currentUserId)
+            navigateToConversation(conversation)
+            Self.logger.info("Deep link navigated to conversation \(conversationId)")
+        } catch {
+            Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
+            ToastManager.shared.showError("Impossible d'ouvrir la conversation")
         }
     }
 

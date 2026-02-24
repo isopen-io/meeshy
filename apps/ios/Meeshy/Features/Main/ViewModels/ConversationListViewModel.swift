@@ -22,6 +22,10 @@ class ConversationListViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var hasMore = true
 
+    var totalUnreadCount: Int {
+        conversations.reduce(0) { $0 + $1.unreadCount }
+    }
+
     private let api = APIClient.shared
     private let limit = 30
     private var currentOffset = 0
@@ -30,6 +34,7 @@ class ConversationListViewModel: ObservableObject {
     init() {
         observeSocketReconnect()
         subscribeToSocketEvents()
+        syncBadgeOnUnreadChange()
     }
 
     // Re-seed presence when Socket.IO reconnects (online → offline → online)
@@ -79,6 +84,22 @@ class ConversationListViewModel: ObservableObject {
                 if idx > 0 {
                     let conv = self.conversations.remove(at: idx)
                     self.conversations.insert(conv, at: 0)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Badge Sync
+
+    private func syncBadgeOnUnreadChange() {
+        $conversations
+            .map { $0.reduce(0) { $0 + $1.unreadCount } }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total in
+                guard self != nil else { return }
+                Task {
+                    await PushNotificationManager.shared.updateBadge(totalUnread: total)
                 }
             }
             .store(in: &cancellables)
