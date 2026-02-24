@@ -73,8 +73,8 @@ extension ConversationView {
             set: { if !$0 { imageToPreview = nil } }
         )) {
             if let image = imageToPreview {
-                ImageCropView(image: image) { croppedImage in
-                    handleCameraCapture(croppedImage)
+                ImageEditView(image: image) { editedImage in
+                    handleCameraCapture(editedImage)
                 }
             }
         }

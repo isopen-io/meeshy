@@ -61,7 +61,8 @@
 		AA1000000000002FA1 /* UploadProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000001FA1 /* UploadProgressBar.swift */; };
 		AA2000000000002FA2 /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000001FA2 /* LocationPickerView.swift */; };
 		AA3000000000002FA3 /* MediaCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3000000000001FA3 /* MediaCompressor.swift */; };
-		AA4000000000002FA4 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4000000000001FA4 /* ImageCropView.swift */; };
+		BB7000000000002FB7 /* ImageEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7000000000001FB7 /* ImageEditView.swift */; };
+		BB8000000000002FB8 /* ImageFilterEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8000000000001FB8 /* ImageFilterEngine.swift */; };
 		AA5000000000002FA5 /* VideoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5000000000001FA5 /* VideoPreviewView.swift */; };
 		AA6000000000002FA6 /* AttachmentSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6000000000001FA6 /* AttachmentSendService.swift */; };
 		CC5DF0610487315B178B7FE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB909122D8D9361EC72DF1 /* RootView.swift */; };
@@ -157,7 +158,8 @@
 		AA1000000000001FA1 /* UploadProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProgressBar.swift; sourceTree = "<group>"; };
 		AA2000000000001FA2 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		AA3000000000001FA3 /* MediaCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCompressor.swift; sourceTree = "<group>"; };
-		AA4000000000001FA4 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
+		BB7000000000001FB7 /* ImageEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditView.swift; sourceTree = "<group>"; };
+		BB8000000000001FB8 /* ImageFilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFilterEngine.swift; sourceTree = "<group>"; };
 		AA5000000000001FA5 /* VideoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPreviewView.swift; sourceTree = "<group>"; };
 		AA6000000000001FA6 /* AttachmentSendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendService.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
@@ -199,7 +201,7 @@
 				CC2000000000001F20 /* CameraView.swift */,
 				AA1000000000001FA1 /* UploadProgressBar.swift */,
 				AA2000000000001FA2 /* LocationPickerView.swift */,
-				AA4000000000001FA4 /* ImageCropView.swift */,
+				BB7000000000001FB7 /* ImageEditView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
@@ -297,6 +299,7 @@
 				AA3000000000001FA3 /* MediaCompressor.swift */,
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
+				BB8000000000001FB8 /* ImageFilterEngine.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -474,7 +477,8 @@
 				AA1000000000002FA1 /* UploadProgressBar.swift in Sources */,
 				AA2000000000002FA2 /* LocationPickerView.swift in Sources */,
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
-				AA4000000000002FA4 /* ImageCropView.swift in Sources */,
+				BB7000000000002FB7 /* ImageEditView.swift in Sources */,
+				BB8000000000002FB8 /* ImageFilterEngine.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,

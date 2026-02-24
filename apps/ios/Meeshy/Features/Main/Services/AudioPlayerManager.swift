@@ -20,9 +20,9 @@ class AudioPlayerManager: ObservableObject {
 
         guard !urlString.isEmpty else { return }
 
-        // Configure audio session
+        // Configure audio session for background playback
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             // Silent failure

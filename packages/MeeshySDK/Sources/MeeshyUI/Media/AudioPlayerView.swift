@@ -48,7 +48,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { }
 
@@ -72,7 +72,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         resetState()
         currentUrl = url.absoluteString
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             try AVAudioSession.sharedInstance().setActive(true)
             let data = try Data(contentsOf: url)
             playData(data)

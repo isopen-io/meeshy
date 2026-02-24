@@ -655,7 +655,7 @@ struct FeedComposerSheet: View {
             },
             set: { editingAttachmentId = $0?.id }
         )) { item in
-            ImageCropView(image: item.image) { editedImage in
+            ImageEditView(image: item.image) { editedImage in
                 pendingThumbnails[item.id] = editedImage
                 Task {
                     let result = await MediaCompressor.shared.compressImage(editedImage)
