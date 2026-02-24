@@ -14,6 +14,7 @@ enum Route: Hashable {
 final class Router: ObservableObject {
     @Published var path = NavigationPath()
     @Published var deepLinkProfileUser: ProfileSheetUser?
+    @Published var pendingShareContent: SharedContentType? = nil
 
     private static let logger = Logger(subsystem: "com.meeshy.app", category: "router")
 
@@ -65,6 +66,10 @@ final class Router: ObservableObject {
                     await self?.handleMagicLinkToken(token)
                 }
 
+            case .share(let text, let urlString):
+                Self.logger.info("Deep link share received")
+                handleShareDeepLink(text: text, urlString: urlString)
+
             case .external:
                 break // handled by DeepLinkRouter.open before calling this closure
             }
@@ -97,6 +102,20 @@ final class Router: ObservableObject {
         } else {
             ToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
             Self.logger.error("Magic link validation failed")
+        }
+    }
+
+    // MARK: - Share Deep Link
+
+    private func handleShareDeepLink(text: String?, urlString: String?) {
+        popToRoot()
+
+        if let urlString, let url = URL(string: urlString) {
+            pendingShareContent = .url(url)
+        } else if let text, !text.isEmpty {
+            pendingShareContent = .text(text)
+        } else {
+            Self.logger.error("Share deep link received with no content")
         }
     }
 }

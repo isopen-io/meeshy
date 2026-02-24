@@ -59,6 +59,9 @@ class ConversationViewModel: ObservableObject {
     /// When true, onAppear prefetch triggers are suppressed.
     @Published var isProgrammaticScroll = false
 
+    /// Selected ephemeral duration for next message
+    @Published var ephemeralDuration: EphemeralDuration?
+
     // MARK: - Search State
 
     @Published var searchResults: [SearchResultItem] = []
@@ -81,7 +84,7 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    /// Maps attachment.id → caption text for the fullscreen gallery.
+    /// Maps attachment.id -> caption text for the fullscreen gallery.
     /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
     var mediaCaptionMap: [String: String] {
         var map: [String: String] = [:]
@@ -91,7 +94,7 @@ class ConversationViewModel: ObservableObject {
                 if let caption = att.caption, !caption.isEmpty {
                     map[att.id] = caption
                 } else if visuals.count == 1 && !msg.content.isEmpty {
-                    // Single visual + message text → show as caption
+                    // Single visual + message text -> show as caption
                     // Use translation if available, otherwise original content
                     if let translations = messageTranslations[msg.id],
                        let best = translations.first {
@@ -146,7 +149,7 @@ class ConversationViewModel: ObservableObject {
     deinit {
         leaveRoom()
         MessageSocketManager.shared.activeConversationId = nil
-        // Direct cleanup — can't call @MainActor methods from deinit
+        // Direct cleanup -- can't call @MainActor methods from deinit
         typingTimer?.invalidate()
         if isEmittingTyping {
             MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -328,12 +331,15 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil) async {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil) async {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
 
         // Stop typing emission on send
         stopTypingEmission()
+
+        // Resolve ephemeral: use explicit param or ViewModel state
+        let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
 
         isSending = true
 
@@ -347,6 +353,7 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
+            expiresAt: resolvedExpiresAt,
             createdAt: Date(),
             updatedAt: Date(),
             deliveryStatus: .sending,
@@ -356,7 +363,7 @@ class ConversationViewModel: ObservableObject {
         newMessageAppended += 1
 
         do {
-            let body = SendMessageRequest(
+            var body = SendMessageRequest(
                 content: text.isEmpty ? nil : text,
                 originalLanguage: nil,
                 replyToId: replyToId,
@@ -364,6 +371,9 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds
             )
+            if let resolvedExpiresAt {
+                body.expiresAt = resolvedExpiresAt
+            }
             let response: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
                 endpoint: "/conversations/\(conversationId)/messages",
                 body: body
@@ -377,11 +387,17 @@ class ConversationViewModel: ObservableObject {
                     senderId: currentUserId,
                     content: text,
                     replyToId: replyToId,
+                    expiresAt: resolvedExpiresAt,
                     createdAt: response.data.createdAt,
                     updatedAt: response.data.createdAt,
                     deliveryStatus: .sent,
                     isMe: true
                 )
+            }
+
+            // Clear ephemeral duration after successful send
+            if ephemeralDuration != nil {
+                ephemeralDuration = nil
             }
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
@@ -411,6 +427,16 @@ class ConversationViewModel: ObservableObject {
 
     func removeFailedMessage(messageId: String) {
         messages.removeAll { $0.id == messageId && $0.deliveryStatus == .failed }
+    }
+
+    // MARK: - Handle Expired Messages
+
+    func removeExpiredMessages() {
+        let now = Date()
+        messages.removeAll { msg in
+            guard let expiresAt = msg.expiresAt else { return false }
+            return expiresAt <= now
+        }
     }
 
     // MARK: - Toggle Reaction
@@ -686,7 +712,7 @@ class ConversationViewModel: ObservableObject {
                 if event.userId != userId, !self.typingUsernames.contains(event.username) {
                     self.typingUsernames.append(event.username)
                 }
-                // Reset safety timer (even if already in list — they're still typing)
+                // Reset safety timer (even if already in list -- they're still typing)
                 if event.userId != userId {
                     self.resetTypingSafetyTimer(for: event.username)
                 }
@@ -717,7 +743,7 @@ class ConversationViewModel: ObservableObject {
                     guard self.messages[i].isMe else { continue }
                     guard self.messages[i].deliveryStatus.rawValue != Message.DeliveryStatus.read.rawValue else { continue }
                     if self.messages[i].createdAt <= event.updatedAt {
-                        // Only upgrade status (sent → delivered → read), never downgrade
+                        // Only upgrade status (sent -> delivered -> read), never downgrade
                         let current = self.messages[i].deliveryStatus
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             self.messages[i].deliveryStatus = newStatus

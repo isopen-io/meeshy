@@ -256,6 +256,24 @@ extension ConversationListView {
                 .transition(.scale.combined(with: .opacity))
             }
 
+            // Dashboard / widget button
+            Button {
+                HapticFeedback.medium()
+                showWidgetPreview = true
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.orange, MeeshyColors.pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .accessibilityLabel("Tableau de bord")
+            .accessibilityHint("Ouvre le tableau de bord avec les widgets")
+
             // Global search button
             Button {
                 HapticFeedback.medium()

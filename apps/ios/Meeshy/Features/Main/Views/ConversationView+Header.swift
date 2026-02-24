@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Header, Background & Navigation
 extension ConversationView {
@@ -126,6 +127,57 @@ extension ConversationView {
                 } label: {
                     Label("Infos conversation", systemImage: "info.circle.fill")
                 }
+            }
+        }
+    }
+
+    // MARK: - Header Call Buttons (audio + video)
+
+    @ViewBuilder
+    var headerCallButtons: some View {
+        if isDirect, let userId = conversation?.participantUserId {
+            HStack(spacing: 4) {
+                // Audio call
+                Button {
+                    CallManager.shared.startCall(
+                        userId: userId,
+                        username: conversation?.name ?? "Inconnu",
+                        isVideo: false
+                    )
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                }
+                .accessibilityLabel("Appel audio")
+
+                // Video call
+                Button {
+                    CallManager.shared.startCall(
+                        userId: userId,
+                        username: conversation?.name ?? "Inconnu",
+                        isVideo: true
+                    )
+                } label: {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                }
+                .accessibilityLabel("Appel video")
             }
         }
     }

@@ -8,6 +8,7 @@ enum DeepLinkDestination {
     case userProfile(username: String)
     case conversation(id: String)
     case magicLink(token: String)
+    case share(text: String?, url: String?)
     case external(URL)
 }
 
@@ -20,13 +21,15 @@ enum DeepLinkRouter {
     /// Parse any URL into a deep link destination.
     ///
     /// Handles:
-    /// - `https://meeshy.me/me`          → own profile
-    /// - `https://meeshy.me/u/{username}` → user profile
-    /// - `https://meeshy.me/c/{id}`       → conversation
-    /// - `meeshy://me`                    → own profile
-    /// - `meeshy://u/{username}`          → user profile
-    /// - `meeshy://c/{id}`               → conversation
-    /// - Everything else                  → open externally
+    /// - `https://meeshy.me/me`          -> own profile
+    /// - `https://meeshy.me/u/{username}` -> user profile
+    /// - `https://meeshy.me/c/{id}`       -> conversation
+    /// - `meeshy://me`                    -> own profile
+    /// - `meeshy://u/{username}`          -> user profile
+    /// - `meeshy://c/{id}`               -> conversation
+    /// - `meeshy://share?text=...`        -> share text content
+    /// - `meeshy://share?url=...`         -> share URL content
+    /// - Everything else                  -> open externally
     static func parse(_ url: URL) -> DeepLinkDestination {
         if url.scheme == "meeshy" {
             return parseCustomScheme(url)
@@ -61,6 +64,11 @@ enum DeepLinkRouter {
             return .ownProfile
         }
 
+        // meeshy://share?text=...&url=...
+        if path == "share" || components.first == "share" {
+            return parseShareQuery(url)
+        }
+
         // meeshy://auth/magic-link?token=xxx
         if path == "auth" || components.first == "auth" {
             let subPath = components.dropFirst()
@@ -89,6 +97,11 @@ enum DeepLinkRouter {
             return .ownProfile
         }
 
+        // https://meeshy.me/share?text=...&url=...
+        if components.first == "share" {
+            return parseShareQuery(url)
+        }
+
         // https://meeshy.me/auth/magic-link?token=xxx
         if components.count >= 2, components[0] == "auth", components[1] == "magic-link",
            let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
@@ -104,7 +117,16 @@ enum DeepLinkRouter {
             }
         }
 
-        // Unknown meeshy.me path (e.g. /l/TOKEN) → open in Safari
+        // Unknown meeshy.me path (e.g. /l/TOKEN) -> open in Safari
         return .external(url)
+    }
+
+    // MARK: - Share Query Parser
+
+    private static func parseShareQuery(_ url: URL) -> DeepLinkDestination {
+        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        let text = queryItems?.first(where: { $0.name == "text" })?.value
+        let urlString = queryItems?.first(where: { $0.name == "url" })?.value
+        return .share(text: text, url: urlString)
     }
 }

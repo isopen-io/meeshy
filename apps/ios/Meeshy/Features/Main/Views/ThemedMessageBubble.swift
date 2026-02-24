@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -29,6 +30,11 @@ struct ThemedMessageBubble: View {
     @State private var isTextExpanded: Bool = false
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
     @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
+
+    // Ephemeral timer state
+    @State private var ephemeralSecondsRemaining: TimeInterval = 0
+    @State private var isEphemeralExpired: Bool = false
+    @State private var ephemeralTimerCancellable: AnyCancellable?
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
@@ -109,6 +115,7 @@ struct ThemedMessageBubble: View {
         if message.isEdited { parts.append("modifie") }
         if message.pinnedAt != nil { parts.append("epingle") }
         if message.isEncrypted { parts.append("chiffre") }
+        if message.expiresAt != nil { parts.append("ephemere") }
         if !reactionSummaries.isEmpty {
             let reactionText = reactionSummaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
             parts.append("reactions: \(reactionText)")
@@ -126,11 +133,61 @@ struct ThemedMessageBubble: View {
         }
     }
 
+    // MARK: - Ephemeral Formatting
+
+    private var ephemeralTimerText: String {
+        let total = Int(ephemeralSecondsRemaining)
+        if total <= 0 { return "0s" }
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
+    }
+
     var body: some View {
         if message.isDeleted {
             deletedMessageView
+        } else if isEphemeralExpired {
+            EmptyView()
         } else {
             messageContent
+                .opacity(isEphemeralExpired ? 0 : 1)
+                .scaleEffect(isEphemeralExpired ? 0.8 : 1)
+                .onAppear { startEphemeralTimerIfNeeded() }
+                .onDisappear { ephemeralTimerCancellable?.cancel() }
+        }
+    }
+
+    // MARK: - Ephemeral Timer Logic
+
+    private func startEphemeralTimerIfNeeded() {
+        guard let expiresAt = message.expiresAt else { return }
+        let remaining = expiresAt.timeIntervalSinceNow
+        if remaining <= 0 {
+            withAnimation(.easeOut(duration: 0.4)) {
+                isEphemeralExpired = true
+            }
+            return
+        }
+        ephemeralSecondsRemaining = remaining
+
+        let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+        ephemeralTimerCancellable = timer.sink { _ in
+            let newRemaining = expiresAt.timeIntervalSinceNow
+            if newRemaining <= 0 {
+                withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
+                    isEphemeralExpired = true
+                }
+                ephemeralTimerCancellable?.cancel()
+            } else {
+                ephemeralSecondsRemaining = newRemaining
+            }
         }
     }
 
@@ -142,7 +199,7 @@ struct ThemedMessageBubble: View {
                 Image(systemName: "nosign")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                Text("Message supprimé")
+                Text("Message supprime")
                     .font(.system(size: 13, weight: .regular))
                     .italic()
                     .foregroundColor(theme.textMuted)
@@ -202,12 +259,17 @@ struct ThemedMessageBubble: View {
                     forwardedIndicator
                 }
 
+                // Ephemeral indicator
+                if message.expiresAt != nil && !isEphemeralExpired {
+                    ephemeralTimerOverlay
+                }
+
                 // Message content (blurred if isBlurred and not revealed)
                 let shouldBlur = message.isBlurred && !isBlurRevealed
 
                 ZStack {
                     VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                        // Grille visuelle (images + vidéos) ou carrousel inline
+                        // Grille visuelle (images + videos) ou carrousel inline
                         if !visualAttachments.isEmpty {
                             let mediaTimestampAlignment: Alignment = .bottomTrailing
 
@@ -295,7 +357,7 @@ struct ThemedMessageBubble: View {
                                 .font(.system(size: 20))
                                 .foregroundStyle(.white)
 
-                            Text(message.isViewOnce ? "Voir une fois" : "Contenu masqué")
+                            Text(message.isViewOnce ? "Voir une fois" : "Contenu masque")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white)
 
@@ -381,6 +443,31 @@ struct ThemedMessageBubble: View {
         }
     }
 
+    // MARK: - Ephemeral Timer Overlay
+
+    private var ephemeralTimerOverlay: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Color(hex: "FF6B6B"))
+
+            Text(ephemeralTimerText)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(Color(hex: "FF6B6B"))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.15 : 0.1))
+                .overlay(
+                    Capsule()
+                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
+                )
+        )
+        .accessibilityLabel("Message ephemere, expire dans \(ephemeralTimerText)")
+    }
+
     // MARK: - Expandable Text
 
     private static let textTruncateLimit = 512
@@ -458,7 +545,7 @@ struct ThemedMessageBubble: View {
     /// never covers actual message content. Concatenated via `+` to the content Text.
     private var timestampSpacerText: Text {
         let spacer = message.isMe
-            ? "\u{00A0}\u{00A0}\u{00A0}\(timeString)\u{00A0}✓✓"
+            ? "\u{00A0}\u{00A0}\u{00A0}\(timeString)\u{00A0}\u{2713}\u{2713}"
             : "\u{00A0}\u{00A0}\u{00A0}\(timeString)"
         return Text(spacer)
             .font(.system(size: 10))
@@ -500,7 +587,7 @@ struct ThemedMessageBubble: View {
         return HStack(spacing: 3) {
             Image(systemName: "pencil")
                 .font(.system(size: 8, weight: .semibold))
-            Text("modifié")
+            Text("modifie")
                 .font(.system(size: 9, weight: .medium))
                 .italic()
         }
@@ -617,7 +704,7 @@ struct ThemedMessageBubble: View {
                 .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
-            Text("Épinglé")
+            Text("Epingle")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
@@ -648,7 +735,7 @@ struct ThemedMessageBubble: View {
                         .lineLimit(1)
                 }
             } else {
-                Text("Transféré")
+                Text("Transfere")
                     .font(.system(size: 10))
                     .italic()
                     .foregroundColor(theme.textMuted)
@@ -790,7 +877,7 @@ struct ThemedMessageBubble: View {
                             .font(.system(size: 36))
                             .foregroundColor(.white)
 
-                        Text("Position partagée")
+                        Text("Position partagee")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.9))
                     }

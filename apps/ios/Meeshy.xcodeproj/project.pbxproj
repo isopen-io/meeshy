@@ -104,6 +104,13 @@
 		CB3100000000002F31 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3100000000001F31 /* ConnectionBanner.swift */; };
 		GS3200000000002F32 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3200000000001F32 /* GlobalSearchView.swift */; };
 		GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3300000000001F33 /* GlobalSearchViewModel.swift */; };
+		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
+		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
+		CM3600000000002F36 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM3600000000001F36 /* CallManager.swift */; };
+		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
+		CV3800000000002F38 /* CallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CV3800000000001F38 /* CallView.swift */; };
+		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
+		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -205,6 +212,13 @@
 		CB3100000000001F31 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
 		GS3200000000001F32 /* GlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchView.swift; sourceTree = "<group>"; };
 		GS3300000000001F33 /* GlobalSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchViewModel.swift; sourceTree = "<group>"; };
+		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
+		WP3500000000001F35 /* WidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviewView.swift; sourceTree = "<group>"; };
+		CM3600000000001F36 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
+		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+		CV3800000000001F38 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
+		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
+		CC4000000000001F40 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -245,6 +259,7 @@
 				PP2600000000001F26 /* AddParticipantSheet.swift */,
 				OF3000000000001F30 /* OfflineBanner.swift */,
 				CB3100000000001F31 /* ConnectionBanner.swift */,
+				CC4000000000001F40 /* ContactCardView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -313,6 +328,7 @@
 				694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
 				AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */,
+				SP3400000000001F34 /* SharePickerView.swift */,
 				BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */,
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
 				BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */,
@@ -333,6 +349,9 @@
 				2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */,
 				PP2500000000001F25 /* ParticipantsView.swift */,
 				GS3200000000001F32 /* GlobalSearchView.swift */,
+				WP3500000000001F35 /* WidgetPreviewView.swift */,
+				CV3800000000001F38 /* CallView.swift */,
+				IC3900000000001F39 /* IncomingCallView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -347,6 +366,8 @@
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				BB8000000000001FB8 /* ImageFilterEngine.swift */,
 				TM2800000000001F28 /* ToastManager.swift */,
+				CM3600000000001F36 /* CallManager.swift */,
+				WR3700000000001F37 /* WebRTCService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -575,6 +596,13 @@
 				CB3100000000002F31 /* ConnectionBanner.swift in Sources */,
 				GS3200000000002F32 /* GlobalSearchView.swift in Sources */,
 				GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */,
+				SP3400000000002F34 /* SharePickerView.swift in Sources */,
+				WP3500000000002F35 /* WidgetPreviewView.swift in Sources */,
+				CM3600000000002F36 /* CallManager.swift in Sources */,
+				WR3700000000002F37 /* WebRTCService.swift in Sources */,
+				CV3800000000002F38 /* CallView.swift in Sources */,
+				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
+				CC4000000000002F40 /* ContactCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

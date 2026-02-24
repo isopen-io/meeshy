@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import CoreLocation
 import AVFoundation
+import Contacts
 import MeeshySDK
 import MeeshyUI
 
@@ -105,6 +106,10 @@ struct ConversationView: View {
     // Swipe state
     @State var swipedMessageId: String? = nil
     @State var swipeOffset: CGFloat = 0
+
+    // Ephemeral & contact picker state
+    @State var showEphemeralPicker = false
+    @State var showContactPicker = false
 
     // Typing dot state
     @State var typingDotPhase: Int = 0
@@ -568,7 +573,7 @@ struct ConversationView: View {
                 ThemedBackButton(color: accentColor, compactMode: showOptions) { HapticFeedback.light(); dismiss() }
 
                 if showOptions {
-                    // Title row: name + tags scroll + search icon
+                    // Title row: name + tags scroll + call buttons + search icon
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 4) {
                             Button { showConversationInfo = true } label: {
@@ -581,6 +586,7 @@ struct ConversationView: View {
                             .accessibilityHint("Ouvre les informations de la conversation")
                             if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
                             Spacer(minLength: 4)
+                            headerCallButtons
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
                                 isSearchFocused = true

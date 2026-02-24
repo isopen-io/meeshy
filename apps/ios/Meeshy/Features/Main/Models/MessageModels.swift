@@ -94,6 +94,7 @@ struct APIMessage: Decodable {
     let pinnedBy: String?
     let isViewOnce: Bool?
     let isBlurred: Bool?
+    let expiresAt: Date?
     let createdAt: Date
     let updatedAt: Date?
     let sender: APIMessageSender?
@@ -131,6 +132,7 @@ struct SendMessageRequest: Encodable {
     var forwardedFromId: String? = nil
     var forwardedFromConversationId: String? = nil
     var attachmentIds: [String]? = nil
+    var expiresAt: Date? = nil
 }
 
 // MARK: - Send Message Response
@@ -157,7 +159,7 @@ struct SearchResultItem: Identifiable {
     let createdAt: Date
 }
 
-// MARK: - APIMessage → Message Conversion
+// MARK: - APIMessage -> Message Conversion
 
 extension APIMessage {
     func toMessage(currentUserId: String) -> Message {
@@ -297,6 +299,7 @@ extension APIMessage {
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
+            expiresAt: expiresAt,
             isViewOnce: isViewOnce ?? false,
             isBlurred: isBlurred ?? false,
             pinnedAt: parsedPinnedAt,

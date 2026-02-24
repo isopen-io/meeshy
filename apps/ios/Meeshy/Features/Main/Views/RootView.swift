@@ -13,6 +13,7 @@ struct RootView: View {
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
+    @ObservedObject private var callManager = CallManager.shared
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
@@ -29,6 +30,9 @@ struct RootView: View {
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
 
+    // Share sheet state (triggered by deep link)
+    @State private var showSharePicker = false
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -40,12 +44,16 @@ struct RootView: View {
         return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
     }
 
+    private var isCallActive: Bool {
+        callManager.callState.isActive
+    }
+
     var body: some View {
         ZStack {
             // 1. Dynamic Background
             themedBackground
 
-            // 2. Main content — NavigationStack
+            // 2. Main content -- NavigationStack
             NavigationStack(path: $router.path) {
                 ConversationListView(
                     isScrollingDown: $isScrollingDown,
@@ -177,6 +185,12 @@ struct RootView: View {
                 )
             }
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { isCallActive },
+            set: { if !$0 { callManager.endCall() } }
+        )) {
+            CallView()
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
         .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
@@ -189,6 +203,24 @@ struct RootView: View {
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
             ProfileFetchingSheet(user: user)
+        }
+        .sheet(isPresented: $showSharePicker) {
+            if let content = router.pendingShareContent {
+                SharePickerView(
+                    sharedContent: content,
+                    onDismiss: {
+                        router.pendingShareContent = nil
+                    }
+                )
+                .environmentObject(conversationViewModel)
+                .environmentObject(router)
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .onChange(of: router.pendingShareContent != nil) { hasContent in
+            if hasContent {
+                showSharePicker = true
+            }
         }
     }
 

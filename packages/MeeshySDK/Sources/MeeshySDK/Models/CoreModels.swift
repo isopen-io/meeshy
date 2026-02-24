@@ -58,7 +58,7 @@ public struct MeeshyConversationSection: Identifiable, Hashable {
         self.order = order
     }
 
-    public static let pinned = MeeshyConversationSection(id: "pinned", name: "Épinglés", icon: "pin.fill", color: "FF6B6B", order: 0)
+    public static let pinned = MeeshyConversationSection(id: "pinned", name: "Epingles", icon: "pin.fill", color: "FF6B6B", order: 0)
     public static let work = MeeshyConversationSection(id: "work", name: "Travail", icon: "briefcase.fill", color: "3498DB", order: 1)
     public static let family = MeeshyConversationSection(id: "family", name: "Famille", icon: "house.fill", color: "2ECC71", order: 2)
     public static let friends = MeeshyConversationSection(id: "friends", name: "Amis", icon: "person.2.fill", color: "9B59B6", order: 3)
@@ -335,9 +335,51 @@ public struct MeeshyMessage: Identifiable, Codable {
     public var text: String { content }
     public var timestamp: Date { createdAt }
     public var attachment: MeeshyMessageAttachment? { attachments.first }
+
+    /// Whether the message is ephemeral and has not yet expired.
+    public var isEphemeralActive: Bool {
+        guard let expiresAt else { return false }
+        return expiresAt > Date()
+    }
 }
 
 public typealias MeeshyChatMessage = MeeshyMessage
+
+// MARK: - Ephemeral Duration
+
+public enum EphemeralDuration: Int, CaseIterable, Identifiable {
+    case thirtySeconds = 30
+    case oneMinute = 60
+    case fiveMinutes = 300
+    case oneHour = 3600
+    case twentyFourHours = 86400
+
+    public var id: Int { rawValue }
+
+    public var label: String {
+        switch self {
+        case .thirtySeconds: return "30s"
+        case .oneMinute: return "1min"
+        case .fiveMinutes: return "5min"
+        case .oneHour: return "1h"
+        case .twentyFourHours: return "24h"
+        }
+    }
+
+    public var displayLabel: String {
+        switch self {
+        case .thirtySeconds: return "30 secondes"
+        case .oneMinute: return "1 minute"
+        case .fiveMinutes: return "5 minutes"
+        case .oneHour: return "1 heure"
+        case .twentyFourHours: return "24 heures"
+        }
+    }
+
+    public var expiresAt: Date {
+        Date().addingTimeInterval(TimeInterval(rawValue))
+    }
+}
 
 // MARK: - Message Attachment
 
@@ -594,11 +636,11 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
     case all = "Tous"
     case unread = "Non lus"
     case personnel = "Personnel"
-    case privee = "Privée"
+    case privee = "Privee"
     case ouvertes = "Ouvertes"
     case globales = "Globales"
     case channels = "Channels"
-    case archived = "Archivés"
+    case archived = "Archives"
 
     public var id: String { self.rawValue }
 
@@ -613,5 +655,21 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
         case .channels: return "1ABC9C"
         case .archived: return "9B59B6"
         }
+    }
+}
+
+// MARK: - Shared Contact Model
+
+public struct SharedContact: Codable, Identifiable {
+    public let id: String
+    public let fullName: String
+    public var phoneNumbers: [String]
+    public var emails: [String]
+
+    public init(id: String = UUID().uuidString, fullName: String, phoneNumbers: [String] = [], emails: [String] = []) {
+        self.id = id
+        self.fullName = fullName
+        self.phoneNumbers = phoneNumbers
+        self.emails = emails
     }
 }

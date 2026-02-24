@@ -100,6 +100,9 @@ struct ConversationListView: View {
     @State var showBlockConfirmation = false
     @State var blockTargetConversation: Conversation? = nil
 
+    // Widget preview state
+    @State var showWidgetPreview = false
+
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
@@ -156,7 +159,7 @@ struct ConversationListView: View {
             return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
         }
 
-        // Finally: Uncategorized ("Mes conversations") — no sectionId + not pinned, plus orphaned
+        // Finally: Uncategorized ("Mes conversations") -- no sectionId + not pinned, plus orphaned
         let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
         let allUncategorized = uncategorized + orphaned
         if !allUncategorized.isEmpty {
@@ -269,7 +272,7 @@ struct ConversationListView: View {
         [
             SwipeAction(
                 icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned ? "Désépingler" : "Épingler",
+                label: conversation.isPinned ? "D\u{00e9}s\u{00e9}pingler" : "\u{00c9}pingler",
                 color: Color(hex: "3B82F6")
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
@@ -343,7 +346,7 @@ struct ConversationListView: View {
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel) { groupIndex in
-                        onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
+                        onStoryViewRequest?(groupIndex, true)  // fromTray = true -> all groups
                     }
 
                     // Connection status banner
@@ -351,7 +354,7 @@ struct ConversationListView: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
                         .padding(.top, 4)
 
-                    // Sectioned conversation list (skeleton → content → empty)
+                    // Sectioned conversation list (skeleton -> content -> empty)
                     if conversationViewModel.isLoading && filtered.isEmpty {
                         LazyVStack(spacing: 8) {
                             ForEach(0..<8, id: \.self) { index in
@@ -572,6 +575,13 @@ struct ConversationListView: View {
                 }
             )
             .environmentObject(theme)
+        }
+        .sheet(isPresented: $showWidgetPreview) {
+            WidgetPreviewView()
+                .environmentObject(conversationViewModel)
+                .environmentObject(router)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showGlobalSearch) {
             GlobalSearchView()
