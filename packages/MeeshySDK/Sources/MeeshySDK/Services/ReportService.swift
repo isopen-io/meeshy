@@ -12,7 +12,7 @@ public final class ReportService {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/api/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
     }
 
     public func reportUser(userId: String, reportType: String, reason: String? = nil) async throws {
@@ -22,7 +22,7 @@ public final class ReportService {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/api/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
     }
 
     public func reportConversation(conversationId: String, reportType: String, reason: String? = nil) async throws {
@@ -32,7 +32,7 @@ public final class ReportService {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/api/admin/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
     }
 }
 

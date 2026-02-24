@@ -7,7 +7,7 @@ public final class AccountService {
 
     public func deleteAccount(confirmationPhrase: String) async throws {
         let body = DeleteAccountBody(confirmationPhrase: confirmationPhrase)
-        let _: APIResponse<DeleteAccountResponse> = try await api.delete(endpoint: "/api/me/delete-account", body: body)
+        let _: APIResponse<DeleteAccountResponse> = try await api.delete(endpoint: "/me/delete-account", body: body)
     }
 }
 
