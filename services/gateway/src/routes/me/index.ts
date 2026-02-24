@@ -11,10 +11,12 @@
 
 import { FastifyInstance } from 'fastify';
 import { userPreferencesRoutes } from './preferences';
+import { deleteAccountRoutes } from './delete-account';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
   await fastify.register(userPreferencesRoutes, { prefix: '/preferences' });
+  await fastify.register(deleteAccountRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);
