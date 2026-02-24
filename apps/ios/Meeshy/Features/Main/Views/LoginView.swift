@@ -234,10 +234,8 @@ struct LoginView: View {
                 .environmentObject(authManager)
         }
         .fullScreenCover(isPresented: $showRegister) {
-            MeeshyRegisterView(
-                onRegisterSuccess: { showRegister = false },
-                onBack: { showRegister = false }
-            )
+            OnboardingFlowView(onComplete: { showRegister = false })
+                .environmentObject(authManager)
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
