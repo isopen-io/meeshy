@@ -120,10 +120,21 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
           });
         }
 
-        await fastify.prisma.accountDeletionRequest.updateMany({
-          where: { userId, status: 'GRACE_PERIOD_EXPIRED' },
-          data: { status: 'CANCELLED', cancelledAt: new Date() }
+        const expiredRequests = await fastify.prisma.accountDeletionRequest.count({
+          where: { userId, status: 'GRACE_PERIOD_EXPIRED' }
         });
+        if (expiredRequests > 0) {
+          await fastify.prisma.$transaction([
+            fastify.prisma.accountDeletionRequest.updateMany({
+              where: { userId, status: 'GRACE_PERIOD_EXPIRED' },
+              data: { status: 'CANCELLED', cancelledAt: new Date(), confirmTokenHash: 'revoked', cancelTokenHash: 'revoked' }
+            }),
+            fastify.prisma.user.update({
+              where: { id: userId },
+              data: { isActive: true, deletedAt: null }
+            })
+          ]);
+        }
 
         const confirmToken = crypto.randomBytes(32).toString('base64url');
         const cancelToken = crypto.randomBytes(32).toString('base64url');
@@ -215,6 +226,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             status: 'CONFIRMED',
             confirmedAt: new Date(),
             gracePeriodEndsAt,
+            confirmTokenHash: 'used',
           }
         });
 
@@ -270,7 +282,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
 
         await fastify.prisma.accountDeletionRequest.update({
           where: { id: deletionRequest.id },
-          data: { status: 'CANCELLED', cancelledAt: new Date() }
+          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelTokenHash: 'used' }
         });
 
         const user = await fastify.prisma.user.findUnique({

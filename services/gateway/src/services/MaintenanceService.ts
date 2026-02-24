@@ -435,13 +435,25 @@ export class MaintenanceService {
       });
 
       if (expiredRequests.length > 0) {
-        await this.prisma.accountDeletionRequest.updateMany({
-          where: {
-            id: { in: expiredRequests.map(r => r.id) }
-          },
-          data: { status: 'GRACE_PERIOD_EXPIRED' }
-        });
-        logger.info(`🗑️  [DELETION] ${expiredRequests.length} grace periods expired`);
+        let expiredCount = 0;
+        for (const req of expiredRequests) {
+          try {
+            await this.prisma.$transaction([
+              this.prisma.accountDeletionRequest.update({
+                where: { id: req.id },
+                data: { status: 'GRACE_PERIOD_EXPIRED' }
+              }),
+              this.prisma.user.update({
+                where: { id: req.userId },
+                data: { isActive: false, deletedAt: new Date() }
+              })
+            ]);
+            expiredCount++;
+          } catch (error) {
+            logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
+          }
+        }
+        logger.info(`🗑️  [DELETION] ${expiredCount}/${expiredRequests.length} grace periods expired`);
       }
 
       // 2. Rappels hebdomadaires

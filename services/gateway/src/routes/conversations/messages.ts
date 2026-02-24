@@ -1190,7 +1190,18 @@ export function registerMessagesRoutes(
 
       // Add expiration if specified
       if (expiresAt) {
-        messageData.expiresAt = new Date(expiresAt);
+        const expiryDate = new Date(expiresAt);
+        if (isNaN(expiryDate.getTime())) {
+          return reply.status(400).send({ success: false, error: 'Invalid expiresAt date format' });
+        }
+        if (expiryDate <= new Date()) {
+          return reply.status(400).send({ success: false, error: 'expiresAt must be in the future' });
+        }
+        const maxFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+        if (expiryDate > maxFuture) {
+          return reply.status(400).send({ success: false, error: 'expiresAt cannot exceed 1 year' });
+        }
+        messageData.expiresAt = expiryDate;
       }
 
       // Add encryption fields if message is encrypted

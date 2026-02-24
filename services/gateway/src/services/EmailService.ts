@@ -647,8 +647,8 @@ export class EmailService {
     const year = new Date().getFullYear().toString();
     const copyright = translations[normalized].common.copyright.replace('{year}', year);
     const copyrightWithLink = copyright.replace(
-      'Meeshy',
-      `<a href="${this.frontendUrl}" style="color:inherit;text-decoration:underline">Meeshy</a>`
+      'Meeshy.',
+      `<a href="${this.frontendUrl}" style="color:inherit;text-decoration:underline">Meeshy</a>.`
     );
     const slogan = this.getSlogan(normalized);
     return `<p style="font-size:11px;color:#9ca3af;margin:15px 0 5px;font-style:italic">${slogan}</p><p style="margin:0">${copyrightWithLink}</p>`;
