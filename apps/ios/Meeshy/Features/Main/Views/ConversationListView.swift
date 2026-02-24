@@ -58,6 +58,7 @@ struct ConversationListView: View {
     var onStoryViewRequest: ((Int, Bool) -> Void)? = nil  // (groupIndex, fromTray)
 
     @ObservedObject var theme = ThemeManager.shared
+    @ObservedObject var socketManager = MessageSocketManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -342,6 +343,11 @@ struct ConversationListView: View {
                     StoryTrayView(viewModel: storyViewModel) { groupIndex in
                         onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
                     }
+
+                    // Connection status banner
+                    ConnectionBanner()
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
+                        .padding(.top, 4)
 
                     // Sectioned conversation list (skeleton → content → empty)
                     if conversationViewModel.isLoading && filtered.isEmpty {

@@ -33,7 +33,7 @@ public struct ConversationContext: Sendable {
         case bot
     }
 
-    public enum ConversationLanguage: String, CaseIterable, Sendable {
+    public enum ConversationLanguage: String, CaseIterable, Sendable, Codable {
         case french
         case english
         case spanish
@@ -46,7 +46,7 @@ public struct ConversationContext: Sendable {
         case other
     }
 
-    public enum ConversationTheme: String, CaseIterable, Sendable {
+    public enum ConversationTheme: String, CaseIterable, Sendable, Codable {
         case general
         case work
         case social

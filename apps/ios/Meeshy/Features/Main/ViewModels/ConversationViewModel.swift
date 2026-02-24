@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
@@ -116,6 +117,13 @@ class ConversationViewModel: ObservableObject {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
+    // Pagination safety
+    private static let paginationRetryCount = 3
+    private static let paginationRetryDelay: UInt64 = 1_000_000_000  // 1s in nanoseconds
+    private static let paginationDebounceInterval: TimeInterval = 0.3
+    private var lastOlderPaginationTime: Date = .distantPast
+    private var lastNewerPaginationTime: Date = .distantPast
+
     // Typing emission state
     private var typingTimer: Timer?
     private var isEmittingTyping = false
@@ -131,11 +139,13 @@ class ConversationViewModel: ObservableObject {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
         subscribeToSocket()
+        subscribeToReconnect()
         joinRoom()
     }
 
     deinit {
         leaveRoom()
+        MessageSocketManager.shared.activeConversationId = nil
         // Direct cleanup — can't call @MainActor methods from deinit
         typingTimer?.invalidate()
         if isEmittingTyping {
@@ -147,6 +157,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Room Management
 
     private func joinRoom() {
+        MessageSocketManager.shared.activeConversationId = conversationId
         MessageSocketManager.shared.joinConversation(conversationId)
     }
 
@@ -207,6 +218,14 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
+        // Show cached messages immediately while fetching from API
+        if messages.isEmpty {
+            let cached = await LocalStore.shared.loadMessages(for: conversationId)
+            if !cached.isEmpty {
+                messages = cached
+            }
+        }
+
         do {
             let response: MessagesAPIResponse = try await APIClient.shared.request(
                 endpoint: "/conversations/\(conversationId)/messages",
@@ -235,6 +254,12 @@ class ConversationViewModel: ObservableObject {
 
             // Mark conversation as read (fire-and-forget)
             markAsRead()
+
+            // Update cache in background
+            let conversationId = self.conversationId
+            Task.detached(priority: .utility) { [messages] in
+                await LocalStore.shared.saveMessages(messages, for: conversationId)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -245,8 +270,13 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Load Older Messages (infinite scroll)
 
     func loadOlderMessages() async {
-        guard hasOlderMessages, !isLoadingOlder else { return }
+        guard hasOlderMessages, !isLoadingOlder, !isProgrammaticScroll else { return }
         guard let oldestId = messages.first?.id else { return }
+
+        // Debounce: ignore calls that arrive too soon after the last one
+        let now = Date()
+        guard now.timeIntervalSince(lastOlderPaginationTime) >= Self.paginationDebounceInterval else { return }
+        lastOlderPaginationTime = now
 
         isLoadingOlder = true
         // Save anchor BEFORE prepend so the view can restore scroll position
@@ -254,29 +284,43 @@ class ConversationViewModel: ObservableObject {
 
         let beforeValue = nextMessageCursor ?? oldestId
 
-        do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "before", value: beforeValue),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
-            )
+        var lastError: Error?
+        for attempt in 1...Self.paginationRetryCount {
+            do {
+                let response: MessagesAPIResponse = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(conversationId)/messages",
+                    queryItems: [
+                        URLQueryItem(name: "limit", value: "\(limit)"),
+                        URLQueryItem(name: "before", value: beforeValue),
+                        URLQueryItem(name: "include_replies", value: "true"),
+                    ]
+                )
 
-            let userId = currentUserId
-            let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
-            extractAttachmentTranscriptions(from: response.data)
+                let userId = currentUserId
+                let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                extractAttachmentTranscriptions(from: response.data)
 
-            // Dedup and prepend
-            let existingIds = Set(messages.map(\.id))
-            let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
-            messages.insert(contentsOf: newMessages, at: 0)
+                // Dedup and prepend
+                let existingIds = Set(messages.map(\.id))
+                let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
+                messages.insert(contentsOf: newMessages, at: 0)
 
-            self.nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
-        } catch {
-            self.error = error.localizedDescription
+                self.nextMessageCursor = response.cursorPagination?.nextCursor
+                hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                if attempt < Self.paginationRetryCount {
+                    Logger.messages.warning("loadOlderMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
+                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                }
+            }
+        }
+
+        if let lastError {
+            Logger.messages.error("loadOlderMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
+            self.error = lastError.localizedDescription
         }
 
         isLoadingOlder = false
@@ -792,6 +836,53 @@ class ConversationViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: - Reconnection Sync
+
+    private func subscribeToReconnect() {
+        MessageSocketManager.shared.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.syncMissedMessages()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncMissedMessages() async {
+        guard !messages.isEmpty else { return }
+        guard let lastMessage = messages.last else { return }
+
+        do {
+            let response: MessagesAPIResponse = try await APIClient.shared.request(
+                endpoint: "/conversations/\(conversationId)/messages",
+                queryItems: [
+                    URLQueryItem(name: "limit", value: "50"),
+                    URLQueryItem(name: "offset", value: "0"),
+                    URLQueryItem(name: "include_replies", value: "true"),
+                ]
+            )
+
+            let userId = currentUserId
+            let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
+
+            let existingIds = Set(messages.map(\.id))
+            let newMessages = fetchedMessages.filter { !existingIds.contains($0.id) }
+                .filter { $0.createdAt > lastMessage.createdAt }
+
+            if !newMessages.isEmpty {
+                messages.append(contentsOf: newMessages)
+                messages.sort { $0.createdAt < $1.createdAt }
+                newMessageAppended += 1
+                Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
+            }
+        } catch {
+            Logger.socket.error("Failed to sync missed messages: \(error)")
+        }
+    }
+
     // MARK: - Search Messages
 
     func searchMessages(query: String) async {
@@ -908,43 +999,58 @@ class ConversationViewModel: ObservableObject {
     }
 
     func loadNewerMessages() async {
-        guard isInJumpedState, hasNewerMessages, !isLoadingNewer else { return }
+        guard isInJumpedState, hasNewerMessages, !isLoadingNewer, !isProgrammaticScroll else { return }
         guard let lastMsg = messages.last else { return }
+
+        // Debounce: ignore calls that arrive too soon after the last one
+        let now = Date()
+        guard now.timeIntervalSince(lastNewerPaginationTime) >= Self.paginationDebounceInterval else { return }
+        lastNewerPaginationTime = now
+
         isLoadingNewer = true
 
-        do {
-            // Load messages after the last one we have (use createdAt as cursor)
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                    // We load in reverse order (newest first), so 'before' gives us older.
-                    // For newer, we need a different approach - load around the last message
-                    URLQueryItem(name: "around", value: lastMsg.id),
-                ]
-            )
+        var lastError: Error?
+        for attempt in 1...Self.paginationRetryCount {
+            do {
+                let response: MessagesAPIResponse = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(conversationId)/messages",
+                    queryItems: [
+                        URLQueryItem(name: "limit", value: "\(limit)"),
+                        URLQueryItem(name: "include_replies", value: "true"),
+                        URLQueryItem(name: "around", value: lastMsg.id),
+                    ]
+                )
 
-            let userId = currentUserId
-            let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
-            extractAttachmentTranscriptions(from: response.data)
-            let existingIds = Set(messages.map(\.id))
-            let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
+                let userId = currentUserId
+                let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                extractAttachmentTranscriptions(from: response.data)
+                let existingIds = Set(messages.map(\.id))
+                let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
 
-            if !genuinelyNew.isEmpty {
-                messages.append(contentsOf: genuinelyNew)
-                messages.sort { $0.createdAt < $1.createdAt }
+                if !genuinelyNew.isEmpty {
+                    messages.append(contentsOf: genuinelyNew)
+                    messages.sort { $0.createdAt < $1.createdAt }
+                }
+
+                hasNewerMessages = response.hasNewer ?? false
+                if !hasNewerMessages {
+                    isInJumpedState = false
+                    savedMessages = nil
+                    savedCursor = nil
+                }
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                if attempt < Self.paginationRetryCount {
+                    Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
+                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                }
             }
+        }
 
-            hasNewerMessages = response.hasNewer ?? false
-            if !hasNewerMessages {
-                // We've caught up to the latest messages
-                isInJumpedState = false
-                savedMessages = nil
-                savedCursor = nil
-            }
-        } catch {
-            // Ignore pagination errors
+        if let lastError {
+            Logger.messages.error("loadNewerMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
         }
 
         isLoadingNewer = false

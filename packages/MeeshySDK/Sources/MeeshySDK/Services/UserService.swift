@@ -74,4 +74,42 @@ public final class UserService {
         )
         return response.data
     }
+
+    // MARK: - Contact Change
+
+    public func changeEmail(_ request: ChangeEmailRequest) async throws -> ChangeEmailResponse {
+        let response: APIResponse<ChangeEmailResponse> = try await api.post(
+            endpoint: "/users/me/change-email", body: request
+        )
+        return response.data
+    }
+
+    public func verifyEmailChange(_ request: VerifyEmailChangeRequest) async throws -> VerifyEmailChangeResponse {
+        let response: APIResponse<VerifyEmailChangeResponse> = try await api.post(
+            endpoint: "/users/me/verify-email-change", body: request
+        )
+        return response.data
+    }
+
+    public func resendEmailChangeVerification() async throws -> ChangeEmailResponse {
+        struct Empty: Encodable {}
+        let response: APIResponse<ChangeEmailResponse> = try await api.post(
+            endpoint: "/users/me/resend-email-change-verification", body: Empty()
+        )
+        return response.data
+    }
+
+    public func changePhone(_ request: ChangePhoneRequest) async throws -> ChangePhoneResponse {
+        let response: APIResponse<ChangePhoneResponse> = try await api.post(
+            endpoint: "/users/me/change-phone", body: request
+        )
+        return response.data
+    }
+
+    public func verifyPhoneChange(_ request: VerifyPhoneChangeRequest) async throws -> VerifyPhoneChangeResponse {
+        let response: APIResponse<VerifyPhoneChangeResponse> = try await api.post(
+            endpoint: "/users/me/verify-phone-change", body: request
+        )
+        return response.data
+    }
 }

@@ -156,6 +156,15 @@ public struct ReadStatusUpdateEvent: Decodable {
     public let updatedAt: Date
 }
 
+// MARK: - Connection State
+
+public enum ConnectionState: Equatable {
+    case connected
+    case connecting
+    case reconnecting(attempt: Int)
+    case disconnected
+}
+
 // MARK: - Message Socket Manager
 
 public final class MessageSocketManager: ObservableObject {
@@ -190,12 +199,21 @@ public final class MessageSocketManager: ObservableObject {
     public let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     public let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
 
+    // Combine publisher — reconnection (fires after successful reconnect)
+    public let didReconnect = PassthroughSubject<Void, Never>()
+
     @Published public var isConnected = false
+    @Published public var connectionState: ConnectionState = .disconnected
+
+    // The currently active (foreground) conversation for priority re-join
+    public var activeConversationId: String?
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
     private var joinedConversations: Set<String> = []
+    private var reconnectAttempt: Int = 0
+    private var hadPreviousConnection = false
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -222,14 +240,17 @@ public final class MessageSocketManager: ObservableObject {
 
         guard let url = SocketConfig.baseURL else { return }
 
+        DispatchQueue.main.async { self.connectionState = .connecting }
+
         manager = SocketManager(socketURL: url, config: [
             .log(false),
             .compress,
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
             .reconnects(true),
-            .reconnectWait(3),
-            .reconnectWaitMax(30),
+            .reconnectWait(1),
+            .reconnectWaitMax(16),
+            .reconnectAttempts(-1),
         ])
 
         socket = manager?.defaultSocket
@@ -239,10 +260,14 @@ public final class MessageSocketManager: ObservableObject {
 
     public func disconnect() {
         joinedConversations.removeAll()
+        activeConversationId = nil
         socket?.disconnect()
         socket = nil
         manager = nil
         isConnected = false
+        connectionState = .disconnected
+        reconnectAttempt = 0
+        hadPreviousConnection = false
     }
 
     // MARK: - Room Management
@@ -278,17 +303,52 @@ public final class MessageSocketManager: ObservableObject {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
-            DispatchQueue.main.async { self.isConnected = true }
-            // Re-join conversations on reconnect
-            for convId in self.joinedConversations {
+            let wasReconnect = self.hadPreviousConnection
+            self.hadPreviousConnection = true
+            self.reconnectAttempt = 0
+
+            DispatchQueue.main.async {
+                self.isConnected = true
+                self.connectionState = .connected
+            }
+
+            // Re-join all tracked conversations
+            // Priority: active conversation first for fastest UX
+            if let activeId = self.activeConversationId, self.joinedConversations.contains(activeId) {
+                self.socket?.emit("conversation:join", ["conversationId": activeId])
+            }
+            for convId in self.joinedConversations where convId != self.activeConversationId {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
-            Logger.socket.info("MessageSocket connected")
+
+            if wasReconnect {
+                Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
+                DispatchQueue.main.async { self.didReconnect.send(()) }
+            } else {
+                Logger.socket.info("MessageSocket connected")
+            }
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.isConnected = false }
+            DispatchQueue.main.async {
+                self?.isConnected = false
+                if self?.hadPreviousConnection == true {
+                    self?.connectionState = .reconnecting(attempt: 0)
+                } else {
+                    self?.connectionState = .disconnected
+                }
+            }
             Logger.socket.info("MessageSocket disconnected")
+        }
+
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            guard let self else { return }
+            self.reconnectAttempt += 1
+            let attempt = self.reconnectAttempt
+            DispatchQueue.main.async {
+                self.connectionState = .reconnecting(attempt: attempt)
+            }
+            Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
         socket.on(clientEvent: .error) { _, args in

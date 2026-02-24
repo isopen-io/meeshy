@@ -13,6 +13,7 @@ struct RootView: View {
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
@@ -115,7 +116,18 @@ struct RootView: View {
                 menuLadder
             }
 
-            // 7. Toast overlay
+            // 7. Offline banner
+            if networkMonitor.isOffline {
+                VStack {
+                    OfflineBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
+                .zIndex(190)
+            }
+
+            // 8. Toast overlay
             VStack {
                 if let toast = toastManager.currentToast {
                     ToastView(toast: toast)

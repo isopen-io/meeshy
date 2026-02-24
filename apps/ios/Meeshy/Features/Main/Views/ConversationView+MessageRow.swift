@@ -102,6 +102,16 @@ extension ConversationView {
                 }
                 .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
 
+                // Reply count pill
+                if let replyCount = replyCountFor(messageId: msg.id), replyCount > 0 {
+                    HStack {
+                        if msg.isMe { Spacer() }
+                        replyCountPill(count: replyCount, isMe: msg.isMe)
+                        if !msg.isMe { Spacer() }
+                    }
+                    .padding(.top, 2)
+                }
+
                 // Quick reaction bar (below message)
                 if quickReactionMessageId == msg.id {
                     HStack {
@@ -148,7 +158,11 @@ extension ConversationView {
         .id(msg.id)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(hex: accentColor).opacity(highlightedMessageId == msg.id ? 0.2 : 0))
+                .fill(Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.25 : 0))
+                .shadow(
+                    color: Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.4 : 0),
+                    radius: highlightedMessageId == msg.id ? 12 : 0
+                )
                 .animation(.easeInOut(duration: 0.3), value: highlightedMessageId)
                 .allowsHitTesting(false)
         )
@@ -220,16 +234,21 @@ extension ConversationView {
     }
 
     func scrollToAndHighlight(_ targetId: String, proxy: ScrollViewProxy) {
+        let messageExists = viewModel.messages.contains { $0.id == targetId }
+        guard messageExists else {
+            ToastManager.shared.show("Message non disponible", type: .error)
+            return
+        }
         viewModel.markProgrammaticScroll()
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             proxy.scrollTo(targetId, anchor: .center)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeIn(duration: 0.15)) {
+            withAnimation(.easeIn(duration: 0.2)) {
                 highlightedMessageId = targetId
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                withAnimation(.easeOut(duration: 0.4)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeOut(duration: 0.5)) {
                     highlightedMessageId = nil
                 }
             }
@@ -703,5 +722,38 @@ extension ConversationView {
         .padding(.horizontal, 16)
         .padding(.top, 2)
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    // MARK: - Reply Count
+
+    func replyCountFor(messageId: String) -> Int? {
+        let count = viewModel.messages.filter { $0.replyToId == messageId }.count
+        return count > 0 ? count : nil
+    }
+
+    func replyCountPill(count: Int, isMe: Bool) -> some View {
+        let accent = Color(hex: accentColor)
+        let label = count == 1 ? "1 reponse" : "\(count) reponses"
+        return Button {
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrowshape.turn.up.left.2.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(accent.opacity(theme.mode.isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                    )
+            )
+        }
     }
 }

@@ -70,7 +70,7 @@ public struct MeeshyConversationSection: Identifiable, Hashable {
 
 // MARK: - Recent Message Preview
 
-public struct RecentMessagePreview: Identifiable, Hashable {
+public struct RecentMessagePreview: Identifiable, Hashable, Codable {
     public let id: String
     public let content: String
     public let senderName: String
@@ -89,7 +89,7 @@ public struct RecentMessagePreview: Identifiable, Hashable {
 
 // MARK: - Conversation Model
 
-public struct MeeshyConversation: Identifiable, Hashable {
+public struct MeeshyConversation: Identifiable, Hashable, Codable {
     public let id: String
     public let identifier: String
     public let type: ConversationType
@@ -242,7 +242,7 @@ public struct MeeshyCommunity: Identifiable, Hashable {
 
 // MARK: - Message Model
 
-public struct MeeshyMessage: Identifiable {
+public struct MeeshyMessage: Identifiable, Codable {
     public let id: String
     public let conversationId: String
     public var senderId: String?
@@ -283,7 +283,7 @@ public struct MeeshyMessage: Identifiable {
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
 
-    public enum DeliveryStatus: String {
+    public enum DeliveryStatus: String, Codable {
         case sending   // optimistic, not confirmed
         case sent      // server confirmed (single check)
         case delivered // recipient received (double gray check)
@@ -455,7 +455,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable {
 
 // MARK: - Reply Reference
 
-public struct ReplyReference {
+public struct ReplyReference: Codable {
     public let messageId: String
     public let authorName: String
     public let authorColor: String
@@ -477,7 +477,7 @@ public struct ReplyReference {
 
 // MARK: - Forward Reference
 
-public struct ForwardReference {
+public struct ForwardReference: Codable {
     public let originalMessageId: String
     public let senderName: String
     public let senderAvatar: String?

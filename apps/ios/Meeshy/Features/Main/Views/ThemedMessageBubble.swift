@@ -153,16 +153,6 @@ struct ThemedMessageBubble: View {
                     forwardedIndicator
                 }
 
-                // Reply reference (tap to scroll to original)
-                if let reply = message.replyTo {
-                    replyPreview(reply)
-                        .onTapGesture {
-                            guard !reply.messageId.isEmpty else { return }
-                            HapticFeedback.light()
-                            onReplyTap?(reply.messageId)
-                        }
-                }
-
                 // Message content (blurred if isBlurred and not revealed)
                 let shouldBlur = message.isBlurred && !isBlurRevealed
 
@@ -200,24 +190,37 @@ struct ThemedMessageBubble: View {
                         }
 
                         // Bulle texte + non-media attachments (file, location)
-                        if hasTextOrNonMediaContent {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(nonMediaAttachments) { attachment in
-                                    attachmentView(attachment)
+                        // Also show the bubble if we have a reply reference (quoted message)
+                        if hasTextOrNonMediaContent || message.replyTo != nil {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Quoted reply preview (inside bubble)
+                                if let reply = message.replyTo {
+                                    quotedReplyView(reply)
+                                        .onTapGesture {
+                                            guard !reply.messageId.isEmpty else { return }
+                                            HapticFeedback.light()
+                                            onReplyTap?(reply.messageId)
+                                        }
                                 }
 
-                                if !message.content.isEmpty {
-                                    expandableTextView
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(nonMediaAttachments) { attachment in
+                                        attachmentView(attachment)
+                                    }
+
+                                    if !message.content.isEmpty {
+                                        expandableTextView
+                                    }
                                 }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
                             .padding(.top, message.isEdited ? 12 : 0)
                             .overlay(alignment: .topLeading) {
                                 if message.isEdited {
                                     editedIndicator
                                         .padding(.leading, 12)
-                                        .padding(.top, 6)
+                                        .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
                                 }
                             }
                             .overlay(alignment: .bottomTrailing) {
@@ -596,50 +599,71 @@ struct ThemedMessageBubble: View {
         .padding(.bottom, 2)
     }
 
-    private func replyPreview(_ reply: ReplyReference) -> some View {
-        HStack(spacing: 8) {
+    // MARK: - Quoted Reply View (inside bubble)
+
+    private func quotedReplyView(_ reply: ReplyReference) -> some View {
+        let accentBarColor = Color(hex: reply.isMe ? contactColor : reply.authorColor)
+        let nameColor: Color = message.isMe
+            ? .white.opacity(0.9)
+            : Color(hex: reply.isMe ? contactColor : reply.authorColor)
+        let previewColor: Color = message.isMe
+            ? .white.opacity(0.65)
+            : theme.textMuted
+        let isDark = theme.mode.isDark
+        let bgColor: Color = message.isMe
+            ? Color.white.opacity(0.15)
+            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+
+        return HStack(spacing: 0) {
+            // Left accent bar
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: reply.isMe ? contactColor : reply.authorColor))
-                .frame(width: 3)
+                .fill(message.isMe ? Color.white.opacity(0.7) : accentBarColor)
+                .frame(width: 4)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(reply.isMe ? "Vous" : reply.authorName)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.isMe ? contactColor : reply.authorColor))
-
-                HStack(spacing: 6) {
-                    // Attachment type icon
-                    if let attType = reply.attachmentType {
-                        Image(systemName: replyAttachmentIcon(attType))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-
-                    Text(reply.previewText)
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textMuted)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(reply.isMe ? "Vous" : reply.authorName)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(nameColor)
                         .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        if let attType = reply.attachmentType {
+                            Image(systemName: replyAttachmentIcon(attType))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(previewColor)
+                        }
+
+                        Text(reply.previewText.isEmpty ? "Media" : reply.previewText)
+                            .font(.system(size: 12))
+                            .foregroundColor(previewColor)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Attachment thumbnail
+                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                    CachedAsyncImage(url: thumbUrl) {
+                        Color(hex: reply.authorColor).opacity(0.3)
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
-
-            Spacer(minLength: 0)
-
-            // Attachment thumbnail preview
-            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: reply.authorColor).opacity(0.3)
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(bgColor)
         )
+        .padding(.horizontal, 6)
+        .padding(.top, 6)
+        .contentShape(Rectangle())
     }
 
     private func replyAttachmentIcon(_ type: String) -> String {

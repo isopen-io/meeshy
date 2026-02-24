@@ -137,6 +137,14 @@ class ConversationListViewModel: ObservableObject {
         isLoading = true
         currentOffset = 0
 
+        // Show cached conversations immediately while fetching from API
+        if conversations.isEmpty {
+            let cached = await LocalStore.shared.loadConversations()
+            if !cached.isEmpty {
+                conversations = cached
+            }
+        }
+
         async let categoriesTask: () = loadCategories()
 
         do {
@@ -152,6 +160,12 @@ class ConversationListViewModel: ObservableObject {
                 conversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset = conversations.count
+
+                // Update cache in background
+                Task.detached(priority: .utility) { [conversations] in
+                    await LocalStore.shared.saveConversations(conversations)
+                    await LocalStore.shared.cleanupStaleMessageCaches()
+                }
             }
         } catch { }
 

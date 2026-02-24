@@ -12,8 +12,6 @@ struct ProfileView: View {
     @State private var lastName = ""
     @State private var displayName = ""
     @State private var bio = ""
-    @State private var email = ""
-    @State private var phoneNumber = ""
     @State private var systemLanguage = ""
     @State private var regionalLanguage = ""
     @State private var customDestinationLanguage = ""
@@ -208,18 +206,9 @@ struct ProfileView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
 
-                        if isEditing {
-                            TextField("email@exemple.com", text: $email)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .textContentType(.emailAddress)
-                                .keyboardType(.emailAddress)
-                                .autocapitalization(.none)
-                        } else {
-                            Text(email.isEmpty ? "—" : email)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(email.isEmpty ? theme.textMuted : theme.textPrimary)
-                        }
+                        Text(user?.email ?? "—")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
 
                     Spacer()
@@ -233,21 +222,13 @@ struct ProfileView: View {
                     fieldIcon("phone.fill")
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Téléphone")
+                        Text("Telephone")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
 
-                        if isEditing {
-                            TextField("+33 6 12 34 56 78", text: $phoneNumber)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .textContentType(.telephoneNumber)
-                                .keyboardType(.phonePad)
-                        } else {
-                            Text(phoneNumber.isEmpty ? "—" : phoneNumber)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(phoneNumber.isEmpty ? theme.textMuted : theme.textPrimary)
-                        }
+                        Text(user?.phoneNumber ?? "—")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }
 
                     Spacer()
@@ -471,8 +452,6 @@ struct ProfileView: View {
         lastName = user?.lastName ?? ""
         displayName = user?.displayName ?? user?.username ?? ""
         bio = user?.bio ?? ""
-        email = user?.email ?? ""
-        phoneNumber = user?.phoneNumber ?? ""
         systemLanguage = user?.systemLanguage ?? ""
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
@@ -491,8 +470,6 @@ struct ProfileView: View {
                     bio: bio.isEmpty ? nil : bio,
                     systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
                     regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-                    email: email.isEmpty ? nil : email,
-                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
                     customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
                 )
                 let updatedUser = try await UserService.shared.updateProfile(request)

@@ -32,6 +32,7 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var presenceManager = PresenceManager.shared
+    @ObservedObject var socketManager = MessageSocketManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
@@ -361,6 +362,16 @@ struct ConversationView: View {
             messageScrollView
 
             floatingHeaderSection
+
+            // Connection status banner
+            VStack {
+                Color.clear.frame(height: showOptions ? 72 : 56)
+                ConnectionBanner()
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
+                Spacer()
+            }
+            .zIndex(98)
+            .allowsHitTesting(false)
 
             // Status bar gradient — from very top edge of screen through status bar
             VStack(spacing: 0) {

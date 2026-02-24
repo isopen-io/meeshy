@@ -94,10 +94,13 @@
 		PP2600000000002F26 /* AddParticipantSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2600000000001F26 /* AddParticipantSheet.swift */; };
 		EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDIT001A001A001A001A0001 /* EditProfileView.swift */; };
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
+		SECV002A002A002A002A0002 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SECV001A001A001A001A0001 /* SecurityView.swift */; };
 		BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BLKU001A001A001A001A0001 /* BlockedUsersView.swift */; };
 		ML2700000000002F27 /* MagicLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ML2700000000001F27 /* MagicLinkView.swift */; };
 		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
 		OB2900000000002F29 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2900000000001F29 /* OnboardingView.swift */; };
+		OF3000000000002F30 /* OfflineBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OF3000000000001F30 /* OfflineBanner.swift */; };
+		CB3100000000002F31 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3100000000001F31 /* ConnectionBanner.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -118,6 +121,7 @@
 		PROF001A001A001A001A0001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		EDIT001A001A001A001A0001 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
+		SECV001A001A001A001A0001 /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		BLKU001A001A001A001A0001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+MessageRow.swift"; sourceTree = "<group>"; };
@@ -193,6 +197,8 @@
 		ML2700000000001F27 /* MagicLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicLinkView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 		OB2900000000001F29 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		OF3000000000001F30 /* OfflineBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineBanner.swift; sourceTree = "<group>"; };
+		CB3100000000001F31 /* ConnectionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionBanner.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -231,6 +237,8 @@
 				CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */,
 				CC2300000000001F23 /* ConversationLockSheet.swift */,
 				PP2600000000001F26 /* AddParticipantSheet.swift */,
+				OF3000000000001F30 /* OfflineBanner.swift */,
+				CB3100000000001F31 /* ConnectionBanner.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -283,6 +291,7 @@
 				NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */,
 				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
 				CHPW001A001A001A001A0001 /* ChangePasswordView.swift */,
+				SECV001A001A001A001A0001 /* SecurityView.swift */,
 				BLKU001A001A001A001A0001 /* BlockedUsersView.swift */,
 				NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */,
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
@@ -472,6 +481,7 @@
 				PROF002A002A002A002A0002 /* ProfileView.swift in Sources */,
 				EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */,
 				CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */,
+				SECV002A002A002A002A0002 /* SecurityView.swift in Sources */,
 				BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */,
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
@@ -551,6 +561,8 @@
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* ToastManager.swift in Sources */,
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
+				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
+				CB3100000000002F31 /* ConnectionBanner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
