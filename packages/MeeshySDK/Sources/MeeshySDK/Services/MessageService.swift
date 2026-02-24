@@ -63,6 +63,14 @@ public final class MessageService {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin")
     }
 
+    public func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse {
+        struct Empty: Encodable {}
+        let response: APIResponse<ConsumeViewOnceResponse> = try await api.post(
+            endpoint: "/conversations/\(conversationId)/messages/\(messageId)/consume", body: Empty()
+        )
+        return response.data
+    }
+
     public func search(conversationId: String, query: String, limit: Int = 20) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages/search",

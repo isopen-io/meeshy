@@ -24,9 +24,17 @@ public final class AuthService {
 
     // MARK: - Magic Link
 
-    public func requestMagicLink(email: String, deviceFingerprint: String? = nil) async throws {
+    @discardableResult
+    public func requestMagicLink(email: String, deviceFingerprint: String? = nil) async throws -> Int {
         let body = MagicLinkRequest(email: email, deviceFingerprint: deviceFingerprint)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/auth/magic-link/request", body: body)
+        let data = try JSONEncoder().encode(body)
+        let response: MagicLinkResponse = try await api.request(
+            endpoint: "/auth/magic-link/request", method: "POST", body: data
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
+        }
+        return response.expiresInSeconds ?? 300
     }
 
     public func validateMagicLink(token: String) async throws -> LoginResponseData {
@@ -39,19 +47,37 @@ public final class AuthService {
 
     public func requestPasswordReset(email: String) async throws {
         let body = ForgotPasswordRequest(email: email)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/auth/password-reset/request", body: body)
+        let data = try JSONEncoder().encode(body)
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/auth/password-reset/request", method: "POST", body: data
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
+        }
     }
 
     public func resetPassword(token: String, newPassword: String) async throws {
         let body = ResetPasswordRequest(token: token, newPassword: newPassword)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/auth/password-reset/reset", body: body)
+        let data = try JSONEncoder().encode(body)
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/auth/password-reset/reset", method: "POST", body: data
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
+        }
     }
 
     // MARK: - Phone Verification
 
     public func sendPhoneCode(phoneNumber: String) async throws {
         let body = SendPhoneCodeRequest(phoneNumber: phoneNumber)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/auth/phone/send-code", body: body)
+        let data = try JSONEncoder().encode(body)
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/auth/phone/send-code", method: "POST", body: data
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
+        }
     }
 
     public func verifyPhone(phoneNumber: String, code: String) async throws -> VerifyPhoneResponse {
@@ -66,8 +92,11 @@ public final class AuthService {
         var items: [URLQueryItem] = []
         if let username { items.append(URLQueryItem(name: "username", value: username)) }
         if let email { items.append(URLQueryItem(name: "email", value: email)) }
-        if let phone { items.append(URLQueryItem(name: "phone", value: phone)) }
-        return try await api.request(endpoint: "/auth/check-availability", queryItems: items)
+        if let phone { items.append(URLQueryItem(name: "phoneNumber", value: phone)) }
+        let response: APIResponse<AvailabilityResponse> = try await api.request(
+            endpoint: "/auth/check-availability", queryItems: items
+        )
+        return response.data
     }
 
     // MARK: - Refresh Token

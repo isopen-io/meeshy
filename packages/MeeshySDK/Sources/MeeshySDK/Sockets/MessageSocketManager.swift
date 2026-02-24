@@ -156,6 +156,15 @@ public struct ReadStatusUpdateEvent: Decodable {
     public let updatedAt: Date
 }
 
+public struct MessageConsumedEvent: Decodable {
+    public let messageId: String
+    public let conversationId: String
+    public let userId: String
+    public let viewOnceCount: Int
+    public let maxViewOnceCount: Int
+    public let isFullyConsumed: Bool
+}
+
 // MARK: - Connection State
 
 public enum ConnectionState: Equatable {
@@ -189,6 +198,9 @@ public final class MessageSocketManager: ObservableObject {
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+
+    // Combine publishers — view-once
+    public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
     // Combine publishers — translation
     public let translationReceived = PassthroughSubject<TranslationEvent, Never>()
@@ -466,6 +478,12 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("read-status:updated") { [weak self] data, _ in
             self?.decode(ReadStatusUpdateEvent.self, from: data) { event in
                 self?.readStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("message:consumed") { [weak self] data, _ in
+            self?.decode(MessageConsumedEvent.self, from: data) { event in
+                self?.messageConsumed.send(event)
             }
         }
     }

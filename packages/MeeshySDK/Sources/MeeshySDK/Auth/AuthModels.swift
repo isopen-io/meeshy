@@ -69,6 +69,13 @@ public struct MagicLinkRequest: Encodable {
     }
 }
 
+public struct MagicLinkResponse: Decodable {
+    public let success: Bool
+    public let message: String?
+    public let expiresInSeconds: Int?
+    public let error: String?
+}
+
 public struct MagicLinkValidateRequest: Encodable {
     public let token: String
 
@@ -125,8 +132,15 @@ public struct VerifyPhoneResponse: Decodable {
 // MARK: - Availability Check
 
 public struct AvailabilityResponse: Decodable {
-    public let available: Bool
+    public let usernameAvailable: Bool?
+    public let emailAvailable: Bool?
+    public let phoneNumberAvailable: Bool?
+    public let phoneNumberValid: Bool?
     public let suggestions: [String]?
+
+    public var available: Bool {
+        usernameAvailable ?? emailAvailable ?? phoneNumberAvailable ?? false
+    }
 }
 
 // MARK: - Refresh Token

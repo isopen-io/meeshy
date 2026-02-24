@@ -8,6 +8,12 @@ public struct APIResponse<T: Decodable>: Decodable {
     public let error: String?
 }
 
+public struct SimpleAPIResponse: Decodable {
+    public let success: Bool
+    public let message: String?
+    public let error: String?
+}
+
 public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let success: Bool
     public let data: T

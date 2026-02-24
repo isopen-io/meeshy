@@ -112,6 +112,13 @@ public struct SendMessageResponseData: Decodable {
     public let createdAt: Date
 }
 
+public struct ConsumeViewOnceResponse: Decodable {
+    public let messageId: String
+    public let viewOnceCount: Int
+    public let maxViewOnceCount: Int
+    public let isFullyConsumed: Bool
+}
+
 // MARK: - APIMessage -> MeeshyMessage Conversion
 
 extension APIMessage {
