@@ -185,11 +185,34 @@ extension ConversationView {
     // MARK: - Header Tags Row (category first, then colored tags, horizontally scrollable)
     @ViewBuilder
     var headerTagsRow: some View {
-        let hasTags = conversationSection != nil || !(conversation?.tags.isEmpty ?? true)
+        let isEncrypted = conversation?.encryptionMode != nil
+        let hasTags = conversationSection != nil || !(conversation?.tags.isEmpty ?? true) || isEncrypted
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    // Category tag always first
+                    // Encryption badge first
+                    if isEncrypted {
+                        HStack(spacing: 2) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 7, weight: .bold))
+                            Text("E2EE")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "4ECDC4").opacity(0.2))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "4ECDC4").opacity(0.3), lineWidth: 0.5)
+                                )
+                        )
+                        .accessibilityLabel("Conversation chiffree")
+                    }
+
+                    // Category tag
                     if let section = conversationSection {
                         HStack(spacing: 2) {
                             Image(systemName: section.icon)

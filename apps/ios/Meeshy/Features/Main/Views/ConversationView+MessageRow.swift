@@ -83,6 +83,12 @@ extension ConversationView {
                             Task { await MediaCacheManager.shared.prefetch(resolved) }
                         }
                         galleryStartAttachment = attachment
+                    },
+                    onConsumeViewOnce: { messageId, completion in
+                        Task {
+                            let success = await viewModel.consumeViewOnce(messageId: messageId)
+                            completion(success)
+                        }
                     }
                 )
                 .background(

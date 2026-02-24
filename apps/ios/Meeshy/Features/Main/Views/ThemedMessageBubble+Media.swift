@@ -97,15 +97,22 @@ extension ThemedMessageBubble {
                     isViewOnce: attachment.isViewOnce,
                     onReveal: {
                         HapticFeedback.medium()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            _ = revealedAttachmentIds.insert(attachment.id)
-                        }
                         if attachment.isViewOnce {
-                            let attachmentId = attachment.id
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                                withAnimation(.easeOut(duration: 0.5)) {
-                                    _ = revealedAttachmentIds.remove(attachmentId)
+                            onConsumeViewOnce?(message.id) { success in
+                                guard success else { return }
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    _ = revealedAttachmentIds.insert(attachment.id)
                                 }
+                                let attachmentId = attachment.id
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                    withAnimation(.easeOut(duration: 0.5)) {
+                                        _ = revealedAttachmentIds.remove(attachmentId)
+                                    }
+                                }
+                            }
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                _ = revealedAttachmentIds.insert(attachment.id)
                             }
                         }
                     }

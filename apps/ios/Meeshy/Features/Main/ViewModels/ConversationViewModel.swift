@@ -343,6 +343,33 @@ class ConversationViewModel: ObservableObject {
 
         isSending = true
 
+        // Build ReplyReference from quoted message
+        var replyRef: ReplyReference?
+        if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
+            let previewText: String = {
+                if !quoted.content.isEmpty { return quoted.content }
+                if let first = quoted.attachments.first {
+                    switch first.type {
+                    case .image: return "\u{1F4F7} Photo"
+                    case .video: return "\u{1F3AC} Video"
+                    case .audio: return "\u{1F3B5} Message vocal"
+                    case .file: return "\u{1F4CE} Fichier"
+                    default: return "\u{1F4CE} Piece jointe"
+                    }
+                }
+                return ""
+            }()
+            replyRef = ReplyReference(
+                messageId: replyId,
+                authorName: quoted.senderName ?? "Utilisateur",
+                previewText: previewText,
+                isMe: quoted.isMe,
+                authorColor: quoted.senderColor,
+                attachmentType: quoted.attachments.first?.type.rawValue,
+                attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+            )
+        }
+
         // Optimistic insert
         let tempId = "temp_\(UUID().uuidString)"
         let optimisticMessage = Message(
@@ -356,6 +383,7 @@ class ConversationViewModel: ObservableObject {
             expiresAt: resolvedExpiresAt,
             createdAt: Date(),
             updatedAt: Date(),
+            replyTo: replyRef,
             deliveryStatus: .sending,
             isMe: true
         )
@@ -390,6 +418,7 @@ class ConversationViewModel: ObservableObject {
                     expiresAt: resolvedExpiresAt,
                     createdAt: response.data.createdAt,
                     updatedAt: response.data.createdAt,
+                    replyTo: replyRef,
                     deliveryStatus: .sent,
                     isMe: true
                 )
@@ -546,6 +575,41 @@ class ConversationViewModel: ObservableObject {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - Consume View-Once Message
+
+    func consumeViewOnce(messageId: String) async -> Bool {
+        do {
+            let result = try await MessageService.shared.consumeViewOnce(
+                conversationId: conversationId, messageId: messageId
+            )
+            if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[idx].viewOnceCount = result.viewOnceCount
+            }
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    func evictViewOnceMedia(message: Message) {
+        for attachment in message.attachments {
+            let urls = [attachment.fileUrl, attachment.thumbnailUrl].compactMap { $0 }.filter { !$0.isEmpty }
+            for urlStr in urls {
+                Task {
+                    let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+                    await MediaCacheManager.shared.remove(for: resolved)
+                }
+            }
+        }
+    }
+
+    func markMessageAsConsumed(messageId: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages[idx].isBlurred = true
+        messages[idx].content = "[Message vu]"
     }
 
     // MARK: - Edit Message
@@ -748,6 +812,22 @@ class ConversationViewModel: ObservableObject {
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             self.messages[i].deliveryStatus = newStatus
                         }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // View-once consumed
+        socketManager.messageConsumed
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
+                    self.messages[idx].viewOnceCount = event.viewOnceCount
+                    if event.isFullyConsumed {
+                        self.evictViewOnceMedia(message: self.messages[idx])
+                        self.markMessageAsConsumed(messageId: event.messageId)
                     }
                 }
             }

@@ -19,6 +19,7 @@ struct ThemedMessageBubble: View {
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
@@ -115,7 +116,6 @@ struct ThemedMessageBubble: View {
         }
         if message.isEdited { parts.append("modifie") }
         if message.pinnedAt != nil { parts.append("epingle") }
-        if message.isEncrypted { parts.append("chiffre") }
         if message.expiresAt != nil { parts.append("ephemere") }
         if !reactionSummaries.isEmpty {
             let reactionText = reactionSummaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
@@ -373,14 +373,21 @@ struct ThemedMessageBubble: View {
                         .accessibilityHint("Maintenir pour reveler le contenu")
                         .onLongPressGesture(minimumDuration: 0.3) {
                             HapticFeedback.medium()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                isBlurRevealed = true
-                            }
                             if message.isViewOnce {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                                    withAnimation(.easeOut(duration: 0.5)) {
-                                        isBlurRevealed = false
+                                onConsumeViewOnce?(message.id) { success in
+                                    guard success else { return }
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        isBlurRevealed = true
                                     }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                        withAnimation(.easeOut(duration: 0.5)) {
+                                            isBlurRevealed = false
+                                        }
+                                    }
+                                }
+                            } else {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    isBlurRevealed = true
                                 }
                             }
                         }
@@ -560,13 +567,6 @@ struct ThemedMessageBubble: View {
             : theme.textSecondary.opacity(0.6)
 
         HStack(spacing: 3) {
-            if message.isEncrypted {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 8))
-                    .foregroundColor(metaColor.opacity(0.8))
-                    .accessibilityLabel("Message chiffre")
-            }
-
             Text(timeString)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(metaColor)
@@ -644,13 +644,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Media Timestamp Overlay (for visual media grid)
     private var mediaTimestampOverlay: some View {
         HStack(spacing: 3) {
-            if message.isEncrypted {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 8))
-                    .foregroundColor(.white.opacity(0.8))
-                    .accessibilityLabel("Message chiffre")
-            }
-
             Text(timeString)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white)
