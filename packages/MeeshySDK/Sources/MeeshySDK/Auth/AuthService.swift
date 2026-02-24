@@ -49,7 +49,7 @@ public final class AuthService {
         let body = ForgotPasswordRequest(email: email)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/password-reset/request", method: "POST", body: data
+            endpoint: "/auth/forgot-password", method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")

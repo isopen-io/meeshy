@@ -27,12 +27,13 @@ public final class MessageService {
         )
     }
 
-    public func listAround(conversationId: String, around: String, limit: Int = 30) async throws -> MessagesAPIResponse {
+    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "around", value: around),
                 URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
             ]
         )
     }

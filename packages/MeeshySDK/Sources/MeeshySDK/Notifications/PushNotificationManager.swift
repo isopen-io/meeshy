@@ -4,7 +4,7 @@ import UserNotifications
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.meeshy.app", category: "push")
+private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
 @MainActor
 public final class PushNotificationManager: NSObject, ObservableObject {

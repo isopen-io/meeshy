@@ -16,4 +16,11 @@ public final class ReactionService {
             endpoint: "/reactions/\(messageId)/\(encoded)", method: "DELETE"
         )
     }
+
+    public func fetchDetails(messageId: String) async throws -> ReactionSyncResponse {
+        let response: APIResponse<ReactionSyncResponse> = try await api.request(
+            endpoint: "/reactions/\(messageId)"
+        )
+        return response.data
+    }
 }

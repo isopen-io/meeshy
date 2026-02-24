@@ -308,6 +308,13 @@ public final class MessageSocketManager: ObservableObject {
         socket?.emit("typing:stop", ["conversationId": conversationId])
     }
 
+    // MARK: - Translation Request
+
+    public func requestTranslation(messageId: String, targetLanguage: String) {
+        socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
+        Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+    }
+
     // MARK: - Event Handlers
 
     private func setupEventHandlers() {

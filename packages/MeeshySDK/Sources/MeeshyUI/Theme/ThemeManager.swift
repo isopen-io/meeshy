@@ -54,7 +54,9 @@ public enum ThemePreference: String, CaseIterable {
 public class ThemeManager: ObservableObject {
     public static let shared = ThemeManager()
 
-    @Published public var mode: ThemeMode = .dark
+    @Published public var mode: ThemeMode = {
+        UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
+    }()
     @Published public var preference: ThemePreference = .system {
         didSet {
             UserDefaults.standard.set(preference.rawValue, forKey: "themePreference")

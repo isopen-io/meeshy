@@ -42,7 +42,7 @@ public enum RegistrationStep: Int, CaseIterable, Identifiable {
         case .password:
             return "Faut que ce soit fort comme le ndole de maman! Minimum 8 caracteres!"
         case .language:
-            return "Tous tes messages vont etre traduits dans cette langue. C'est la magie de Meeshy!"
+            return "Choisis ta langue principale et ta langue regionale. Meeshy traduit tout automatiquement!"
         case .profile:
             return "Dis au monde qui tu es! C'est optionnel mais ca fait du bien."
         case .recap:
@@ -136,6 +136,7 @@ public final class RegistrationViewModel: ObservableObject {
 
     public init() {
         detectCountry()
+        detectLanguages()
         setupValidationDebounce()
     }
 
@@ -145,6 +146,51 @@ public final class RegistrationViewModel: ObservableObject {
         guard let regionCode = Locale.current.region?.identifier.uppercased() else { return }
         if let match = CountryPicker.countries.first(where: { $0.id == regionCode }) {
             selectedCountry = match
+        }
+    }
+
+    // MARK: - Language Detection
+
+    private static let regionLanguageMap: [String: String] = [
+        "CM": "fr", "FR": "fr", "BE": "fr", "CH": "fr", "CA": "fr", "SN": "fr", "CI": "fr", "CD": "fr", "MG": "fr",
+        "US": "en", "GB": "en", "AU": "en", "NZ": "en", "IE": "en", "ZA": "en", "NG": "en", "GH": "en", "KE": "en",
+        "ES": "es", "MX": "es", "AR": "es", "CO": "es", "CL": "es", "PE": "es",
+        "DE": "de", "AT": "de",
+        "IT": "it",
+        "PT": "pt", "BR": "pt",
+        "SA": "ar", "AE": "ar", "EG": "ar", "MA": "ar", "DZ": "ar", "TN": "ar",
+        "CN": "zh", "TW": "zh", "HK": "zh",
+        "JP": "ja",
+        "KR": "ko",
+        "RU": "ru",
+        "TR": "tr",
+        "NL": "nl",
+        "PL": "pl",
+        "SE": "sv",
+        "IN": "hi",
+        "TH": "th",
+        "VN": "vi",
+        "UA": "uk",
+        "RO": "ro",
+    ]
+
+    private func detectLanguages() {
+        let availableIds = Set(LanguageSelector.defaultLanguages.map(\.id))
+
+        if let langCode = Locale.current.language.languageCode?.identifier.lowercased(),
+           availableIds.contains(langCode) {
+            systemLanguage = langCode
+        } else {
+            systemLanguage = "fr"
+        }
+
+        if let regionCode = Locale.current.region?.identifier.uppercased(),
+           let regionLang = Self.regionLanguageMap[regionCode],
+           availableIds.contains(regionLang),
+           regionLang != systemLanguage {
+            regionalLanguage = regionLang
+        } else {
+            regionalLanguage = systemLanguage != "en" ? "en" : "fr"
         }
     }
 

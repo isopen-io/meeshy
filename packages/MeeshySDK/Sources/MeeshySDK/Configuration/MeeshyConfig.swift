@@ -21,7 +21,7 @@ public final class MeeshyConfig {
 
     public var socketBaseURL: String { serverOrigin }
 
-    public var appBundleId: String = "com.meeshy.app"
+    public var appBundleId: String = "me.meeshy.app"
 
     private init() {}
 
