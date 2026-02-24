@@ -3,7 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';

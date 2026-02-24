@@ -35,6 +35,9 @@ export interface SendMessageBody {
   isEncrypted?: boolean;
   // Audio attachments (pre-uploaded via /attachments/upload)
   attachmentIds?: string[];
+  // Ephemeral/blurred message fields
+  isBlurred?: boolean;
+  expiresAt?: string;
 }
 
 export interface MessagesQuery {

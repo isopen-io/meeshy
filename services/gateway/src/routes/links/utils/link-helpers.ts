@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UnifiedAuthRequest } from '../../../middleware/auth';
 import { isRegisteredUser } from '../../../middleware/auth';
 
