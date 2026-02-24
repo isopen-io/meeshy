@@ -262,7 +262,7 @@ public struct AudioPlayerView: View {
 
     @StateObject private var player = AudioPlaybackManager()
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var showTranscription = true
+    @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
@@ -292,24 +292,18 @@ public struct AudioPlayerView: View {
         self.onPlayingChange = onPlayingChange
     }
 
+    private var fullTranscriptionText: String {
+        displaySegments.map(\.text).joined(separator: " ")
+    }
+
+    private var isLongTranscription: Bool {
+        fullTranscriptionText.count > 255
+    }
+
     // MARK: - Body
     public var body: some View {
         VStack(spacing: 0) {
             mainPlayer
-
-            transcriptionToggle
-
-            if showTranscription, !displaySegments.isEmpty {
-                MediaTranscriptionView(
-                    segments: displaySegments,
-                    currentTime: player.currentTime,
-                    accentColor: accentColor,
-                    maxHeight: context.isCompact ? 150 : 250,
-                    onSeek: { time in player.seekToTime(time) }
-                )
-                .padding(.horizontal, context.isCompact ? 0 : 4)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
 
             if !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
@@ -317,7 +311,7 @@ public struct AudioPlayerView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTranscription)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
             player.attachmentId = attachment.id
             AudioPlaybackManager.registerAutoplay(url: attachment.fileUrl) { [player] in
@@ -335,18 +329,135 @@ public struct AudioPlayerView: View {
 
     // MARK: - Main Player
     private var mainPlayer: some View {
-        HStack(spacing: context.isCompact ? 8 : 10) {
-            playButton
-            VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
-                waveformProgress
-                timeRow
+        VStack(spacing: 0) {
+            HStack(spacing: context.isCompact ? 8 : 10) {
+                playButton
+                VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
+                    waveformProgress
+                    timeRow
+                }
+                percentageView
+                contextActions
             }
-            percentageView
-            contextActions
+            .padding(.horizontal, context.isCompact ? 10 : 14)
+            .padding(.vertical, context.isCompact ? 8 : 12)
+
+            inlineTranscription
         }
-        .padding(.horizontal, context.isCompact ? 10 : 14)
-        .padding(.vertical, context.isCompact ? 8 : 12)
         .background(playerBackground)
+    }
+
+    // MARK: - Inline Transcription (inside player)
+    @ViewBuilder
+    private var inlineTranscription: some View {
+        if !displaySegments.isEmpty {
+            VStack(spacing: 0) {
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+
+                let segments = isLongTranscription && !isTranscriptionExpanded
+                    ? truncatedSegments
+                    : displaySegments
+
+                inlineFlowTranscription(segments: segments)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+
+                if isLongTranscription {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isTranscriptionExpanded.toggle()
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 20)
+                    }
+                }
+            }
+        } else if let onRequest = onRequestTranscription {
+            VStack(spacing: 0) {
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+
+                Button {
+                    onRequest()
+                    HapticFeedback.light()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.badge.plus")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("Transcrire")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private var truncatedSegments: [TranscriptionDisplaySegment] {
+        var charCount = 0
+        var result: [TranscriptionDisplaySegment] = []
+        for segment in displaySegments {
+            charCount += segment.text.count
+            if charCount > 255 {
+                let overflow = charCount - 255
+                let trimmed = String(segment.text.dropLast(overflow))
+                if !trimmed.isEmpty {
+                    result.append(TranscriptionDisplaySegment(
+                        text: trimmed + "...",
+                        startTime: segment.startTime,
+                        endTime: segment.endTime,
+                        speakerId: segment.speakerId,
+                        speakerColor: segment.speakerColor
+                    ))
+                }
+                break
+            }
+            result.append(segment)
+        }
+        return result
+    }
+
+    private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
+        let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+
+        return FlowLayout(spacing: 0) {
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                let isActive = index == activeIdx
+                let isPast = activeIdx != nil && index < activeIdx!
+
+                Button {
+                    player.seekToTime(segment.startTime)
+                    HapticFeedback.light()
+                } label: {
+                    Text(segment.text + " ")
+                        .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                        .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                        .padding(.horizontal, isActive ? 2 : 0)
+                        .padding(.vertical, isActive ? 1 : 0)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                        )
+                }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: isActive)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func inlineSegmentColor(isActive: Bool, isPast: Bool) -> Color {
+        if isActive { return Color(hex: accentColor) }
+        if isPast { return isDark ? Color.white.opacity(0.7) : Color.black.opacity(0.6) }
+        return isDark ? Color.white.opacity(0.35) : Color.black.opacity(0.25)
     }
 
     // MARK: - Play Button
@@ -456,43 +567,6 @@ public struct AudioPlayerView: View {
             .frame(minWidth: context.isCompact ? 32 : 38)
             .contentTransition(.numericText())
             .animation(.easeInOut(duration: 0.15), value: pct)
-    }
-
-    // MARK: - Transcription Toggle (chevron)
-    @ViewBuilder
-    private var transcriptionToggle: some View {
-        if transcription != nil {
-            Button {
-                withAnimation { showTranscription.toggle() }
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: showTranscription ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 16)
-            }
-        } else if let onRequest = onRequestTranscription {
-            Button {
-                onRequest()
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "text.badge.plus")
-                        .font(.system(size: 10, weight: .medium))
-                    Text("Transcrire")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
-                )
-            }
-            .padding(.top, 6)
-        }
     }
 
     // MARK: - Context Actions
