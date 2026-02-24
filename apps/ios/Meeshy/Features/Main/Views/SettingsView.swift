@@ -15,6 +15,14 @@ struct SettingsView: View {
     @State private var showNotificationSettings = false
     @State private var showSecurity = false
     @State private var showBlockedUsers = false
+    @State private var showAbout = false
+    @State private var showPrivacyPolicy = false
+    @State private var showTerms = false
+    @State private var showLicenses = false
+    @State private var showSupport = false
+    @State private var showDataStorage = false
+    @State private var showDataExport = false
+    @State private var showDeleteAccount = false
 
     private let accentColor = "08D9D6"
 
@@ -48,6 +56,14 @@ struct SettingsView: View {
         .sheet(isPresented: $showBlockedUsers) {
             BlockedUsersView()
         }
+        .sheet(isPresented: $showAbout) { AboutView() }
+        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
+        .sheet(isPresented: $showTerms) { TermsOfServiceView() }
+        .sheet(isPresented: $showLicenses) { LicensesView() }
+        .sheet(isPresented: $showSupport) { SupportView() }
+        .sheet(isPresented: $showDataStorage) { DataStorageView() }
+        .sheet(isPresented: $showDataExport) { DataExportView() }
+        .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
 
@@ -91,6 +107,8 @@ struct SettingsView: View {
                 appearanceSection
                 notificationsSection
                 languageSection
+                dataSection
+                supportSection
                 aboutSection
                 logoutSection
 
@@ -156,6 +174,19 @@ struct SettingsView: View {
             }
             .accessibilityLabel("Utilisateurs bloques")
             .accessibilityHint("Ouvre la liste des utilisateurs bloques")
+
+            Button {
+                HapticFeedback.heavy()
+                showDeleteAccount = true
+            } label: {
+                settingsRow(icon: "person.crop.circle.badge.minus", title: "Supprimer le compte", color: "EF4444") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "EF4444").opacity(0.6))
+                }
+            }
+            .accessibilityLabel("Supprimer le compte")
+            .accessibilityHint("Ouvre la page de suppression de compte")
         }
     }
 
@@ -274,24 +305,115 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Data Section
+
+    private var dataSection: some View {
+        settingsSection(title: "Donnees", icon: "externaldrive.fill", color: "E67E22") {
+            Button {
+                HapticFeedback.light()
+                showDataStorage = true
+            } label: {
+                settingsRow(icon: "internaldrive.fill", title: "Stockage", color: "E67E22") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Stockage")
+            .accessibilityHint("Ouvre les parametres de stockage")
+
+            Button {
+                HapticFeedback.light()
+                showDataExport = true
+            } label: {
+                settingsRow(icon: "square.and.arrow.up.fill", title: "Exporter mes donnees", color: "E67E22") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Exporter mes donnees")
+            .accessibilityHint("Ouvre la page d'export de donnees")
+        }
+    }
+
+    // MARK: - Support Section
+
+    private var supportSection: some View {
+        settingsSection(title: "Aide", icon: "questionmark.circle.fill", color: "27AE60") {
+            Button {
+                HapticFeedback.light()
+                showSupport = true
+            } label: {
+                settingsRow(icon: "lifepreserver.fill", title: "Centre d'aide", color: "27AE60") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Centre d'aide")
+            .accessibilityHint("Ouvre le centre d'aide et support")
+        }
+    }
+
     // MARK: - About Section
 
     private var aboutSection: some View {
-        settingsSection(title: "À propos", icon: "info.circle.fill", color: "45B7D1") {
-            settingsRow(icon: "doc.text.fill", title: "Conditions d'utilisation", color: "45B7D1") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+        settingsSection(title: "A propos", icon: "info.circle.fill", color: "45B7D1") {
+            Button {
+                HapticFeedback.light()
+                showAbout = true
+            } label: {
+                settingsRow(icon: "info.circle.fill", title: "A propos de Meeshy", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("A propos de Meeshy")
+            .accessibilityHint("Ouvre la page a propos")
 
-            settingsRow(icon: "hand.raised.fill", title: "Politique de confidentialité", color: "45B7D1") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showTerms = true
+            } label: {
+                settingsRow(icon: "doc.text.fill", title: "Conditions d'utilisation", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("Conditions d'utilisation")
+            .accessibilityHint("Ouvre les conditions d'utilisation")
+
+            Button {
+                HapticFeedback.light()
+                showPrivacyPolicy = true
+            } label: {
+                settingsRow(icon: "hand.raised.fill", title: "Politique de confidentialite", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Politique de confidentialite")
+            .accessibilityHint("Ouvre la politique de confidentialite")
+
+            Button {
+                HapticFeedback.light()
+                showLicenses = true
+            } label: {
+                settingsRow(icon: "checkmark.seal.fill", title: "Licences open source", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Licences open source")
+            .accessibilityHint("Ouvre la liste des licences open source")
 
             settingsRow(icon: "sparkles", title: "Version", color: "F8B500") {
-                Text("1.0.0")
+                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }

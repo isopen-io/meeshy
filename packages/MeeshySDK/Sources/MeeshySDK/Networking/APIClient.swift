@@ -246,4 +246,14 @@ public final class APIClient {
     public func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
         return try await request(endpoint: endpoint, method: "DELETE")
     }
+
+    // MARK: - DELETE with Encodable body
+
+    public func delete<T: Decodable, U: Encodable>(
+        endpoint: String,
+        body: U
+    ) async throws -> APIResponse<T> {
+        let data = try JSONEncoder().encode(body)
+        return try await request(endpoint: endpoint, method: "DELETE", body: data)
+    }
 }
