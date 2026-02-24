@@ -1391,6 +1391,9 @@ export class MeeshySocketIOManager {
         messageType: saved?.messageType || data.messageType || 'text',
         isEdited: Boolean(saved?.isEdited),
         isDeleted: Boolean(saved?.isDeleted),
+        isBlurred: Boolean(saved?.isBlurred),
+        isViewOnce: Boolean(saved?.isViewOnce),
+        expiresAt: saved?.expiresAt || undefined,
         createdAt: saved?.createdAt || new Date(),
         updatedAt: saved?.updatedAt || new Date(),
         sender: saved?.sender
@@ -2359,6 +2362,9 @@ export class MeeshySocketIOManager {
         messageType: message.messageType || 'text',
         isEdited: Boolean(message.isEdited),
         isDeleted: Boolean(message.isDeleted),
+        isBlurred: Boolean((message as any).isBlurred),
+        isViewOnce: Boolean((message as any).isViewOnce),
+        expiresAt: (message as any).expiresAt || undefined,
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),
         // CORRECTION CRITIQUE: Inclure validatedMentions pour rendre les mentions cliquables en temps réel

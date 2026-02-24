@@ -102,11 +102,14 @@ PushNotificationManager.shared
 
 ### Prisme Linguistique — Models & Socket
 
-Le SDK fournit les types et la communication temps reel pour le prisme linguistique :
+Le SDK fournit les types API et la communication temps reel pour le prisme linguistique :
 
-**Models** (`Models/MessageModels.swift`) :
-- `MessageTranslation` : Traduction d'un message (sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
-- `MeeshyMessage.translations: [MessageTranslation]` : Traductions pre-chargees avec le message
+**Models SDK** (`Models/MessageModels.swift`) :
+- `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
+- `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
+
+**Model App** (`Features/Main/ViewModels/ConversationViewModel.swift`) :
+- `MessageTranslation` : Type domain cote app (pas dans le SDK) pour les traductions en cache dans le ViewModel
 
 **Socket** (`Sockets/MessageSocketManager.swift`) :
 - `requestTranslation(messageId:targetLanguage:)` : Demande de traduction on-demand

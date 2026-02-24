@@ -382,21 +382,6 @@ struct ConversationView: View {
                     )
                 }
             }
-            .sheet(isPresented: $showTranslationDetail) {
-                if let msgId = translationDetailMessageId,
-                   let msg = viewModel.messages.first(where: { $0.id == msgId }) {
-                    TranslationDetailSheet(
-                        messageId: msg.id,
-                        originalContent: msg.content,
-                        originalLanguage: msg.originalLanguage,
-                        translations: viewModel.messageTranslations[msg.id] ?? [],
-                        accentColor: conversation?.accentColor ?? "#FF2E63",
-                        onRequestTranslation: { messageId, lang in
-                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
-                        }
-                    )
-                }
-            }
     }
 
     // MARK: - Body Content (extracted to help type-checker)
@@ -566,10 +551,8 @@ struct ConversationView: View {
                 if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
             .onChange(of: scrollToBottomTrigger) { _ in
-                if let last = viewModel.messages.last {
-                    viewModel.markProgrammaticScroll()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
             }
             .onChange(of: scrollToMessageId) { targetId in
                 guard let targetId else { return }

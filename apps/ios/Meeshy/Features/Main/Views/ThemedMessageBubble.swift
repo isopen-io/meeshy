@@ -33,6 +33,8 @@ struct ThemedMessageBubble: View {
     @State var showCarousel: Bool = false // internal for cross-file extension access
     @State var carouselIndex: Int = 0 // internal for cross-file extension access
     @State private var isBlurRevealed: Bool = false
+    @State private var blurRevealTask: Task<Void, Never>?
+    @State private var fogOpacity: CGFloat = 0
     @State private var isTextExpanded: Bool = false
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
@@ -177,7 +179,11 @@ struct ThemedMessageBubble: View {
                 .opacity(isEphemeralExpired ? 0 : 1)
                 .scaleEffect(isEphemeralExpired ? 0.8 : 1)
                 .onAppear { startEphemeralTimerIfNeeded() }
-                .onDisappear { ephemeralTimerCancellable?.cancel() }
+                .onDisappear {
+                    ephemeralTimerCancellable?.cancel()
+                    blurRevealTask?.cancel()
+                    fogOpacity = 0
+                }
         }
     }
 
@@ -204,6 +210,58 @@ struct ThemedMessageBubble: View {
                 ephemeralTimerCancellable?.cancel()
             } else {
                 ephemeralSecondsRemaining = newRemaining
+            }
+        }
+    }
+
+    // MARK: - Blur Reveal Logic
+
+    private static let defaultBlurRevealDuration: TimeInterval = 5
+
+    private var blurRevealDuration: TimeInterval {
+        // TODO: source from UserPreferencesManager when available
+        Self.defaultBlurRevealDuration
+    }
+
+    private func revealBlurredContent() {
+        HapticFeedback.medium()
+        if message.isViewOnce {
+            onConsumeViewOnce?(message.id) { success in
+                guard success else { return }
+                scheduleBlurReveal()
+            }
+        } else {
+            scheduleBlurReveal()
+        }
+    }
+
+    private func scheduleBlurReveal() {
+        fogOpacity = 0
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isBlurRevealed = true
+        }
+        blurRevealTask?.cancel()
+        blurRevealTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(blurRevealDuration))
+            guard !Task.isCancelled else { return }
+
+            // Phase 1: Fog condensation appears
+            withAnimation(.easeIn(duration: 0.4)) {
+                fogOpacity = 1
+            }
+            try? await Task.sleep(for: .seconds(0.35))
+            guard !Task.isCancelled else { return }
+
+            // Phase 2: Blur applies behind fog
+            withAnimation(.easeOut(duration: 0.4)) {
+                isBlurRevealed = false
+            }
+            try? await Task.sleep(for: .seconds(0.45))
+            guard !Task.isCancelled else { return }
+
+            // Phase 3: Fog dissipates
+            withAnimation(.easeOut(duration: 0.5)) {
+                fogOpacity = 0
             }
         }
     }
@@ -365,48 +423,48 @@ struct ThemedMessageBubble: View {
                         }
                     }
                     .blur(radius: shouldBlur ? 20 : 0)
-                    .allowsHitTesting(!shouldBlur)
 
-                    // Blur reveal overlay
-                    if shouldBlur {
-                        VStack(spacing: 6) {
-                            Image(systemName: message.isViewOnce ? "eye.slash.fill" : "eye.slash.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white)
+                    // Fog condensation effect (appears when blur returns)
+                    if fogOpacity > 0 {
+                        ZStack {
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.35),
+                                    Color.white.opacity(0.12),
+                                    Color.clear
+                                ]),
+                                center: .center,
+                                startRadius: 5,
+                                endRadius: 120
+                            )
+                            .blur(radius: 18)
+                            .scaleEffect(1.3)
 
-                            Text(message.isViewOnce ? "Voir une fois" : "Contenu masque")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white)
+                            Circle()
+                                .fill(Color.white.opacity(0.18))
+                                .blur(radius: 25)
+                                .frame(width: 70, height: 70)
+                                .offset(x: -25, y: -18)
 
-                            Text("Maintenir pour voir")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.7))
+                            Circle()
+                                .fill(Color.white.opacity(0.12))
+                                .blur(radius: 30)
+                                .frame(width: 55, height: 55)
+                                .offset(x: 20, y: 12)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 80)
-                        .contentShape(Rectangle())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(message.isViewOnce ? "Contenu a voir une fois" : "Contenu masque")
-                        .accessibilityHint("Maintenir pour reveler le contenu")
-                        .onLongPressGesture(minimumDuration: 0.3) {
-                            HapticFeedback.medium()
-                            if message.isViewOnce {
-                                onConsumeViewOnce?(message.id) { success in
-                                    guard success else { return }
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        isBlurRevealed = true
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                                        withAnimation(.easeOut(duration: 0.5)) {
-                                            isBlurRevealed = false
-                                        }
-                                    }
-                                }
-                            } else {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    isBlurRevealed = true
-                                }
-                            }
-                        }
+                        .opacity(fogOpacity)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .allowsHitTesting(false)
+                    }
+
+                    // Blur peek: tap to reveal for N seconds, then auto re-blur
+                    if message.isBlurred && !isBlurRevealed {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Contenu masque")
+                            .accessibilityHint("Toucher pour reveler le contenu")
+                            .onTapGesture { revealBlurredContent() }
                     }
                 }
                 .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {

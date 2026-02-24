@@ -96,8 +96,9 @@ extension ConversationView {
                         MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                     },
                     onShowTranslationDetail: { messageId in
-                        translationDetailMessageId = messageId
-                        showTranslationDetail = true
+                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetInitialTab = .language
+                        showMessageDetailSheet = true
                     }
                 )
                 .background(

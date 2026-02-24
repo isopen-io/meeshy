@@ -516,7 +516,6 @@ struct MessageDetailSheet: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear { Task { await loadExistingTranslations() } }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedLanguageCode)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: translations.count)
     }
