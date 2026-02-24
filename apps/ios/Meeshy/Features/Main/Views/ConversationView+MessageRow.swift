@@ -76,6 +76,13 @@ extension ConversationView {
                     },
                     onReplyTap: { messageId in
                         scrollToMessageId = messageId
+                    },
+                    onMediaTap: { attachment in
+                        // User explicitly tapped media -> always cache (not conditional)
+                        if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                            Task { await MediaCacheManager.shared.prefetch(resolved) }
+                        }
+                        galleryStartAttachment = attachment
                     }
                 )
                 .background(

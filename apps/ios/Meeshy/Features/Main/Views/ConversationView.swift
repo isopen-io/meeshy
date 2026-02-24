@@ -98,6 +98,9 @@ struct ConversationView: View {
     // searchResultIds and searchCurrentIndex removed — backend search uses viewModel.searchResults
     @FocusState var isSearchFocused: Bool
 
+    // Conversation-level media gallery
+    @State var galleryStartAttachment: MessageAttachment? = nil
+
     // Swipe state
     @State var swipedMessageId: String? = nil
     @State var swipeOffset: CGFloat = 0
@@ -314,6 +317,14 @@ struct ConversationView: View {
             }
             .onPreferenceChange(MessageFrameKey.self) { frames in messageFrames = frames }
             .overlay { overlayMenuContent }
+            .fullScreenCover(item: $galleryStartAttachment) { startAttachment in
+                ConversationMediaGalleryView(
+                    allAttachments: viewModel.allVisualAttachments,
+                    startAttachmentId: startAttachment.id,
+                    accentColor: accentColor,
+                    captionMap: viewModel.mediaCaptionMap
+                )
+            }
             .sheet(isPresented: $showMessageDetailSheet) {
                 if let msg = detailSheetMessage {
                     MessageDetailSheet(

@@ -146,6 +146,13 @@ struct RootView: View {
                 router.navigateToConversation(conversation)
             }
         }
+        .onOpenURL { url in
+            router.handleDeepLink(url)
+        }
+        .sheet(item: $router.deepLinkProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Handle Story Reply

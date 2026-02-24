@@ -71,6 +71,39 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
+    // MARK: - Conversation-Wide Media
+
+    /// All visual attachments (images + videos) across every loaded message, in chronological order.
+    var allVisualAttachments: [MessageAttachment] {
+        messages.flatMap { msg in
+            msg.attachments.filter { [.image, .video].contains($0.type) }
+        }
+    }
+
+    /// Maps attachment.id → caption text for the fullscreen gallery.
+    /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
+    var mediaCaptionMap: [String: String] {
+        var map: [String: String] = [:]
+        for msg in messages {
+            let visuals = msg.attachments.filter { [.image, .video].contains($0.type) }
+            for att in visuals {
+                if let caption = att.caption, !caption.isEmpty {
+                    map[att.id] = caption
+                } else if visuals.count == 1 && !msg.content.isEmpty {
+                    // Single visual + message text → show as caption
+                    // Use translation if available, otherwise original content
+                    if let translations = messageTranslations[msg.id],
+                       let best = translations.first {
+                        map[att.id] = best.translatedContent
+                    } else {
+                        map[att.id] = msg.content
+                    }
+                }
+            }
+        }
+        return map
+    }
+
     // MARK: - Private
 
     let conversationId: String

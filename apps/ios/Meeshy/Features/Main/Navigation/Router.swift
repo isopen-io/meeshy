@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 enum Route: Hashable {
     case conversation(Conversation)
@@ -11,6 +12,7 @@ enum Route: Hashable {
 @MainActor
 final class Router: ObservableObject {
     @Published var path = NavigationPath()
+    @Published var deepLinkProfileUser: ProfileSheetUser?
 
     var isInConversation: Bool { !path.isEmpty }
 
@@ -31,6 +33,31 @@ final class Router: ObservableObject {
         popToRoot()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.path.append(Route.conversation(conversation))
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    func handleDeepLink(_ url: URL) {
+        DeepLinkRouter.open(url) { [weak self] destination in
+            guard let self else { return }
+            switch destination {
+            case .ownProfile:
+                popToRoot()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.push(.profile)
+                }
+
+            case .userProfile(let username):
+                deepLinkProfileUser = ProfileSheetUser(username: username)
+
+            case .conversation:
+                // TODO: fetch conversation by ID and navigate
+                break
+
+            case .external:
+                break // handled by DeepLinkRouter.open before calling this closure
+            }
         }
     }
 }

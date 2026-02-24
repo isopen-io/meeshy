@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import SwiftUI
+import MeeshySDK
 
 @MainActor
 class AudioPlayerManager: ObservableObject {

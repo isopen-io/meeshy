@@ -3,7 +3,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Visual Media Grid & Carousel
+// MARK: - Visual Media Grid
 extension ThemedMessageBubble {
 
     @ViewBuilder
@@ -12,13 +12,13 @@ extension ThemedMessageBubble {
 
         switch items.count {
         case 1:
-            visualGridCell(items[0])
-                .frame(width: gridMaxWidth, height: 240)
+            gridCell(items[0], solo: true)
+                .frame(width: gridMaxWidth, height: items[0].type == .video ? 200 : 240)
 
         case 2:
             HStack(spacing: gridSpacing) {
-                visualGridCell(items[0])
-                visualGridCell(items[1])
+                gridCell(items[0])
+                gridCell(items[1])
             }
             .frame(width: gridMaxWidth, height: 180)
 
@@ -26,42 +26,57 @@ extension ThemedMessageBubble {
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
             HStack(spacing: gridSpacing) {
-                visualGridCell(items[0])
+                gridCell(items[0])
                     .frame(width: leftW)
                 VStack(spacing: gridSpacing) {
-                    visualGridCell(items[1])
-                    visualGridCell(items[2], isFirstRow: false)
+                    gridCell(items[1])
+                    gridCell(items[2])
                 }
                 .frame(width: rightW)
             }
             .frame(width: gridMaxWidth, height: 240)
 
         default:
-            let overflow = items.count - 3
+            let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
                 HStack(spacing: gridSpacing) {
-                    visualGridCell(items[0])
-                    visualGridCell(items[1])
+                    gridCell(items[0])
+                    gridCell(items[1])
                 }
                 HStack(spacing: gridSpacing) {
-                    visualGridCell(items[2], isFirstRow: false)
-                    visualGridCell(items[3], overflowCount: overflow, isFirstRow: false)
+                    gridCell(items[2])
+                    gridCell(items[3], overflowCount: max(0, overflow))
                 }
             }
             .frame(width: gridMaxWidth, height: 240)
         }
     }
 
+    // MARK: - Carousel View (inline within message, for browsing this message's media)
+
     @ViewBuilder
-    func visualGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, isFirstRow: Bool = true) -> some View {
+    var carouselView: some View {
+        BubbleCarouselView(
+            items: visualAttachments,
+            carouselIndex: $carouselIndex,
+            showCarousel: $showCarousel,
+            fullscreenAttachment: $fullscreenAttachment,
+            contactColor: contactColor
+        )
+    }
+
+    // MARK: - Grid Cell
+
+    @ViewBuilder
+    private func gridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> some View {
         ZStack {
             Color.black
 
             switch attachment.type {
             case .image:
-                gridImageCell(attachment)
+                gridImageView(attachment)
             case .video:
-                gridVideoCell(attachment)
+                gridVideoThumbnail(attachment, solo: solo)
             default:
                 EmptyView()
             }
@@ -76,16 +91,8 @@ extension ThemedMessageBubble {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            if overflowCount > 0 {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showCarousel = true
-                    carouselIndex = 0
-                }
-                HapticFeedback.light()
-            } else if attachment.type != .video {
-                fullscreenAttachment = attachment
-                HapticFeedback.light()
-            }
+            fullscreenAttachment = attachment
+            HapticFeedback.light()
         }
         .overlay(alignment: .bottom) {
             downloadBadge(attachment)
@@ -93,21 +100,10 @@ extension ThemedMessageBubble {
         }
     }
 
-    // MARK: - Carousel View
+    // MARK: - Grid Image
 
     @ViewBuilder
-    var carouselView: some View {
-        BubbleCarouselView(
-            items: visualAttachments,
-            carouselIndex: $carouselIndex,
-            showCarousel: $showCarousel,
-            fullscreenAttachment: $fullscreenAttachment,
-            contactColor: contactColor
-        )
-    }
-
-    @ViewBuilder
-    func gridImageCell(_ attachment: MessageAttachment) -> some View {
+    private func gridImageView(_ attachment: MessageAttachment) -> some View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl
         let urlStr = fullUrl ?? thumbUrl ?? ""
@@ -131,16 +127,59 @@ extension ThemedMessageBubble {
         }
     }
 
+    // MARK: - Grid Video Thumbnail (no inline player — tap opens gallery)
+
     @ViewBuilder
-    func gridVideoCell(_ attachment: MessageAttachment) -> some View {
-        InlineVideoPlayerView(
-            attachment: attachment,
-            accentColor: contactColor,
-            onExpandFullscreen: {
-                fullscreenAttachment = attachment
+    private func gridVideoThumbnail(_ attachment: MessageAttachment, solo: Bool = false) -> some View {
+        ZStack {
+            let thumbUrl = attachment.thumbnailUrl ?? ""
+            if !thumbUrl.isEmpty {
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            } else {
+                Color(hex: attachment.thumbnailColor)
             }
-        )
+
+            // Play icon overlay
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: solo ? 48 : 36, height: solo ? 48 : 36)
+                Circle()
+                    .fill(Color(hex: contactColor).opacity(0.85))
+                    .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
+                Image(systemName: "play.fill")
+                    .font(.system(size: solo ? 18 : 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .offset(x: solo ? 2 : 1)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+
+            // Duration badge
+            if let formatted = attachment.durationFormatted {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(formatted)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.6)))
+                    }
+                    .padding(.trailing, 4)
+                    .padding(.bottom, 4)
+                }
+            }
+        }
     }
+
+    // MARK: - Download Badge
 
     func downloadBadge(_ attachment: MessageAttachment) -> some View {
         DownloadBadgeView(
@@ -170,7 +209,6 @@ struct BubbleCarouselView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Native paging ScrollView
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(items) { attachment in
@@ -196,7 +234,6 @@ struct BubbleCarouselView: View {
             .frame(height: carouselHeight)
             .scrollClipDisabled(false)
 
-            // Top bar: close + page indicator
             carouselTopBar
         }
         .onAppear {
@@ -211,7 +248,6 @@ struct BubbleCarouselView: View {
             let oldIndex = carouselIndex
             carouselIndex = newIndex
 
-            // Auto-pause video when swiping away
             if oldIndex != newIndex {
                 let oldAttachment = items[oldIndex]
                 if oldAttachment.type == .video && videoManager.activeURL == oldAttachment.fileUrl {
@@ -220,7 +256,6 @@ struct BubbleCarouselView: View {
                 HapticFeedback.light()
             }
 
-            // Prefetch adjacent pages
             prefetchAdjacentPages(around: newIndex)
         }
     }
@@ -229,7 +264,6 @@ struct BubbleCarouselView: View {
 
     private var carouselTopBar: some View {
         HStack(spacing: 0) {
-            // Close button
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCarousel = false
@@ -246,7 +280,6 @@ struct BubbleCarouselView: View {
 
             Spacer()
 
-            // Page indicator
             if items.count > 1 {
                 pageIndicator
             }
@@ -255,14 +288,13 @@ struct BubbleCarouselView: View {
         .padding(.top, 10)
     }
 
-    // MARK: - Adaptive Page Indicator
+    // MARK: - Page Indicator
 
     @ViewBuilder
     private var pageIndicator: some View {
         let accent = Color(hex: contactColor)
 
         if items.count <= 7 {
-            // Dot indicator for small counts
             HStack(spacing: 5) {
                 ForEach(0..<items.count, id: \.self) { i in
                     Circle()
@@ -286,7 +318,6 @@ struct BubbleCarouselView: View {
                     .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
             )
         } else {
-            // Counter for many items
             Text("\(carouselIndex + 1) / \(items.count)")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
@@ -321,9 +352,9 @@ struct BubbleCarouselView: View {
         .frame(height: carouselHeight)
         .clipped()
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
+        .onTapGesture {
             fullscreenAttachment = attachment
-            HapticFeedback.medium()
+            HapticFeedback.light()
         }
         .overlay(alignment: .bottom) {
             DownloadBadgeView(

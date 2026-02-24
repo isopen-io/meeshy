@@ -1,6 +1,7 @@
 import Foundation
 import Photos
 import UIKit
+import MeeshySDK
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
 final class PhotoLibraryManager {

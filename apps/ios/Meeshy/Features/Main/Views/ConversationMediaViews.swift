@@ -67,11 +67,12 @@ struct DownloadBadgeView: View {
         .padding(4)
         .task { await downloader.checkCache(attachment.fileUrl) }
         .task {
-            // Poll cache periodically so badge disappears when file is cached by player
+            // Poll cache periodically so badge disappears when file is cached by player/gallery
+            let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !downloader.isCached {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                let cached = await MediaCacheManager.shared.isCached(resolved)
                 if cached {
                     downloader.isCached = true
                     break
@@ -133,7 +134,8 @@ final class AttachmentDownloader: ObservableObject {
     private var downloadTask: Task<Void, Never>?
 
     func checkCache(_ urlString: String) async {
-        let cached = await MediaCacheManager.shared.isCached(urlString)
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        let cached = await MediaCacheManager.shared.isCached(resolved)
         if cached { isCached = true }
     }
 
@@ -187,7 +189,8 @@ final class AttachmentDownloader: ObservableObject {
                     data.append(contentsOf: buffer)
                 }
 
-                await MediaCacheManager.shared.store(data, for: fileUrl)
+                let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
+                await MediaCacheManager.shared.store(data, for: resolvedKey)
 
                 let finalSize = Int64(data.count)
                 await MainActor.run { [weak self] in
@@ -240,8 +243,9 @@ struct CachedPlayIcon: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isCached)
         .task {
+            let resolved = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
             while !Task.isCancelled && !isCached {
-                let cached = await MediaCacheManager.shared.isCached(fileUrl)
+                let cached = await MediaCacheManager.shared.isCached(resolved)
                 if cached {
                     isCached = true
                     break
@@ -329,8 +333,9 @@ struct AudioMediaView: View {
             }
         }
         .task {
+            let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !isCached {
-                let cached = await MediaCacheManager.shared.isCached(attachment.fileUrl)
+                let cached = await MediaCacheManager.shared.isCached(resolved)
                 if cached {
                     isCached = true
                     break

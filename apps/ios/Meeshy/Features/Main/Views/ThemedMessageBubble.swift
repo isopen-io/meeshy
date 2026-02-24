@@ -17,6 +17,7 @@ struct ThemedMessageBubble: View {
     var onShowInfo: (() -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
     @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
@@ -171,34 +172,17 @@ struct ThemedMessageBubble: View {
                         if !visualAttachments.isEmpty {
                             let mediaTimestampAlignment: Alignment = .bottomTrailing
 
-                            if showCarousel {
-                                carouselView
-                                    .background(Color.black)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .overlay(alignment: mediaTimestampAlignment) {
-                                        if !hasTextOrNonMediaContent && !isVideoPlaying {
-                                            mediaTimestampOverlay
-                                                .padding(8)
-                                                .transition(.opacity)
-                                        }
+                            visualMediaGrid
+                                .background(Color.black)
+                                .compositingGroup()
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(alignment: mediaTimestampAlignment) {
+                                    if !hasTextOrNonMediaContent {
+                                        mediaTimestampOverlay
+                                            .padding(8)
+                                            .transition(.opacity)
                                     }
-                                    .animation(.easeInOut(duration: 0.2), value: isVideoPlaying)
-                                    .transition(.opacity)
-                            } else {
-                                visualMediaGrid
-                                    .background(Color.black)
-                                    .compositingGroup()
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .overlay(alignment: mediaTimestampAlignment) {
-                                        if !hasTextOrNonMediaContent && !isVideoPlaying {
-                                            mediaTimestampOverlay
-                                                .padding(8)
-                                                .transition(.opacity)
-                                        }
-                                    }
-                                    .animation(.easeInOut(duration: 0.2), value: isVideoPlaying)
-                                    .transition(.opacity)
-                            }
+                                }
                         }
 
                         // Audio standalone
@@ -296,7 +280,18 @@ struct ThemedMessageBubble: View {
                 ShareSheet(activityItems: [url])
             }
         }
-        .fullScreenCover(item: $fullscreenAttachment) { attachment in
+        .onChange(of: fullscreenAttachment?.id) { _, _ in
+            guard let attachment = fullscreenAttachment else { return }
+            if let onMediaTap {
+                fullscreenAttachment = nil
+                onMediaTap(attachment)
+            }
+            // If onMediaTap is nil, keep fullscreenAttachment set for the local fullScreenCover fallback
+        }
+        .fullScreenCover(item: Binding(
+            get: { onMediaTap == nil ? fullscreenAttachment : nil },
+            set: { fullscreenAttachment = $0 }
+        )) { attachment in
             switch attachment.type {
             case .image:
                 let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
@@ -324,6 +319,10 @@ struct ThemedMessageBubble: View {
 
     private static let textTruncateLimit = 512
 
+    private var linkTint: Color {
+        message.isMe ? .white : Color(hex: "45B7D1")
+    }
+
     @ViewBuilder
     private var expandableTextView: some View {
         let content = message.content
@@ -333,11 +332,10 @@ struct ThemedMessageBubble: View {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                (Text(truncated + "...")
-                    .font(.system(size: 15))
-                    .foregroundColor(textColor)
+                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
+                .tint(linkTint)
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -353,11 +351,10 @@ struct ThemedMessageBubble: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                (Text(content)
-                    .font(.system(size: 15))
-                    .foregroundColor(textColor)
+                (MessageTextRenderer.render(content, fontSize: 15, color: textColor)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
+                .tint(linkTint)
 
                 if isTextExpanded && content.count > Self.textTruncateLimit {
                     Button {
