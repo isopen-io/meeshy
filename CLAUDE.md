@@ -3,6 +3,31 @@
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 
+## Prisme Linguistique — Philosophie Produit
+
+Le Prisme Linguistique est le principe fondamental de l'experience Meeshy :
+
+**Par defaut, l'utilisateur consomme tout le contenu dans sa langue principale configuree.** Les traductions sont appliquees automatiquement, de maniere elegante et discrete — l'utilisateur ne devrait jamais ressentir de friction linguistique.
+
+### Principes
+- **Transparence** : Le contenu traduit s'affiche comme du contenu natif. Pas de popup, pas de banniere intrusive
+- **Discretion** : Un indicateur subtil (icone translate, badge langue) signale qu'une traduction est active, sans distraire
+- **Exploration** : L'utilisateur peut a tout moment voir l'original ou explorer d'autres langues via un geste naturel (long press, tap icone)
+- **Automatisme** : La resolution de langue preferee est automatique (langue principale > langues secondaires > original)
+- **Coherence** : Le prisme s'applique a TOUT le contenu — messages texte, transcriptions audio, metadonnees, previews
+
+### Pipeline technique
+```
+Message recu → Detection langue originale → Traduction auto (NLLB-200 via translator)
+→ Stockage MongoDB (MessageTranslation[]) → Push Socket.IO → Client affiche dans langue preferee
+```
+
+### Resolution de langue
+1. Override manuel utilisateur (selection explicite dans l'onglet Language)
+2. Langue principale configuree dans le profil
+3. Langues secondaires configurees
+4. Contenu original (fallback)
+
 ## Architecture
 
 ```

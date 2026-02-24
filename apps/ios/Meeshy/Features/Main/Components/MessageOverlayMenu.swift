@@ -16,6 +16,9 @@ struct MessageOverlayMenu: View {
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
     var onPin: (() -> Void)?
+    var textTranslations: [MessageTranslation] = []
+    var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
+    var onRequestTranslation: ((String, String) -> Void)? = nil
     var onReact: ((String) -> Void)?
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
@@ -401,6 +404,9 @@ struct MessageOverlayMenu: View {
                     initialTab: .language,
                     canDelete: canDelete,
                     actions: overlayActions,
+                    textTranslations: textTranslations,
+                    onSelectTranslation: onSelectTranslation,
+                    onRequestTranslation: onRequestTranslation,
                     onDismissAction: { dismiss() },
                     onReact: { emoji in onReact?(emoji) },
                     onReport: { type, reason in onReport?(type, reason) },

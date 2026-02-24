@@ -134,6 +134,9 @@ struct MessageDetailSheet: View {
     var initialTab: DetailTab? = nil
     var canDelete: Bool = false
     var actions: [MessageAction]? = nil
+    var textTranslations: [MessageTranslation] = []
+    var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
+    var onRequestTranslation: ((String, String) -> Void)? = nil
     var onDismissAction: (() -> Void)? = nil
 
     var onReact: ((String) -> Void)?
@@ -181,13 +184,16 @@ struct MessageDetailSheet: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, textTranslations: [MessageTranslation] = [], onSelectTranslation: ((MessageTranslation?) -> Void)? = nil, onRequestTranslation: ((String, String) -> Void)? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
         self.initialTab = initialTab
         self.canDelete = canDelete
         self.actions = actions
+        self.textTranslations = textTranslations
+        self.onSelectTranslation = onSelectTranslation
+        self.onRequestTranslation = onRequestTranslation
         self.onDismissAction = onDismissAction
         self.onReact = onReact
         self.onReport = onReport
@@ -527,6 +533,21 @@ struct MessageDetailSheet: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedLanguageCode = isSelected ? nil : lang.code
                 }
+                // Notify parent to update bubble
+                if !isSelected, let translated = translations[lang.code] {
+                    let mt = MessageTranslation(
+                        id: "\(message.id)-\(lang.code)",
+                        messageId: message.id,
+                        sourceLanguage: message.originalLanguage,
+                        targetLanguage: lang.code,
+                        translatedContent: translated,
+                        translationModel: "nllb-200",
+                        confidenceScore: nil
+                    )
+                    onSelectTranslation?(mt)
+                } else if isSelected {
+                    onSelectTranslation?(nil)
+                }
             } else {
                 Task { await translateTo(lang.code, from: originalLang) }
             }
@@ -552,11 +573,19 @@ struct MessageDetailSheet: View {
                         .scaleEffect(0.7)
                         .tint(langColor)
                 } else if hasTranslation {
-                    Text(String((translations[lang.code] ?? "").prefix(30)) + (translations[lang.code]?.count ?? 0 > 30 ? "..." : ""))
+                    Text(String((translations[lang.code] ?? "").prefix(60)) + (translations[lang.code]?.count ?? 0 > 60 ? "..." : ""))
                         .font(.system(size: 11))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
-                        .frame(maxWidth: 120, alignment: .trailing)
+                        .frame(maxWidth: 180, alignment: .trailing)
+
+                    Button {
+                        Task { await translateTo(lang.code, from: originalLang) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(langColor.opacity(0.6))
+                    }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.system(size: 12, weight: .medium))
@@ -597,6 +626,19 @@ struct MessageDetailSheet: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedLanguageCode = targetLang
             }
+            // Notify parent to update bubble
+            let mt = MessageTranslation(
+                id: "\(message.id)-\(targetLang)",
+                messageId: message.id,
+                sourceLanguage: sourceLang,
+                targetLanguage: targetLang,
+                translatedContent: response.translatedText,
+                translationModel: "on-demand",
+                confidenceScore: nil
+            )
+            onSelectTranslation?(mt)
+            // Trigger socket-based translation for persistence
+            onRequestTranslation?(message.id, targetLang)
             HapticFeedback.success()
         } catch {
             HapticFeedback.error()
@@ -607,6 +649,13 @@ struct MessageDetailSheet: View {
         guard !isLoadingTranslations else { return }
         isLoadingTranslations = true
         defer { isLoadingTranslations = false }
+
+        // Pre-populate from ViewModel-provided translations
+        for t in textTranslations {
+            if translations[t.targetLanguage] == nil {
+                translations[t.targetLanguage] = t.translatedContent
+            }
+        }
 
         do {
             let response: APIResponse<[TranslationData]> = try await APIClient.shared.request(

@@ -45,6 +45,10 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranscriptions: [String: MessageTranscription] = [:]
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
 
+    /// Manual translation override per message (user selected a specific language in Language tab)
+    /// nil value means user chose "show original"
+    @Published var activeTranslationOverrides: [String: MessageTranslation?] = [:]
+
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
@@ -1174,7 +1178,17 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    func setActiveTranslation(for messageId: String, translation: MessageTranslation?) {
+        activeTranslationOverrides[messageId] = translation
+    }
+
     func preferredTranslation(for messageId: String) -> MessageTranslation? {
+        // Manual override from Language tab takes priority
+        if let override = activeTranslationOverrides[messageId] {
+            return override  // nil means user chose "original"
+        }
+
+        // Automatic resolution
         guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
         let user = AuthManager.shared.currentUser
 

@@ -100,6 +100,21 @@ PushNotificationManager.shared
 - Double couche: NSCache (mmoire) + FileManager (disque, 7j TTL)
 - Dduplification in-flight (vite tlchargements parallles du mme fichier)
 
+### Prisme Linguistique — Models & Socket
+
+Le SDK fournit les types et la communication temps reel pour le prisme linguistique :
+
+**Models** (`Models/MessageModels.swift`) :
+- `MessageTranslation` : Traduction d'un message (sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
+- `MeeshyMessage.translations: [MessageTranslation]` : Traductions pre-chargees avec le message
+
+**Socket** (`Sockets/MessageSocketManager.swift`) :
+- `requestTranslation(messageId:targetLanguage:)` : Demande de traduction on-demand
+- `translationReceivedPublisher` : Combine publisher pour les traductions recues en temps reel
+- Evenements : `translation:request` (client → server), `translation:completed` (server → client)
+
+**Resolution** : La logique de resolution de langue preferee est dans le ViewModel de l'app (pas dans le SDK). Le SDK fournit les donnees brutes, l'app decide de l'affichage.
+
 ## Conventions
 
 ### Nommage

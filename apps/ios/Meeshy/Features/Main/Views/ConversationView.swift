@@ -110,10 +110,6 @@ struct ConversationView: View {
     // Contact picker state
     @State var showContactPicker = false
 
-    // Translation detail sheet
-    @State var showTranslationDetail = false
-    @State var translationDetailMessageId: String? = nil
-
     // Emoji picker state
     @State var showTextEmojiPicker = false
     @State var emojiToInject = ""
@@ -363,6 +359,13 @@ struct ConversationView: View {
                         conversationId: viewModel.conversationId,
                         initialTab: detailSheetInitialTab,
                         canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                        textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                        onSelectTranslation: { translation in
+                            viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                        },
+                        onRequestTranslation: { messageId, lang in
+                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                        },
                         onReact: { emoji in
                             viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                         },
@@ -708,6 +711,13 @@ struct ConversationView: View {
                     messageText = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
+                textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                onSelectTranslation: { translation in
+                    viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                },
+                onRequestTranslation: { messageId, lang in
+                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                },
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },

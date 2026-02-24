@@ -125,6 +125,43 @@ MediaCacheManager.shared    // Disk caching
 - Animations: `.spring(response: 0.4-0.7, dampingFraction: 0.6-0.8)`
 - Staggered delays: 0.04-0.05s per list item index
 
+## Prisme Linguistique — Implementation iOS
+
+Le Prisme Linguistique garantit que l'utilisateur consomme le contenu dans sa langue preferee, de maniere transparente.
+
+### Architecture cote iOS
+```
+ConversationViewModel
+  ├── messageTranslations: [String: [MessageTranslation]]  → Cache des traductions par message
+  ├── preferredTranslation(for:) → Resolution automatique de la meilleure traduction
+  └── activeTranslationOverrides: [String: MessageTranslation?] → Override manuelle utilisateur
+
+ThemedMessageBubble
+  ├── effectiveContent → Affiche le contenu traduit OU original
+  ├── isDisplayingTranslation → Indicateur discret (icone translate dans meta row)
+  └── translatedBadge → Toggle "Voir l'original" / "Voir traduction"
+
+MessageDetailSheet (onglet Language)
+  ├── Listing des langues avec preview de chaque traduction
+  ├── Indicateurs de disponibilite (checkmark / bouton Traduire)
+  ├── Selection d'une langue → callback vers ViewModel → mise a jour bulle
+  └── Bouton retraduire (arrow.clockwise)
+```
+
+### UX Translation Flow
+- **Affichage par defaut** : `effectiveContent` retourne `preferredTranslation.translatedContent` si disponible, sinon `message.content`
+- **Indicateur discret** : Icone `translate` dans le meta row quand des traductions existent
+- **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
+- **Tap icone translate** : Ouvre directement l'onglet Language
+- **Selection langue** : Met a jour la bulle via `activeTranslationOverrides` dans le ViewModel
+- **Badge toggle** : Permet de basculer entre traduction et original sans ouvrir de sheet
+
+### Regles
+- Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
+- Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
+- La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
+- L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
+
 ## App Extensions
 - MeeshyNotificationExtension (rich push)
 - MeeshyShareExtension (share to Meeshy)
