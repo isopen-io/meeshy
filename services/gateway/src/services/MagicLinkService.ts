@@ -3,7 +3,7 @@
  *
  * Security Features:
  * - SHA-256 hashed tokens
- * - 10 minute token expiry
+ * - 10 minute token expiry (returned as expiresInSeconds to clients)
  * - Single-use tokens
  * - Rate limiting (3 requests per hour per email)
  * - Device tracking (IP, location, browser)
@@ -52,7 +52,7 @@ export class MagicLinkService {
    */
   async requestMagicLink(
     request: MagicLinkRequest
-  ): Promise<{ success: boolean; message: string; error?: string }> {
+  ): Promise<{ success: boolean; message: string; expiresInSeconds?: number; error?: string }> {
     const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice } = request;
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -88,7 +88,7 @@ export class MagicLinkService {
       if (!user) {
         // Return success to prevent email enumeration
         console.log('[MagicLink] No user found for:', normalizedEmail);
-        return { success: true, message: 'If an account exists, a login link has been sent.' };
+        return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
       }
 
       // 3. Revoke any existing magic link tokens
@@ -140,12 +140,12 @@ export class MagicLinkService {
       });
 
       console.log('[MagicLink] Token sent to:', normalizedEmail);
-      return { success: true, message: 'If an account exists, a login link has been sent.' };
+      return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
 
     } catch (error) {
       console.error('[MagicLink] Error requesting magic link:', error);
       // Return success to prevent info leakage
-      return { success: true, message: 'If an account exists, a login link has been sent.' };
+      return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
     }
   }
 

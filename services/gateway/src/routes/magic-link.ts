@@ -65,7 +65,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            message: { type: 'string', example: 'If an account exists, a login link has been sent.' }
+            message: { type: 'string', example: 'If an account exists, a login link has been sent.' },
+            expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' }
           }
         },
         400: {

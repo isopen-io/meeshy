@@ -254,6 +254,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         suggestions?: string[];
         emailAvailable?: boolean;
         phoneNumberAvailable?: boolean;
+        phoneNumberValid?: boolean;
       } = {};
 
       // Check username (case-insensitive)
@@ -328,9 +329,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
             }
           });
           result.phoneNumberAvailable = !existingUser;
+          result.phoneNumberValid = true;
         } else {
-          // Numéro invalide → considérer comme non disponible
           result.phoneNumberAvailable = false;
+          result.phoneNumberValid = false;
         }
       }
 
