@@ -262,6 +262,8 @@ struct ConversationView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Unread Separator
@@ -271,6 +273,7 @@ struct ConversationView: View {
             Rectangle()
                 .fill(MeeshyColors.coral.opacity(0.5))
                 .frame(height: 1)
+                .accessibilityHidden(true)
             Text("Nouveaux messages")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(MeeshyColors.coral)
@@ -279,10 +282,14 @@ struct ConversationView: View {
             Rectangle()
                 .fill(MeeshyColors.coral.opacity(0.5))
                 .frame(height: 1)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 4)
         .id("unread_separator")
         .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Nouveaux messages non lus")
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Body
@@ -390,6 +397,7 @@ struct ConversationView: View {
             .ignoresSafeArea(edges: .top)
             .zIndex(99)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             if !isNearBottom {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
@@ -569,6 +577,8 @@ struct ConversationView: View {
                                     .foregroundColor(.white).lineLimit(1)
                                     .fixedSize()
                             }
+                            .accessibilityLabel(conversation?.name ?? "Conversation")
+                            .accessibilityHint("Ouvre les informations de la conversation")
                             if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
                             Spacer(minLength: 4)
                             Button {
@@ -581,6 +591,7 @@ struct ConversationView: View {
                                     .frame(width: 28, height: 28)
                                     .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
                             }
+                            .accessibilityLabel("Rechercher dans la conversation")
                         }
 
                         // Tags row: aligned with title, scrolls under the search icon

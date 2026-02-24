@@ -285,6 +285,7 @@ extension ConversationView {
                             .font(.system(size: 16))
                             .foregroundColor(theme.textMuted)
                     }
+                    .accessibilityLabel("Effacer la recherche")
                 }
             }
             .padding(.horizontal, 10)
@@ -307,6 +308,7 @@ extension ConversationView {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel("Fermer la recherche")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -542,6 +544,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
+                    .accessibilityLabel("Retourner aux messages recents")
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -691,6 +694,7 @@ extension ConversationView {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
                 .foregroundColor(Color(hex: "FF6B6B"))
+                .accessibilityHidden(true)
 
             Text("Échec de l'envoi")
                 .font(.system(size: 11, weight: .medium))
@@ -698,6 +702,7 @@ extension ConversationView {
 
             Text("·")
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             Button {
                 HapticFeedback.light()
@@ -707,6 +712,7 @@ extension ConversationView {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel("Reessayer l'envoi du message")
 
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -717,6 +723,7 @@ extension ConversationView {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel("Supprimer le message en echec")
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, 16)
@@ -755,5 +762,7 @@ extension ConversationView {
                     )
             )
         }
+        .accessibilityLabel(label)
+        .accessibilityHint("Voir les reponses a ce message")
     }
 }

@@ -55,6 +55,17 @@ extension ConversationView {
                     .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
             )
         }
+        .accessibilityLabel(scrollToBottomAccessibilityLabel)
+    }
+
+    private var scrollToBottomAccessibilityLabel: String {
+        if unreadBadgeCount > 0 {
+            return "\(unreadBadgeCount) messages non lus, defiler vers le bas"
+        }
+        if hasTypingIndicator {
+            return "\(typingLabel), defiler vers le bas"
+        }
+        return "Defiler vers le bas"
     }
 
     var unreadPreviewContent: some View {
@@ -276,5 +287,7 @@ extension ConversationView {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(typingLabel)
     }
 }

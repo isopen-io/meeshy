@@ -62,6 +62,7 @@ struct ConversationListView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
+    @EnvironmentObject var router: Router
 
     // Status bubble overlay state
     @State private var showStatusBubble = false
@@ -73,6 +74,7 @@ struct ConversationListView: View {
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
     @State private var animateGradient = false
+    @State var showGlobalSearch = false
 
     // Scroll tracking
     @State private var lastScrollOffset: CGFloat? = nil
@@ -570,6 +572,11 @@ struct ConversationListView: View {
                 }
             )
             .environmentObject(theme)
+        }
+        .fullScreenCover(isPresented: $showGlobalSearch) {
+            GlobalSearchView()
+                .environmentObject(conversationViewModel)
+                .environmentObject(router)
         }
         .confirmationDialog(
             "Bloquer cet utilisateur ?",

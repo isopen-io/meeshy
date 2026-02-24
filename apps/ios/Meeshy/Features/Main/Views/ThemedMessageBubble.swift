@@ -79,6 +79,53 @@ struct ThemedMessageBubble: View {
         return emojiCounts.map { ReactionSummary(emoji: $0.key, count: $0.value.count, includesMe: $0.value.includesMe) }
     }
 
+    private var messageAccessibilityLabel: String {
+        var parts: [String] = []
+        if !message.isMe {
+            parts.append(message.senderName ?? "Inconnu")
+        }
+        if !message.content.isEmpty {
+            parts.append(message.content)
+        }
+        if !visualAttachments.isEmpty {
+            let imageCount = visualAttachments.filter { $0.type == .image }.count
+            let videoCount = visualAttachments.filter { $0.type == .video }.count
+            if imageCount > 0 { parts.append(imageCount == 1 ? "une image" : "\(imageCount) images") }
+            if videoCount > 0 { parts.append(videoCount == 1 ? "une video" : "\(videoCount) videos") }
+        }
+        if !audioAttachments.isEmpty {
+            parts.append(audioAttachments.count == 1 ? "un audio" : "\(audioAttachments.count) audios")
+        }
+        if !nonMediaAttachments.isEmpty {
+            for att in nonMediaAttachments {
+                if att.type == .location { parts.append("position partagee") }
+                else { parts.append("fichier \(att.originalName)") }
+            }
+        }
+        parts.append(timeString)
+        if message.isMe {
+            parts.append(deliveryStatusAccessibilityLabel)
+        }
+        if message.isEdited { parts.append("modifie") }
+        if message.pinnedAt != nil { parts.append("epingle") }
+        if message.isEncrypted { parts.append("chiffre") }
+        if !reactionSummaries.isEmpty {
+            let reactionText = reactionSummaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
+            parts.append("reactions: \(reactionText)")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private var deliveryStatusAccessibilityLabel: String {
+        switch message.deliveryStatus {
+        case .sending: return "en cours d'envoi"
+        case .sent: return "envoye"
+        case .delivered: return "distribue"
+        case .read: return "lu"
+        case .failed: return "echec d'envoi"
+        }
+    }
+
     var body: some View {
         if message.isDeleted {
             deletedMessageView
@@ -110,6 +157,8 @@ struct ThemedMessageBubble: View {
                             .stroke(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Message supprime")
 
             if !message.isMe { Spacer(minLength: 50) }
         }
@@ -256,6 +305,9 @@ struct ThemedMessageBubble: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 80)
                         .contentShape(Rectangle())
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(message.isViewOnce ? "Contenu a voir une fois" : "Contenu masque")
+                        .accessibilityHint("Maintenir pour reveler le contenu")
                         .onLongPressGesture(minimumDuration: 0.3) {
                             HapticFeedback.medium()
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -282,6 +334,8 @@ struct ThemedMessageBubble: View {
             if !message.isMe { Spacer(minLength: 50) }
         }
         .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(messageAccessibilityLabel)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(user: user)
                 .presentationDetents([.medium, .large])
@@ -459,40 +513,43 @@ struct ThemedMessageBubble: View {
             ? .white.opacity(0.7)
             : theme.textSecondary.opacity(0.6)
 
-        switch message.deliveryStatus {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 10))
+        Group {
+            switch message.deliveryStatus {
+            case .sending:
+                Image(systemName: "clock")
+                    .font(.system(size: 10))
+                    .foregroundColor(metaColor)
+            case .sent:
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(metaColor)
+            case .delivered:
+                ZStack(alignment: .leading) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .offset(x: 4)
+                }
                 .foregroundColor(metaColor)
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(metaColor)
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .offset(x: 4)
+                .frame(width: 16)
+            case .read:
+                ZStack(alignment: .leading) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .offset(x: 4)
+                }
+                .foregroundColor(insideBubble && message.isMe ? .white : MeeshyColors.readReceipt)
+                .frame(width: 16)
+            case .failed:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(MeeshyColors.coral)
             }
-            .foregroundColor(metaColor)
-            .frame(width: 16)
-        case .read:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .offset(x: 4)
-            }
-            .foregroundColor(insideBubble && message.isMe ? .white : MeeshyColors.readReceipt)
-            .frame(width: 16)
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(MeeshyColors.coral)
         }
+        .accessibilityLabel(deliveryStatusAccessibilityLabel)
     }
 
     // MARK: - Media Timestamp Overlay (for visual media grid)
@@ -566,6 +623,8 @@ struct ThemedMessageBubble: View {
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Message epingle")
     }
 
     private var forwardedIndicator: some View {
@@ -597,6 +656,7 @@ struct ThemedMessageBubble: View {
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Quoted Reply View (inside bubble)
@@ -735,6 +795,8 @@ struct ThemedMessageBubble: View {
                             .foregroundColor(.white.opacity(0.9))
                     }
                 )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Position partagee")
         }
     }
 
@@ -799,6 +861,8 @@ struct ThemedMessageBubble: View {
                 HapticFeedback.medium()
                 onOpenReactPicker?(message.id)
             }
+            .accessibilityLabel("Ajouter une reaction")
+            .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
     }
 
     private func overflowPill(count: Int, isDark: Bool, accent: Color) -> some View {
@@ -820,10 +884,18 @@ struct ThemedMessageBubble: View {
                         .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
                 )
         )
+        .accessibilityLabel("\(count) reactions supplementaires")
+        .accessibilityHint("Voir toutes les reactions")
+    }
+
+    private func reactionPillAccessibilityLabel(_ reaction: ReactionSummary) -> String {
+        let countLabel = reaction.count == 1 ? "reaction" : "reactions"
+        let meLabel = reaction.includesMe ? ", vous avez reagi" : ""
+        return "\(reaction.emoji) \(reaction.count) \(countLabel)\(meLabel)"
     }
 
     private func reactionPill(reaction: ReactionSummary, isDark: Bool, accent: Color) -> some View {
-        HStack(spacing: 2) {
+        let pillContent = HStack(spacing: 2) {
             Text(reaction.emoji)
                 .font(.system(size: 11))
             if reaction.count > 1 {
@@ -838,39 +910,39 @@ struct ThemedMessageBubble: View {
         }
         .padding(.horizontal, reaction.count > 1 ? 6 : 5)
         .frame(height: 22)
-        .background(
-            Capsule()
-                .fill(
-                    reaction.includesMe
-                        ? (isDark
-                            ? accent.opacity(0.5)
-                            : accent.opacity(0.35))
-                        : (isDark
-                            ? Color.white.opacity(0.08)
-                            : Color.black.opacity(0.04))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            reaction.includesMe
-                                ? accent.opacity(isDark ? 0.8 : 0.6)
-                                : accent.opacity(isDark ? 0.15 : 0.1),
-                            lineWidth: reaction.includesMe ? 1.5 : 0.5
-                        )
-                )
-                .shadow(
-                    color: reaction.includesMe ? accent.opacity(0.3) : .clear,
-                    radius: 4, y: 2
-                )
-        )
-        .onTapGesture {
-            HapticFeedback.light()
-            onToggleReaction?(reaction.emoji)
-        }
-        .onLongPressGesture(minimumDuration: 0.4) {
-            HapticFeedback.medium()
-            onShowReactions?(message.id)
-        }
+
+        let fillColor: Color = reaction.includesMe
+            ? (isDark ? accent.opacity(0.5) : accent.opacity(0.35))
+            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+
+        let strokeColor: Color = reaction.includesMe
+            ? accent.opacity(isDark ? 0.8 : 0.6)
+            : accent.opacity(isDark ? 0.15 : 0.1)
+
+        let strokeWidth: CGFloat = reaction.includesMe ? 1.5 : 0.5
+
+        let shadowColor: Color = reaction.includesMe ? accent.opacity(0.3) : .clear
+
+        return pillContent
+            .background(
+                Capsule()
+                    .fill(fillColor)
+                    .overlay(
+                        Capsule()
+                            .stroke(strokeColor, lineWidth: strokeWidth)
+                    )
+                    .shadow(color: shadowColor, radius: 4, y: 2)
+            )
+            .onTapGesture {
+                HapticFeedback.light()
+                onToggleReaction?(reaction.emoji)
+            }
+            .onLongPressGesture(minimumDuration: 0.4) {
+                HapticFeedback.medium()
+                onShowReactions?(message.id)
+            }
+            .accessibilityLabel(reactionPillAccessibilityLabel(reaction))
+            .accessibilityHint("Appuyer pour basculer la reaction")
     }
 
     // MARK: - Bubble Background

@@ -173,6 +173,7 @@ extension ConversationListView {
                                 )
                             )
                     }
+                    .accessibilityLabel("Fermer les communautes")
                 }
             }
             .padding(.horizontal, 16)
@@ -235,6 +236,8 @@ extension ConversationListView {
                     .scaleEffect(isActive ? 1.15 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
             }
+            .accessibilityLabel("Rechercher")
+            .accessibilityHint("Ouvre les filtres et la recherche de conversations")
 
             TextField("Rechercher...", text: $searchText)
                 .focused($isSearching)
@@ -249,8 +252,27 @@ extension ConversationListView {
                         .foregroundColor(MeeshyColors.coral)
                         .scaleEffect(1.0)
                 }
+                .accessibilityLabel("Effacer la recherche")
                 .transition(.scale.combined(with: .opacity))
             }
+
+            // Global search button
+            Button {
+                HapticFeedback.medium()
+                showGlobalSearch = true
+            } label: {
+                Image(systemName: "text.magnifyingglass")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.purple, MeeshyColors.teal],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .accessibilityLabel("Recherche globale")
+            .accessibilityHint("Rechercher dans tous les messages, conversations et utilisateurs")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

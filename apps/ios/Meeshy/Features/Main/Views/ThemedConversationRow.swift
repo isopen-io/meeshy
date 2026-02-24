@@ -116,6 +116,21 @@ struct ThemedConversationRow: View {
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(conversationAccessibilityLabel)
+        .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
+    }
+
+    private var conversationAccessibilityLabel: String {
+        var parts: [String] = []
+        parts.append("Conversation avec \(conversation.name)")
+        if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("dernier message: \(preview)")
+        }
+        parts.append(timeAgo(conversation.lastMessageAt))
+        if conversation.isMuted { parts.append("en silence") }
+        if conversation.isPinned { parts.append("epingle") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Tags Row

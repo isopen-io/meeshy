@@ -41,6 +41,7 @@ struct LoginView: View {
                     .offset(x: orb.offset.x, y: orb.offset.y)
                     .scaleEffect(glowPulse ? 1.3 - CGFloat(index) * 0.05 : 0.8 + CGFloat(index) * 0.05)
             }
+            .accessibilityHidden(true)
 
             VStack(spacing: 0) {
                 Spacer()
@@ -52,6 +53,7 @@ struct LoginView: View {
                 )
                 .frame(width: 100, height: 100)
                 .padding(.bottom, MeeshySpacing.xxl)
+                .accessibilityHidden(true)
 
                 Text("Meeshy")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -64,6 +66,7 @@ struct LoginView: View {
                     )
                     .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .padding(.bottom, 48)
+                    .accessibilityAddTraits(.isHeader)
 
                 VStack(spacing: MeeshySpacing.lg) {
                     // Username
@@ -71,6 +74,7 @@ struct LoginView: View {
                         Image(systemName: "person.fill")
                             .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                             .frame(width: 20)
+                            .accessibilityHidden(true)
                         TextField("Nom d'utilisateur", text: $username)
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
@@ -79,6 +83,7 @@ struct LoginView: View {
                             .foregroundColor(theme.textPrimary)
                             .submitLabel(.next)
                             .onSubmit { focusedField = .password }
+                            .accessibilityLabel("Nom d'utilisateur")
                     }
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.vertical, MeeshySpacing.md + 2)
@@ -101,12 +106,14 @@ struct LoginView: View {
                         Image(systemName: "lock.fill")
                             .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                             .frame(width: 20)
+                            .accessibilityHidden(true)
                         SecureField("Mot de passe", text: $password)
                             .textContentType(.password)
                             .focused($focusedField, equals: .password)
                             .foregroundColor(theme.textPrimary)
                             .submitLabel(.go)
                             .onSubmit { attemptLogin() }
+                            .accessibilityLabel("Mot de passe")
                     }
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.vertical, MeeshySpacing.md + 2)
@@ -160,6 +167,8 @@ struct LoginView: View {
                     .disabled(authManager.isLoading || username.isEmpty || password.isEmpty)
                     .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
                     .padding(.top, MeeshySpacing.sm)
+                    .accessibilityLabel("Se connecter")
+                    .accessibilityHint("Connexion avec le nom d'utilisateur et le mot de passe saisis")
 
                     HStack(spacing: MeeshySpacing.lg) {
                         Button { showForgotPassword = true } label: {
@@ -167,9 +176,12 @@ struct LoginView: View {
                                 .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                                 .foregroundColor(theme.textMuted)
                         }
+                        .accessibilityLabel("Mot de passe oublie")
+                        .accessibilityHint("Ouvre le formulaire de reinitialisation du mot de passe")
 
                         Text("·")
                             .foregroundColor(theme.textMuted.opacity(0.5))
+                            .accessibilityHidden(true)
 
                         Button { showMagicLink = true } label: {
                             Text("Connexion sans mot de passe")
@@ -182,6 +194,8 @@ struct LoginView: View {
                                     )
                                 )
                         }
+                        .accessibilityLabel("Connexion sans mot de passe")
+                        .accessibilityHint("Ouvre le formulaire de connexion par lien magique")
                     }
                     .padding(.top, MeeshySpacing.xs)
                 }
@@ -206,6 +220,8 @@ struct LoginView: View {
                     }
                     .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 }
+                .accessibilityLabel("Creer un compte")
+                .accessibilityHint("Ouvre le formulaire d'inscription")
                 .padding(.bottom, MeeshySpacing.xxxl)
                 .opacity(showFields ? 1 : 0)
             }

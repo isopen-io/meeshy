@@ -172,6 +172,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
+            .accessibilityLabel("Annuler la reponse")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -183,6 +184,8 @@ extension ConversationView {
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)")
     }
 
     // MARK: - Edit Banner
@@ -218,6 +221,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
+            .accessibilityLabel("Annuler la modification")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -229,6 +233,8 @@ extension ConversationView {
                         .stroke(theme.border(tint: "F8B500", intensity: 0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Modification du message en cours")
     }
 
     func submitEdit() {
@@ -427,6 +433,7 @@ extension ConversationView {
                             .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 4, y: 2)
                     )
             }
+            .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")
             .padding(.trailing, 8)
 
             // Tappable preview area
@@ -649,6 +656,7 @@ struct PendingImagePreview: View {
                             .frame(width: 36, height: 36)
                             .background(Circle().fill(.white.opacity(0.2)))
                     }
+                    .accessibilityLabel("Fermer l'apercu")
                     .padding(16)
                 }
                 Spacer()

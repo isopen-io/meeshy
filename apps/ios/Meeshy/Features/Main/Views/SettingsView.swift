@@ -62,17 +62,21 @@ struct SettingsView: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
+                    .frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel("Retour")
 
             Spacer()
 
             Text("Réglages")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
-            Color.clear.frame(width: 24, height: 24)
+            Color.clear.frame(width: 44, height: 44)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -111,6 +115,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Profil")
+            .accessibilityHint("Ouvre les reglages du profil")
 
             Button {
                 HapticFeedback.light()
@@ -122,6 +128,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Confidentialite")
+            .accessibilityHint("Ouvre les reglages de confidentialite")
 
             Button {
                 HapticFeedback.light()
@@ -133,6 +141,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Securite")
+            .accessibilityHint("Ouvre les reglages de securite")
 
             Button {
                 HapticFeedback.light()
@@ -144,6 +154,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Utilisateurs bloques")
+            .accessibilityHint("Ouvre la liste des utilisateurs bloques")
         }
     }
 
@@ -176,6 +188,9 @@ struct SettingsView: View {
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
+                        .accessibilityLabel("Theme \(pref.label)")
+                        .accessibilityValue(theme.preference == pref ? "selectionne" : "")
+                        .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
                 }
             }
@@ -193,6 +208,8 @@ struct SettingsView: View {
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
+                .accessibilityLabel("Notifications push")
+                .accessibilityValue(prefs.notification.pushEnabled ? "active" : "desactive")
             }
 
             settingsRow(icon: "speaker.wave.2.fill", title: "Sons", color: "4ECDC4") {
@@ -202,6 +219,8 @@ struct SettingsView: View {
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
+                .accessibilityLabel("Sons de notification")
+                .accessibilityValue(prefs.notification.soundEnabled ? "active" : "desactive")
             }
 
             settingsRow(icon: "iphone.radiowaves.left.and.right", title: "Vibrations", color: "9B59B6") {
@@ -211,6 +230,8 @@ struct SettingsView: View {
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
+                .accessibilityLabel("Vibrations")
+                .accessibilityValue(prefs.notification.vibrationEnabled ? "active" : "desactive")
             }
 
             Button {
@@ -223,6 +244,8 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .accessibilityLabel("Plus d'options de notifications")
+            .accessibilityHint("Ouvre les reglages avances de notifications")
         }
     }
 
@@ -244,6 +267,9 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .accessibilityLabel("Langue \(name)")
+                .accessibilityValue(prefs.application.interfaceLanguage == code ? "selectionnee" : "")
+                .accessibilityAddTraits(prefs.application.interfaceLanguage == code ? .isSelected : [])
             }
         }
     }
@@ -297,6 +323,8 @@ struct SettingsView: View {
                     )
             )
         }
+        .accessibilityLabel("Deconnexion")
+        .accessibilityHint("Vous deconnecte de votre compte Meeshy")
     }
 
     // MARK: - Theme Sync
@@ -359,6 +387,7 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(.system(size: 14, weight: .medium))
