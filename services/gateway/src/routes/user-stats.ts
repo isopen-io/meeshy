@@ -57,7 +57,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              translations: { some: {} },
+              translations: { isSet: true },
             },
           }),
           fastify.prisma.friendRequest.count({
@@ -82,21 +82,20 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           ? Math.floor((Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24))
           : 0;
 
-        const stats = {
+        const numericStats = {
           totalMessages,
           totalConversations,
           totalTranslations,
           friendRequestsReceived,
           languagesUsed,
           memberDays,
-          languages: languagesRaw.map((l) => l.originalLanguage).filter(Boolean),
         };
-
-        const achievements = computeAchievements(stats);
+        const languages = languagesRaw.map((l) => l.originalLanguage).filter(Boolean);
+        const achievements = computeAchievements(numericStats);
 
         return {
           success: true,
-          data: { ...stats, achievements },
+          data: { ...numericStats, languages, achievements },
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching user stats');
@@ -226,7 +225,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              translations: { some: {} },
+              translations: { isSet: true },
             },
           }),
           fastify.prisma.friendRequest.count({
