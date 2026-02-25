@@ -271,7 +271,7 @@ struct StoryViewerView: View {
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             VStack(spacing: 0) {
                 progressBars
-                    .padding(.top, geometry.safeAreaInsets.top + 8)
+                    .padding(.top, geometry.safeAreaInsets.top + 2)
                     .padding(.horizontal, 12)
 
                 storyHeader
@@ -396,8 +396,14 @@ struct StoryViewerView: View {
             }
             .zIndex(10)
 
-            // Reshare / Transfer
+            // Transfert (forward to another user)
             sidebarButton(icon: "arrowshape.turn.up.right.fill", color: .white) {
+                HapticFeedback.light()
+                // TODO: forward to conversation
+            }
+
+            // Republication (reshare to own story)
+            sidebarButton(icon: "arrow.2.squarepath", color: .white) {
                 reshareStory()
             }
 
@@ -414,42 +420,12 @@ struct StoryViewerView: View {
             }
             .overlay(alignment: .trailing) {
                 if showLanguageOptions {
-                    EmojiReactionPicker(
-                        quickEmojis: TranslationLanguage.quickStrip.map(\.flag),
-                        style: .dark,
-                        onReact: { flag in
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showLanguageOptions = false
-                            }
-                            if let lang = TranslationLanguage.quickStrip.first(where: { $0.flag == flag }),
-                               let story = currentStory {
-                                Task {
-                                    let body: [String: String] = ["targetLanguage": lang.id]
-                                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                                        endpoint: "/posts/\(story.id)/translate",
-                                        body: body
-                                    )
-                                }
-                            }
-                        },
-                        onDismiss: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showLanguageOptions = false
-                            }
-                        },
-                        onExpandFullPicker: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showLanguageOptions = false
-                            }
-                            showFullLanguagePicker = true
-                        }
-                    )
-                    .fixedSize()
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                    .offset(x: -56)
+                    languageScrollStrip
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .offset(x: -56)
                 }
             }
             .zIndex(10)
@@ -475,6 +451,72 @@ struct StoryViewerView: View {
                 )
                 .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         }
+    }
+
+    // MARK: - Language Scroll Strip
+
+    /// Scrollable horizontal strip of language flags.
+    /// Shows all 39 TranslationLanguage sorted by most-used first.
+    /// 5 flags visible by default, scroll to reveal more, + opens full sheet.
+    private var languageScrollStrip: some View {
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(LanguageUsageTracker.sorted(TranslationLanguage.all)) { lang in
+                        Button {
+                            HapticFeedback.light()
+                            LanguageUsageTracker.recordUsage(languageId: lang.id)
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showLanguageOptions = false
+                            }
+                            guard let story = currentStory else { return }
+                            Task {
+                                let body: [String: String] = ["targetLanguage": lang.id]
+                                let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                                    endpoint: "/posts/\(story.id)/translate",
+                                    body: body
+                                )
+                            }
+                        } label: {
+                            Text(lang.flag)
+                                .font(.system(size: 22))
+                                .frame(width: 38, height: 38)
+                                .background(Circle().fill(Color.white.opacity(0.1)))
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            // 5 flags visible = 5 × (38 + 8) - 8 = 222
+            .frame(width: 222, height: 50)
+
+            // + button → full sheet
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showLanguageOptions = false
+                }
+                showFullLanguagePicker = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.15))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
+            .padding(.trailing, 10)
+            .padding(.vertical, 6)
+        }
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.4)))
+                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+        )
     }
 
     // MARK: - Story Reactions

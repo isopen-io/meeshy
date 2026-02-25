@@ -84,6 +84,32 @@ public struct TranslationLanguage: Identifiable, Hashable, Sendable {
     ]
 }
 
+// MARK: - LanguageUsageTracker
+
+/// Tracks which languages the user selects most often.
+/// Used to sort the quick language strip by frequency.
+public struct LanguageUsageTracker {
+    private static let key = "com.meeshy.languageUsageCount"
+
+    public static func recordUsage(languageId: String) {
+        var counts = getCounts()
+        counts[languageId, default: 0] += 1
+        UserDefaults.standard.set(counts, forKey: key)
+    }
+
+    /// Returns `languages` sorted by usage frequency (most used first).
+    /// Languages never used keep their original order at the end.
+    public static func sorted(_ languages: [TranslationLanguage]) -> [TranslationLanguage] {
+        let counts = getCounts()
+        if counts.isEmpty { return languages }
+        return languages.sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
+    }
+
+    private static func getCounts() -> [String: Int] {
+        UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+    }
+}
+
 // MARK: - LanguagePickerSheet
 
 /// Full-screen language picker sheet for translation.
