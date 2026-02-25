@@ -53,7 +53,7 @@ final class Router: ObservableObject {
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ url: URL) {
-        DeepLinkRouter.open(url) { [weak self] destination in
+        DeepLinkParser.open(url) { [weak self] destination in
             guard let self else { return }
             switch destination {
             case .ownProfile:

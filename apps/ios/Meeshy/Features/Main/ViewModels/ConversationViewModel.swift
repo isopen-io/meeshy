@@ -1392,6 +1392,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
         }
+    }
 
     // MARK: - Location Sharing
 

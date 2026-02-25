@@ -95,7 +95,6 @@
 		DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */; };
 		DD9981C0D89B4E730BB0B70C /* ThemedMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */; };
 		DELA002A002A002A002A0002 /* DeleteAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DELA001A001A001A001A0001 /* DeleteAccountView.swift */; };
-		DEXV002A002A002A002A0002 /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEXV001A001A001A001A0001 /* DataExportView.swift */; };
 		DL1100000000002F01 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DL1100000000001F01 /* DeepLinkRouter.swift */; };
 		DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSTV001A001A001A001A0001 /* DataStorageView.swift */; };
 		E3FB7818ED933C8F0757593F /* ThemedConversationRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */; };
@@ -139,7 +138,6 @@
 		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
 
-		DLNK002A002A002A002A0002 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */; };
 		FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FRRL001A001A001A001A0001 /* FriendRequestListView.swift */; };
 /* End PBXBuildFile section */
 
@@ -788,7 +786,6 @@
 				RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */,
 				DELA002A002A002A002A0002 /* DeleteAccountView.swift in Sources */,
 				DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */,
-				DEXV002A002A002A002A0002 /* DataExportView.swift in Sources */,
 				BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */,
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
@@ -839,8 +836,6 @@
 				CC2400000000002F24 /* ConversationLockManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
 				DL1100000000002F01 /* DeepLinkRouter.swift in Sources */,
-
-				DLNK002A002A002A002A0002 /* DeepLinkRouter.swift in Sources */,
 				FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */,
 				AA00BB11CC22DD33EE440001 /* Conversation.swift in Sources */,
 				AA00BB11CC22DD33EE440002 /* Message.swift in Sources */,

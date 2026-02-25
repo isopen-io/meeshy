@@ -373,13 +373,14 @@ struct ConversationListView: View {
                             icon: "bubble.left.and.bubble.right",
                             title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
                             subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
-                            actionTitle: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion")
-                        ) {
-                            NotificationCenter.default.post(
-                                name: Notification.Name("navigateToNewConversation"),
-                                object: nil
-                            )
-                        }
+                            actionLabel: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion"),
+                            onAction: {
+                                NotificationCenter.default.post(
+                                    name: Notification.Name("navigateToNewConversation"),
+                                    object: nil
+                                )
+                            }
+                        )
                         .padding(.top, 60)
                         .transition(.opacity)
                     } else {
