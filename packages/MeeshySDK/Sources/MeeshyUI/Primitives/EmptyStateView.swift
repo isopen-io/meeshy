@@ -1,20 +1,30 @@
 import SwiftUI
+import MeeshySDK
 
 public struct EmptyStateView: View {
     public let icon: String
     public let title: String
     public let subtitle: String
-    public var actionTitle: String? = nil
-    public var action: (() -> Void)? = nil
+    public let actionLabel: String?
+    public let accentColor: String
+    public var onAction: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
 
-    public init(icon: String, title: String, subtitle: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+    public init(
+        icon: String,
+        title: String,
+        subtitle: String,
+        actionLabel: String? = nil,
+        accentColor: String = "4ECDC4",
+        onAction: (() -> Void)? = nil
+    ) {
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
-        self.actionTitle = actionTitle
-        self.action = action
+        self.actionLabel = actionLabel
+        self.accentColor = accentColor
+        self.onAction = onAction
     }
 
     public var body: some View {
@@ -22,47 +32,43 @@ public struct EmptyStateView: View {
             Spacer()
 
             Image(systemName: icon)
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .opacity(0.6)
+                .font(.system(size: 52, weight: .light))
+                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .padding(.bottom, 4)
 
             Text(title)
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.center)
 
             Text(subtitle)
-                .font(.system(size: 14, weight: .regular, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
 
-            if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+            if let actionLabel, let onAction {
+                Button {
+                    HapticFeedback.light()
+                    onAction()
+                } label: {
+                    Text(actionLabel)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 10)
                         .background(
-                            LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                            Capsule()
+                                .fill(Color(hex: accentColor))
                         )
-                        .clipShape(Capsule())
                 }
                 .padding(.top, 4)
             }
 
             Spacer()
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
     }
 }

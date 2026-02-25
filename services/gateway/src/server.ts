@@ -63,6 +63,7 @@ import { translationRoutes as translationBlockingRoutes } from './routes/transla
 import { translationJobsRoutes } from './routes/translation-jobs';
 import { maintenanceRoutes } from './routes/maintenance';
 import affiliateRoutes from './routes/affiliate';
+import { userStatsRoutes } from './routes/user-stats';
 import messageRoutes from './routes/messages';
 import mentionRoutes from './routes/mentions';
 import { notificationRoutes } from './routes/notifications';
@@ -953,6 +954,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register affiliate routes
     await this.server.register(affiliateRoutes, { prefix: API_PREFIX });
+
+    // Register user stats routes (GET /users/me/stats, /timeline, /achievements)
+    await this.server.register(userStatsRoutes, { prefix: API_PREFIX });
 
 
     // Register maintenance routes with /api prefix

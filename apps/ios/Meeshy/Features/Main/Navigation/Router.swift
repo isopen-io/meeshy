@@ -12,6 +12,10 @@ enum Route: Hashable {
     case communitySettings(Community)
     case communityMembers(String)
     case communityInvite(String)
+    case notifications
+    case userStats
+    case affiliate
+    case dataExport
 }
 
 @MainActor

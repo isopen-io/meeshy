@@ -9,6 +9,7 @@ class FeedViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMore = true
+    @Published var hasLoaded = false
     @Published var error: String?
 
     /// Number of new posts received via Socket.IO while the user is scrolled down.
@@ -51,6 +52,7 @@ class FeedViewModel: ObservableObject {
         }
 
         isLoading = false
+        hasLoaded = true
     }
 
     // MARK: - Load More (Infinite Scroll)

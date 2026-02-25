@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Feed Sample Data (Global access for ThemedFeedOverlay)
 struct FeedSampleData {
@@ -620,6 +621,20 @@ struct FeedView: View {
                     // Composer placeholder
                     composerPlaceholder
                         .padding(.bottom, 8)
+
+                    // Empty state when no posts
+                    if viewModel.hasLoaded && viewModel.posts.isEmpty && FeedSampleData.posts.isEmpty {
+                        EmptyStateView(
+                            icon: "text.bubble",
+                            title: "Aucune publication",
+                            subtitle: "Soyez le premier a partager quelque chose !",
+                            actionLabel: "Publier",
+                            accentColor: "FF6B6B"
+                        ) {
+                            showComposer = true
+                        }
+                        .frame(height: 300)
+                    }
 
                     // Posts with infinite scroll
                     ForEach(posts) { post in

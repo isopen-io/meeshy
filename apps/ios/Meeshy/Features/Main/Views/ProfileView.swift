@@ -10,6 +10,8 @@ struct ProfileView: View {
     @State private var bio: String = ""
     @State private var isEditing = false
     @State private var isSaving = false
+    @State private var showStats = false
+    @State private var stats: UserStats?
 
     private let accentColor = "9B59B6"
 
@@ -24,9 +26,15 @@ struct ProfileView: View {
                 scrollContent
             }
         }
+        .sheet(isPresented: $showStats) {
+            UserStatsView()
+        }
         .onAppear {
             displayName = user?.displayName ?? user?.username ?? ""
             bio = user?.bio ?? ""
+            Task {
+                stats = try? await StatsService.shared.fetchStats()
+            }
         }
     }
 
@@ -177,11 +185,17 @@ struct ProfileView: View {
             }
             .padding(.leading, 4)
 
-            HStack(spacing: 12) {
-                statCard(value: "—", label: "Messages", color: "FF6B6B")
-                statCard(value: "—", label: "Conversations", color: "4ECDC4")
-                statCard(value: "—", label: "Amis", color: "9B59B6")
+            Button {
+                HapticFeedback.light()
+                showStats = true
+            } label: {
+                HStack(spacing: 12) {
+                    statCard(value: "\(stats?.totalMessages ?? 0)", label: "Messages", color: "FF6B6B")
+                    statCard(value: "\(stats?.totalConversations ?? 0)", label: "Conversations", color: "4ECDC4")
+                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: "Amis", color: "9B59B6")
+                }
             }
+            .buttonStyle(.plain)
         }
     }
 

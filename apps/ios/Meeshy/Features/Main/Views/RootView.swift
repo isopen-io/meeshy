@@ -130,6 +130,21 @@ struct RootView: View {
                         )
                     case .communityInvite(let communityId):
                         CommunityInviteView(communityId: communityId)
+                    case .notifications:
+                        NotificationListView(
+                            onNotificationTap: { _ in },
+                            onDismiss: { router.pop() }
+                        )
+                        .navigationBarHidden(true)
+                    case .userStats:
+                        UserStatsView()
+                            .navigationBarHidden(true)
+                    case .affiliate:
+                        AffiliateView()
+                            .navigationBarHidden(true)
+                    case .dataExport:
+                        DataExportView()
+                            .navigationBarHidden(true)
                     }
                 }
             }
@@ -426,8 +441,8 @@ struct RootView: View {
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
                 ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
-                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
-                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
+                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.affiliate) }),
+                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
                 (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         theme.cyclePreference(systemScheme: systemColorScheme)
