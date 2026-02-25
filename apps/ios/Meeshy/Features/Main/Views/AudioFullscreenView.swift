@@ -380,30 +380,56 @@ private struct AudioFullscreenPage: View {
     private var waveformSection: some View {
         GeometryReader { geo in
             let barCount = waveformAnalyzer.samples.isEmpty ? 80 : waveformAnalyzer.samples.count
+            let barWidth: CGFloat = 3
             let spacing: CGFloat = 2
-            let totalSpacing = spacing * CGFloat(barCount - 1)
-            let barWidth = max(2, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            let totalWidth = CGFloat(barCount) * (barWidth + spacing) - spacing
+            let needsScroll = totalWidth > geo.size.width
+            let playheadBarIndex = max(0, min(barCount - 1, Int(progress * Double(barCount))))
 
-            HStack(spacing: spacing) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    let fraction = Double(i) / Double(barCount)
-                    let isPlayed = fraction <= progress
-                    let sample = waveformAnalyzer.samples.isEmpty
-                        ? fallbackHeight(index: i)
-                        : CGFloat(waveformAnalyzer.samples[i])
-                    let height = max(3, sample * geo.size.height * 0.9)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    ZStack(alignment: .leading) {
+                        HStack(spacing: spacing) {
+                            ForEach(0..<barCount, id: \.self) { i in
+                                let fraction = Double(i) / Double(barCount)
+                                let isPlayed = fraction <= progress
+                                let sample = waveformAnalyzer.samples.isEmpty
+                                    ? fallbackHeight(index: i)
+                                    : CGFloat(waveformAnalyzer.samples[i])
+                                let height = max(3, sample * geo.size.height * 0.9)
+                                let computedWidth = needsScroll
+                                    ? barWidth
+                                    : max(2, (geo.size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
 
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(isPlayed ? accent : Color.white.opacity(0.15))
-                        .frame(width: barWidth, height: height)
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(isPlayed ? accent : Color.white.opacity(0.15))
+                                    .frame(width: computedWidth, height: height)
+                                    .overlay(
+                                        needsScroll && i == playheadBarIndex
+                                            ? RoundedRectangle(cornerRadius: 1.5)
+                                                .fill(Color.white)
+                                                .frame(width: 2, height: geo.size.height * 0.95)
+                                            : nil
+                                    )
+                                    .id("bar-\(i)")
+                            }
+                        }
+                        .frame(height: geo.size.height, alignment: .center)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let contentWidth = needsScroll ? totalWidth : geo.size.width
+                        let fraction = max(0, min(1, location.x / contentWidth))
+                        player.seek(to: fraction)
+                        HapticFeedback.light()
+                    }
                 }
-            }
-            .frame(height: geo.size.height, alignment: .center)
-            .contentShape(Rectangle())
-            .onTapGesture { location in
-                let fraction = max(0, min(1, location.x / geo.size.width))
-                player.seek(to: fraction)
-                HapticFeedback.light()
+                .onChange(of: playheadBarIndex) { _, newIdx in
+                    guard needsScroll else { return }
+                    withAnimation(.linear(duration: 0.2)) {
+                        proxy.scrollTo("bar-\(newIdx)", anchor: .center)
+                    }
+                }
             }
         }
         .frame(height: 80)

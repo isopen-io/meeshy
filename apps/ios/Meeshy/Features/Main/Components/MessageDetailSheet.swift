@@ -179,6 +179,9 @@ struct MessageDetailSheet: View {
     // Delete animation
     @State private var deleteIconScale: CGFloat = 0.5
 
+    // Transcription request
+    @State private var isRequestingTranscription = false
+
     // Read status state
     @State private var readStatusData: ReadStatusData? = nil
     @State private var isLoadingReadStatus = false
@@ -1767,16 +1770,124 @@ struct MessageDetailSheet: View {
     // MARK: - Transcription Tab Content
 
     private var transcriptionTabContent: some View {
+        let accent = Color(hex: contactColor)
         let mediaAttachments = message.attachments.filter {
             $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
         }
 
+        return VStack(alignment: .leading, spacing: 14) {
+            if let transcription {
+                transcriptionAvailableContent(transcription, accent: accent)
+            } else {
+                transcriptionEmptyContent(mediaAttachments: mediaAttachments, accent: accent)
+            }
+
+            if !translatedAudios.isEmpty {
+                translatedAudioTranscriptions(accent: accent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func transcriptionAvailableContent(_ transcription: MessageTranscription, accent: Color) -> some View {
+        let langColor = Color(hex: LanguageDisplay.colorHex(for: transcription.language))
+        let segments = TranscriptionDisplaySegment.buildFrom(transcription)
+
         return VStack(alignment: .leading, spacing: 12) {
+            // Language + confidence banner
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.and.mic")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(langColor)
+
+                Text(Self.languageName(for: transcription.language))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer()
+
+                if let conf = transcription.confidence {
+                    Text(String(format: "%.0f%%", conf * 100))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(langColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(langColor.opacity(0.12)))
+                }
+
+                if let durationMs = transcription.durationMs {
+                    Text(formatDuration(durationMs / 1000))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(langColor.opacity(theme.mode.isDark ? 0.08 : 0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(langColor.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+
+            // Full text
+            Text(transcription.text)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+
+            // Word-by-word segments
+            if !segments.isEmpty {
+                Rectangle()
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .frame(height: 0.5)
+
+                FlowLayout(spacing: 0) {
+                    ForEach(segments) { segment in
+                        Text(segment.text + " ")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(hex: segment.speakerColor).opacity(
+                                        transcription.speakerCount ?? 1 > 1 ? 0.1 : 0
+                                    ))
+                            )
+                    }
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.mode.isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                )
+
+                if let speakerCount = transcription.speakerCount, speakerCount > 1 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(accent.opacity(0.6))
+                        Text("\(speakerCount) locuteurs detectes")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+        }
+    }
+
+    private func transcriptionEmptyContent(mediaAttachments: [MessageAttachment], accent: Color) -> some View {
+        VStack(spacing: 14) {
+            // Attachment cards
             ForEach(mediaAttachments) { attachment in
                 HStack(spacing: 10) {
                     Image(systemName: attachment.mimeType.hasPrefix("audio/") ? "waveform" : "video")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: contactColor))
+                        .foregroundColor(accent)
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -1786,7 +1897,7 @@ struct MessageDetailSheet: View {
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
-                            Text(formatDuration(duration))
+                            Text(formatDuration(duration / 1000))
                                 .font(.system(size: 11))
                                 .foregroundColor(theme.textMuted)
                         }
@@ -1801,9 +1912,136 @@ struct MessageDetailSheet: View {
                 )
             }
 
-            emptyStateView(icon: "text.below.photo", text: "Transcription non disponible", accent: Color(hex: contactColor))
+            // Empty state with transcribe button
+            VStack(spacing: 12) {
+                Image(systemName: "text.word.spacing")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundColor(theme.textMuted.opacity(0.4))
+
+                Text("Aucune transcription")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                if let firstMedia = mediaAttachments.first {
+                    Button {
+                        requestTranscription(for: firstMedia.id)
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isRequestingTranscription {
+                                ProgressView()
+                                    .tint(accent)
+                                    .scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "waveform.and.mic")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            Text("Transcrire")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(accent.opacity(0.15)))
+                        .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: 0.5))
+                    }
+                    .disabled(isRequestingTranscription)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func translatedAudioTranscriptions(accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Rectangle()
+                .fill(theme.mode.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                .frame(height: 0.5)
+
+            HStack(spacing: 6) {
+                Image(systemName: "translate")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(accent.opacity(0.6))
+                Text("Traductions audio")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 4)
+
+            ForEach(translatedAudios, id: \.id) { audio in
+                let langColor = Color(hex: LanguageDisplay.colorHex(for: audio.targetLanguage))
+                let display = LanguageDisplay.from(code: audio.targetLanguage)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(display?.flag ?? "\u{1F310}")
+                            .font(.system(size: 14))
+                        Text(display?.name ?? audio.targetLanguage)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+
+                        Spacer()
+
+                        if audio.cloned {
+                            HStack(spacing: 3) {
+                                Image(systemName: "person.wave.2")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text("Clone")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundColor(langColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(langColor.opacity(0.12)))
+                        }
+
+                        Text(formatDuration(audio.durationMs / 1000))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(theme.textMuted)
+                    }
+
+                    if !audio.transcription.isEmpty {
+                        Text(audio.transcription)
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(4)
+                    }
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(langColor.opacity(theme.mode.isDark ? 0.06 : 0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(langColor.opacity(0.12), lineWidth: 0.5)
+                        )
+                )
+            }
+        }
+    }
+
+    private func requestTranscription(for attachmentId: String) {
+        guard !isRequestingTranscription else { return }
+        isRequestingTranscription = true
+        HapticFeedback.light()
+
+        Task {
+            do {
+                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                    endpoint: "/attachments/\(attachmentId)/transcribe",
+                    method: "POST"
+                )
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await MainActor.run {
+                    isRequestingTranscription = false
+                }
+            } catch {
+                await MainActor.run {
+                    isRequestingTranscription = false
+                    HapticFeedback.error()
+                }
+            }
+        }
     }
 
     // MARK: - Network Actions
