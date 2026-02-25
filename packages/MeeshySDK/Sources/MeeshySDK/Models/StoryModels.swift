@@ -1,7 +1,155 @@
 import Foundation
 
+// MARK: - Story Text Style
+
+public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
+    case bold
+    case neon
+    case typewriter
+    case handwriting
+    case classic
+
+    public var displayName: String {
+        switch self {
+        case .bold: return "Bold"
+        case .neon: return "Neon"
+        case .typewriter: return "Typewriter"
+        case .handwriting: return "Handwriting"
+        case .classic: return "Classic"
+        }
+    }
+
+    public var fontName: String? {
+        switch self {
+        case .bold: return nil
+        case .neon: return nil
+        case .typewriter: return "Courier"
+        case .handwriting: return "SnellRoundhand"
+        case .classic: return "Georgia"
+        }
+    }
+
+    public var fontWeight: Int {
+        switch self {
+        case .bold: return 800
+        case .neon: return 600
+        case .typewriter: return 400
+        case .handwriting: return 400
+        case .classic: return 500
+        }
+    }
+}
+
+// MARK: - Story Filter
+
+public enum StoryFilter: String, Codable, CaseIterable, Sendable {
+    case vintage
+    case bw
+    case warm
+    case cool
+    case dramatic
+
+    public var displayName: String {
+        switch self {
+        case .vintage: return "Vintage"
+        case .bw: return "N&B"
+        case .warm: return "Warm"
+        case .cool: return "Cool"
+        case .dramatic: return "Dramatic"
+        }
+    }
+
+    public var ciFilterName: String {
+        switch self {
+        case .vintage: return "CIPhotoEffectTransfer"
+        case .bw: return "CIPhotoEffectNoir"
+        case .warm: return "CIColorControls"
+        case .cool: return "CIColorControls"
+        case .dramatic: return "CIPhotoEffectProcess"
+        }
+    }
+}
+
+// MARK: - Story Text Position
+
+public struct StoryTextPosition: Codable, Sendable {
+    public var x: CGFloat
+    public var y: CGFloat
+
+    public init(x: CGFloat = 0.5, y: CGFloat = 0.5) {
+        self.x = x; self.y = y
+    }
+
+    public static let center = StoryTextPosition(x: 0.5, y: 0.5)
+    public static let top = StoryTextPosition(x: 0.5, y: 0.2)
+    public static let bottom = StoryTextPosition(x: 0.5, y: 0.8)
+}
+
+// MARK: - Story Sticker
+
+public struct StorySticker: Codable, Identifiable, Sendable {
+    public var id: String
+    public var emoji: String
+    public var x: CGFloat
+    public var y: CGFloat
+    public var scale: CGFloat
+    public var rotation: CGFloat
+
+    public init(id: String = UUID().uuidString, emoji: String, x: CGFloat = 0.5, y: CGFloat = 0.5,
+                scale: CGFloat = 1.0, rotation: CGFloat = 0) {
+        self.id = id; self.emoji = emoji; self.x = x; self.y = y
+        self.scale = scale; self.rotation = rotation
+    }
+}
+
+// MARK: - Story Slide
+
+public struct StorySlide: Identifiable, Codable, Sendable {
+    public var id: String
+    public var mediaURL: String?
+    public var mediaData: Data?
+    public var content: String?
+    public var effects: StoryEffects
+    public var duration: TimeInterval
+    public var order: Int
+
+    public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
+                content: String? = nil, effects: StoryEffects = StoryEffects(),
+                duration: TimeInterval = 5, order: Int = 0) {
+        self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
+        self.content = content; self.effects = effects
+        self.duration = duration; self.order = order
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, mediaURL, content, effects, duration, order
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        mediaURL = try container.decodeIfPresent(String.self, forKey: .mediaURL)
+        mediaData = nil
+        content = try container.decodeIfPresent(String.self, forKey: .content)
+        effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
+        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 5
+        order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(mediaURL, forKey: .mediaURL)
+        try container.encodeIfPresent(content, forKey: .content)
+        try container.encode(effects, forKey: .effects)
+        try container.encode(duration, forKey: .duration)
+        try container.encode(order, forKey: .order)
+    }
+}
+
 // MARK: - Story Effects
-public struct StoryEffects: Decodable {
+
+public struct StoryEffects: Codable, Sendable {
     public var background: String?
     public var textStyle: String?
     public var textColor: String?
@@ -12,13 +160,87 @@ public struct StoryEffects: Decodable {
     public var textSize: CGFloat?
     public var textBg: String?
     public var textOffsetY: CGFloat?
+    public var stickerObjects: [StorySticker]?
+    public var textPositionPoint: StoryTextPosition?
+    public var drawingData: Data?
+    public var musicTrackId: String?
+    public var musicStartTime: TimeInterval?
+    public var musicEndTime: TimeInterval?
 
     public init(background: String? = nil, textStyle: String? = nil, textColor: String? = nil,
                 textPosition: String? = nil, filter: String? = nil, stickers: [String]? = nil,
-                textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil) {
+                textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
+                stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
+                drawingData: Data? = nil, musicTrackId: String? = nil,
+                musicStartTime: TimeInterval? = nil, musicEndTime: TimeInterval? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
+        self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
+        self.drawingData = drawingData; self.musicTrackId = musicTrackId
+        self.musicStartTime = musicStartTime; self.musicEndTime = musicEndTime
+    }
+
+    public var parsedTextStyle: StoryTextStyle? {
+        guard let raw = textStyle else { return nil }
+        return StoryTextStyle(rawValue: raw)
+    }
+
+    public var parsedFilter: StoryFilter? {
+        guard let raw = filter else { return nil }
+        return StoryFilter(rawValue: raw)
+    }
+
+    public var resolvedTextPosition: StoryTextPosition {
+        if let point = textPositionPoint { return point }
+        switch textPosition {
+        case "top": return .top
+        case "bottom": return .bottom
+        default: return .center
+        }
+    }
+
+    public func toJSON() -> [String: Any] {
+        var dict: [String: Any] = [:]
+        if let bg = background { dict["background"] = bg }
+        if let ts = textStyle { dict["textStyle"] = ts }
+        if let tc = textColor { dict["textColor"] = tc }
+        if let tp = textPositionPoint {
+            dict["textPosition"] = ["x": tp.x, "y": tp.y]
+        } else if let tp = textPosition {
+            dict["textPosition"] = tp
+        }
+        if let f = filter { dict["filter"] = f }
+        if let so = stickerObjects, !so.isEmpty {
+            dict["stickers"] = so.map { s in
+                ["emoji": s.emoji, "x": s.x, "y": s.y, "scale": s.scale, "rotation": s.rotation] as [String: Any]
+            }
+        } else if let st = stickers { dict["stickers"] = st }
+        return dict
+    }
+}
+
+// MARK: - Post Type
+
+public enum PostType: String, CaseIterable, Sendable {
+    case post = "POST"
+    case story = "STORY"
+    case status = "STATUS"
+
+    public var displayName: String {
+        switch self {
+        case .post: return "Post"
+        case .story: return "Story"
+        case .status: return "Status"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .post: return "square.and.pencil"
+        case .story: return "camera.fill"
+        case .status: return "face.smiling"
+        }
     }
 }
 

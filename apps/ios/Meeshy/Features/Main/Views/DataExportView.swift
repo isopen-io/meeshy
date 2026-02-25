@@ -6,11 +6,28 @@ struct DataExportView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
 
-    @State private var exportMessages = true
-    @State private var exportMedia = true
-    @State private var exportContacts = true
+    @State private var selectedFormats: Set<ExportFormat> = [.json]
+    @State private var includeMessages = true
+    @State private var includeMedia = false
+    @State private var includeContacts = true
+    @State private var isExporting = false
+    @State private var exportComplete = false
 
     private let accentColor = "3498DB"
+
+    enum ExportFormat: String, CaseIterable, Identifiable {
+        case json = "JSON"
+        case csv = "CSV"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .json: return "doc.text"
+            case .csv: return "tablecells"
+            }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -43,7 +60,7 @@ struct DataExportView: View {
 
             Spacer()
 
-            Text("Exporter")
+            Text("Export de donnees")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -57,120 +74,107 @@ struct DataExportView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Scroll Content
+    // MARK: - Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                explanationCard
+                infoCard
+                formatSection
                 optionsSection
                 exportButton
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.top, 8)
         }
     }
 
-    // MARK: - Explanation Card
+    private var infoCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "shield.checkered")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(Color(hex: accentColor))
 
-    private var explanationCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "square.and.arrow.up.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color(hex: accentColor))
-
-                Text("Exportez une copie de vos donnees")
-                    .font(.system(size: 15, weight: .bold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Vos donnees, votre controle")
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
-            }
 
-            Text("Vous recevrez un fichier contenant les donnees selectionnees ci-dessous. Cette fonctionnalite vous permet de conserver une copie personnelle de vos informations.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(theme.textMuted)
-                .lineSpacing(3)
+                Text("Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textMuted)
+            }
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 14)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
     }
 
-    // MARK: - Options Section
+    private var formatSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "FORMAT", icon: "doc.fill", color: accentColor)
+
+            HStack(spacing: 12) {
+                ForEach(ExportFormat.allCases) { format in
+                    Button {
+                        HapticFeedback.light()
+                        if selectedFormats.contains(format) {
+                            selectedFormats.remove(format)
+                        } else {
+                            selectedFormats.insert(format)
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: format.icon)
+                                .font(.system(size: 22, weight: .semibold))
+                            Text(format.rawValue)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(selectedFormats.contains(format) ? .white : Color(hex: accentColor))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(
+                                    selectedFormats.contains(format)
+                                        ? Color(hex: accentColor)
+                                        : Color(hex: accentColor).opacity(0.12)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     private var optionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Donnees a exporter", icon: "square.and.arrow.up.fill", color: accentColor)
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(title: "CONTENU", icon: "checklist", color: "F8B500")
 
             VStack(spacing: 0) {
-                exportToggle(icon: "message.fill", title: "Messages", isOn: $exportMessages, color: accentColor)
-                exportToggle(icon: "photo.fill", title: "Medias", isOn: $exportMedia, color: "9B59B6")
-                exportToggle(icon: "person.2.fill", title: "Contacts", isOn: $exportContacts, color: "4ECDC4")
+                toggleRow(title: "Messages", icon: "bubble.left.fill", color: "FF6B6B", isOn: $includeMessages)
+                toggleRow(title: "Media", icon: "photo.fill", color: "9B59B6", isOn: $includeMedia)
+                toggleRow(title: "Contacts", icon: "person.2.fill", color: "4ECDC4", isOn: $includeContacts)
             }
-            .background(sectionBackground(tint: accentColor))
-        }
-    }
-
-    // MARK: - Export Button
-
-    private var exportButton: some View {
-        VStack(spacing: 8) {
-            Button { } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Exporter mes donnees")
-                        .font(.system(size: 15, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(hex: accentColor).opacity(0.3))
-                )
-            }
-            .disabled(true)
-            .accessibilityLabel("Exporter mes donnees")
-            .accessibilityHint("Fonctionnalite bientot disponible")
-
-            Text("Bientot disponible")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: accentColor))
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: color))
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
-                .tracking(1.2)
-        }
-        .padding(.leading, 4)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
+            .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
+                    .fill(theme.surfaceGradient(tint: "F8B500"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(theme.border(tint: "F8B500"), lineWidth: 1)
+                    )
             )
+        }
     }
 
-    private func exportToggle(icon: String, title: String, isOn: Binding<Bool>, color: String) -> some View {
+    private func toggleRow(title: String, icon: String, color: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
@@ -195,5 +199,56 @@ struct DataExportView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private var exportButton: some View {
+        Button {
+            HapticFeedback.medium()
+            isExporting = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                isExporting = false
+                exportComplete = true
+                HapticFeedback.success()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if isExporting {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.8)
+                } else if exportComplete {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                } else {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                Text(exportComplete ? "Export termine" : "Exporter mes donnees")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(exportComplete ? Color(hex: "2ECC71") : Color(hex: accentColor))
+            )
+        }
+        .disabled(isExporting || selectedFormats.isEmpty)
+        .accessibilityLabel("Exporter mes donnees")
+        .accessibilityHint(isExporting ? "Export en cours" : "Lance l'export de vos donnees")
+    }
+
+    private func sectionHeader(title: String, icon: String, color: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(hex: color))
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: color))
+                .tracking(1.2)
+        }
+        .padding(.leading, 4)
     }
 }

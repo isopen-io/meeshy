@@ -20,6 +20,13 @@
 		542025BAEF06C3FB0578E670 /* ConversationListView+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CC3F2F25BE7ED204EC43B5 /* ConversationListView+Overlays.swift */; };
 		63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
+		7FCC2F965C3421351E49E5E0 /* UserStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */; };
+		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
+		771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */; };
+		8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */; };
+		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
+		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
+		2A52D4F1D5A9C383AC4E2CFB /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AD7697AD569462191E395F /* DataExportView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
 		75F796AFDAAFB88DFFB87706 /* ConversationView+Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB514257655035123C7AD2F8 /* ConversationView+Composer.swift */; };
 		90541F6A2DB27962673BFD35 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584D60650A4F6BDC569D97 /* NotificationService.swift */; };
@@ -131,6 +138,9 @@
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
+
+		DLNK002A002A002A002A0002 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */; };
+		FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FRRL001A001A001A001A0001 /* FriendRequestListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -190,6 +200,14 @@
 		694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMenu.swift; sourceTree = "<group>"; };
 		6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
 		6B4592BA9A00EF9FA3BBEE07 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
+
+		3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStatsView.swift; sourceTree = "<group>"; };
+		3CA306483025A83773D87DED /* StatsTimelineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTimelineChart.swift; sourceTree = "<group>"; };
+		8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementBadgeView.swift; sourceTree = "<group>"; };
+		B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateView.swift; sourceTree = "<group>"; };
+		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
+		F71C9C50ECED369B628670C7 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
+		25AD7697AD569462191E395F /* DataExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportView.swift; sourceTree = "<group>"; };
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		80584D60650A4F6BDC569D97 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -294,6 +312,9 @@
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		WP3500000000001F35 /* WidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviewView.swift; sourceTree = "<group>"; };
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+
+		DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
+		FRRL001A001A001A001A0001 /* FriendRequestListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -487,6 +508,15 @@
 				WP3500000000001F35 /* WidgetPreviewView.swift */,
 				CV3800000000001F38 /* CallView.swift */,
 				IC3900000000001F39 /* IncomingCallView.swift */,
+
+				FRRL001A001A001A001A0001 /* FriendRequestListView.swift */,
+				3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */,
+				3CA306483025A83773D87DED /* StatsTimelineChart.swift */,
+				8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */,
+				B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */,
+				0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */,
+				F71C9C50ECED369B628670C7 /* ThreadView.swift */,
+				25AD7697AD569462191E395F /* DataExportView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -587,6 +617,7 @@
 			children = (
 				DL1100000000001F01 /* DeepLinkRouter.swift */,
 				RR1100000000001F01 /* Router.swift */,
+				DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */,
 			);
 			path = Navigation;
 			sourceTree = "<group>";
@@ -808,6 +839,9 @@
 				CC2400000000002F24 /* ConversationLockManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
 				DL1100000000002F01 /* DeepLinkRouter.swift in Sources */,
+
+				DLNK002A002A002A002A0002 /* DeepLinkRouter.swift in Sources */,
+				FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */,
 				AA00BB11CC22DD33EE440001 /* Conversation.swift in Sources */,
 				AA00BB11CC22DD33EE440002 /* Message.swift in Sources */,
 				AA00BB11CC22DD33EE440007 /* MessageModels.swift in Sources */,
@@ -852,6 +886,14 @@
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
 				2D6AD43B267CD9FA109110AF /* OnboardingStepViews.swift in Sources */,
 				D143407BBF8B39883209BCFD /* OnboardingFlowView.swift in Sources */,
+
+				7FCC2F965C3421351E49E5E0 /* UserStatsView.swift in Sources */,
+				00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */,
+				771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */,
+				8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */,
+				E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */,
+				044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */,
+				2A52D4F1D5A9C383AC4E2CFB /* DataExportView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

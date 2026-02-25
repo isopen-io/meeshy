@@ -19,6 +19,8 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var showStats = false
+    @State private var stats: UserStats?
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -71,7 +73,13 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showStats) {
+            UserStatsView()
+        }
         .onAppear { loadUserData() }
+        .task {
+            stats = try? await StatsService.shared.fetchStats()
+        }
         .onChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
             loadImageForEditor(from: newItem) { image in
@@ -382,11 +390,17 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader(icon: "chart.bar.fill", title: "STATISTIQUES", color: "4ECDC4")
 
-            HStack(spacing: 12) {
-                statCard(value: "—", label: "Messages", color: "FF6B6B")
-                statCard(value: "—", label: "Conversations", color: "4ECDC4")
-                statCard(value: "—", label: "Amis", color: "9B59B6")
+            Button {
+                HapticFeedback.light()
+                showStats = true
+            } label: {
+                HStack(spacing: 12) {
+                    statCard(value: "\(stats?.totalMessages ?? 0)", label: "Messages", color: "FF6B6B")
+                    statCard(value: "\(stats?.totalConversations ?? 0)", label: "Conversations", color: "4ECDC4")
+                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: "Amis", color: "9B59B6")
+                }
             }
+            .buttonStyle(.plain)
         }
     }
 

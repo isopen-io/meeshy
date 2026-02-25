@@ -23,6 +23,13 @@ struct SettingsView: View {
     @State private var showDataStorage = false
     @State private var showDataExport = false
     @State private var showDeleteAccount = false
+    @State private var showStats = false
+    @State private var showAffiliate = false
+    @State private var showVoiceProfileWizard = false
+    @State private var showVoiceProfileManage = false
+    @State private var autoTranscriptionEnabled = false
+
+    @AppStorage("preferredLanguage") private var preferredLanguage = "fr"
 
     private let accentColor = "08D9D6"
 
@@ -35,6 +42,9 @@ struct SettingsView: View {
                 scrollContent
             }
         }
+        .sheet(isPresented: $showStats) { UserStatsView() }
+        .sheet(isPresented: $showAffiliate) { AffiliateView() }
+        .sheet(isPresented: $showDataExport) { DataExportView() }
         .alert("Déconnexion", isPresented: $showLogoutConfirm) {
             Button("Annuler", role: .cancel) { }
             Button("Déconnexion", role: .destructive) {
@@ -62,7 +72,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showLicenses) { LicensesView() }
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
-        .sheet(isPresented: $showDataExport) { DataExportView() }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
@@ -105,9 +114,12 @@ struct SettingsView: View {
             VStack(spacing: 20) {
                 accountSection
                 appearanceSection
+                voiceProfileSection
+                transcriptionSection
                 notificationsSection
                 languageSection
                 dataSection
+                meeshyToolsSection
                 supportSection
                 aboutSection
                 logoutSection
@@ -334,6 +346,84 @@ struct SettingsView: View {
             }
             .accessibilityLabel("Exporter mes donnees")
             .accessibilityHint("Ouvre la page d'export de donnees")
+        }
+    }
+
+    // MARK: - Voice Profile Section
+
+    private var voiceProfileSection: some View {
+        settingsSection(title: "Profil vocal", icon: "waveform.and.mic", color: "A855F7") {
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileManage = true
+            } label: {
+                settingsRow(icon: "waveform.circle.fill", title: "Gerer le profil vocal", color: "A855F7") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileWizard = true
+            } label: {
+                settingsRow(icon: "plus.circle.fill", title: "Creer un profil vocal", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+        .sheet(isPresented: $showVoiceProfileWizard) {
+            VoiceProfileWizardView(accentColor: "A855F7")
+        }
+        .sheet(isPresented: $showVoiceProfileManage) {
+            VoiceProfileManageView(accentColor: "A855F7")
+        }
+    }
+
+    // MARK: - Transcription Section
+
+    private var transcriptionSection: some View {
+        settingsSection(title: "Transcription", icon: "text.quote", color: "4ECDC4") {
+            settingsRow(icon: "waveform", title: "Transcription automatique", color: "4ECDC4") {
+                Toggle("", isOn: $autoTranscriptionEnabled)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+            }
+
+            settingsRow(icon: "info.circle", title: "Apple Speech (on-device)", color: "6B7280") {
+                EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Meeshy Tools Section
+
+    private var meeshyToolsSection: some View {
+        settingsSection(title: "Outils", icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
+            Button {
+                HapticFeedback.light()
+                showStats = true
+            } label: {
+                settingsRow(icon: "chart.bar.fill", title: "Statistiques", color: "4ECDC4") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showAffiliate = true
+            } label: {
+                settingsRow(icon: "link.badge.plus", title: "Parrainage", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
         }
     }
 

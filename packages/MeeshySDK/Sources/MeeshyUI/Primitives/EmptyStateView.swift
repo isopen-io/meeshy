@@ -1,70 +1,82 @@
 import SwiftUI
+import MeeshySDK
 
 public struct EmptyStateView: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    var actionTitle: String? = nil
-    var action: (() -> Void)? = nil
+    public let icon: String
+    public let title: String
+    public let subtitle: String
+    public let actionLabel: String?
+    public let accentColor: String
+    public var onAction: (() -> Void)?
 
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var appeared = false
 
     public init(
         icon: String,
         title: String,
         subtitle: String,
-        actionTitle: String? = nil,
-        action: (() -> Void)? = nil
+        actionLabel: String? = nil,
+        accentColor: String = "4ECDC4",
+        onAction: (() -> Void)? = nil
     ) {
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
-        self.actionTitle = actionTitle
-        self.action = action
+        self.actionLabel = actionLabel
+        self.accentColor = accentColor
+        self.onAction = onAction
     }
 
     public var body: some View {
-        VStack(spacing: MeeshySpacing.lg) {
+        VStack(spacing: 16) {
+            Spacer()
+
             Image(systemName: icon)
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(MeeshyColors.cyan.opacity(0.5))
-                .padding(.bottom, MeeshySpacing.sm)
+                .font(.system(size: 52, weight: .light))
+                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .padding(.bottom, 4)
 
             Text(title)
-                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textPrimary)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(subtitle)
-                .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(ThemeManager.shared.textMuted)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
-                .lineLimit(3)
+                .padding(.horizontal, 40)
 
-            if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle)
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+            if let actionLabel, let onAction {
+                Button {
+                    HapticFeedback.light()
+                    onAction()
+                } label: {
+                    Text(actionLabel)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, MeeshySpacing.xxl)
-                        .padding(.vertical, MeeshySpacing.md)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 10)
                         .background(
                             Capsule()
-                                .fill(MeeshyColors.cyan)
+                                .fill(Color(hex: accentColor))
                         )
-                        .shadow(color: MeeshyColors.cyan.opacity(0.3), radius: 8, y: 4)
                 }
-                .padding(.top, MeeshySpacing.sm)
+                .padding(.top, 4)
             }
+
+            Spacer()
         }
-        .padding(.horizontal, MeeshySpacing.xxxl)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared ? 0 : 12)
         .onAppear {
-            withAnimation(MeeshyAnimation.springDefault.delay(0.15)) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
                 appeared = true
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
     }
 }

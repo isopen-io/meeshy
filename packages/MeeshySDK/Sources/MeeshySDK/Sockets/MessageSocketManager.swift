@@ -202,6 +202,12 @@ public final class MessageSocketManager: ObservableObject {
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
+    // Combine publishers — location sharing
+    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
+    public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
+    public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
+    public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
+
     // Combine publishers — translation
     public let translationReceived = PassthroughSubject<TranslationEvent, Never>()
 
@@ -313,6 +319,30 @@ public final class MessageSocketManager: ObservableObject {
     public func requestTranslation(messageId: String, targetLanguage: String) {
         socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
         Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+    }
+
+    // MARK: - Location Emission
+
+    public func emitLocationShare(payload: LocationSharePayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:share", dict)
+    }
+
+    public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:live-start", dict)
+    }
+
+    public func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:live-update", dict)
+    }
+
+    public func emitLiveLocationStop(conversationId: String) {
+        socket?.emit("location:live-stop", ["conversationId": conversationId])
     }
 
     // MARK: - Event Handlers
@@ -491,6 +521,32 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("message:consumed") { [weak self] data, _ in
             self?.decode(MessageConsumedEvent.self, from: data) { event in
                 self?.messageConsumed.send(event)
+            }
+        }
+
+        // --- Location events ---
+
+        socket.on("location:shared") { [weak self] data, _ in
+            self?.decode(LocationSharedEvent.self, from: data) { event in
+                self?.locationShared.send(event)
+            }
+        }
+
+        socket.on("location:live-started") { [weak self] data, _ in
+            self?.decode(LiveLocationStartedEvent.self, from: data) { event in
+                self?.liveLocationStarted.send(event)
+            }
+        }
+
+        socket.on("location:live-updated") { [weak self] data, _ in
+            self?.decode(LiveLocationUpdatedEvent.self, from: data) { event in
+                self?.liveLocationUpdated.send(event)
+            }
+        }
+
+        socket.on("location:live-stopped") { [weak self] data, _ in
+            self?.decode(LiveLocationStoppedEvent.self, from: data) { event in
+                self?.liveLocationStopped.send(event)
             }
         }
     }

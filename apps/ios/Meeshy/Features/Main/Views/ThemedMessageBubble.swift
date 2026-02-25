@@ -1,6 +1,8 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
 import Combine
+
+import MapKit
 import MeeshySDK
 import MeeshyUI
 
@@ -41,6 +43,8 @@ struct ThemedMessageBubble: View {
     @State private var fogOpacity: CGFloat = 0
     @State private var isTextExpanded: Bool = false
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
+
+    @State var fullscreenLocationAttachment: MessageAttachment? = nil
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
     @ObservedObject private var videoPlayerManager = SharedAVPlayerManager.shared
 
@@ -544,6 +548,17 @@ struct ThemedMessageBubble: View {
                 }
             default:
                 Color.black.onAppear { fullscreenAttachment = nil }
+            }
+        }
+        .fullScreenCover(item: $fullscreenLocationAttachment) { attachment in
+            if let lat = attachment.latitude, let lon = attachment.longitude {
+                LocationFullscreenView(
+                    latitude: lat,
+                    longitude: lon,
+                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                    accentColor: contactColor,
+                    senderName: message.senderName
+                )
             }
         }
     }
@@ -1099,28 +1114,41 @@ struct ThemedMessageBubble: View {
             )
 
         case .location:
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 200, height: 120)
-                .overlay(
-                    VStack(spacing: 8) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(.white)
-
-                        Text("Position partagee")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
+            if let lat = attachment.latitude, let lon = attachment.longitude {
+                LocationMessageView(
+                    latitude: lat,
+                    longitude: lon,
+                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                    address: nil,
+                    accentColor: contactColor,
+                    onTapFullscreen: {
+                        fullscreenLocationAttachment = attachment
                     }
                 )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Position partagee")
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 200, height: 120)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 36))
+                                .foregroundColor(.white)
+
+                            Text("Position partagee")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Position partagee")
+            }
         }
     }
 

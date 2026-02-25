@@ -166,7 +166,9 @@ extension ConversationListView {
                 Spacer()
 
                 HStack(spacing: 12) {
-                    Button {} label: {
+                    Button {
+                        router.push(.communityList)
+                    } label: {
                         Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(MeeshyColors.teal)
@@ -199,6 +201,10 @@ extension ConversationListView {
                     ForEach(Array(SampleData.communities.enumerated()), id: \.element.id) { index, community in
                         ThemedCommunityCard(community: community)
                             .staggeredAppear(index: index, baseDelay: 0.06)
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                router.push(.communityDetail(community.id))
+                            }
                     }
                 }
                 .padding(.horizontal, 16)

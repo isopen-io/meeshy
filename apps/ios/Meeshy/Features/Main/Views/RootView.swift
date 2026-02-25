@@ -15,6 +15,7 @@ struct RootView: View {
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
@@ -22,6 +23,8 @@ struct RootView: View {
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
     @State private var selectedStoryGroupIndexFromConv = 0
+    @State private var joinFlowIdentifier: String?
+    @State private var showJoinFlow = false
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -83,6 +86,74 @@ struct RootView: View {
                             .navigationBarHidden(true)
                     case .newConversation:
                         NewConversationView()
+                            .navigationBarHidden(true)
+                    case .communityList:
+                        CommunityListView(
+                            onSelectCommunity: { community in
+                                router.push(.communityDetail(community.id))
+                            },
+                            onCreateCommunity: {
+                                router.push(.communityCreate)
+                            }
+                        )
+                        .navigationTitle("Communities")
+                        .navigationBarTitleDisplayMode(.inline)
+                    case .communityDetail(let communityId):
+                        CommunityDetailView(
+                            communityId: communityId,
+                            onSelectConversation: { apiConversation in
+                                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                                let conv = apiConversation.toConversation(currentUserId: currentUserId)
+                                router.push(.conversation(conv))
+                            },
+                            onOpenSettings: { community in
+                                router.push(.communitySettings(community))
+                            },
+                            onOpenMembers: { id in
+                                router.push(.communityMembers(id))
+                            },
+                            onInvite: { id in
+                                router.push(.communityInvite(id))
+                            }
+                        )
+                        .navigationBarHidden(true)
+                    case .communityCreate:
+                        CommunityCreateView(
+                            onCreated: { community in
+                                router.pop()
+                                router.push(.communityDetail(community.id))
+                            }
+                        )
+                    case .communitySettings(let community):
+                        CommunitySettingsView(
+                            community: community,
+                            onUpdated: { _ in router.pop() },
+                            onDeleted: { router.popToRoot() },
+                            onLeft: { router.popToRoot() }
+                        )
+                    case .communityMembers(let communityId):
+                        CommunityMembersView(
+                            communityId: communityId,
+                            onInvite: {
+                                router.push(.communityInvite(communityId))
+                            }
+                        )
+                    case .communityInvite(let communityId):
+                        CommunityInviteView(communityId: communityId)
+                    case .notifications:
+                        NotificationListView(
+                            onNotificationTap: { _ in },
+                            onDismiss: { router.pop() }
+                        )
+                        .navigationBarHidden(true)
+                    case .userStats:
+                        UserStatsView()
+                            .navigationBarHidden(true)
+                    case .affiliate:
+                        AffiliateView()
+                            .navigationBarHidden(true)
+                    case .dataExport:
+                        DataExportView()
                             .navigationBarHidden(true)
                     }
                 }
@@ -151,7 +222,7 @@ struct RootView: View {
             .zIndex(200)
         }
         .environment(\.openURL, OpenURLAction { url in
-            let destination = DeepLinkRouter.parse(url)
+            let destination = DeepLinkParser.parse(url)
             switch destination {
             case .external:
                 return .systemAction
@@ -222,6 +293,51 @@ struct RootView: View {
                 showSharePicker = true
             }
         }
+        .sheet(isPresented: $showJoinFlow) {
+            if let identifier = joinFlowIdentifier {
+                JoinFlowSheet(identifier: identifier) { joinResponse in
+                    handleJoinSuccess(joinResponse)
+                }
+            }
+        }
+        .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
+            handleDeepLink(newValue)
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    private func handleDeepLink(_ deepLink: DeepLink?) {
+        guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+
+        switch deepLink {
+        case .joinLink(let identifier):
+            joinFlowIdentifier = identifier
+            showJoinFlow = true
+
+        case .conversation(let id):
+            let conv = Conversation(
+                id: id, identifier: id, type: .group,
+                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
+            )
+            router.navigateToConversation(conv)
+
+        case .magicLink:
+            break
+        }
+    }
+
+    private func handleJoinSuccess(_ response: AnonymousJoinResponse) {
+        let conv = Conversation(
+            id: response.conversation.id,
+            identifier: response.conversation.id,
+            type: response.conversation.type.lowercased() == "group" ? .group : .direct,
+            title: response.conversation.title,
+            lastMessageAt: Date(),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        router.navigateToConversation(conv)
     }
 
     // MARK: - Handle Story Reply
@@ -400,8 +516,9 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
-                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
-                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
+                ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
+                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.affiliate) }),
+                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
                 (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         theme.cyclePreference(systemScheme: systemColorScheme)

@@ -8,6 +8,7 @@ struct MeeshyApp: App {
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var toastManager = ToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
+    @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = true
@@ -61,6 +62,7 @@ struct MeeshyApp: App {
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
                 .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
                     handleAppLevelDeepLink(url)
@@ -86,6 +88,9 @@ struct MeeshyApp: App {
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
                     guard let payload, let conversationId = payload.conversationId else { return }
                     handlePushNavigation(conversationId: conversationId)
+                }
+                .onOpenURL { url in
+                    let _ = deepLinkRouter.handle(url: url)
                 }
             }
         }
@@ -124,7 +129,7 @@ struct MeeshyApp: App {
     // MARK: - App-Level Deep Link (handles magic link when not authenticated)
 
     private func handleAppLevelDeepLink(_ url: URL) {
-        let destination = DeepLinkRouter.parse(url)
+        let destination = DeepLinkParser.parse(url)
         guard case .magicLink(let token) = destination else { return }
 
         Task {
