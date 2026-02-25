@@ -171,4 +171,13 @@ public final class UserService {
         )
         return response.data
     }
+
+    // MARK: - Stats
+
+    public func getUserStats(userId: String) async throws -> UserStats {
+        let response: APIResponse<UserStats> = try await api.request(
+            endpoint: "/users/\(userId)/stats"
+        )
+        return response.data
+    }
 }

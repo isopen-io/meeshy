@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - User Stats
 
-public struct UserStats: Decodable {
+public struct UserStats: Codable, Sendable {
     public let totalMessages: Int
     public let totalConversations: Int
     public let totalTranslations: Int
@@ -27,7 +27,7 @@ public struct UserStats: Decodable {
 
 // MARK: - Achievement
 
-public struct Achievement: Decodable, Identifiable {
+public struct Achievement: Codable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let description: String
@@ -51,7 +51,7 @@ public struct Achievement: Decodable, Identifiable {
 
 // MARK: - Timeline Point
 
-public struct TimelinePoint: Decodable, Identifiable {
+public struct TimelinePoint: Codable, Identifiable, Sendable {
     public var id: String { date }
     public let date: String
     public let messages: Int

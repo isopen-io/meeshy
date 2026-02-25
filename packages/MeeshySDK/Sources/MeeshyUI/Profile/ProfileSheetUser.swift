@@ -17,13 +17,19 @@ public struct ProfileSheetUser: Identifiable {
     public let lastActiveAt: Date?
     public let createdAt: Date?
     public let bannerURL: String?
+    public let timezone: String?
+    public let registrationCountry: String?
+    public let profileCompletionRate: Int?
+    public let hasE2EE: Bool
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
         avatarURL: String? = nil, accentColor: String = "",
         bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: Date? = nil,
-        createdAt: Date? = nil, bannerURL: String? = nil
+        createdAt: Date? = nil, bannerURL: String? = nil,
+        timezone: String? = nil, registrationCountry: String? = nil,
+        profileCompletionRate: Int? = nil, hasE2EE: Bool = false
     ) {
         self.userId = userId
         self.username = username
@@ -37,6 +43,10 @@ public struct ProfileSheetUser: Identifiable {
         self.lastActiveAt = lastActiveAt
         self.createdAt = createdAt
         self.bannerURL = bannerURL
+        self.timezone = timezone
+        self.registrationCountry = registrationCountry
+        self.profileCompletionRate = profileCompletionRate
+        self.hasE2EE = hasE2EE
     }
 
     public var resolvedDisplayName: String {
@@ -134,7 +144,11 @@ extension ProfileSheetUser {
             isOnline: user.isOnline,
             lastActiveAt: lastActive,
             createdAt: createdAt,
-            bannerURL: user.banner
+            bannerURL: user.banner,
+            timezone: user.timezone,
+            registrationCountry: user.registrationCountry,
+            profileCompletionRate: user.profileCompletionRate,
+            hasE2EE: user.signalIdentityKeyPublic != nil
         )
     }
 }

@@ -54,6 +54,14 @@ extension ConversationListView {
             }
         }
 
+        // Détails (configuration de la conversation)
+        Button {
+            HapticFeedback.light()
+            conversationInfoConversation = conversation
+        } label: {
+            Label(String(localized: "context.details", defaultValue: "Détails"), systemImage: "info.circle.fill")
+        }
+
         // React to last message
         if let lastMsgId = conversation.lastMessageId {
             Menu {
@@ -198,7 +206,7 @@ extension ConversationListView {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(Array(SampleData.communities.enumerated()), id: \.element.id) { index, community in
+                    ForEach(Array(userCommunities.enumerated()), id: \.element.id) { index, community in
                         ThemedCommunityCard(community: community)
                             .staggeredAppear(index: index, baseDelay: 0.06)
                             .onTapGesture {

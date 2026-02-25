@@ -481,6 +481,8 @@ model Message {
   forwardedFromConversationId String?   @db.ObjectId
   /// Expiration timestamp for self-destructing messages
   expiresAt                   DateTime?
+  /// Ephemeral duration in seconds (e.g., 30, 60, 300, 3600, 86400 for 30s, 1m, 5m, 1h, 1d)
+  ephemeralDuration           Int?
 
   // ============================================
   // SECRET / VIEW-ONCE / BLUR FIELDS

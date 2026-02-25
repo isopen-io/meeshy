@@ -681,4 +681,128 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       });
     }
   });
+
+  // Route pour ajouter une conversation existante a une communaute
+  fastify.post('/communities/:id/conversations/:conversationId', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Add an existing conversation to a community. The authenticated user must be an admin/creator of both the community and the conversation.',
+      tags: ['communities'],
+      summary: 'Add conversation to community',
+      params: {
+        type: 'object',
+        required: ['id', 'conversationId'],
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Community unique ID'
+          },
+          conversationId: {
+            type: 'string',
+            description: 'Conversation unique ID to add'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Successfully added conversation to community',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: { type: 'object' }
+          }
+        },
+        401: { description: 'User not authenticated', ...errorResponseSchema },
+        403: { description: 'Insufficient permissions', ...errorResponseSchema },
+        404: { description: 'Community or conversation not found', ...errorResponseSchema },
+        500: { description: 'Internal server error', ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id, conversationId } = request.params as { id: string; conversationId: string };
+
+      const authContext = (request as any).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({
+          success: false,
+          error: 'User must be authenticated'
+        });
+      }
+
+      const userId = authContext.userId;
+
+      // Verify community exists and user is admin/creator
+      const community = await fastify.prisma.community.findFirst({
+        where: { id },
+        select: {
+          id: true,
+          createdBy: true,
+          members: { select: { userId: true, role: true } }
+        }
+      });
+
+      if (!community) {
+        return reply.status(404).send({ success: false, error: 'Community not found' });
+      }
+
+      const isCreator = community.createdBy === userId;
+      const memberRecord = community.members.find(m => m.userId === userId);
+      const isAdmin = memberRecord?.role === CommunityRole.ADMIN;
+
+      if (!isCreator && !isAdmin) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Only community admins can add conversations'
+        });
+      }
+
+      // Verify conversation exists and user has access
+      const conversation = await fastify.prisma.conversation.findFirst({
+        where: { id: conversationId },
+        select: {
+          id: true,
+          communityId: true,
+          createdBy: true,
+          members: { select: { userId: true, role: true } }
+        }
+      });
+
+      if (!conversation) {
+        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+      }
+
+      // Update conversation to belong to this community (allows moving between communities)
+      const updated = await fastify.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { communityId: id },
+        include: {
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: { messages: true, members: true }
+          }
+        }
+      });
+
+      reply.send({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error adding conversation to community:', error);
+      reply.status(500).send({
+        success: false,
+        error: 'Failed to add conversation to community'
+      });
+    }
+  });
 }

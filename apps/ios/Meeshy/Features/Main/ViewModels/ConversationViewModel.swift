@@ -387,7 +387,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Send Message
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isBlurred: Bool? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
@@ -396,6 +396,11 @@ class ConversationViewModel: ObservableObject {
 
         // Resolve ephemeral: use explicit param or ViewModel state
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
+        let resolvedEphemeralDuration = ephemeralDuration?.rawValue
+
+        // Resolve view-once: explicit param or derive from ephemeralDuration
+        let resolvedIsViewOnce = isViewOnce ?? false
+        let resolvedMaxViewOnceCount = maxViewOnceCount
 
         // Resolve blur: use explicit param or ViewModel state
         let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
@@ -440,7 +445,9 @@ class ConversationViewModel: ObservableObject {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: resolvedExpiresAt,
-            isViewOnce: false, maxViewOnceCount: nil, viewOnceCount: 0,
+            isViewOnce: resolvedIsViewOnce,
+            maxViewOnceCount: resolvedMaxViewOnceCount,
+            viewOnceCount: 0,
             isBlurred: resolvedBlur == true,
             createdAt: Date(),
             updatedAt: Date(),
@@ -460,6 +467,9 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
                 expiresAt: resolvedExpiresAt,
+                ephemeralDuration: resolvedEphemeralDuration,
+                isViewOnce: resolvedIsViewOnce ? true : nil,
+                maxViewOnceCount: resolvedMaxViewOnceCount,
                 isBlurred: resolvedBlur
             )
             let responseData = try await MessageService.shared.send(
@@ -475,7 +485,9 @@ class ConversationViewModel: ObservableObject {
                     content: text,
                     replyToId: replyToId,
                     expiresAt: resolvedExpiresAt,
-                    isViewOnce: false, maxViewOnceCount: nil, viewOnceCount: 0,
+                    isViewOnce: resolvedIsViewOnce,
+                    maxViewOnceCount: resolvedMaxViewOnceCount,
+                    viewOnceCount: 0,
                     isBlurred: resolvedBlur == true,
                     createdAt: responseData.createdAt,
                     updatedAt: responseData.createdAt,

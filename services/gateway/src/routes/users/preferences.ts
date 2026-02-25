@@ -388,7 +388,6 @@ export async function getUserStats(fastify: FastifyInstance) {
       }
 
       const { userId: userIdOrUsername } = request.params;
-      fastify.log.info(`[USER_STATS] Getting stats for user ${userIdOrUsername}`);
 
       const isMongoId = /^[a-f\d]{24}$/i.test(userIdOrUsername);
 
@@ -404,116 +403,85 @@ export async function getUserStats(fastify: FastifyInstance) {
         select: {
           id: true,
           createdAt: true,
-          isOnline: true,
-          lastActiveAt: true
         }
       });
 
       if (!user) {
-        fastify.log.warn(`[USER_STATS] User not found: ${userIdOrUsername}`);
         return reply.status(404).send({
           success: false,
           error: 'User not found'
         });
       }
 
-      fastify.log.info(`[USER_STATS] User found: ${user.id}`);
-
       const userId = user.id;
 
-      // Performance instrumentation
-      const perfStart = performance.now();
-      const perfTimings: Record<string, number> = {};
-
-      // OPTIMISATION: Récupérer les conversations avec leur type en une seule requête
-      const startConvIds = performance.now();
-      const userConversationMembers = await fastify.prisma.conversationMember.findMany({
-        where: {
-          userId: userId,
-          isActive: true,
-          conversation: {
-            type: { not: 'global' }  // Exclure les conversations globales
-          }
-        },
-        select: {
-          conversationId: true,
-          conversation: {
-            select: {
-              type: true  // Charger le type pour éviter une requête séparée
-            }
-          }
-        }
-      });
-      const conversationIds = userConversationMembers.map(cm => cm.conversationId);
-      // Calculer groupsCount en mémoire (évite une requête DB supplémentaire)
-      const groupsCountInMemory = userConversationMembers.filter(cm => cm.conversation.type === 'group').length;
-      perfTimings.getConversationIds = performance.now() - startConvIds;
-
-      // Utiliser les données en mémoire (pas de requête DB)
-      const startMemCalc = performance.now();
-      const totalConversations = userConversationMembers.length;
-      const groupsCount = groupsCountInMemory; // Déjà calculé en mémoire
-      perfTimings.memoryCalculations = performance.now() - startMemCalc;
-
       const [
-        messagesSent,
-        messagesReceived
+        totalMessages,
+        totalConversations,
+        totalTranslations,
+        friendRequestsReceived,
+        languagesRaw,
       ] = await Promise.all([
-        (async () => {
-          const start = performance.now();
-          const result = await fastify.prisma.message.count({
-            where: {
-              senderId: userId,
-              isDeleted: false
-            }
-          });
-          perfTimings.messagesSent = performance.now() - start;
-          return result;
-        })(),
-        (async () => {
-          const start = performance.now();
-          // OPTIMISATION: Compter seulement dans les conversations de l'utilisateur
-          const result = await fastify.prisma.message.count({
-            where: {
-              conversationId: { in: conversationIds },
-              senderId: { not: userId },
-              isDeleted: false
-            }
-          });
-          perfTimings.messagesReceived = performance.now() - start;
-          return result;
-        })()
+        fastify.prisma.message.count({
+          where: { senderId: userId, isDeleted: false },
+        }),
+        fastify.prisma.conversationMember.count({
+          where: { userId },
+        }),
+        fastify.prisma.message.count({
+          where: {
+            senderId: userId,
+            isDeleted: false,
+            translations: { isSet: true },
+          },
+        }),
+        fastify.prisma.friendRequest.count({
+          where: { receiverId: userId },
+        }),
+        fastify.prisma.message.groupBy({
+          by: ['originalLanguage'],
+          where: {
+            senderId: userId,
+            isDeleted: false,
+            originalLanguage: { not: null },
+          },
+        }),
       ]);
 
-      const perfEnd = performance.now();
-      const totalTime = perfEnd - perfStart;
+      const languagesUsed = languagesRaw.length;
+      const memberDays = Math.floor((Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      const languages = languagesRaw.map((l) => l.originalLanguage).filter(Boolean);
 
-      // Log performance metrics avec console.log pour garantir la visibilité
-      console.log('===============================================');
-      console.log('[USER_STATS_PERF] Query performance breakdown');
-      console.log('  User ID:', user.id);
-      console.log('  Timings:');
-      console.log(`    - getConversationIds (with types): ${perfTimings.getConversationIds.toFixed(2)}ms [OPTIMIZED v2]`);
-      console.log(`    - memoryCalculations (totalConv + groupsCount): ${perfTimings.memoryCalculations.toFixed(2)}ms [IN-MEMORY]`);
-      console.log(`    - messagesSent: ${perfTimings.messagesSent.toFixed(2)}ms`);
-      console.log(`    - messagesReceived: ${perfTimings.messagesReceived.toFixed(2)}ms [OPTIMIZED]`);
-      console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
-      console.log('  DB Queries: 3 (was 5), Eliminated: groupsCount + totalConversations queries');
-      console.log('===============================================');
+      const ACHIEVEMENT_THRESHOLDS = {
+        polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB', name: 'Polyglotte', description: 'Utiliser 5+ langues' },
+        bavard: { field: 'totalMessages', threshold: 1000, icon: 'bubble.left.and.bubble.right.fill', color: '#FF6B6B', name: 'Bavard', description: 'Envoyer 1000+ messages' },
+        connecteur: { field: 'totalConversations', threshold: 10, icon: 'person.2.fill', color: '#4ECDC4', name: 'Connecteur', description: 'Rejoindre 10+ conversations' },
+        traducteur: { field: 'totalTranslations', threshold: 100, icon: 'character.book.closed.fill', color: '#9B59B6', name: 'Traducteur', description: 'Traduire 100+ messages' },
+        fidele: { field: 'memberDays', threshold: 30, icon: 'calendar.badge.checkmark', color: '#F8B500', name: 'Fidele', description: 'Membre pendant 30+ jours' },
+        populaire: { field: 'friendRequestsReceived', threshold: 50, icon: 'star.fill', color: '#E91E63', name: 'Populaire', description: "Recevoir 50+ demandes d'amis" },
+      } as const;
 
-      const stats = {
-        messagesSent,
-        messagesReceived,
-        conversationsCount: totalConversations,
-        groupsCount,
-        totalConversations,
-        averageResponseTime: undefined,
-        lastActivity: user.lastActiveAt || user.createdAt
+      const numericStats: Record<string, number> = {
+        totalMessages, totalConversations, totalTranslations, friendRequestsReceived, languagesUsed, memberDays,
       };
+
+      const achievements = Object.entries(ACHIEVEMENT_THRESHOLDS).map(([key, config]) => {
+        const current = numericStats[config.field] ?? 0;
+        const progress = Math.min(current / config.threshold, 1);
+        return {
+          id: key, name: config.name, description: config.description,
+          icon: config.icon, color: config.color,
+          isUnlocked: current >= config.threshold, progress, threshold: config.threshold, current,
+        };
+      });
 
       return reply.send({
         success: true,
-        data: stats
+        data: {
+          totalMessages, totalConversations, totalTranslations,
+          friendRequestsReceived, languagesUsed, memberDays,
+          languages, achievements,
+        },
       });
 
     } catch (error) {

@@ -81,7 +81,7 @@ struct ConversationListView: View {
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
-    @State private var conversationInfoConversation: Conversation? = nil
+    @State var conversationInfoConversation: Conversation? = nil
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
@@ -103,6 +103,9 @@ struct ConversationListView: View {
 
     // Widget preview state
     @State var showWidgetPreview = false
+
+    // Communities data (replaces SampleData)
+    @State var userCommunities: [MeeshyCommunity] = []
 
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
@@ -261,6 +264,9 @@ struct ConversationListView: View {
                 draggingConversation = conversation
                 HapticFeedback.medium()
                 return NSItemProvider(object: conversation.id as NSString)
+            }
+            .contextMenu {
+                conversationContextMenu(for: conversation)
             }
         }
     }
@@ -515,6 +521,7 @@ struct ConversationListView: View {
         }
         .task {
             await conversationViewModel.loadConversations()
+            await loadUserCommunities()
         }
         .onChange(of: conversationViewModel.userCategories) { _, categories in
             for cat in categories where cat.isExpanded {
@@ -710,6 +717,16 @@ struct ConversationListView: View {
         }
 
         return true
+    }
+
+    // MARK: - Load Communities
+    private func loadUserCommunities() async {
+        do {
+            let response = try await CommunityService.shared.list(offset: 0, limit: 10)
+            userCommunities = response.data.map { $0.toCommunity() }
+        } catch {
+            print("[ConversationListView] Error loading communities: \(error)")
+        }
     }
 
     // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar

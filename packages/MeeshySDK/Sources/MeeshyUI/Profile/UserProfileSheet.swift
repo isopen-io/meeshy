@@ -11,18 +11,27 @@ public struct UserProfileSheet: View {
     public var isBlockedByTarget: Bool = false
     public var isLoading: Bool = false
     public var fullUser: MeeshyUser?
+    public var userStats: UserStats?
+    public var isLoadingStats: Bool = false
     public var onNavigateToConversation: ((MeeshyConversation) -> Void)?
     public var onSendMessage: (() -> Void)?
     public var onBlock: (() -> Void)?
     public var onUnblock: (() -> Void)?
     public var onConnectionRequest: (() -> Void)?
     public var onDismiss: (() -> Void)?
+    public var onLoadStats: (() async -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var selectedTab: ProfileTab = .profile
     @State private var showFullscreenImage = false
     @State private var fullscreenImageURL: String? = nil
     @State private var fullscreenImageFallback: String = ""
+    @State private var internalFullUser: MeeshyUser?
+    @State private var internalUserStats: UserStats?
+    @State private var internalConversations: [MeeshyConversation] = []
+    @State private var internalIsLoading = false
+    @State private var internalIsLoadingStats = false
+    @State private var internalIsLoadingConversations = false
 
     public init(
         user: ProfileSheetUser,
@@ -32,12 +41,15 @@ public struct UserProfileSheet: View {
         isBlockedByTarget: Bool = false,
         isLoading: Bool = false,
         fullUser: MeeshyUser? = nil,
+        userStats: UserStats? = nil,
+        isLoadingStats: Bool = false,
         onNavigateToConversation: ((MeeshyConversation) -> Void)? = nil,
         onSendMessage: (() -> Void)? = nil,
         onBlock: (() -> Void)? = nil,
         onUnblock: (() -> Void)? = nil,
         onConnectionRequest: (() -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
+        onDismiss: (() -> Void)? = nil,
+        onLoadStats: (() async -> Void)? = nil
     ) {
         self.user = user
         self.conversations = conversations
@@ -46,12 +58,15 @@ public struct UserProfileSheet: View {
         self.isBlockedByTarget = isBlockedByTarget
         self.isLoading = isLoading
         self.fullUser = fullUser
+        self.userStats = userStats
+        self.isLoadingStats = isLoadingStats
         self.onNavigateToConversation = onNavigateToConversation
         self.onSendMessage = onSendMessage
         self.onBlock = onBlock
         self.onUnblock = onUnblock
         self.onConnectionRequest = onConnectionRequest
         self.onDismiss = onDismiss
+        self.onLoadStats = onLoadStats
     }
 
     private var resolvedAccent: String {
@@ -59,8 +74,30 @@ public struct UserProfileSheet: View {
     }
 
     private var displayUser: ProfileSheetUser {
-        guard let full = fullUser else { return user }
-        return ProfileSheetUser.from(user: full)
+        // Priorité : fullUser fourni > internalFullUser chargé > user de base
+        if let full = fullUser {
+            return ProfileSheetUser.from(user: full)
+        }
+        if let loaded = internalFullUser {
+            return ProfileSheetUser.from(user: loaded)
+        }
+        return user
+    }
+
+    private var effectiveIsLoading: Bool {
+        isLoading || internalIsLoading
+    }
+
+    private var effectiveUserStats: UserStats? {
+        userStats ?? internalUserStats
+    }
+
+    private var effectiveIsLoadingStats: Bool {
+        isLoadingStats || internalIsLoadingStats
+    }
+
+    private var effectiveConversations: [MeeshyConversation] {
+        conversations.isEmpty ? internalConversations : conversations
     }
 
     public var body: some View {
@@ -273,7 +310,7 @@ public struct UserProfileSheet: View {
             // Tab Content
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 16) {
-                    if isLoading {
+                    if effectiveIsLoading {
                         loadingPlaceholder
                             .padding(.horizontal, 20)
                             .padding(.top, 16)
@@ -293,6 +330,59 @@ public struct UserProfileSheet: View {
                 .padding(.top, 16)
             }
         }
+        .task {
+            // Auto-load full user data if not provided
+            await loadDataIfNeeded()
+            // Auto-load shared conversations
+            await loadConversationsIfNeeded()
+        }
+    }
+
+    // MARK: - Auto-loading
+
+    private func loadDataIfNeeded() async {
+        // Si fullUser déjà fourni, ne rien faire
+        guard fullUser == nil, let userId = user.userId else { return }
+
+        // Charger le profil complet
+        internalIsLoading = true
+        do {
+            let fetchedUser = try await UserProfileCacheManager.shared.profile(for: userId)
+            internalFullUser = fetchedUser
+        } catch {
+            // Silent fail - utilisera les données de base
+        }
+        internalIsLoading = false
+    }
+
+    private func loadStatsIfNeeded() async {
+        // Si userStats déjà fourni ou onLoadStats fourni, ne rien faire
+        guard userStats == nil, onLoadStats == nil, let userId = user.userId else { return }
+
+        // Charger les stats
+        internalIsLoadingStats = true
+        do {
+            let fetchedStats = try await UserProfileCacheManager.shared.stats(for: userId)
+            internalUserStats = fetchedStats
+        } catch {
+            // Silent fail
+        }
+        internalIsLoadingStats = false
+    }
+
+    private func loadConversationsIfNeeded() async {
+        // Si conversations déjà fournies, ne rien faire
+        guard conversations.isEmpty, let userId = user.userId else { return }
+
+        // Charger les conversations en commun
+        internalIsLoadingConversations = true
+        do {
+            let apiConversations = try await UserProfileCacheManager.shared.sharedConversations(with: userId)
+            internalConversations = apiConversations.map { $0.toConversation(currentUserId: "") }
+        } catch {
+            // Silent fail
+        }
+        internalIsLoadingConversations = false
     }
 
     // MARK: - Profile Tab
@@ -308,6 +398,33 @@ public struct UserProfileSheet: View {
             languagePills
                 .padding(.horizontal, 20)
 
+            // Profile completion ring
+            if let completionRate = displayUser.profileCompletionRate {
+                ProfileCompletionRing(progress: Double(completionRate) / 100.0)
+                    .padding(.vertical, 8)
+            }
+
+            // Timezone + Country chips
+            if displayUser.timezone != nil || displayUser.registrationCountry != nil {
+                HStack(spacing: 8) {
+                    if let tz = displayUser.timezone {
+                        infoChip(icon: "clock.fill", text: tz)
+                    }
+                    if let country = displayUser.registrationCountry {
+                        let countryName = CountryFlag.name(for: country) ?? country
+                        let flag = CountryFlag.emoji(for: country)
+                        infoChip(icon: flag, text: countryName)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+
+            // E2EE badge
+            if displayUser.hasE2EE {
+                e2eeBadge
+                    .padding(.horizontal, 20)
+            }
+
             if !isCurrentUser {
                 actionButtons
                     .padding(.horizontal, 20)
@@ -319,12 +436,39 @@ public struct UserProfileSheet: View {
     @ViewBuilder
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            sendMessageButton
-
             if let onConnectionRequest {
                 connectionRequestButton(action: onConnectionRequest)
             }
+
+            // Block button (only if not blocked and callback provided)
+            if !isBlocked, let onBlock {
+                blockButton(action: onBlock)
+            }
         }
+    }
+
+    private func blockButton(action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.medium()
+            action()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Bloquer cet utilisateur")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(theme.error)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(theme.error.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(theme.error.opacity(0.3), lineWidth: 1.5)
+            )
+        }
+        .pressable()
     }
 
     private func connectionRequestButton(action: @escaping () -> Void) -> some View {
@@ -355,12 +499,36 @@ public struct UserProfileSheet: View {
 
     @ViewBuilder
     private var conversationsTabContent: some View {
-        if conversations.isEmpty {
-            emptyConversationsView
-                .padding(.top, 40)
+        if effectiveConversations.isEmpty {
+            // Empty state: affiche le bouton Send Message
+            VStack(spacing: 16) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 32))
+                    .foregroundColor(theme.textMuted.opacity(0.6))
+
+                Text("Aucune conversation en commun")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                if let onSendMessage, !isBlocked, !isBlockedByTarget {
+                    sendMessageButton
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         } else {
             VStack(spacing: 0) {
-                ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conv in
+                // Bouton Send Message en tête si conversations existent
+                if let onSendMessage, !isBlocked, !isBlockedByTarget {
+                    sendMessageButton
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
+                }
+
+                ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
                     Button {
                         HapticFeedback.light()
                         onNavigateToConversation?(conv)
@@ -390,7 +558,7 @@ public struct UserProfileSheet: View {
                     }
                     .staggeredAppear(index: index)
 
-                    if index < conversations.count - 1 {
+                    if index < effectiveConversations.count - 1 {
                         Divider()
                             .padding(.leading, 64)
                             .opacity(0.3)
@@ -400,25 +568,12 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private var emptyConversationsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 32))
-                .foregroundColor(theme.textMuted.opacity(0.6))
-
-            Text("Aucune conversation en commun")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-    }
-
     // MARK: - Stats Tab
 
     @ViewBuilder
     private var statsTabContent: some View {
         VStack(spacing: 12) {
+            // Stats de base (toujours visibles)
             if let createdAt = displayUser.createdAt {
                 statCard(
                     icon: "calendar",
@@ -428,20 +583,105 @@ public struct UserProfileSheet: View {
                 .padding(.horizontal, 20)
             }
 
-            statCard(
-                icon: "bubble.left.and.bubble.right.fill",
-                label: "Conversations en commun",
-                value: "\(conversations.count)"
+            // Stats détaillées (si chargées)
+            if let stats = effectiveUserStats {
+                detailedStatsSection(stats: stats)
+            } else if effectiveIsLoadingStats {
+                loadingStatsPlaceholder
+                    .padding(.horizontal, 20)
+            } else {
+                // Trigger load on appear
+                Color.clear
+                    .frame(height: 1)
+                    .onAppear {
+                        Task {
+                            if let onLoadStats {
+                                await onLoadStats()
+                            } else {
+                                await loadStatsIfNeeded()
+                            }
+                        }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func detailedStatsSection(stats: UserStats) -> some View {
+        VStack(spacing: 12) {
+            // Stats cards
+            StatsCard(
+                icon: "paperplane.fill",
+                label: "Messages envoyés",
+                value: "\(stats.totalMessages)",
+                accentColor: resolvedAccent
             )
             .padding(.horizontal, 20)
 
-            if !isCurrentUser {
-                statCard(
-                    icon: "person.2.fill",
-                    label: "Statut de connexion",
-                    value: "Non connecté"
-                )
+            StatsCard(
+                icon: "character.book.closed.fill",
+                label: "Traductions",
+                value: "\(stats.totalTranslations)",
+                accentColor: resolvedAccent
+            )
+            .padding(.horizontal, 20)
+
+            StatsCard(
+                icon: "globe",
+                label: "Langues utilisées",
+                value: "\(stats.languagesUsed)",
+                accentColor: resolvedAccent
+            )
+            .padding(.horizontal, 20)
+
+            StatsCard(
+                icon: "calendar.badge.checkmark",
+                label: "Jours d'ancienneté",
+                value: "\(stats.memberDays)",
+                accentColor: resolvedAccent
+            )
+            .padding(.horizontal, 20)
+
+            // Achievements section
+            if !stats.achievements.isEmpty {
+                achievementsSection(achievements: stats.achievements)
+                    .padding(.top, 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func achievementsSection(achievements: [Achievement]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Succès")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
                 .padding(.horizontal, 20)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ],
+                spacing: 16
+            ) {
+                ForEach(Array(achievements.enumerated()), id: \.element.id) { index, achievement in
+                    AchievementBadge(achievement: achievement)
+                        .staggeredAppear(index: index)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var loadingStatsPlaceholder: some View {
+        VStack(spacing: 12) {
+            ForEach(0..<3, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
+                    .frame(height: 60)
+                    .shimmer()
             }
         }
     }
@@ -483,6 +723,55 @@ public struct UserProfileSheet: View {
         .padding(16)
         .background(theme.surfaceGradient(tint: resolvedAccent))
         .glassCard(cornerRadius: 16)
+    }
+
+    // MARK: - Info Chip
+
+    private func infoChip(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            if icon.count > 1 {
+                // Emoji flag
+                Text(icon)
+                    .font(.system(size: 14))
+            } else {
+                // SF Symbol
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: resolvedAccent))
+            }
+            Text(text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule().stroke(theme.border(tint: resolvedAccent, intensity: 0.2), lineWidth: 1)
+        )
+    }
+
+    // MARK: - E2EE Badge
+
+    private var e2eeBadge: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(hex: "2ECC71"))
+
+            Text("Chiffrement de bout en bout activé")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(hex: "2ECC71"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(hex: "2ECC71").opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(hex: "2ECC71").opacity(0.3), lineWidth: 1.5)
+        )
     }
 
     // MARK: - Language Pills

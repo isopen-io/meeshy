@@ -222,7 +222,7 @@ struct ThemedConversationRow: View {
                 storyState: avatarStoryState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceManager.presenceState(for: conversation.participantUserId ?? "") : .offline,
-                onViewProfile: onViewProfile,
+                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
                 onViewStory: onViewStory,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {

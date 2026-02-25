@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import WidgetKit
 import MeeshySDK
 
 // MARK: - API Category Model
@@ -93,14 +94,16 @@ class ConversationListViewModel: ObservableObject {
 
     private func syncBadgeOnUnreadChange() {
         $conversations
-            .map { $0.reduce(0) { $0 + $1.unreadCount } }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] total in
+            .removeDuplicates { $0.map(\.id) == $1.map(\.id) && $0.map(\.unreadCount) == $1.map(\.unreadCount) }
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] conversations in
                 guard self != nil else { return }
+                let total = conversations.reduce(0) { $0 + $1.unreadCount }
                 Task {
                     await PushNotificationManager.shared.updateBadge(totalUnread: total)
                 }
+                WidgetDataManager.shared.updateConversations(conversations)
+                WidgetDataManager.shared.updateFavoriteContacts(conversations)
             }
             .store(in: &cancellables)
     }

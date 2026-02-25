@@ -149,4 +149,14 @@ public final class CommunityService {
         )
         return response.data
     }
+
+    // MARK: - Add Conversation to Community
+
+    public func addConversation(communityId: String, conversationId: String) async throws -> APIConversation {
+        let response: APIResponse<APIConversation> = try await api.request(
+            endpoint: "/communities/\(communityId)/conversations/\(conversationId)",
+            method: "POST"
+        )
+        return response.data
+    }
 }

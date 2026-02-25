@@ -10,6 +10,9 @@ final class UserProfileViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isBlocked = false
     @Published var isBlockedByTarget = false
+    @Published var userStats: UserStats?
+    @Published var isLoadingStats = false
+    @Published var statsError: String?
 
     var isCurrentUser: Bool {
         guard let currentId = AuthManager.shared.currentUser?.id else { return false }
@@ -27,11 +30,25 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let user = try await UserService.shared.getProfile(idOrUsername: userId)
+            let user = try await UserProfileCacheManager.shared.profile(for: userId)
             fullUser = user
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
         } catch {}
+    }
+
+    func loadUserStats() async {
+        guard let userId = profileUser.userId else { return }
+        isLoadingStats = true
+        statsError = nil
+        defer { isLoadingStats = false }
+
+        do {
+            let stats = try await UserProfileCacheManager.shared.stats(for: userId)
+            userStats = stats
+        } catch {
+            statsError = "Impossible de charger les statistiques"
+        }
     }
 
     func findSharedConversations(from allConversations: [Conversation]) {

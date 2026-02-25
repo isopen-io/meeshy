@@ -139,13 +139,18 @@ public struct SendMessageRequest: Encodable {
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
     public var expiresAt: Date?
+    public var ephemeralDuration: Int?
+    public var isViewOnce: Bool?
+    public var maxViewOnceCount: Int?
     public var isBlurred: Bool?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isBlurred: Bool? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
-        self.expiresAt = expiresAt; self.isBlurred = isBlurred
+        self.expiresAt = expiresAt; self.ephemeralDuration = ephemeralDuration
+        self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
+        self.isBlurred = isBlurred
     }
 }
 

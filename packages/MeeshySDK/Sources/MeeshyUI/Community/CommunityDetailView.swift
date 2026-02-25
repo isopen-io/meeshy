@@ -10,17 +10,24 @@ public struct CommunityDetailView: View {
     public var onOpenSettings: ((MeeshyCommunity) -> Void)? = nil
     public var onOpenMembers: ((String) -> Void)? = nil
     public var onInvite: ((String) -> Void)? = nil
+    public var onDismiss: (() -> Void)? = nil
+
+    @State private var showLeaveConfirm = false
+    @State private var showAddChannel = false
+    @State private var isLeaving = false
 
     public init(communityId: String,
                 onSelectConversation: ((APIConversation) -> Void)? = nil,
                 onOpenSettings: ((MeeshyCommunity) -> Void)? = nil,
                 onOpenMembers: ((String) -> Void)? = nil,
-                onInvite: ((String) -> Void)? = nil) {
+                onInvite: ((String) -> Void)? = nil,
+                onDismiss: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
         self.onInvite = onInvite
+        self.onDismiss = onDismiss
     }
 
     public var body: some View {
@@ -33,6 +40,7 @@ public struct CommunityDetailView: View {
             } else if let community = viewModel.community {
                 ScrollView {
                     VStack(spacing: 0) {
+                        navigationHeader(community)
                         headerSection(community)
                         statsSection(community)
                         actionsSection(community)
@@ -51,6 +59,83 @@ public struct CommunityDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
+        .alert("Quitter la communaute ?", isPresented: $showLeaveConfirm) {
+            Button("Annuler", role: .cancel) {}
+            Button("Quitter", role: .destructive) {
+                Task {
+                    isLeaving = true
+                    await viewModel.leaveCommunity()
+                    isLeaving = false
+                    if onDismiss != nil {
+                        onDismiss?()
+                    } else {
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text("Vous ne pourrez plus acceder aux channels de cette communaute.")
+        }
+        .sheet(isPresented: $showAddChannel) {
+            AddChannelSheet(
+                communityId: viewModel.communityId,
+                onAdded: { Task { await viewModel.load() } }
+            )
+        }
+    }
+
+    // MARK: - Navigation Header
+
+    @ViewBuilder
+    private func navigationHeader(_ community: MeeshyCommunity) -> some View {
+        HStack {
+            Button {
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+
+            Spacer()
+
+            if viewModel.isMember {
+                Menu {
+                    if viewModel.isAdmin {
+                        Button {
+                            onOpenSettings?(community)
+                        } label: {
+                            Label("Reglages", systemImage: "gearshape.fill")
+                        }
+                    }
+
+                    if !viewModel.isCreator {
+                        Button(role: .destructive) {
+                            showLeaveConfirm = true
+                        } label: {
+                            Label("Quitter", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Header
@@ -101,9 +186,14 @@ public struct CommunityDetailView: View {
             )
             .frame(width: 80, height: 80)
             .overlay {
-                Text(String(community.name.prefix(2)).uppercased())
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                if !community.emoji.isEmpty {
+                    Text(community.emoji)
+                        .font(.system(size: 36))
+                } else {
+                    Text(String(community.name.prefix(2)).uppercased())
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
             }
             .shadow(color: Color(hex: color).opacity(0.3), radius: 10, y: 4)
     }
@@ -144,26 +234,56 @@ public struct CommunityDetailView: View {
 
     @ViewBuilder
     private func actionsSection(_ community: MeeshyCommunity) -> some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 12) {
             if viewModel.isMember {
-                actionButton(icon: "person.2.fill", title: "Members") {
-                    onOpenMembers?(community.id)
+                HStack(spacing: 12) {
+                    actionButton(icon: "person.2.fill", title: "Membres") {
+                        onOpenMembers?(community.id)
+                    }
+
+                    actionButton(icon: "person.badge.plus", title: "Inviter") {
+                        onInvite?(community.id)
+                    }
+
+                    if viewModel.isAdmin {
+                        actionButton(icon: "plus.bubble.fill", title: "Channel") {
+                            showAddChannel = true
+                        }
+                    }
+
+                    actionButton(icon: "gearshape.fill", title: "Reglages") {
+                        onOpenSettings?(community)
+                    }
                 }
 
-                actionButton(icon: "person.badge.plus", title: "Invite") {
-                    onInvite?(community.id)
-                }
-
-                actionButton(icon: "gearshape.fill", title: "Settings") {
-                    onOpenSettings?(community)
+                if !viewModel.isCreator {
+                    Button {
+                        showLeaveConfirm = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Quitter la communaute")
+                        }
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(Color(hex: "FF2E63"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color(hex: "FF2E63").opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
                 }
             } else {
                 Button {
                     Task { await viewModel.joinCommunity() }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Join Community")
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Rejoindre la communaute")
+                        }
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
@@ -178,6 +298,7 @@ public struct CommunityDetailView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .disabled(viewModel.isLoading)
             }
         }
         .padding(.horizontal, 16)
@@ -278,6 +399,9 @@ final class CommunityDetailViewModel: ObservableObject {
     @Published var community: MeeshyCommunity?
     @Published var conversations: [APIConversation] = []
     @Published var isMember = false
+    @Published var isCreator = false
+    @Published var isAdmin = false
+    @Published var currentUserRole: CommunityRole = .member
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -296,7 +420,20 @@ final class CommunityDetailViewModel: ObservableObject {
             community = apiCommunity.toCommunity()
 
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            isMember = apiCommunity.members?.contains(where: { $0.userId == currentUserId }) ?? false
+            let creatorMatch = apiCommunity.createdBy == currentUserId
+            let memberRecord = apiCommunity.members?.first(where: { $0.userId == currentUserId })
+            let inMemberList = memberRecord != nil
+
+            isCreator = creatorMatch
+            isMember = creatorMatch || inMemberList
+
+            if let record = memberRecord {
+                currentUserRole = record.communityRole
+            } else if creatorMatch {
+                currentUserRole = .admin
+            }
+
+            isAdmin = currentUserRole == .admin || isCreator
 
             if isMember {
                 conversations = try await CommunityService.shared.getConversations(communityId: communityId)
@@ -307,9 +444,236 @@ final class CommunityDetailViewModel: ObservableObject {
     }
 
     func joinCommunity() async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             _ = try await CommunityService.shared.join(communityId: communityId)
             await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func leaveCommunity() async {
+        do {
+            try await CommunityService.shared.leave(communityId: communityId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Add Channel Sheet
+
+struct AddChannelSheet: View {
+    let communityId: String
+    let onAdded: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var conversations: [APIConversation] = []
+    @State private var isLoading = true
+    @State private var isLoadingMore = false
+    @State private var hasMore = false
+    @State private var currentOffset = 0
+    @State private var isAdding: String? = nil
+    @State private var errorMessage: String?
+    @State private var searchText = ""
+    @State private var showMoveConfirm = false
+    @State private var pendingMoveConversation: APIConversation?
+
+    private let pageSize = 20
+
+    private var filtered: [APIConversation] {
+        guard !searchText.isEmpty else { return conversations }
+        return conversations.filter { conv in
+            let title = conv.title ?? conv.identifier ?? ""
+            return title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                if isLoading && conversations.isEmpty {
+                    ProgressView()
+                        .tint(Color(hex: "A855F7"))
+                } else if filtered.isEmpty && !isLoading {
+                    emptyState
+                } else {
+                    conversationList
+                }
+            }
+            .navigationTitle("Ajouter un channel")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "Rechercher une conversation...")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+        }
+        .task { await loadConversations() }
+        .presentationDetents([.medium, .large])
+        .alert("Deplacer cette conversation ?", isPresented: $showMoveConfirm) {
+            Button("Annuler", role: .cancel) {
+                pendingMoveConversation = nil
+            }
+            Button("Deplacer") {
+                if let conv = pendingMoveConversation {
+                    Task { await addConversation(conv) }
+                }
+                pendingMoveConversation = nil
+            }
+        } message: {
+            Text("Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci.")
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40))
+                .foregroundColor(theme.textMuted)
+            Text(searchText.isEmpty ? "Aucune conversation disponible" : "Aucun resultat")
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(theme.textSecondary)
+            if searchText.isEmpty {
+                Text("Creez d'abord une conversation pour l'ajouter ici.")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+        }
+    }
+
+    private var conversationList: some View {
+        List {
+            ForEach(filtered, id: \.id) { conversation in
+                Button {
+                    handleTap(conversation)
+                } label: {
+                    channelRow(conversation)
+                }
+                .disabled(isAdding != nil)
+                .listRowBackground(theme.backgroundSecondary.opacity(0.3))
+            }
+
+            if hasMore && searchText.isEmpty {
+                HStack {
+                    Spacer()
+                    if isLoadingMore {
+                        ProgressView()
+                            .tint(Color(hex: "A855F7"))
+                    }
+                    Spacer()
+                }
+                .listRowBackground(Color.clear)
+                .task { await loadMore() }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func channelRow(_ conversation: APIConversation) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "number")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color(hex: "A855F7"))
+                .frame(width: 32, height: 32)
+                .background(Color(hex: "A855F7").opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(conversation.title ?? conversation.identifier ?? "Conversation")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    if let count = conversation.memberCount {
+                        Label("\(count)", systemImage: "person.2.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+
+                    if conversation.communityId != nil {
+                        Label("Autre communaute", systemImage: "arrow.triangle.swap")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: "F59E0B"))
+                    }
+                }
+            }
+
+            Spacer()
+
+            if isAdding == conversation.id {
+                ProgressView()
+                    .tint(Color(hex: "A855F7"))
+            } else if conversation.communityId != nil {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color(hex: "F59E0B"))
+            } else {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color(hex: "A855F7"))
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func handleTap(_ conversation: APIConversation) {
+        if conversation.communityId != nil && conversation.communityId != communityId {
+            pendingMoveConversation = conversation
+            showMoveConfirm = true
+        } else {
+            Task { await addConversation(conversation) }
+        }
+    }
+
+    private func loadConversations() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let response = try await ConversationService.shared.list(offset: 0, limit: pageSize)
+            conversations = response.data.filter { $0.communityId != communityId }
+            currentOffset = conversations.count
+            hasMore = response.data.count >= pageSize
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func loadMore() async {
+        guard !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        do {
+            let response = try await ConversationService.shared.list(offset: currentOffset, limit: pageSize)
+            let newItems = response.data.filter { $0.communityId != communityId }
+            conversations.append(contentsOf: newItems)
+            currentOffset += response.data.count
+            hasMore = response.data.count >= pageSize
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func addConversation(_ conversation: APIConversation) async {
+        isAdding = conversation.id
+        defer { isAdding = nil }
+
+        do {
+            _ = try await CommunityService.shared.addConversation(communityId: communityId, conversationId: conversation.id)
+            conversations.removeAll { $0.id == conversation.id }
+            onAdded()
         } catch {
             errorMessage = error.localizedDescription
         }

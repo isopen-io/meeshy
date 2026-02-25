@@ -190,6 +190,12 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let translateToRegionalLanguage: Bool?
     public let useCustomDestination: Bool?
 
+    // Profile enrichment
+    public let timezone: String?
+    public let registrationCountry: String?
+    public let profileCompletionRate: Int?
+    public let signalIdentityKeyPublic: String?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -207,7 +213,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         autoTranslateEnabled: Bool? = nil,
         translateToSystemLanguage: Bool? = nil,
         translateToRegionalLanguage: Bool? = nil,
-        useCustomDestination: Bool? = nil
+        useCustomDestination: Bool? = nil,
+        timezone: String? = nil,
+        registrationCountry: String? = nil,
+        profileCompletionRate: Int? = nil,
+        signalIdentityKeyPublic: String? = nil
     ) {
         self.id = id
         self.username = username
@@ -238,6 +248,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.translateToSystemLanguage = translateToSystemLanguage
         self.translateToRegionalLanguage = translateToRegionalLanguage
         self.useCustomDestination = useCustomDestination
+        self.timezone = timezone
+        self.registrationCountry = registrationCountry
+        self.profileCompletionRate = profileCompletionRate
+        self.signalIdentityKeyPublic = signalIdentityKeyPublic
     }
 }
 

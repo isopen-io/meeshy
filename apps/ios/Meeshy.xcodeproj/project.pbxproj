@@ -111,6 +111,7 @@
 		FF55AA66BB77CC880001DD02 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF55AA66BB77CC880001EE02 /* ConversationViewModel.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
 		GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */; };
+		WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDMGR001A001A001A00001 /* WidgetDataManager.swift */; };
 		GS3200000000002F32 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3200000000001F32 /* GlobalSearchView.swift */; };
 		GS3300000000002F33 /* GlobalSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = GS3300000000001F33 /* GlobalSearchViewModel.swift */; };
 		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
@@ -261,6 +262,7 @@
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
 		CC2300000000001F23 /* ConversationLockSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockSheet.swift; sourceTree = "<group>"; };
 		CC2400000000001F24 /* ConversationLockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockManager.swift; sourceTree = "<group>"; };
+		WDMGR001A001A001A00001 /* WidgetDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetDataManager.swift; sourceTree = "<group>"; };
 		CC4000000000001F40 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		CM3600000000001F36 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
@@ -539,6 +541,7 @@
 				TM2800000000001F28 /* ToastManager.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
 				WR3700000000001F37 /* WebRTCService.swift */,
+				WDMGR001A001A001A00001 /* WidgetDataManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -834,6 +837,7 @@
 				AACC00220033FF01 /* AudioRecorderManager.swift in Sources */,
 				CC2300000000002F23 /* ConversationLockSheet.swift in Sources */,
 				CC2400000000002F24 /* ConversationLockManager.swift in Sources */,
+				WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */,
 				RR1100000000002F01 /* Router.swift in Sources */,
 				DL1100000000002F01 /* DeepLinkRouter.swift in Sources */,
 				FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */,

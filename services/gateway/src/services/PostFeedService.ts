@@ -154,8 +154,11 @@ export class PostFeedService {
 
   async getStories(userId: string) {
     const now = new Date();
-    const friendIds = await this.getFriendIds(userId);
-    const viewerIds = [userId, ...friendIds];
+    const [friendIds, dmContactIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+    ]);
+    const viewerIds = [...new Set([userId, ...friendIds, ...dmContactIds])];
 
     const stories = await this.prisma.post.findMany({
       where: {
@@ -377,6 +380,29 @@ export class PostFeedService {
         { visibility: 'ONLY', visibilityUserIds: { has: viewerId } },
       ],
     };
+  }
+
+  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
+    try {
+      const myMemberships = await this.prisma.conversationMember.findMany({
+        where: { userId, isActive: true, conversation: { type: 'direct' } },
+        select: { conversationId: true },
+      });
+      const conversationIds = myMemberships.map((m) => m.conversationId);
+      if (conversationIds.length === 0) return [];
+
+      const otherMembers = await this.prisma.conversationMember.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          userId: { not: userId },
+          isActive: true,
+        },
+        select: { userId: true },
+      });
+      return [...new Set(otherMembers.map((m) => m.userId))];
+    } catch {
+      return [];
+    }
   }
 
   private async getFriendIds(userId: string): Promise<string[]> {

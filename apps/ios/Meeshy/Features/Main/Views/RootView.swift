@@ -96,8 +96,7 @@ struct RootView: View {
                                 router.push(.communityCreate)
                             }
                         )
-                        .navigationTitle("Communities")
-                        .navigationBarTitleDisplayMode(.inline)
+                        .navigationBarHidden(true)
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -114,7 +113,8 @@ struct RootView: View {
                             },
                             onInvite: { id in
                                 router.push(.communityInvite(id))
-                            }
+                            },
+                            onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
                     case .communityCreate:
@@ -559,18 +559,18 @@ private struct ProfileFetchingSheet: View {
     @State private var isLoading = true
     @State private var fullUser: MeeshyUser?
     @State private var fetchError: String?
+    @State private var isCreatingDM = false
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var conversationViewModel: ConversationListViewModel
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Group {
             if let fetchError {
                 errorView(fetchError)
             } else {
-                UserProfileSheet(
-                    user: user,
-                    isLoading: isLoading,
-                    fullUser: fullUser
-                )
+                profileSheet
             }
         }
         .presentationDetents([.medium, .large])
@@ -595,6 +595,67 @@ private struct ProfileFetchingSheet: View {
                 fetchError = "Impossible de charger ce profil."
             }
             isLoading = false
+        }
+    }
+
+    private var profileSheet: some View {
+        UserProfileSheet(
+            user: user,
+            isLoading: isLoading,
+            fullUser: fullUser,
+            onNavigateToConversation: { conversation in
+                handleNavigateToConversation(conversation)
+            },
+            onSendMessage: { handleSendMessage() },
+            onDismiss: { dismiss() }
+        )
+    }
+
+    private func handleNavigateToConversation(_ conversation: MeeshyConversation) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            let conv = Conversation(
+                id: conversation.id,
+                identifier: conversation.id,
+                type: conversation.type,
+                title: conversation.name,
+                lastMessageAt: Date(),
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            router.navigateToConversation(conv)
+        }
+    }
+
+    private func handleSendMessage() {
+        guard let targetUserId = fullUser?.id ?? user.userId, !isCreatingDM else { return }
+        isCreatingDM = true
+        Task {
+            defer { isCreatingDM = false }
+            if let existingConv = conversationViewModel.conversations.first(where: {
+                $0.type == .direct && $0.participantUserId == targetUserId
+            }) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    router.navigateToConversation(existingConv)
+                }
+                return
+            }
+            do {
+                let response = try await ConversationService.shared.create(
+                    type: "direct",
+                    participantIds: [targetUserId]
+                )
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                let apiConv = try await ConversationService.shared.getById(response.id)
+                let conv = apiConv.toConversation(currentUserId: currentUserId)
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    router.navigateToConversation(conv)
+                }
+            } catch {
+                ToastManager.shared.showError("Impossible de creer la conversation")
+            }
         }
     }
 

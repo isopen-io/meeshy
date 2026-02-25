@@ -41,4 +41,16 @@ public final class ConversationService {
         )
         return response.data
     }
+
+    /// Récupère les conversations en commun avec un utilisateur spécifique
+    public func listSharedWith(userId: String, limit: Int = 50) async throws -> [APIConversation] {
+        let response: APIResponse<[APIConversation]> = try await api.request(
+            endpoint: "/conversations",
+            queryItems: [
+                URLQueryItem(name: "withUserId", value: userId),
+                URLQueryItem(name: "limit", value: "\(limit)")
+            ]
+        )
+        return response.data
+    }
 }
