@@ -105,13 +105,7 @@ struct ConversationMediaGalleryView: View {
                 EmptyView()
             }
 
-            // Caption overlay at bottom
-            if showControls, let caption = captionMap[attachment.id], !caption.isEmpty {
-                VStack {
-                    Spacer()
-                    captionOverlay(caption)
-                }
-            }
+            // Caption is now shown in controlsOverlay (bottom, below author info)
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -126,21 +120,13 @@ struct ConversationMediaGalleryView: View {
     private func captionOverlay(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(.white)
-            .multilineTextAlignment(.center)
+            .foregroundColor(.white.opacity(0.85))
+            .multilineTextAlignment(.leading)
             .lineLimit(4)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.7)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 120)
-            )
-            .padding(.bottom, 60)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.black.opacity(0.3))
     }
 
     // MARK: - Vertical-only drag gesture (does not capture horizontal → ScrollView paging works)
@@ -300,7 +286,7 @@ struct ConversationMediaGalleryView: View {
 
                 Spacer()
 
-                if currentIndex < allAttachments.count && allAttachments[currentIndex].type == .image {
+                if currentIndex < allAttachments.count {
                     Button { saveCurrentToPhotos() } label: {
                         Group {
                             switch saveState {
@@ -329,12 +315,14 @@ struct ConversationMediaGalleryView: View {
 
             Spacer()
 
-            // Bottom metadata overlay (author + dimensions)
+            // Bottom: author info always, caption below if present
             if currentIndex < allAttachments.count {
                 let att = allAttachments[currentIndex]
-                let hasCaption = captionMap[att.id]?.isEmpty == false
-                if !hasCaption {
+                VStack(spacing: 0) {
                     bottomMetadataOverlay(att)
+                    if let caption = captionMap[att.id], !caption.isEmpty {
+                        captionOverlay(caption)
+                    }
                 }
             }
         }
@@ -413,10 +401,21 @@ struct ConversationMediaGalleryView: View {
         HapticFeedback.light()
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let saved = await PhotoLibraryManager.shared.saveImage(data)
-                withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
-                saved ? HapticFeedback.success() : HapticFeedback.error()
+                if att.type == .video {
+                    let (tempURL, _) = try await URLSession.shared.download(from: url)
+                    let tempFile = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("save_\(UUID().uuidString).mp4")
+                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                    let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
+                    try? FileManager.default.removeItem(at: tempFile)
+                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
+                    saved ? HapticFeedback.success() : HapticFeedback.error()
+                } else {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let saved = await PhotoLibraryManager.shared.saveImage(data)
+                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
+                    saved ? HapticFeedback.success() : HapticFeedback.error()
+                }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 withAnimation { saveState = .idle }
             } catch {
