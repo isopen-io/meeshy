@@ -15,12 +15,15 @@ public struct ProfileSheetUser: Identifiable {
     public let regionalLanguage: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    public let createdAt: Date?
+    public let bannerURL: String?
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
         avatarURL: String? = nil, accentColor: String = "",
         bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
-        isOnline: Bool? = nil, lastActiveAt: Date? = nil
+        isOnline: Bool? = nil, lastActiveAt: Date? = nil,
+        createdAt: Date? = nil, bannerURL: String? = nil
     ) {
         self.userId = userId
         self.username = username
@@ -32,6 +35,8 @@ public struct ProfileSheetUser: Identifiable {
         self.regionalLanguage = regionalLanguage
         self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt
+        self.createdAt = createdAt
+        self.bannerURL = bannerURL
     }
 
     public var resolvedDisplayName: String {
@@ -102,6 +107,16 @@ extension ProfileSheetUser {
             }()
         }()
 
+        let createdAt: Date? = {
+            guard let str = user.createdAt else { return nil }
+            let fmt = ISO8601DateFormatter()
+            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return fmt.date(from: str) ?? {
+                fmt.formatOptions = [.withInternetDateTime]
+                return fmt.date(from: str)
+            }()
+        }()
+
         let resolvedDisplayName: String? = user.displayName ?? {
             let parts = [user.firstName, user.lastName].compactMap { $0 }.filter { !$0.isEmpty }
             return parts.isEmpty ? nil : parts.joined(separator: " ")
@@ -117,7 +132,9 @@ extension ProfileSheetUser {
             systemLanguage: user.systemLanguage,
             regionalLanguage: user.regionalLanguage,
             isOnline: user.isOnline,
-            lastActiveAt: lastActive
+            lastActiveAt: lastActive,
+            createdAt: createdAt,
+            bannerURL: user.banner
         )
     }
 }

@@ -122,6 +122,9 @@ public struct LanguagePickerSheet: View {
 
     @State private var searchText = ""
     @State private var selectedId: String?
+    @State private var sheetDragOffset: CGFloat = 0
+
+    private let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.65
 
     public init(
         style: Style = .dark,
@@ -143,10 +146,9 @@ public struct LanguagePickerSheet: View {
 
     public var body: some View {
         ZStack(alignment: .bottom) {
-            // Dimmed background
             (style == .dark ? Color.black.opacity(0.6) : Color.black.opacity(0.3))
                 .ignoresSafeArea()
-                .onTapGesture { onDismiss?() }
+                .onTapGesture { dismiss() }
 
             VStack(spacing: 0) {
                 dragHandle
@@ -154,12 +156,35 @@ public struct LanguagePickerSheet: View {
                 languageGrid
             }
             .frame(maxWidth: .infinity)
+            .frame(maxHeight: maxHeight)
             .background(sheetBackground)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 0)
+            .offset(y: max(sheetDragOffset, 0))
+            .gesture(sheetDragGesture)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         .ignoresSafeArea()
+    }
+
+    private var sheetDragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in sheetDragOffset = value.translation.height }
+            .onEnded { value in
+                let dy = value.translation.height
+                let velocity = value.predictedEndTranslation.height
+                if dy > 100 || velocity > 300 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        sheetDragOffset = 0
+                    }
+                }
+            }
+    }
+
+    private func dismiss() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { sheetDragOffset = maxHeight }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
     }
 
     // MARK: - Drag Handle

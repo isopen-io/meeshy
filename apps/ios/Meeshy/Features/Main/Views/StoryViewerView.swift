@@ -37,8 +37,8 @@ struct StoryViewerView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
-    @State private var showLanguageOptions = false
-    @State private var showFullLanguagePicker = false
+    @State var showLanguageOptions = false // internal for cross-file extension access
+    @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
 
     // === Transition states ===
@@ -131,20 +131,6 @@ struct StoryViewerView: View {
         .onDisappear {
             timerCancellable?.cancel()
         }
-        .sheet(isPresented: $showFullLanguagePicker) {
-            LanguagePickerSheet(style: .dark) { lang in
-                guard let story = currentStory else { return }
-                Task {
-                    let body: [String: String] = ["targetLanguage": lang.id]
-                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                        endpoint: "/posts/\(story.id)/translate",
-                        body: body
-                    )
-                }
-            } onDismiss: {
-                showFullLanguagePicker = false
-            }
-        }
     }
 
     // MARK: - Computed Card Transforms
@@ -205,9 +191,10 @@ struct StoryViewerView: View {
                     }
                 }
                 .opacity(outgoingOpacity)
-                .padding(.top, geometry.safeAreaInsets.top + 80)
+                .padding(.top, max(geometry.safeAreaInsets.top, 59) + 80)
                 .padding(.bottom, 120)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityHidden(true)
             }
 
             // === Layer 2: Media image/video (fills as background) ===
@@ -230,13 +217,14 @@ struct StoryViewerView: View {
                         ForEach(stickers, id: \.self) { sticker in
                             Text(sticker)
                                 .font(.system(size: 40))
+                                .accessibilityLabel("Sticker \(sticker)")
                         }
                     }
                 }
             }
             .opacity(contentOpacity)
             .offset(y: textSlideOffset)
-            .padding(.top, geometry.safeAreaInsets.top + 80)
+            .padding(.top, max(geometry.safeAreaInsets.top, 59) + 80)
             .padding(.bottom, 120)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -250,7 +238,7 @@ struct StoryViewerView: View {
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: geometry.safeAreaInsets.top + 110)
+                .frame(height: max(geometry.safeAreaInsets.top, 59) + 110)
                 Spacer()
                 LinearGradient(
                     stops: [
@@ -264,30 +252,35 @@ struct StoryViewerView: View {
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
             gestureOverlay(geometry: geometry)
 
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
+            // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
                 progressBars
-                    .padding(.top, geometry.safeAreaInsets.top + 2)
                     .padding(.horizontal, 12)
+                    .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
 
                 storyHeader
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
 
                 Spacer()
             }
 
-            // === Layer 8: Right action sidebar ===
-            HStack {
+            // === Layer 8: Right action sidebar — anchored to bottom-right, above composer ===
+            VStack(spacing: 0) {
                 Spacer()
-                storyActionSidebar
-                    .padding(.trailing, 10)
+                HStack {
+                    Spacer()
+                    storyActionSidebar
+                        .padding(.trailing, 6)
+                        .padding(.bottom, 90 + geometry.safeAreaInsets.bottom)
+                }
             }
-            .padding(.bottom, 100 + geometry.safeAreaInsets.bottom)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
@@ -299,6 +292,7 @@ struct StoryViewerView: View {
                     .rotationEffect(.degrees(bigReactionPhase == 1 ? -6 : (bigReactionPhase == 2 ? 12 : 0)))
                     .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
                     .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
 
             // Bottom area: composer + emoji panel / keyboard space
@@ -349,23 +343,53 @@ struct StoryViewerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(100)
             }
+
+            // === Layer 10: Full Language Picker overlay (transparent — story stays visible) ===
+            if showFullLanguagePicker {
+                LanguagePickerSheet(style: .dark) { lang in
+                    LanguageUsageTracker.recordUsage(languageId: lang.id)
+                    guard let story = currentStory else { return }
+                    Task {
+                        let body: [String: String] = ["targetLanguage": lang.id]
+                        let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                            endpoint: "/posts/\(story.id)/translate",
+                            body: body
+                        )
+                    }
+                } onDismiss: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showFullLanguagePicker = false
+                    }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(150)
+            }
         }
     }
 
     // MARK: - Right Action Sidebar
 
+    @State private var heartScale: CGFloat = 1.0
+
+    private var isOwnStory: Bool {
+        currentGroup?.id == AuthManager.shared.currentUser?.id
+    }
+
     private var storyActionSidebar: some View {
-        VStack(spacing: 16) {
-            // Heart/reaction toggle button — emoji picker floats as overlay
-            sidebarButton(
+        VStack(spacing: 20) {
+            // 1. Reaction (heart) — primary action, brand-colored when active
+            storyActionButton(
                 icon: "heart.fill",
-                color: showEmojiStrip ? MeeshyColors.pink : .white,
-                bgOpacity: showEmojiStrip ? 0.25 : 0.15
+                label: "React",
+                isActive: showEmojiStrip,
+                activeColor: MeeshyColors.pink,
+                activeGlow: MeeshyColors.pink
             ) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     showEmojiStrip.toggle()
                 }
             }
+            .scaleEffect(heartScale)
             .overlay(alignment: .trailing) {
                 if showEmojiStrip {
                     EmojiReactionPicker(
@@ -391,27 +415,37 @@ struct StoryViewerView: View {
                         insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                         removal: .opacity
                     ))
-                    .offset(x: -52)
+                    .offset(x: -56)
                 }
             }
             .zIndex(10)
 
-            // Transfert (forward to another user)
-            sidebarButton(icon: "arrowshape.turn.up.right.fill", color: .white) {
+            // 2. Forward (send to someone)
+            storyActionButton(
+                icon: "paperplane.fill",
+                label: "Envoyer"
+            ) {
                 HapticFeedback.light()
                 // TODO: forward to conversation
             }
 
-            // Republication (reshare to own story)
-            sidebarButton(icon: "arrow.2.squarepath", color: .white) {
-                reshareStory()
+            // 3. Reshare (republish to own story) — hidden for own stories
+            if !isOwnStory {
+                storyActionButton(
+                    icon: "arrow.2.squarepath",
+                    label: "Partager"
+                ) {
+                    reshareStory()
+                }
             }
 
-            // Language / Translation
-            sidebarButton(
-                icon: "character.bubble.fill",
-                color: showLanguageOptions ? MeeshyColors.cyan : .white,
-                bgOpacity: showLanguageOptions ? 0.25 : 0.15
+            // 4. Translate — brand cyan when active
+            storyActionButton(
+                icon: "textformat.abc",
+                label: "Traductions",
+                isActive: showLanguageOptions,
+                activeColor: MeeshyColors.cyan,
+                activeGlow: MeeshyColors.cyan
             ) {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -432,32 +466,71 @@ struct StoryViewerView: View {
         }
     }
 
-    private func sidebarButton(
+    private func storyActionButton(
         icon: String,
-        color: Color,
-        bgOpacity: Double = 0.15,
+        label: String,
+        isActive: Bool = false,
+        activeColor: Color = .white,
+        activeGlow: Color? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(color)
-                .frame(width: 44, height: 44)
-                .background(
+        Button {
+            action()
+        } label: {
+            VStack(spacing: 4) {
+                ZStack {
+                    // Outer glow when active
+                    if isActive, let glow = activeGlow {
+                        Circle()
+                            .fill(glow.opacity(0.2))
+                            .frame(width: 52, height: 52)
+                            .blur(radius: 4)
+                    }
+
                     Circle()
                         .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(Color.black.opacity(bgOpacity)))
-                        .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                        .overlay(
+                            Circle()
+                                .fill(isActive ? activeColor.opacity(0.15) : Color.black.opacity(0.15))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isActive ?
+                                        AnyShapeStyle(activeColor.opacity(0.4)) :
+                                        AnyShapeStyle(Color.white.opacity(0.12)),
+                                    lineWidth: isActive ? 1 : 0.5
+                                )
+                        )
+                        .frame(width: 46, height: 46)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(isActive ? activeColor : .white)
+                        .symbolEffect(.bounce, value: isActive)
+                }
+                .shadow(
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
+                    radius: isActive ? 8 : 4,
+                    y: isActive ? 0 : 2
                 )
-                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 56)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     // MARK: - Language Scroll Strip
 
-    /// Scrollable horizontal strip of language flags.
-    /// Shows all 39 TranslationLanguage sorted by most-used first.
-    /// 5 flags visible by default, scroll to reveal more, + opens full sheet.
     private var languageScrollStrip: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -483,21 +556,22 @@ struct StoryViewerView: View {
                                 .frame(width: 38, height: 38)
                                 .background(Circle().fill(Color.white.opacity(0.1)))
                         }
+                        .accessibilityLabel("Traduire en \(lang.name)")
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
             }
-            // 5 flags visible = 5 × (38 + 8) - 8 = 222
             .frame(width: 222, height: 50)
 
-            // + button → full sheet
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     showLanguageOptions = false
                 }
-                showFullLanguagePicker = true
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showFullLanguagePicker = true
+                }
             } label: {
                 ZStack {
                     Circle()
@@ -510,6 +584,8 @@ struct StoryViewerView: View {
             }
             .padding(.trailing, 10)
             .padding(.vertical, 6)
+            .accessibilityLabel("Plus de langues")
+            .accessibilityHint("Ouvre la liste complete des langues")
         }
         .background(
             Capsule()
@@ -517,6 +593,8 @@ struct StoryViewerView: View {
                 .overlay(Capsule().fill(Color.black.opacity(0.4)))
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selection de langue de traduction")
     }
 
     // MARK: - Story Reactions
@@ -668,6 +746,7 @@ struct StoryViewerView: View {
             }
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 
     // MARK: - Progress Bars
@@ -698,10 +777,14 @@ struct StoryViewerView: View {
                                 )
                         }
                     }
-                    .frame(height: 2.5)
+                    .frame(height: 3)
+                    .accessibilityHidden(true)
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Story \(currentStoryIndex + 1) sur \(currentGroup?.stories.count ?? 0)")
+        .accessibilityValue("\(Int(progress * 100)) pourcent")
     }
 
     private func progressWidth(for index: Int, totalWidth: CGFloat) -> CGFloat {
@@ -716,50 +799,160 @@ struct StoryViewerView: View {
 
     // MARK: - Header
 
+    @State private var showStoryOptions = false
+    @State private var avatarLongPressGlow = false
+
     private var storyHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if let group = currentGroup {
-                // Avatar with tap/longpress interactions
-                MeeshyAvatar(
-                    name: group.username,
-                    mode: .custom(32),
-                    accentColor: group.avatarColor,
-                    onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
-                    contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            selectedProfileUser = .from(storyGroup: group)
+                Button {
+                    HapticFeedback.light()
+                    selectedProfileUser = .from(storyGroup: group)
+                } label: {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            // Glow radial au long press
+                            if avatarLongPressGlow {
+                                Circle()
+                                    .fill(
+                                        RadialGradient(
+                                            colors: [
+                                                Color(hex: group.avatarColor).opacity(0.4),
+                                                MeeshyColors.pink.opacity(0.2),
+                                                .clear
+                                            ],
+                                            center: .center,
+                                            startRadius: 15,
+                                            endRadius: 35
+                                        )
+                                    )
+                                    .frame(width: 70, height: 70)
+                                    .blur(radius: 8)
+                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                    .allowsHitTesting(false)
+                            }
+
+                            MeeshyAvatar(
+                                name: group.username,
+                                mode: .custom(40),
+                                accentColor: group.avatarColor,
+                                onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
+                                contextMenuItems: [
+                                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                        selectedProfileUser = .from(storyGroup: group)
+                                    }
+                                ]
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: avatarLongPressGlow ? 3 : 2
+                                    )
+                                    .frame(width: 44, height: 44)
+                                    .shadow(
+                                        color: avatarLongPressGlow ? MeeshyColors.pink.opacity(0.6) : .clear,
+                                        radius: 12,
+                                        y: 0
+                                    )
+                            )
+                            .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
                         }
-                    ]
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(group.username)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .onTapGesture {
-                            HapticFeedback.light()
+                        .onLongPressGesture(minimumDuration: 0.4) {
+                            HapticFeedback.medium()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                avatarLongPressGlow = false
+                            }
                             selectedProfileUser = .from(storyGroup: group)
+                        } onPressingChanged: { pressing in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                avatarLongPressGlow = pressing
+                            }
                         }
 
-                    if let story = currentStory {
-                        HStack(spacing: 4) {
-                            Text(story.timeAgo)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(group.username)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white)
 
-                            if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
-                                Text("\u{00B7}")
-                                    .foregroundColor(.white.opacity(0.35))
-                                Text(storyTimeRemaining(expiresAt))
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.45))
+                            if let story = currentStory {
+                                HStack(spacing: 4) {
+                                    Text(story.timeAgo)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.75))
+
+                                    if story.repostOfId != nil {
+                                        Image(systemName: "arrow.2.squarepath")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.6))
+                                    }
+
+                                    if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
+                                        Text("\u{00B7}")
+                                            .foregroundColor(.white.opacity(0.4))
+                                        Image(systemName: "clock")
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.5))
+                                        Text(storyTimeRemaining(expiresAt))
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.55))
+                                    }
+                                }
                             }
                         }
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+                .accessibilityLabel("Profil de \(group.username)")
+                .accessibilityHint("Ouvre le profil de \(group.username)")
             }
 
             Spacer()
+
+            // Options menu (three dots)
+            Menu {
+                if let story = currentStory, let group = currentGroup {
+                    Button {
+                        selectedProfileUser = .from(storyGroup: group)
+                    } label: {
+                        Label("Voir le profil", systemImage: "person.fill")
+                    }
+
+                    Button {
+                        reshareStory()
+                    } label: {
+                        Label("Republier", systemImage: "arrow.2.squarepath")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        // TODO: report/mute
+                    } label: {
+                        Label("Signaler", systemImage: "exclamationmark.triangle")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(Color.black.opacity(0.15)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                    )
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel("Options de la story")
 
             // Close button
             Button {
@@ -767,11 +960,20 @@ struct StoryViewerView: View {
                 dismissViewer()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(Color.black.opacity(0.2)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                    )
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel("Fermer")
+            .accessibilityHint("Ferme le lecteur de stories")
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(user: user)

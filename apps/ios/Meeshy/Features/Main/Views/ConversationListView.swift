@@ -81,6 +81,7 @@ struct ConversationListView: View {
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
+    @State private var conversationInfoConversation: Conversation? = nil
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
@@ -238,6 +239,9 @@ struct ConversationListView: View {
                 onViewProfile: {
                     handleProfileView(conversation)
                 },
+                onViewConversationInfo: {
+                    handleConversationInfoView(conversation)
+                },
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(conversation, at: anchor)
                 }
@@ -252,11 +256,6 @@ struct ConversationListView: View {
                 } else {
                     onSelect(conversation)
                 }
-            }
-            .contextMenu {
-                conversationContextMenu(for: conversation)
-            } preview: {
-                ConversationPreviewView(conversation: conversation)
             }
             .onDrag {
                 draggingConversation = conversation
@@ -331,6 +330,24 @@ struct ConversationListView: View {
     }
 
     var body: some View {
+        mainContent
+            .sheet(item: $selectedProfileUser) { user in
+                UserProfileSheet(user: user)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $conversationInfoConversation) { conversation in
+                ConversationInfoSheet(
+                    conversation: conversation,
+                    accentColor: conversation.accentColor,
+                    messages: []
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+    }
+
+    private var mainContent: some View {
         ZStack(alignment: .bottom) {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
@@ -561,11 +578,6 @@ struct ConversationListView: View {
                 .zIndex(200)
             }
         }
-        .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
         .sheet(item: $lockSheetConversation) { conversation in
             ConversationLockSheet(
                 mode: lockSheetMode,
@@ -628,7 +640,14 @@ struct ConversationListView: View {
 
     // MARK: - Handle Profile View
     private func handleProfileView(_ conversation: Conversation) {
+        // Open user profile sheet (works for DM, uses participant data)
         selectedProfileUser = .from(conversation: conversation)
+    }
+
+    // MARK: - Handle Conversation Info View
+    private func handleConversationInfoView(_ conversation: Conversation) {
+        // Open conversation info sheet (works for all conversation types)
+        conversationInfoConversation = conversation
     }
 
     // MARK: - Handle Mood Badge Tap (opens status bubble)

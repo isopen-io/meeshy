@@ -15,9 +15,14 @@ public struct UserProfileSheet: View {
     public var onSendMessage: (() -> Void)?
     public var onBlock: (() -> Void)?
     public var onUnblock: (() -> Void)?
+    public var onConnectionRequest: (() -> Void)?
     public var onDismiss: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var selectedTab: ProfileTab = .profile
+    @State private var showFullscreenImage = false
+    @State private var fullscreenImageURL: String? = nil
+    @State private var fullscreenImageFallback: String = ""
 
     public init(
         user: ProfileSheetUser,
@@ -31,6 +36,7 @@ public struct UserProfileSheet: View {
         onSendMessage: (() -> Void)? = nil,
         onBlock: (() -> Void)? = nil,
         onUnblock: (() -> Void)? = nil,
+        onConnectionRequest: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
         self.user = user
@@ -44,6 +50,7 @@ public struct UserProfileSheet: View {
         self.onSendMessage = onSendMessage
         self.onBlock = onBlock
         self.onUnblock = onUnblock
+        self.onConnectionRequest = onConnectionRequest
         self.onDismiss = onDismiss
     }
 
@@ -57,7 +64,7 @@ public struct UserProfileSheet: View {
     }
 
     public var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        ZStack {
             VStack(spacing: 0) {
                 bannerSection
                 identitySection
@@ -67,46 +74,91 @@ public struct UserProfileSheet: View {
                     blockedByTargetCard
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
+                    Spacer()
                 } else if isBlocked {
                     blockedByMeCard
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
+                    Spacer()
                 } else {
-                    normalContent
+                    tabSection
                 }
+            }
+            .background(theme.backgroundPrimary)
+            .ignoresSafeArea(edges: .top)
 
-                Spacer(minLength: 40)
+            if showFullscreenImage {
+                FullscreenImageView(
+                    imageURL: fullscreenImageURL,
+                    fallbackText: fullscreenImageFallback,
+                    accentColor: resolvedAccent
+                )
+                .transition(.opacity)
+                .zIndex(100)
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showFullscreenImage = false
+                    }
+                }
             }
         }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - Banner
 
     private var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            LinearGradient(
-                colors: isBlockedByTarget
-                    ? [Color.gray.opacity(0.5), Color.gray.opacity(0.3)]
-                    : [Color(hex: resolvedAccent).opacity(0.6), Color(hex: resolvedAccent).opacity(0.2)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 130)
-            .overlay(
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: resolvedAccent).opacity(0.15))
-                        .frame(width: 200)
-                        .offset(x: -80, y: -30)
-                    Circle()
-                        .fill(Color(hex: resolvedAccent).opacity(0.1))
-                        .frame(width: 150)
-                        .offset(x: 100, y: 20)
+            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty, let url = URL(string: bannerURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        defaultBannerGradient
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 130)
+                            .clipped()
+                            .onTapGesture {
+                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                            }
+                    case .failure:
+                        defaultBannerGradient
+                    @unknown default:
+                        defaultBannerGradient
+                    }
                 }
-            )
-            .clipped()
+                .frame(height: 130)
+            } else {
+                defaultBannerGradient
+            }
+        }
+    }
+
+    private var defaultBannerGradient: some View {
+        LinearGradient(
+            colors: isBlockedByTarget
+                ? [Color.gray.opacity(0.5), Color.gray.opacity(0.3)]
+                : [Color(hex: resolvedAccent).opacity(0.6), Color(hex: resolvedAccent).opacity(0.2)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .frame(height: 130)
+        .overlay(
+            ZStack {
+                Circle()
+                    .fill(Color(hex: resolvedAccent).opacity(0.15))
+                    .frame(width: 200)
+                    .offset(x: -80, y: -30)
+                Circle()
+                    .fill(Color(hex: resolvedAccent).opacity(0.1))
+                    .frame(width: 150)
+                    .offset(x: 100, y: 20)
+            }
+        )
+        .clipped()
+        .onTapGesture {
+            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
         }
     }
 
@@ -116,6 +168,9 @@ public struct UserProfileSheet: View {
         VStack(spacing: 6) {
             profileAvatar
                 .bounceOnAppear()
+                .onTapGesture {
+                    openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
+                }
 
             Text(displayUser.resolvedDisplayName)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -169,37 +224,250 @@ public struct UserProfileSheet: View {
         displayUser.isOnline == true ? .online : .offline
     }
 
-    // MARK: - Normal Content
+    // MARK: - Tab Section
 
     @ViewBuilder
-    private var normalContent: some View {
+    private var tabSection: some View {
+        VStack(spacing: 0) {
+            // Tab Picker
+            HStack(spacing: 0) {
+                ForEach(ProfileTab.allCases, id: \.self) { tab in
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selectedTab = tab
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            HStack(spacing: 4) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(tab.title)
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
+                            .padding(.vertical, 10)
+
+                            if selectedTab == tab {
+                                Rectangle()
+                                    .fill(Color(hex: resolvedAccent))
+                                    .frame(height: 2)
+                            } else {
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(height: 2)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .background(theme.backgroundPrimary)
+
+            Divider()
+                .opacity(0.3)
+
+            // Tab Content
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 16) {
+                    if isLoading {
+                        loadingPlaceholder
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                    } else {
+                        switch selectedTab {
+                        case .profile:
+                            profileTabContent
+                        case .conversations:
+                            conversationsTabContent
+                        case .stats:
+                            statsTabContent
+                        }
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, 16)
+            }
+        }
+    }
+
+    // MARK: - Profile Tab
+
+    @ViewBuilder
+    private var profileTabContent: some View {
         VStack(spacing: 16) {
-            if isLoading {
-                loadingPlaceholder
+            if let bio = displayUser.bio, !bio.isEmpty {
+                bioCard(bio)
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
-            } else {
-                if let bio = displayUser.bio, !bio.isEmpty {
-                    bioCard(bio)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
+            }
 
-                languagePills
+            languagePills
+                .padding(.horizontal, 20)
+
+            if !isCurrentUser {
+                actionButtons
                     .padding(.horizontal, 20)
+                    .padding(.top, 4)
+            }
+        }
+    }
 
-                if !isCurrentUser {
-                    sendMessageButton
+    @ViewBuilder
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            sendMessageButton
+
+            if let onConnectionRequest {
+                connectionRequestButton(action: onConnectionRequest)
+            }
+        }
+    }
+
+    private func connectionRequestButton(action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.medium()
+            action()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.badge.plus.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("Demande de connexion")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundColor(Color(hex: resolvedAccent))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Color(hex: resolvedAccent).opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: 1.5)
+            )
+        }
+        .pressable()
+    }
+
+    // MARK: - Conversations Tab
+
+    @ViewBuilder
+    private var conversationsTabContent: some View {
+        if conversations.isEmpty {
+            emptyConversationsView
+                .padding(.top, 40)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conv in
+                    Button {
+                        HapticFeedback.light()
+                        onNavigateToConversation?(conv)
+                    } label: {
+                        HStack(spacing: 12) {
+                            MeeshyAvatar(
+                                name: conv.name,
+                                mode: .messageBubble,
+                                accentColor: conv.accentColor,
+                                avatarURL: conv.avatar ?? conv.participantAvatarURL
+                            )
+
+                            Text(conv.name)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.textMuted)
+                        }
                         .padding(.horizontal, 20)
-                        .padding(.top, 4)
-                }
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .staggeredAppear(index: index)
 
-                if !conversations.isEmpty {
-                    sharedConversationsList
-                        .padding(.top, 8)
+                    if index < conversations.count - 1 {
+                        Divider()
+                            .padding(.leading, 64)
+                            .opacity(0.3)
+                    }
                 }
             }
         }
+    }
+
+    private var emptyConversationsView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 32))
+                .foregroundColor(theme.textMuted.opacity(0.6))
+
+            Text("Aucune conversation en commun")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    // MARK: - Stats Tab
+
+    @ViewBuilder
+    private var statsTabContent: some View {
+        VStack(spacing: 12) {
+            if let createdAt = displayUser.createdAt {
+                statCard(
+                    icon: "calendar",
+                    label: "Membre depuis",
+                    value: formatRegistrationDate(createdAt)
+                )
+                .padding(.horizontal, 20)
+            }
+
+            statCard(
+                icon: "bubble.left.and.bubble.right.fill",
+                label: "Conversations en commun",
+                value: "\(conversations.count)"
+            )
+            .padding(.horizontal, 20)
+
+            if !isCurrentUser {
+                statCard(
+                    icon: "person.2.fill",
+                    label: "Statut de connexion",
+                    value: "Non connecté"
+                )
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    private func statCard(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(Color(hex: resolvedAccent))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(theme.surfaceGradient(tint: resolvedAccent))
+        .glassCard(cornerRadius: 12)
     }
 
     // MARK: - Bio Card
@@ -280,56 +548,6 @@ public struct UserProfileSheet: View {
             .shadow(color: MeeshyColors.pink.opacity(0.3), radius: 8, y: 4)
         }
         .pressable()
-    }
-
-    // MARK: - Shared Conversations
-
-    private var sharedConversationsList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Conversations en commun (\(conversations.count))")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 20)
-
-            VStack(spacing: 0) {
-                ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conv in
-                    Button {
-                        HapticFeedback.light()
-                        onNavigateToConversation?(conv)
-                    } label: {
-                        HStack(spacing: 12) {
-                            MeeshyAvatar(
-                                name: conv.name,
-                                mode: .messageBubble,
-                                accentColor: conv.accentColor,
-                                avatarURL: conv.avatar ?? conv.participantAvatarURL
-                            )
-
-                            Text(conv.name)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                    }
-                    .staggeredAppear(index: index)
-
-                    if index < conversations.count - 1 {
-                        Divider()
-                            .padding(.leading, 64)
-                            .opacity(0.3)
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Loading Placeholder
@@ -417,5 +635,38 @@ public struct UserProfileSheet: View {
         if seconds < 3600 { return "Vu il y a \(seconds / 60)min" }
         if seconds < 86400 { return "Vu il y a \(seconds / 3600)h" }
         return "Vu il y a \(seconds / 86400)j"
+    }
+
+    private func formatRegistrationDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.locale = Locale(identifier: "fr_FR")
+        return formatter.string(from: date)
+    }
+
+    private func openFullscreenImage(url: String?, fallback: String) {
+        fullscreenImageURL = url
+        fullscreenImageFallback = fallback
+        withAnimation(.easeIn(duration: 0.2)) {
+            showFullscreenImage = true
+        }
+    }
+}
+
+// MARK: - Profile Tab Enum
+
+enum ProfileTab: String, CaseIterable {
+    case profile = "Profil"
+    case conversations = "Conversations"
+    case stats = "Stats"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .profile: return "person.fill"
+        case .conversations: return "bubble.left.and.bubble.right.fill"
+        case .stats: return "chart.bar.fill"
+        }
     }
 }

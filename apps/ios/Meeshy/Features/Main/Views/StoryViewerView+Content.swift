@@ -45,6 +45,7 @@ extension StoryViewerView {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
             .offset(y: offsetY)
+            .accessibilityLabel("Texte de la story: \(content)")
     }
 
     private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
@@ -129,10 +130,12 @@ extension StoryViewerView {
                     .font(.system(size: 56))
                     .foregroundColor(.white.opacity(0.8))
                     .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
+                    .accessibilityHidden(true)
             }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .accessibilityLabel(media.type == .video ? "Video de la story" : "Image de la story")
     }
 
     private func coloredMediaFallback(media: FeedMedia) -> some View {
@@ -168,6 +171,7 @@ extension StoryViewerView {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Gesture Overlay
@@ -181,6 +185,9 @@ extension StoryViewerView {
                     if isComposerEngaged { dismissComposer(); return }
                     goToPrevious()
                 }
+                .accessibilityLabel("Story precedente")
+                .accessibilityHint("Toucher pour revenir a la story precedente")
+                .accessibilityAddTraits(.isButton)
 
             // Right half — next
             Color.clear
@@ -189,6 +196,9 @@ extension StoryViewerView {
                     if isComposerEngaged { dismissComposer(); return }
                     goToNext()
                 }
+                .accessibilityLabel("Story suivante")
+                .accessibilityHint("Toucher pour passer a la story suivante")
+                .accessibilityAddTraits(.isButton)
         }
         // Exclude the bottom composer zone from tap targets
         .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
@@ -427,6 +437,8 @@ extension StoryViewerView {
         || showEmojiStrip
         || showFullEmojiPicker
         || showTextEmojiPicker
+        || showLanguageOptions
+        || showFullLanguagePicker
         || isTransitioning
         || isDismissing
     }

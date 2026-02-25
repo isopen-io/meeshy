@@ -10,6 +10,7 @@ struct ThemedConversationRow: View {
     var isDragging: Bool = false
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
+    var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -189,19 +190,24 @@ struct ThemedConversationRow: View {
 
     private var avatarContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
+
+        // Story en premier si disponible
         if hasStoryRing {
             items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                 onViewStory?()
             })
         }
+
+        // Profil utilisateur (toujours disponible)
         items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
             onViewProfile?()
         })
-        if conversation.type == .direct {
-            items.append(AvatarContextMenuItem(label: "Infos utilisateur", icon: "info.circle.fill") {
-                onViewProfile?()
-            })
-        }
+
+        // Infos conversation (toujours disponible)
+        items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
+            onViewConversationInfo?()
+        })
+
         return items
     }
 

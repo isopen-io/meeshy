@@ -252,6 +252,7 @@ public struct StoryItem: Identifiable {
     public let storyEffects: StoryEffects?
     public let createdAt: Date
     public let expiresAt: Date?
+    public let repostOfId: String?
     public var isViewed: Bool
 
     public var timeAgo: String {
@@ -263,9 +264,9 @@ public struct StoryItem: Identifiable {
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
-                createdAt: Date = Date(), expiresAt: Date? = nil, isViewed: Bool = false) {
+                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, isViewed: Bool = false) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
-        self.createdAt = createdAt; self.expiresAt = expiresAt; self.isViewed = isViewed
+        self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId; self.isViewed = isViewed
     }
 }
 
@@ -342,7 +343,8 @@ extension Array where Element == APIPost {
                           width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
             }
             let item = StoryItem(id: post.id, content: post.content, media: media,
-                                 createdAt: post.createdAt, expiresAt: post.updatedAt, isViewed: false)
+                                 createdAt: post.createdAt, expiresAt: post.updatedAt,
+                                 repostOfId: post.repostOf?.id, isViewed: false)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {

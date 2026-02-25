@@ -3,8 +3,8 @@ import Speech
 import AVFoundation
 import Combine
 
-public final class TranscriptionService: ObservableObject {
-    public static let shared = TranscriptionService()
+public final class EdgeTranscriptionService: ObservableObject {
+    public static let shared = EdgeTranscriptionService()
 
     @Published public var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published public var isTranscribing = false
@@ -35,11 +35,11 @@ public final class TranscriptionService: ObservableObject {
     public func transcribe(audioURL: URL, locale: Locale = Locale(identifier: "fr-FR")) async throws -> OnDeviceTranscription {
         if !isAuthorized {
             let granted = await requestAuthorization()
-            if !granted { throw TranscriptionError.notAuthorized }
+            if !granted { throw EdgeTranscriptionError.notAuthorized }
         }
 
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
-            throw TranscriptionError.recognizerUnavailable
+            throw EdgeTranscriptionError.recognizerUnavailable
         }
 
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
@@ -128,9 +128,9 @@ public struct OnDeviceTranscriptionSegment: Identifiable {
     }
 }
 
-// MARK: - Transcription Errors
+// MARK: - Edge Transcription Errors
 
-public enum TranscriptionError: LocalizedError {
+public enum EdgeTranscriptionError: LocalizedError {
     case notAuthorized
     case recognizerUnavailable
     case noResult
