@@ -110,6 +110,12 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
+  // --- Location sharing ---
+  LOCATION_SHARED: 'location:shared',
+  LOCATION_LIVE_STARTED: 'location:live-started',
+  LOCATION_LIVE_UPDATED: 'location:live-updated',
+  LOCATION_LIVE_STOPPED: 'location:live-stopped',
+
   // --- Social / Posts ---
   POST_CREATED: 'post:created',
   POST_UPDATED: 'post:updated',
@@ -159,6 +165,12 @@ export const CLIENT_EVENTS = {
   CALL_TOGGLE_AUDIO: 'call:toggle-audio',
   CALL_TOGGLE_VIDEO: 'call:toggle-video',
   CALL_END: 'call:end',
+
+  // --- Location sharing ---
+  LOCATION_SHARE: 'location:share',
+  LOCATION_LIVE_START: 'location:live-start',
+  LOCATION_LIVE_UPDATE: 'location:live-update',
+  LOCATION_LIVE_STOP: 'location:live-stop',
 
   // --- Feed subscription ---
   FEED_SUBSCRIBE: 'feed:subscribe',
@@ -405,6 +417,81 @@ export interface TranscriptionReadyEventData {
   readonly processingTimeMs?: number;
 }
 
+// ===== LOCATION SHARING EVENTS =====
+
+export interface LocationShareData {
+  readonly conversationId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly altitude?: number;
+  readonly accuracy?: number;
+  readonly placeName?: string;
+  readonly address?: string;
+}
+
+export interface LocationSharedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly altitude?: number;
+  readonly accuracy?: number;
+  readonly placeName?: string;
+  readonly address?: string;
+  readonly timestamp: Date;
+}
+
+export interface LocationLiveStartData {
+  readonly conversationId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly durationMinutes: number;
+}
+
+export interface LocationLiveStartedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly username: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly durationMinutes: number;
+  readonly expiresAt: Date;
+  readonly startedAt: Date;
+}
+
+export interface LocationLiveUpdateData {
+  readonly conversationId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly altitude?: number;
+  readonly accuracy?: number;
+  readonly speed?: number;
+  readonly heading?: number;
+}
+
+export interface LocationLiveUpdatedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly altitude?: number;
+  readonly accuracy?: number;
+  readonly speed?: number;
+  readonly heading?: number;
+  readonly timestamp: Date;
+}
+
+export interface LocationLiveStopData {
+  readonly conversationId: string;
+}
+
+export interface LocationLiveStoppedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly stoppedAt: Date;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -442,6 +529,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+
+  // Location sharing
+  [SERVER_EVENTS.LOCATION_SHARED]: (data: LocationSharedEventData) => void;
+  [SERVER_EVENTS.LOCATION_LIVE_STARTED]: (data: LocationLiveStartedEventData) => void;
+  [SERVER_EVENTS.LOCATION_LIVE_UPDATED]: (data: LocationLiveUpdatedEventData) => void;
+  [SERVER_EVENTS.LOCATION_LIVE_STOPPED]: (data: LocationLiveStoppedEventData) => void;
 
   // Social / Posts
   [SERVER_EVENTS.POST_CREATED]: (data: PostCreatedEventData) => void;
@@ -590,6 +683,12 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }) => void;
   [CLIENT_EVENTS.CALL_END]: (data: { callId: string }) => void;
+
+  // Location sharing
+  [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;
+  [CLIENT_EVENTS.LOCATION_LIVE_START]: (data: LocationLiveStartData, callback?: (response: SocketIOResponse<LocationLiveStartedEventData>) => void) => void;
+  [CLIENT_EVENTS.LOCATION_LIVE_UPDATE]: (data: LocationLiveUpdateData) => void;
+  [CLIENT_EVENTS.LOCATION_LIVE_STOP]: (data: LocationLiveStopData) => void;
 
   // Feed subscription
   [CLIENT_EVENTS.FEED_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;

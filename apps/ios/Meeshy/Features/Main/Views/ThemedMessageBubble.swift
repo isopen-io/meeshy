@@ -1,6 +1,8 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import MapKit
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Themed Message Bubble
 struct ThemedMessageBubble: View {
@@ -19,6 +21,7 @@ struct ThemedMessageBubble: View {
     @State var showCarousel: Bool = false // internal for cross-file extension access
     @State var carouselIndex: Int = 0 // internal for cross-file extension access
     @State private var isBlurRevealed: Bool = false
+    @State var fullscreenLocationAttachment: MessageAttachment? = nil
     @ObservedObject var theme = ThemeManager.shared // internal for cross-file extension access
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
@@ -279,6 +282,17 @@ struct ThemedMessageBubble: View {
                 EmptyView()
             }
         }
+        .fullScreenCover(item: $fullscreenLocationAttachment) { attachment in
+            if let lat = attachment.latitude, let lon = attachment.longitude {
+                LocationFullscreenView(
+                    latitude: lat,
+                    longitude: lon,
+                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                    accentColor: contactColor,
+                    senderName: message.senderName
+                )
+            }
+        }
     }
 
     // MARK: - Message Meta (timestamp + delivery status)
@@ -497,26 +511,39 @@ struct ThemedMessageBubble: View {
             )
 
         case .location:
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 200, height: 120)
-                .overlay(
-                    VStack(spacing: 8) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(.white)
-
-                        Text("Position partagée")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
+            if let lat = attachment.latitude, let lon = attachment.longitude {
+                LocationMessageView(
+                    latitude: lat,
+                    longitude: lon,
+                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                    address: nil,
+                    accentColor: contactColor,
+                    onTapFullscreen: {
+                        fullscreenLocationAttachment = attachment
                     }
                 )
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 200, height: 120)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 36))
+                                .foregroundColor(.white)
+
+                            Text("Position partagee")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    )
+            }
         }
     }
 
