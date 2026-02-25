@@ -1148,8 +1148,9 @@ export function registerMessagesRoutes(
           });
         }
       } else {
-        // For plaintext messages, validate content
-        if (!content || content.trim().length === 0) {
+        // For plaintext messages, validate content (allow empty content when attachments present)
+        const hasAttachments = attachmentIds && attachmentIds.length > 0;
+        if ((!content || content.trim().length === 0) && !hasAttachments) {
           return reply.status(400).send({
             success: false,
             error: 'Message content cannot be empty'
@@ -1158,12 +1159,12 @@ export function registerMessagesRoutes(
       }
 
       // ÉTAPE 1: Traiter les liens dans le message AVANT la sauvegarde (skip for E2EE)
-      let processedContent = content;
+      let processedContent = content || '';
       let trackingLinks: any[] = [];
 
-      if (!isEncrypted || encryptionMode !== 'e2ee') {
+      if (processedContent.trim() && (!isEncrypted || encryptionMode !== 'e2ee')) {
         const linkResult = await trackingLinkService.processMessageLinks({
-          content: content.trim(),
+          content: processedContent.trim(),
           conversationId,
           createdBy: userId
         });
