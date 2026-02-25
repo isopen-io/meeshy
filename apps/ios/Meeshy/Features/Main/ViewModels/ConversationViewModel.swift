@@ -73,6 +73,9 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranscriptions: [String: MessageTranscription] = [:]
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
 
+    /// Active live location sessions in this conversation
+    @Published var activeLiveLocations: [ActiveLiveLocation] = []
+
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
@@ -764,6 +767,51 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink(receiveValue: audioHandler)
             .store(in: &cancellables)
+
+        // Live location started
+        socketManager.liveLocationStarted
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let session = ActiveLiveLocation(
+                    userId: event.userId,
+                    username: event.username,
+                    latitude: event.latitude,
+                    longitude: event.longitude,
+                    expiresAt: event.expiresAt ?? Date().addingTimeInterval(TimeInterval(event.durationMinutes * 60)),
+                    startedAt: event.startedAt ?? Date()
+                )
+                self.activeLiveLocations.removeAll { $0.userId == event.userId }
+                self.activeLiveLocations.append(session)
+            }
+            .store(in: &cancellables)
+
+        // Live location updated
+        socketManager.liveLocationUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let idx = self.activeLiveLocations.firstIndex(where: { $0.userId == event.userId }) {
+                    self.activeLiveLocations[idx].latitude = event.latitude
+                    self.activeLiveLocations[idx].longitude = event.longitude
+                    self.activeLiveLocations[idx].speed = event.speed
+                    self.activeLiveLocations[idx].heading = event.heading
+                    self.activeLiveLocations[idx].lastUpdated = event.timestamp ?? Date()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Live location stopped
+        socketManager.liveLocationStopped
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                self.activeLiveLocations.removeAll { $0.userId == event.userId }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Search Messages
@@ -941,5 +989,35 @@ class ConversationViewModel: ObservableObject {
         savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
+    }
+
+    // MARK: - Location Sharing
+
+    func shareLocation(latitude: Double, longitude: Double, placeName: String? = nil, address: String? = nil) {
+        LocationService.shared.shareLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            placeName: placeName, address: address
+        )
+    }
+
+    func startLiveLocation(latitude: Double, longitude: Double, durationMinutes: Int) {
+        LocationService.shared.startLiveLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            durationMinutes: durationMinutes
+        )
+    }
+
+    func stopLiveLocation() {
+        LocationService.shared.stopLiveLocation(conversationId: conversationId)
+    }
+
+    func updateLiveLocation(latitude: Double, longitude: Double, speed: Double? = nil, heading: Double? = nil) {
+        LocationService.shared.updateLiveLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            speed: speed, heading: heading
+        )
     }
 }

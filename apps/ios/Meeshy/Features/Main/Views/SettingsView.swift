@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,9 @@ struct SettingsView: View {
     @State private var notificationsEnabled = true
     @State private var soundEnabled = true
     @State private var vibrationEnabled = true
+    @State private var showVoiceProfileWizard = false
+    @State private var showVoiceProfileManage = false
+    @State private var autoTranscriptionEnabled = false
 
     @AppStorage("preferredLanguage") private var preferredLanguage = "fr"
 
@@ -70,6 +74,8 @@ struct SettingsView: View {
             VStack(spacing: 20) {
                 accountSection
                 appearanceSection
+                voiceProfileSection
+                transcriptionSection
                 notificationsSection
                 languageSection
                 aboutSection
@@ -182,6 +188,56 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Voice Profile Section
+
+    private var voiceProfileSection: some View {
+        settingsSection(title: "Profil vocal", icon: "waveform.and.mic", color: "A855F7") {
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileManage = true
+            } label: {
+                settingsRow(icon: "waveform.circle.fill", title: "Gerer le profil vocal", color: "A855F7") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileWizard = true
+            } label: {
+                settingsRow(icon: "plus.circle.fill", title: "Creer un profil vocal", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+        .sheet(isPresented: $showVoiceProfileWizard) {
+            VoiceProfileWizardView(accentColor: "A855F7")
+        }
+        .sheet(isPresented: $showVoiceProfileManage) {
+            VoiceProfileManageView(accentColor: "A855F7")
+        }
+    }
+
+    // MARK: - Transcription Section
+
+    private var transcriptionSection: some View {
+        settingsSection(title: "Transcription", icon: "text.quote", color: "4ECDC4") {
+            settingsRow(icon: "waveform", title: "Transcription automatique", color: "4ECDC4") {
+                Toggle("", isOn: $autoTranscriptionEnabled)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+            }
+
+            settingsRow(icon: "info.circle", title: "Apple Speech (on-device)", color: "6B7280") {
+                EmptyView()
             }
         }
     }
