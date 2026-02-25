@@ -97,73 +97,25 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    // MARK: - Emoji Quick Bar (5 visible + scroll, (+) always pinned)
+    // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultEmojis)
-
-        return HStack(spacing: 4) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 3) {
-                    ForEach(topEmojis, id: \.self) { emoji in
-                        emojiQuickButton(emoji: emoji)
-                    }
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+        let isDark = theme.mode.isDark
+        return EmojiReactionPicker(
+            quickEmojis: topEmojis,
+            style: isDark ? .dark : .light,
+            onReact: { emoji in
+                EmojiUsageTracker.recordUsage(emoji: emoji)
+                onReact?(emoji)
+                dismiss()
+            },
+            onExpandFullPicker: {
+                HapticFeedback.light()
+                isEmojiPickerOpen.toggle()
+                forceTab = isEmojiPickerOpen ? .react : .language
             }
-            .frame(maxWidth: 5 * 30 + 4 * 3 + 12) // 5 emojis visible width
-
-            emojiPlusButton
-        }
-        .frame(height: 38)
-        .padding(.horizontal, 4)
-        .background(emojiBarBackground)
-    }
-
-    private func emojiQuickButton(emoji: String) -> some View {
-        Button {
-            EmojiUsageTracker.recordUsage(emoji: emoji)
-            onReact?(emoji)
-            dismiss()
-        } label: {
-            Text(emoji)
-                .font(.system(size: 18))
-        }
-        .buttonStyle(.plain)
-        .frame(width: 30, height: 30)
-        .contentShape(Circle())
-    }
-
-    private var emojiPlusButton: some View {
-        let accent = Color(hex: contactColor)
-        let isDark = theme.mode.isDark
-        return Button {
-            HapticFeedback.light()
-            isEmojiPickerOpen.toggle()
-            forceTab = isEmojiPickerOpen ? .react : .language
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(accent)
-        }
-        .buttonStyle(.plain)
-        .frame(width: 30, height: 30)
-        .background(
-            Circle()
-                .fill(accent.opacity(isDark ? 0.15 : 0.1))
-                .overlay(Circle().stroke(accent.opacity(0.25), lineWidth: 0.5))
         )
-        .contentShape(Circle())
-    }
-
-    private var emojiBarBackground: some View {
-        let isDark = theme.mode.isDark
-        return Capsule()
-            .fill(.ultraThinMaterial)
-            .overlay(Capsule().fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6)))
-            .overlay(Capsule().stroke(isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.08), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
     }
 
     // MARK: - Dismiss Background (vibrant with bubble form distinction)

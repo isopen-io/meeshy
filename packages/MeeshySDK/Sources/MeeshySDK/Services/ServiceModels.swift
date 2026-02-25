@@ -120,6 +120,26 @@ public struct UserSearchResult: Decodable {
     public let isOnline: Bool?
 }
 
+// MARK: - Attachment Status
+
+public struct AttachmentStatusUser: Decodable, Identifiable {
+    public let userId: String
+    public let username: String
+    public let avatar: String?
+    public let viewedAt: Date?
+    public let downloadedAt: Date?
+    public let listenedAt: Date?
+    public let watchedAt: Date?
+    public let listenCount: Int?
+    public let watchCount: Int?
+    public let listenedComplete: Bool?
+    public let watchedComplete: Bool?
+    public let lastPlayPositionMs: Int?
+    public let lastWatchPositionMs: Int?
+
+    public var id: String { userId }
+}
+
 // MARK: - Generic empty success for fire-and-forget
 
 public struct EmptySuccess: Decodable {

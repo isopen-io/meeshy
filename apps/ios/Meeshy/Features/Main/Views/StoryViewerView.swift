@@ -36,6 +36,18 @@ struct StoryViewerView: View {
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
+    @State private var composerFocusTrigger = false
+    @State private var showLanguageOptions = false
+    private let storyLanguages: [(code: String, flag: String, name: String)] = [
+        ("fr", "🇫🇷", "Français"),
+        ("en", "🇺🇸", "English"),
+        ("es", "🇪🇸", "Español"),
+        ("de", "🇩🇪", "Deutsch"),
+        ("pt", "🇧🇷", "Português"),
+        ("ar", "🇸🇦", "العربية"),
+        ("zh", "🇨🇳", "中文"),
+        ("ja", "🇯🇵", "日本語")
+    ]
     @StateObject private var keyboard = KeyboardObserver()
 
     // === Transition states ===
@@ -379,9 +391,10 @@ struct StoryViewerView: View {
             }
             .zIndex(10)
 
-            // Reply (scroll to/focus composer)
+            // Reply (focus composer)
             sidebarButton(icon: "arrowshape.turn.up.left.fill", color: .white) {
                 HapticFeedback.light()
+                composerFocusTrigger = true
             }
 
             // Reshare
@@ -389,10 +402,52 @@ struct StoryViewerView: View {
                 reshareStory()
             }
 
-            // Language
-            sidebarButton(icon: "globe", color: .white) {
+            // Language / Translation
+            sidebarButton(
+                icon: "character.bubble.fill",
+                color: showLanguageOptions ? MeeshyColors.cyan : .white,
+                bgOpacity: showLanguageOptions ? 0.25 : 0.15
+            ) {
                 HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showLanguageOptions.toggle()
+                }
             }
+            .overlay(alignment: .trailing) {
+                if showLanguageOptions {
+                    EmojiReactionPicker(
+                        quickEmojis: storyLanguages.map(\.flag),
+                        style: .dark,
+                        onReact: { flag in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showLanguageOptions = false
+                            }
+                            if let lang = storyLanguages.first(where: { $0.flag == flag }),
+                               let story = currentStory {
+                                Task {
+                                    let body: [String: String] = ["targetLanguage": lang.code]
+                                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                                        endpoint: "/posts/\(story.id)/translate",
+                                        body: body
+                                    )
+                                }
+                            }
+                        },
+                        onDismiss: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showLanguageOptions = false
+                            }
+                        }
+                    )
+                    .fixedSize()
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                    .offset(x: -56)
+                }
+            }
+            .zIndex(10)
         }
     }
 
@@ -504,6 +559,7 @@ struct StoryViewerView: View {
             onAnyInteraction: {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
+            focusTrigger: $composerFocusTrigger,
             onRecordingChange: { recording in
                 isComposerEngaged = recording
             },

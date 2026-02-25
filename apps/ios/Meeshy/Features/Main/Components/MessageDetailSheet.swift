@@ -2027,13 +2027,10 @@ struct MessageDetailSheet: View {
 
         Task {
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                    endpoint: "/attachments/\(attachmentId)/transcribe",
-                    method: "POST"
-                )
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                try await AttachmentService.shared.requestTranscription(attachmentId: attachmentId)
                 await MainActor.run {
                     isRequestingTranscription = false
+                    HapticFeedback.success()
                 }
             } catch {
                 await MainActor.run {
@@ -2104,12 +2101,8 @@ struct MessageDetailSheet: View {
 
         for attachment in mediaAttachments {
             do {
-                let response: OffsetPaginatedAPIResponse<[AttachmentStatusUser]> = try await APIClient.shared.request(
-                    endpoint: "/attachments/\(attachment.id)/status-details"
-                )
-                if response.success {
-                    attachmentStatuses[attachment.id] = response.data
-                }
+                let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
+                attachmentStatuses[attachment.id] = statuses
             } catch { }
         }
     }
@@ -2256,22 +2249,3 @@ private struct ReadByUser: Decodable {
     let readAt: Date
 }
 
-// MARK: - Attachment Status API Models
-
-private struct AttachmentStatusUser: Decodable, Identifiable {
-    let userId: String
-    let username: String
-    let avatar: String?
-    let viewedAt: Date?
-    let downloadedAt: Date?
-    let listenedAt: Date?
-    let watchedAt: Date?
-    let listenCount: Int?
-    let watchCount: Int?
-    let listenedComplete: Bool?
-    let watchedComplete: Bool?
-    let lastPlayPositionMs: Int?
-    let lastWatchPositionMs: Int?
-
-    var id: String { userId }
-}

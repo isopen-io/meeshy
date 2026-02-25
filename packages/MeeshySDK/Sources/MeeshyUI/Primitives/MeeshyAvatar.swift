@@ -222,7 +222,9 @@ public struct MeeshyAvatar: View {
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .bottomTrailing) { badge }
+        .overlay(alignment: .bottomTrailing) {
+            badge.offset(badgeOffsetWhenRingVisible)
+        }
         .scaleEffect(tapScale)
         .onAppear {
             if effectiveStoryState == .unread {
@@ -308,6 +310,19 @@ public struct MeeshyAvatar: View {
         case .none:
             EmptyView()
         }
+    }
+
+    /// When a story ring is visible, shift the badge so its center lands on
+    /// the ring circumference at the 45° bottom-right angle instead of the
+    /// bounding-box corner (which sits just outside the ring).
+    private var badgeOffsetWhenRingVisible: CGSize {
+        guard effectiveStoryState != .none else { return .zero }
+        let r = mode.ringSize / 2
+        let dot = mode.onlineDotSize / 2
+        // target: center on ring circumference at 45°  → (r + r·cos45, r + r·sin45) from top-left
+        // current: bottomTrailing corner center         → (ringSize - dot, ringSize - dot) from top-left
+        let delta = (r + r * cos(.pi / 4)) - (mode.ringSize - dot)
+        return CGSize(width: delta, height: delta)
     }
 
     // MARK: - Badge

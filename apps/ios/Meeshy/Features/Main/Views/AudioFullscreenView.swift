@@ -659,12 +659,7 @@ private struct AudioFullscreenPage: View {
 
         Task {
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                    endpoint: "/attachments/\(attachment.id)/transcribe",
-                    method: "POST"
-                )
-                // Transcription arrives via Socket.IO (transcriptionReady event)
-                // Keep spinner until result comes through or timeout
+                try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await MainActor.run {
                     isRequestingTranscription = false

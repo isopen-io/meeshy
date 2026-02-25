@@ -148,6 +148,10 @@ struct UniversalComposerBar: View {
     /// Called on ANY user interaction (tap, type, record, attach, etc.) — use to pause stories
     var onAnyInteraction: (() -> Void)? = nil
 
+    /// When set to true externally, immediately focuses the text field.
+    /// Caller must reset to false after triggering.
+    var focusTrigger: Binding<Bool> = .constant(false)
+
     /// Called when recording state changes (true = started, false = stopped)
     var onRecordingChange: ((Bool) -> Void)? = nil
 
@@ -461,6 +465,12 @@ struct UniversalComposerBar: View {
             textAnalyzer.reset()
             notifyContentChange()
         }
+        .onChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
+            if shouldFocus {
+                isFocused = true
+                focusTrigger.wrappedValue = false
+            }
+        }
         .onChange(of: isFocused) { _, focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = focused
@@ -695,14 +705,12 @@ struct UniversalComposerBar: View {
         let isDark = theme.mode.isDark
 
         return ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .opacity(isFocused ? 1.0 : 0.8)
+            Color.clear
 
             accent
                 .opacity(isFocused
-                    ? (isDark ? 0.15 : 0.08)
-                    : (isDark ? 0.06 : 0.03))
+                    ? (isDark ? 0.10 : 0.05)
+                    : (isDark ? 0.03 : 0.01))
 
             VStack {
                 Rectangle()
