@@ -136,15 +136,16 @@ extension ConversationView {
                 _ = messageType
 
                 // Auto-send at 100%
+                var sendSuccess = false
                 if !uploadedIds.isEmpty || !content.isEmpty {
-                    await viewModel.sendMessage(
+                    sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds
                     )
                 }
 
-                // Clear UI after successful send
+                // Clear UI after upload+send
                 await MainActor.run {
                     pendingAttachments.removeAll()
                     pendingAudioURL = nil
@@ -152,20 +153,14 @@ extension ConversationView {
                     pendingThumbnails.removeAll()
                     uploadProgress = nil
                     isUploading = false
-                    HapticFeedback.success()
+                    if sendSuccess {
+                        HapticFeedback.success()
+                    } else {
+                        HapticFeedback.error()
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    let conversationId = conversation?.id ?? "temp"
-                    let newMsg = Message(
-                        conversationId: conversationId,
-                        content: content.isEmpty ? "Media" : content,
-                        createdAt: Date(),
-                        attachments: attachments,
-                        deliveryStatus: .failed,
-                        isMe: true
-                    )
-                    viewModel.messages.append(newMsg)
                     pendingAttachments.removeAll()
                     pendingAudioURL = nil
                     pendingMediaFiles.removeAll()
@@ -174,6 +169,7 @@ extension ConversationView {
                     isUploading = false
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+                    viewModel.error = "Echec de l'envoi du media: \(error.localizedDescription)"
                     HapticFeedback.error()
                 }
             }

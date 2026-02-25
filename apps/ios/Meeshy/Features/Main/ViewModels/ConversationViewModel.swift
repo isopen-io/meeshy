@@ -383,9 +383,10 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isBlurred: Bool? = nil) async {
+    @discardableResult
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isBlurred: Bool? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
+        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
         // Stop typing emission on send
         stopTypingEmission()
@@ -489,15 +490,17 @@ class ConversationViewModel: ObservableObject {
             if isBlurEnabled {
                 isBlurEnabled = false
             }
+            isSending = false
+            return true
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
             if let idx = messages.firstIndex(where: { $0.id == tempId }) {
                 messages[idx].deliveryStatus = .failed
             }
             self.error = error.localizedDescription
+            isSending = false
+            return false
         }
-
-        isSending = false
     }
 
     // MARK: - Retry Failed Message
