@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // Components extracted to RootViewComponents.swift:
 // ThemedFloatingButton, ThemedActionButton, ThemedFeedOverlay,
@@ -73,6 +74,59 @@ struct RootView: View {
                     case .newConversation:
                         NewConversationView()
                             .navigationBarHidden(true)
+                    case .communityList:
+                        CommunityListView(
+                            onSelectCommunity: { community in
+                                router.push(.communityDetail(community.id))
+                            },
+                            onCreateCommunity: {
+                                router.push(.communityCreate)
+                            }
+                        )
+                        .navigationTitle("Communities")
+                        .navigationBarTitleDisplayMode(.inline)
+                    case .communityDetail(let communityId):
+                        CommunityDetailView(
+                            communityId: communityId,
+                            onSelectConversation: { apiConversation in
+                                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                                let conv = apiConversation.toConversation(currentUserId: currentUserId)
+                                router.push(.conversation(conv))
+                            },
+                            onOpenSettings: { community in
+                                router.push(.communitySettings(community))
+                            },
+                            onOpenMembers: { id in
+                                router.push(.communityMembers(id))
+                            },
+                            onInvite: { id in
+                                router.push(.communityInvite(id))
+                            }
+                        )
+                        .navigationBarHidden(true)
+                    case .communityCreate:
+                        CommunityCreateView(
+                            onCreated: { community in
+                                router.pop()
+                                router.push(.communityDetail(community.id))
+                            }
+                        )
+                    case .communitySettings(let community):
+                        CommunitySettingsView(
+                            community: community,
+                            onUpdated: { _ in router.pop() },
+                            onDeleted: { router.popToRoot() },
+                            onLeft: { router.popToRoot() }
+                        )
+                    case .communityMembers(let communityId):
+                        CommunityMembersView(
+                            communityId: communityId,
+                            onInvite: {
+                                router.push(.communityInvite(communityId))
+                            }
+                        )
+                    case .communityInvite(let communityId):
+                        CommunityInviteView(communityId: communityId)
                     }
                 }
             }
@@ -323,6 +377,7 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
+                ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false } }),
                 (theme.preference.icon, theme.preference.tintColor, {

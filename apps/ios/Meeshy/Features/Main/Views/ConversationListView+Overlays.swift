@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
@@ -136,7 +137,9 @@ extension ConversationListView {
                 Spacer()
 
                 HStack(spacing: 12) {
-                    Button {} label: {
+                    Button {
+                        router.push(.communityList)
+                    } label: {
                         Text("Voir tout")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: "4ECDC4"))
@@ -167,6 +170,10 @@ extension ConversationListView {
                     ForEach(Array(SampleData.communities.enumerated()), id: \.element.id) { index, community in
                         ThemedCommunityCard(community: community)
                             .staggeredAppear(index: index, baseDelay: 0.06)
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                router.push(.communityDetail(community.id))
+                            }
                     }
                 }
                 .padding(.horizontal, 16)
