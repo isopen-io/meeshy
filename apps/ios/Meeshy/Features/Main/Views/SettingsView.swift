@@ -8,6 +8,9 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var systemColorScheme
 
     @State private var showLogoutConfirm = false
+    @State private var showStats = false
+    @State private var showAffiliate = false
+    @State private var showDataExport = false
     @State private var notificationsEnabled = true
     @State private var soundEnabled = true
     @State private var vibrationEnabled = true
@@ -25,6 +28,9 @@ struct SettingsView: View {
                 scrollContent
             }
         }
+        .sheet(isPresented: $showStats) { UserStatsView() }
+        .sheet(isPresented: $showAffiliate) { AffiliateView() }
+        .sheet(isPresented: $showDataExport) { DataExportView() }
         .alert("Déconnexion", isPresented: $showLogoutConfirm) {
             Button("Annuler", role: .cancel) { }
             Button("Déconnexion", role: .destructive) {
@@ -72,6 +78,7 @@ struct SettingsView: View {
                 appearanceSection
                 notificationsSection
                 languageSection
+                meeshyToolsSection
                 aboutSection
                 logoutSection
 
@@ -181,6 +188,45 @@ struct SettingsView: View {
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Meeshy Tools Section
+
+    private var meeshyToolsSection: some View {
+        settingsSection(title: "Outils", icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
+            Button {
+                HapticFeedback.light()
+                showStats = true
+            } label: {
+                settingsRow(icon: "chart.bar.fill", title: "Statistiques", color: "4ECDC4") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showAffiliate = true
+            } label: {
+                settingsRow(icon: "link.badge.plus", title: "Parrainage", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showDataExport = true
+            } label: {
+                settingsRow(icon: "square.and.arrow.up", title: "Export de donnees", color: "3498DB") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
                 }
             }
         }

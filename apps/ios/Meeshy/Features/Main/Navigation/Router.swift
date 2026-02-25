@@ -6,6 +6,10 @@ enum Route: Hashable {
     case settings
     case profile
     case newConversation
+    case notifications
+    case userStats
+    case affiliate
+    case dataExport
 }
 
 @MainActor
