@@ -24,8 +24,8 @@ public struct CommunityMembersView: View {
                     icon: "person.3",
                     title: "No Members",
                     subtitle: "Invite people to join this community",
-                    actionTitle: "Invite",
-                    action: { onInvite?() }
+                    actionLabel: "Invite",
+                    onAction: { onInvite?() }
                 )
             } else {
                 memberList

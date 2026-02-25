@@ -25,8 +25,8 @@ public struct CommunityListView: View {
                     icon: "person.3.fill",
                     title: "No Communities",
                     subtitle: "Join or create a community to start collaborating",
-                    actionTitle: "Create Community",
-                    action: { onCreateCommunity?() }
+                    actionLabel: "Create Community",
+                    onAction: { onCreateCommunity?() }
                 )
             } else {
                 communityList

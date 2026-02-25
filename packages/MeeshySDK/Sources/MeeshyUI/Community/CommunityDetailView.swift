@@ -44,8 +44,8 @@ public struct CommunityDetailView: View {
                     icon: "exclamationmark.triangle",
                     title: "Error",
                     subtitle: error,
-                    actionTitle: "Retry",
-                    action: { Task { await viewModel.load() } }
+                    actionLabel: "Retry",
+                    onAction: { Task { await viewModel.load() } }
                 )
             }
         }
