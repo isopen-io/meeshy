@@ -53,6 +53,17 @@ public struct CreateCommentRequest: Encodable {
     }
 }
 
+public struct CreateStoryRequest: Encodable {
+    public let type = "STORY"
+    public let content: String?
+    public let storyEffects: StoryEffects?
+    public let visibility: String
+
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC") {
+        self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
+    }
+}
+
 // MARK: - Preference Requests
 
 public struct UpdateConversationPreferencesRequest: Encodable {
