@@ -3,7 +3,11 @@ import MeeshySDK
 
 // MARK: - Profile Sheet User
 
-public struct ProfileSheetUser: Identifiable {
+public struct ProfileSheetUser: Identifiable, Equatable {
+    public static func == (lhs: ProfileSheetUser, rhs: ProfileSheetUser) -> Bool {
+        lhs.id == rhs.id
+    }
+
     public var id: String { userId ?? username }
     public let userId: String?
     public let username: String

@@ -32,6 +32,7 @@ struct ThemedMessageBubble: View {
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
+    @EnvironmentObject private var router: Router
     @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
     @State var shareURL: URL? = nil // internal for cross-file extension access
@@ -507,10 +508,11 @@ struct ThemedMessageBubble: View {
         .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
-        .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        .onChange(of: selectedProfileUser) { _, newValue in
+            if let user = newValue {
+                selectedProfileUser = nil
+                router.deepLinkProfileUser = user
+            }
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {

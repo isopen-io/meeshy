@@ -122,8 +122,10 @@ struct RootView: View {
                             onCreated: { community in
                                 router.pop()
                                 router.push(.communityDetail(community.id))
-                            }
+                            },
+                            onDismiss: { router.pop() }
                         )
+                        .navigationBarHidden(true)
                     case .communitySettings(let community):
                         CommunitySettingsView(
                             community: community,
@@ -607,23 +609,15 @@ private struct ProfileFetchingSheet: View {
                 handleNavigateToConversation(conversation)
             },
             onSendMessage: { handleSendMessage() },
-            onDismiss: { dismiss() }
+            onDismiss: { dismiss() },
+            currentUserId: AuthManager.shared.currentUser?.id ?? ""
         )
     }
 
     private func handleNavigateToConversation(_ conversation: MeeshyConversation) {
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let conv = Conversation(
-                id: conversation.id,
-                identifier: conversation.id,
-                type: conversation.type,
-                title: conversation.name,
-                lastMessageAt: Date(),
-                createdAt: Date(),
-                updatedAt: Date()
-            )
-            router.navigateToConversation(conv)
+            router.navigateToConversation(conversation)
         }
     }
 

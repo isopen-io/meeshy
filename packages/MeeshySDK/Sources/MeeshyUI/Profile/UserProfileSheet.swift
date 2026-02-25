@@ -20,6 +20,7 @@ public struct UserProfileSheet: View {
     public var onConnectionRequest: (() -> Void)?
     public var onDismiss: (() -> Void)?
     public var onLoadStats: (() async -> Void)?
+    public var currentUserId: String = ""
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var selectedTab: ProfileTab = .profile
@@ -49,7 +50,8 @@ public struct UserProfileSheet: View {
         onUnblock: (() -> Void)? = nil,
         onConnectionRequest: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
-        onLoadStats: (() async -> Void)? = nil
+        onLoadStats: (() async -> Void)? = nil,
+        currentUserId: String = ""
     ) {
         self.user = user
         self.conversations = conversations
@@ -67,6 +69,7 @@ public struct UserProfileSheet: View {
         self.onConnectionRequest = onConnectionRequest
         self.onDismiss = onDismiss
         self.onLoadStats = onLoadStats
+        self.currentUserId = currentUserId
     }
 
     private var resolvedAccent: String {
@@ -378,7 +381,7 @@ public struct UserProfileSheet: View {
         internalIsLoadingConversations = true
         do {
             let apiConversations = try await UserProfileCacheManager.shared.sharedConversations(with: userId)
-            internalConversations = apiConversations.map { $0.toConversation(currentUserId: "") }
+            internalConversations = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
         } catch {
             // Silent fail
         }

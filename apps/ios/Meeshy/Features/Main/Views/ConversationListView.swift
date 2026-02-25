@@ -337,10 +337,11 @@ struct ConversationListView: View {
 
     var body: some View {
         mainContent
-            .sheet(item: $selectedProfileUser) { user in
-                UserProfileSheet(user: user)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
+            .onChange(of: selectedProfileUser) { _, newValue in
+                if let user = newValue {
+                    selectedProfileUser = nil
+                    router.deepLinkProfileUser = user
+                }
             }
             .sheet(item: $conversationInfoConversation) { conversation in
                 ConversationInfoSheet(
