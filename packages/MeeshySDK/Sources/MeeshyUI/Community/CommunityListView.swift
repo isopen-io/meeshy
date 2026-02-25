@@ -7,65 +7,165 @@ public struct CommunityListView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
-    public var onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil
-    public var onCreateCommunity: (() -> Void)? = nil
+    public var onSelectCommunity: ((MeeshyCommunity) -> Void)?
+    public var onCreateCommunity: (() -> Void)?
+    public var onDismiss: (() -> Void)?
 
-    public init(onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil, onCreateCommunity: (() -> Void)? = nil) {
+    public init(
+        onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil,
+        onCreateCommunity: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
+    ) {
         self.onSelectCommunity = onSelectCommunity
         self.onCreateCommunity = onCreateCommunity
+        self.onDismiss = onDismiss
     }
 
     public var body: some View {
         ZStack {
             theme.backgroundPrimary.ignoresSafeArea()
 
-            if viewModel.isLoading && viewModel.communities.isEmpty {
-                ProgressView()
-                    .tint(Color(hex: "FF2E63"))
-            } else if viewModel.communities.isEmpty && !viewModel.isLoading {
-                EmptyStateView(
-                    icon: "person.3.fill",
-                    title: "No Communities",
-                    subtitle: "Join or create a community to start collaborating",
-                    actionLabel: "Create Community",
-                    onAction: { onCreateCommunity?() }
-                )
-            } else {
-                communityGrid
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                }
-            }
-            ToolbarItem(placement: .principal) {
-                Text("Communautes")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { onCreateCommunity?() } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+            VStack(spacing: 0) {
+                navigationHeader
+                searchBar
+
+                if viewModel.isLoading && viewModel.communities.isEmpty {
+                    Spacer()
+                    ProgressView()
+                        .tint(Color(hex: "FF2E63"))
+                    Spacer()
+                } else if viewModel.communities.isEmpty && !viewModel.isLoading {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                } else {
+                    communityGrid
                 }
             }
         }
-        .searchable(text: $viewModel.searchText, prompt: "Rechercher...")
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadIfNeeded() }
     }
+
+    // MARK: - Navigation Header
+
+    private var navigationHeader: some View {
+        HStack {
+            Button {
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+
+            Spacer()
+
+            Text("Communautes")
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            Button { onCreateCommunity?() } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundColor(theme.textMuted)
+
+            TextField("Rechercher...", text: $viewModel.searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+        .padding(10)
+        .background(theme.backgroundSecondary.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "person.3.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Text("Aucune communaute")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Text("Rejoins ou cree une communaute pour collaborer")
+                .font(.system(size: 14, design: .rounded))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button { onCreateCommunity?() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Creer une communaute")
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    LinearGradient(
+                        colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 40)
+    }
+
+    // MARK: - Community Grid
 
     private var communityGrid: some View {
         ScrollView {
@@ -74,14 +174,13 @@ public struct CommunityListView: View {
                 spacing: 14
             ) {
                 ForEach(Array(viewModel.communities.enumerated()), id: \.element.id) { index, community in
-                    VibrantCommunityCard(community: community)
-                        .onTapGesture { onSelectCommunity?(community) }
-                        .opacity(1)
-                        .scaleEffect(1)
-                        .animation(
-                            .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
-                            value: viewModel.communities.count
-                        )
+                    VibrantCommunityCard(community: community) {
+                        onSelectCommunity?(community)
+                    }
+                    .animation(
+                        .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                        value: viewModel.communities.count
+                    )
                 }
 
                 if viewModel.hasMore {
@@ -92,7 +191,7 @@ public struct CommunityListView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
             .padding(.bottom, 20)
         }
     }
@@ -102,6 +201,7 @@ public struct CommunityListView: View {
 
 private struct VibrantCommunityCard: View {
     let community: MeeshyCommunity
+    var onTap: () -> Void
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
 
@@ -111,7 +211,6 @@ private struct VibrantCommunityCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            // Gradient background
             LinearGradient(
                 colors: [
                     Color(hex: accentColor),
@@ -121,7 +220,6 @@ private struct VibrantCommunityCard: View {
                 endPoint: .bottomTrailing
             )
 
-            // Emoji decorative (top-right)
             if !community.emoji.isEmpty {
                 Text(community.emoji)
                     .font(.system(size: 40))
@@ -133,7 +231,6 @@ private struct VibrantCommunityCard: View {
                     .padding(.top, 8)
             }
 
-            // Privacy badge (top-left)
             HStack(spacing: 3) {
                 Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                     .font(.system(size: 8, weight: .semibold))
@@ -147,14 +244,12 @@ private struct VibrantCommunityCard: View {
             .padding(.leading, 10)
             .padding(.top, 10)
 
-            // Dark scrim for text
             LinearGradient(
                 colors: [.clear, .clear, Color.black.opacity(0.65)],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            // Content overlay
             VStack(alignment: .leading, spacing: 4) {
                 Text(community.name)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -164,7 +259,7 @@ private struct VibrantCommunityCard: View {
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .font(.system(size: 11, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(2)
                 }
@@ -198,6 +293,7 @@ private struct VibrantCommunityCard: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 withAnimation { isPressed = false }
             }
+            onTap()
         }
     }
 

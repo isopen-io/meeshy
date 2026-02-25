@@ -14,6 +14,7 @@ public struct CommunityDetailView: View {
 
     @State private var showLeaveConfirm = false
     @State private var showAddChannel = false
+    @State private var showSettings = false
     @State private var isLeaving = false
 
     public init(communityId: String,
@@ -57,7 +58,6 @@ public struct CommunityDetailView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
         .alert("Quitter la communaute ?", isPresented: $showLeaveConfirm) {
             Button("Annuler", role: .cancel) {}
@@ -81,6 +81,33 @@ public struct CommunityDetailView: View {
                 communityId: viewModel.communityId,
                 onAdded: { Task { await viewModel.load() } }
             )
+        }
+        .sheet(isPresented: $showSettings) {
+            if let community = viewModel.community {
+                CommunitySettingsView(
+                    community: community,
+                    onUpdated: { updated in
+                        showSettings = false
+                        Task { await viewModel.load() }
+                    },
+                    onDeleted: {
+                        showSettings = false
+                        if let onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    },
+                    onLeft: {
+                        showSettings = false
+                        if let onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -110,7 +137,7 @@ public struct CommunityDetailView: View {
                 Menu {
                     if viewModel.isAdmin {
                         Button {
-                            onOpenSettings?(community)
+                            showSettings = true
                         } label: {
                             Label("Reglages", systemImage: "gearshape.fill")
                         }
@@ -252,7 +279,7 @@ public struct CommunityDetailView: View {
                     }
 
                     actionButton(icon: "gearshape.fill", title: "Reglages") {
-                        onOpenSettings?(community)
+                        showSettings = true
                     }
                 }
 

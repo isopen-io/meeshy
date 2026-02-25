@@ -23,6 +23,7 @@ public struct UserProfileSheet: View {
     public var currentUserId: String = ""
 
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: ProfileTab = .profile
     @State private var showFullscreenImage = false
     @State private var fullscreenImageURL: String? = nil
@@ -534,7 +535,17 @@ public struct UserProfileSheet: View {
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
                     Button {
                         HapticFeedback.light()
-                        onNavigateToConversation?(conv)
+                        if let onNavigateToConversation {
+                            onNavigateToConversation(conv)
+                        } else {
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                NotificationCenter.default.post(
+                                    name: Notification.Name("navigateToConversation"),
+                                    object: conv
+                                )
+                            }
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             MeeshyAvatar(

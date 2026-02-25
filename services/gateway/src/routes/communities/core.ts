@@ -763,7 +763,6 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         select: {
           id: true,
           communityId: true,
-          createdBy: true,
           members: { select: { userId: true, role: true } }
         }
       });

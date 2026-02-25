@@ -94,7 +94,8 @@ struct RootView: View {
                             },
                             onCreateCommunity: {
                                 router.push(.communityCreate)
-                            }
+                            },
+                            onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
                     case .communityDetail(let communityId):

@@ -498,11 +498,10 @@ final class CommunityCreateViewModel: ObservableObject {
         searchTask?.cancel()
         guard memberSearch.count >= 2 else {
             searchResults = []
+            isSearchingMembers = false
             return
         }
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled else { return }
             isSearchingMembers = true
             defer { isSearchingMembers = false }
             do {

@@ -11,7 +11,7 @@ public final class UserService {
     }
 
     public func searchUsers(query: String, limit: Int = 20, offset: Int = 0) async throws -> [UserSearchResult] {
-        let response: OffsetPaginatedAPIResponse<[UserSearchResult]> = try await api.request(
+        let response: APIResponse<[UserSearchResult]> = try await api.request(
             endpoint: "/users/search",
             queryItems: [
                 URLQueryItem(name: "q", value: query),
