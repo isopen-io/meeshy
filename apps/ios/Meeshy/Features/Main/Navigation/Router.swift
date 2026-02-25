@@ -6,6 +6,12 @@ enum Route: Hashable {
     case settings
     case profile
     case newConversation
+    case communityList
+    case communityDetail(String)
+    case communityCreate
+    case communitySettings(Community)
+    case communityMembers(String)
+    case communityInvite(String)
 }
 
 @MainActor

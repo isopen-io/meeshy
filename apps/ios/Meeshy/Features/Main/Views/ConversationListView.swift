@@ -60,6 +60,7 @@ struct ConversationListView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
+    @EnvironmentObject var router: Router
 
     // Status bubble overlay state
     @State private var showStatusBubble = false
