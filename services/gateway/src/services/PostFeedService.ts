@@ -181,8 +181,12 @@ export class PostFeedService {
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
-    const friendIds = await this.getFriendIds(userId);
-    const visibilityFilter = this.buildVisibilityFilter(userId, friendIds);
+    const [friendIds, dmContactIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const whereClause: any = {
       isDeleted: false,

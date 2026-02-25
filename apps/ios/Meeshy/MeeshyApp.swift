@@ -86,8 +86,8 @@ struct MeeshyApp: App {
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
-                    guard let payload, let conversationId = payload.conversationId else { return }
-                    handlePushNavigation(conversationId: conversationId)
+                    guard let payload else { return }
+                    handlePushNavigation(payload: payload)
                 }
                 .onOpenURL { url in
                     let _ = deepLinkRouter.handle(url: url)
@@ -107,22 +107,54 @@ struct MeeshyApp: App {
         }
     }
 
-    private func handlePushNavigation(conversationId: String) {
+    private func handlePushNavigation(payload: NotificationPayload) {
         guard authManager.isAuthenticated else { return }
 
-        Task {
-            do {
-                let userId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConversation = try await ConversationService.shared.getById(conversationId)
-                let conversation = apiConversation.toConversation(currentUserId: userId)
+        let notifType = MeeshyNotificationType(rawValue: payload.type ?? "")
+
+        switch notifType {
+        case .friendRequest, .friendAccepted, .statusUpdate:
+            if let senderId = payload.senderId {
                 NotificationCenter.default.post(
-                    name: .navigateToConversation,
-                    object: conversation
+                    name: Notification.Name("openProfileSheet"),
+                    object: ["userId": senderId, "username": payload.senderUsername ?? senderId]
                 )
-            } catch {
-                toastManager.showError("Impossible d'ouvrir la conversation")
             }
             pushManager.clearPendingNotification()
+
+        case .achievementUnlocked:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "userStats"
+            )
+            pushManager.clearPendingNotification()
+
+        case .affiliateSignup:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "affiliate"
+            )
+            pushManager.clearPendingNotification()
+
+        default:
+            guard let conversationId = payload.conversationId else {
+                pushManager.clearPendingNotification()
+                return
+            }
+            Task {
+                do {
+                    let userId = AuthManager.shared.currentUser?.id ?? ""
+                    let apiConversation = try await ConversationService.shared.getById(conversationId)
+                    let conversation = apiConversation.toConversation(currentUserId: userId)
+                    NotificationCenter.default.post(
+                        name: .navigateToConversation,
+                        object: conversation
+                    )
+                } catch {
+                    toastManager.showError("Impossible d'ouvrir la conversation")
+                }
+                pushManager.clearPendingNotification()
+            }
         }
     }
 

@@ -36,6 +36,9 @@ struct RootView: View {
     // Share sheet state (triggered by deep link)
     @State private var showSharePicker = false
 
+    // Notification sheet
+    @State private var showNotifications = false
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -272,6 +275,43 @@ struct RootView: View {
                 router.navigateToConversation(conversation)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
+            guard let targetUserId = notification.object as? String else { return }
+            if let existingConv = conversationViewModel.conversations.first(where: {
+                $0.type == .direct && $0.participantUserId == targetUserId
+            }) {
+                router.navigateToConversation(existingConv)
+                return
+            }
+            Task {
+                do {
+                    let response = try await ConversationService.shared.create(
+                        type: "direct",
+                        participantIds: [targetUserId]
+                    )
+                    let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                    let apiConv = try await ConversationService.shared.getById(response.id)
+                    let conv = apiConv.toConversation(currentUserId: currentUserId)
+                    router.navigateToConversation(conv)
+                } catch {
+                    ToastManager.shared.showError("Impossible de creer la conversation")
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openProfileSheet"))) { notification in
+            guard let info = notification.object as? [String: String],
+                  let userId = info["userId"] else { return }
+            let username = info["username"] ?? userId
+            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
+            guard let routeName = notification.object as? String else { return }
+            switch routeName {
+            case "userStats": router.push(.userStats)
+            case "affiliate": router.push(.affiliate)
+            default: break
+            }
+        }
         .onOpenURL { url in
             router.handleDeepLink(url)
         }
@@ -302,6 +342,19 @@ struct RootView: View {
                     handleJoinSuccess(joinResponse)
                 }
             }
+        }
+        .sheet(isPresented: $showNotifications) {
+            NotificationListView(
+                onNotificationTap: { notification in
+                    showNotifications = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        handleNotificationTap(notification)
+                    }
+                },
+                onDismiss: { showNotifications = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
             handleDeepLink(newValue)
@@ -355,6 +408,64 @@ struct RootView: View {
         if let conversation = conversationViewModel.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
             pendingReplyContext = context
             router.navigateToConversation(conversation)
+        }
+    }
+
+    // MARK: - Handle Notification Tap
+
+    private func handleNotificationTap(_ notification: APINotification) {
+        let data = notification.data
+
+        switch notification.notificationType {
+        case .newMessage, .messageReaction, .mention, .translationReady, .storyReply:
+            guard let conversationId = data?.conversationId else { return }
+            navigateToConversationById(conversationId)
+
+        case .friendRequest, .friendAccepted, .statusUpdate:
+            if let senderId = notification.senderId {
+                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
+            }
+
+        case .groupInvite, .groupJoined, .groupLeft:
+            if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .postLike, .postComment:
+            if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .callMissed, .callIncoming:
+            if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .achievementUnlocked:
+            router.push(.userStats)
+
+        case .affiliateSignup:
+            router.push(.affiliate)
+
+        case .systemAlert:
+            break
+        }
+    }
+
+    private func navigateToConversationById(_ conversationId: String) {
+        if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
+            router.navigateToConversation(existing)
+            return
+        }
+        Task {
+            do {
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                let apiConv = try await ConversationService.shared.getById(conversationId)
+                let conv = apiConv.toConversation(currentUserId: currentUserId)
+                router.navigateToConversation(conv)
+            } catch {
+                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
+            }
         }
     }
 
@@ -521,7 +632,7 @@ struct RootView: View {
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
                 ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.affiliate) }),
-                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
+                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
                 (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         theme.cyclePreference(systemScheme: systemColorScheme)
@@ -562,10 +673,7 @@ private struct ProfileFetchingSheet: View {
     @State private var isLoading = true
     @State private var fullUser: MeeshyUser?
     @State private var fetchError: String?
-    @State private var isCreatingDM = false
     @ObservedObject private var theme = ThemeManager.shared
-    @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationViewModel: ConversationListViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -579,7 +687,8 @@ private struct ProfileFetchingSheet: View {
         .presentationDetents([.medium, .large])
         .task {
             do {
-                let fetched = try await UserService.shared.getProfile(idOrUsername: user.username)
+                let identifier = user.userId ?? user.username
+                let fetched = try await UserService.shared.getProfile(idOrUsername: identifier)
                 if fetched.isActive == false {
                     fetchError = "Ce compte a ete desactive."
                     return
@@ -606,52 +715,9 @@ private struct ProfileFetchingSheet: View {
             user: user,
             isLoading: isLoading,
             fullUser: fullUser,
-            onNavigateToConversation: { conversation in
-                handleNavigateToConversation(conversation)
-            },
-            onSendMessage: { handleSendMessage() },
             onDismiss: { dismiss() },
             currentUserId: AuthManager.shared.currentUser?.id ?? ""
         )
-    }
-
-    private func handleNavigateToConversation(_ conversation: MeeshyConversation) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            router.navigateToConversation(conversation)
-        }
-    }
-
-    private func handleSendMessage() {
-        guard let targetUserId = fullUser?.id ?? user.userId, !isCreatingDM else { return }
-        isCreatingDM = true
-        Task {
-            defer { isCreatingDM = false }
-            if let existingConv = conversationViewModel.conversations.first(where: {
-                $0.type == .direct && $0.participantUserId == targetUserId
-            }) {
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    router.navigateToConversation(existingConv)
-                }
-                return
-            }
-            do {
-                let response = try await ConversationService.shared.create(
-                    type: "direct",
-                    participantIds: [targetUserId]
-                )
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConv = try await ConversationService.shared.getById(response.id)
-                let conv = apiConv.toConversation(currentUserId: currentUserId)
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    router.navigateToConversation(conv)
-                }
-            } catch {
-                ToastManager.shared.showError("Impossible de creer la conversation")
-            }
-        }
     }
 
     private func errorView(_ message: String) -> some View {

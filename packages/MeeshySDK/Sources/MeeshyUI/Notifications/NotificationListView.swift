@@ -32,25 +32,6 @@ public struct NotificationListView: View {
 
     private var header: some View {
         HStack {
-            if let onDismiss {
-                Button {
-                    HapticFeedback.light()
-                    onDismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
-                }
-            }
-
-            Spacer()
-
-            Text("Notifications")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
             if viewModel.unreadCount > 0 {
                 Button {
                     HapticFeedback.light()
@@ -61,7 +42,28 @@ public struct NotificationListView: View {
                         .foregroundColor(Color(hex: accentColor))
                 }
             } else {
-                Color.clear.frame(width: 24, height: 24)
+                Color.clear.frame(width: 50, height: 24)
+            }
+
+            Spacer()
+
+            Text("Notifications")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            if let onDismiss {
+                Button {
+                    HapticFeedback.light()
+                    onDismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(theme.textMuted.opacity(0.6))
+                }
+            } else {
+                Color.clear.frame(width: 50, height: 24)
             }
         }
         .padding(.horizontal, 16)

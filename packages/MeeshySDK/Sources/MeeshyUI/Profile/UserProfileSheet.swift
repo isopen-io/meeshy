@@ -514,7 +514,7 @@ public struct UserProfileSheet: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                if let onSendMessage, !isBlocked, !isBlockedByTarget {
+                if !isCurrentUser, !isBlocked, !isBlockedByTarget {
                     sendMessageButton
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -525,7 +525,7 @@ public struct UserProfileSheet: View {
         } else {
             VStack(spacing: 0) {
                 // Bouton Send Message en tête si conversations existent
-                if let onSendMessage, !isBlocked, !isBlockedByTarget {
+                if !isCurrentUser, !isBlocked, !isBlockedByTarget {
                     sendMessageButton
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -829,7 +829,17 @@ public struct UserProfileSheet: View {
     private var sendMessageButton: some View {
         Button {
             HapticFeedback.medium()
-            onSendMessage?()
+            if let onSendMessage {
+                onSendMessage()
+            } else if let targetUserId = (fullUser ?? internalFullUser)?.id ?? user.userId {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("sendMessageToUser"),
+                        object: targetUserId
+                    )
+                }
+            }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "paperplane.fill")
