@@ -19,12 +19,22 @@ struct ProfileView: View {
     @State private var isEditing = false
     @State private var isSaving = false
     @State private var errorMessage: String?
+
+    // Avatar
     @State private var avatarItem: PhotosPickerItem?
+    @State private var avatarImageForEditor: UIImage?
     @State private var isUploadingAvatar = false
+
+    // Banner
+    @State private var bannerItem: PhotosPickerItem?
+    @State private var bannerImageForEditor: UIImage?
+    @State private var isUploadingBanner = false
 
     private let accentColor = "A855F7"
 
     private var user: MeeshyUser? { authManager.currentUser }
+
+    private var isUploading: Bool { isUploadingAvatar || isUploadingBanner }
 
     private let languages = [
         ("", "Aucune"), ("fr", "Français"), ("en", "English"), ("es", "Español"),
@@ -64,7 +74,43 @@ struct ProfileView: View {
         .onAppear { loadUserData() }
         .onChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
-            handleAvatarSelection(newItem)
+            loadImageForEditor(from: newItem) { image in
+                avatarImageForEditor = image
+            }
+        }
+        .onChange(of: bannerItem) { _, newItem in
+            guard let newItem else { return }
+            loadImageForEditor(from: newItem) { image in
+                bannerImageForEditor = image
+            }
+        }
+        .fullScreenCover(item: $avatarImageForEditor) { image in
+            ImageEditView(
+                image: image,
+                initialCropRatio: .square,
+                onAccept: { edited in
+                    avatarImageForEditor = nil
+                    uploadAvatar(edited)
+                },
+                onCancel: {
+                    avatarImageForEditor = nil
+                    avatarItem = nil
+                }
+            )
+        }
+        .fullScreenCover(item: $bannerImageForEditor) { image in
+            ImageEditView(
+                image: image,
+                initialCropRatio: .ratio16x9,
+                onAccept: { edited in
+                    bannerImageForEditor = nil
+                    uploadBanner(edited)
+                },
+                onCancel: {
+                    bannerImageForEditor = nil
+                    bannerItem = nil
+                }
+            )
         }
     }
 
@@ -94,7 +140,7 @@ struct ProfileView: View {
 
             Spacer()
 
-            if isSaving || isUploadingAvatar {
+            if isSaving || isUploading {
                 ProgressView()
                     .tint(Color(hex: accentColor))
             } else {
@@ -121,7 +167,7 @@ struct ProfileView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
-                avatarSection
+                bannerAndAvatarSection
                 identitySection
                 contactSection
                 languagesSection
@@ -130,14 +176,41 @@ struct ProfileView: View {
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.top, 0)
         }
     }
 
-    // MARK: - Avatar Section
+    // MARK: - Banner & Avatar Section
 
-    private var avatarSection: some View {
-        VStack(spacing: 12) {
+    private var bannerAndAvatarSection: some View {
+        VStack(spacing: 0) {
+            // Banner
+            ZStack(alignment: .bottomTrailing) {
+                bannerImage
+                    .frame(height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                if isEditing {
+                    PhotosPicker(selection: $bannerItem, matching: .images) {
+                        Label("Modifier", systemImage: "photo.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.5)))
+                    }
+                    .padding(8)
+                }
+
+                if isUploadingBanner {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.4))
+                        .frame(height: 120)
+                        .overlay(ProgressView().tint(.white))
+                }
+            }
+
+            // Avatar overlapping banner
             ZStack(alignment: .bottomTrailing) {
                 MeeshyAvatar(
                     name: user?.displayName ?? user?.username ?? "?",
@@ -145,6 +218,10 @@ struct ProfileView: View {
                     accentColor: accentColor,
                     secondaryColor: "4ECDC4",
                     avatarURL: user?.avatar
+                )
+                .overlay(
+                    Circle()
+                        .stroke(theme.backgroundGradient, lineWidth: 4)
                 )
 
                 if isEditing {
@@ -156,7 +233,16 @@ struct ProfileView: View {
                     }
                     .offset(x: 4, y: 4)
                 }
+
+                if isUploadingAvatar {
+                    Circle()
+                        .fill(Color.black.opacity(0.4))
+                        .frame(width: 90, height: 90)
+                        .overlay(ProgressView().tint(.white))
+                }
             }
+            .offset(y: -45)
+            .padding(.bottom, -45)
 
             if !isEditing {
                 VStack(spacing: 4) {
@@ -170,18 +256,51 @@ struct ProfileView: View {
                             .foregroundColor(Color(hex: accentColor))
                     }
                 }
+                .padding(.top, 8)
             }
         }
+    }
+
+    @ViewBuilder
+    private var bannerImage: some View {
+        if let bannerURL = user?.banner, let url = URL(string: bannerURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    bannerPlaceholder
+                default:
+                    bannerPlaceholder
+                        .overlay(ProgressView().tint(Color(hex: accentColor)))
+                }
+            }
+        } else {
+            bannerPlaceholder
+        }
+    }
+
+    private var bannerPlaceholder: some View {
+        LinearGradient(
+            colors: [
+                Color(hex: accentColor).opacity(0.3),
+                Color(hex: "4ECDC4").opacity(0.2)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - Identity Section
 
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "person.text.rectangle.fill", title: "IDENTITÉ", color: accentColor)
+            sectionHeader(icon: "person.text.rectangle.fill", title: "IDENTITE", color: accentColor)
 
             VStack(spacing: 0) {
-                profileField(icon: "person.fill", title: "Prénom", value: $firstName, placeholder: "Prénom")
+                profileField(icon: "person.fill", title: "Prenom", value: $firstName, placeholder: "Prenom")
                 profileField(icon: "person.fill", title: "Nom", value: $lastName, placeholder: "Nom")
                 profileInfoRow(icon: "at", title: "Pseudo", value: "@\(user?.username ?? "—")")
                 profileField(icon: "person.crop.rectangle.fill", title: "Nom d'affichage", value: $displayName, placeholder: "Nom d'affichage")
@@ -250,8 +369,8 @@ struct ProfileView: View {
 
             VStack(spacing: 0) {
                 languageRow(title: "Langue principale", selection: $systemLanguage)
-                languageRow(title: "Langue régionale", selection: $regionalLanguage)
-                languageRow(title: "Langue personnalisée", selection: $customDestinationLanguage)
+                languageRow(title: "Langue regionale", selection: $regionalLanguage)
+                languageRow(title: "Langue personnalisee", selection: $customDestinationLanguage)
             }
             .background(sectionBackground)
         }
@@ -411,7 +530,7 @@ struct ProfileView: View {
     }
 
     private func verificationBadge(verified: Bool) -> some View {
-        Text(verified ? "Vérifié" : "Non vérifié")
+        Text(verified ? "Verifie" : "Non verifie")
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
@@ -457,6 +576,17 @@ struct ProfileView: View {
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
     }
 
+    private func loadImageForEditor(from item: PhotosPickerItem, completion: @escaping (UIImage?) -> Void) {
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                completion(nil)
+                return
+            }
+            completion(image)
+        }
+    }
+
     // MARK: - Actions
 
     private func saveProfile() {
@@ -484,24 +614,13 @@ struct ProfileView: View {
         }
     }
 
-    private func handleAvatarSelection(_ item: PhotosPickerItem) {
+    private func uploadAvatar(_ image: UIImage) {
         isUploadingAvatar = true
         Task {
             do {
-                guard let data = try await item.loadTransferable(type: Data.self) else {
-                    isUploadingAvatar = false
-                    return
-                }
-
-                guard let uiImage = UIImage(data: data),
-                      let jpegData = uiImage.jpegData(compressionQuality: 0.8) else {
-                    isUploadingAvatar = false
-                    return
-                }
-
-                let base64 = jpegData.base64EncodedString()
-                let dataUri = "data:image/jpeg;base64,\(base64)"
-                let updatedUser = try await UserService.shared.updateAvatar(url: dataUri)
+                let compressed = compressImage(image, maxSizeKB: 500)
+                let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "avatar.jpg")
+                let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
             } catch {
@@ -513,6 +632,34 @@ struct ProfileView: View {
         }
     }
 
+    private func uploadBanner(_ image: UIImage) {
+        isUploadingBanner = true
+        Task {
+            do {
+                let compressed = compressImage(image, maxSizeKB: 800)
+                let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "banner.jpg")
+                let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
+                authManager.currentUser = updatedUser
+                HapticFeedback.success()
+            } catch {
+                HapticFeedback.error()
+                withAnimation { errorMessage = "Erreur lors du changement de banniere" }
+            }
+            isUploadingBanner = false
+            bannerItem = nil
+        }
+    }
+
+    private func compressImage(_ image: UIImage, maxSizeKB: Int) -> Data {
+        var compression: CGFloat = 0.8
+        var compressed = image.jpegData(compressionQuality: compression) ?? Data()
+        while compressed.count > maxSizeKB * 1024, compression > 0.1 {
+            compression -= 0.1
+            compressed = image.jpegData(compressionQuality: compression) ?? Data()
+        }
+        return compressed
+    }
+
     private func parseAndFormatDate(_ dateString: String) -> String? {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -522,4 +669,10 @@ struct ProfileView: View {
         formatter.locale = Locale(identifier: "fr_FR")
         return formatter.string(from: date)
     }
+}
+
+// MARK: - UIImage + Identifiable (for fullScreenCover)
+
+extension UIImage: @retroactive Identifiable {
+    public var id: ObjectIdentifier { ObjectIdentifier(self) }
 }

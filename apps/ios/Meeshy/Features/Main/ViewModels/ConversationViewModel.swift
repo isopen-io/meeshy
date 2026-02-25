@@ -49,6 +49,10 @@ class ConversationViewModel: ObservableObject {
     /// nil value means user chose "show original"
     @Published var activeTranslationOverrides: [String: MessageTranslation?] = [:]
 
+    /// Manual audio language override per message (user selected a language in Language tab for audio)
+    /// nil value means user chose "show original audio"
+    @Published var activeAudioLanguageOverrides: [String: String?] = [:]
+
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
@@ -111,6 +115,32 @@ class ConversationViewModel: ObservableObject {
     var allVisualAttachments: [MessageAttachment] {
         messages.flatMap { msg in
             msg.attachments.filter { [.image, .video].contains($0.type) }
+        }
+    }
+
+    // MARK: - Audio Items for Fullscreen Gallery
+
+    struct AudioItem: Identifiable {
+        let id: String // attachment.id
+        let attachment: MessageAttachment
+        let message: Message
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+    }
+
+    var allAudioItems: [AudioItem] {
+        messages.flatMap { msg in
+            msg.attachments
+                .filter { $0.type == .audio }
+                .map { att in
+                    AudioItem(
+                        id: att.id,
+                        attachment: att,
+                        message: msg,
+                        transcription: messageTranscriptions[msg.id],
+                        translatedAudios: messageTranslatedAudios[msg.id] ?? []
+                    )
+                }
         }
     }
 
@@ -1210,6 +1240,10 @@ class ConversationViewModel: ObservableObject {
 
     func setActiveTranslation(for messageId: String, translation: MessageTranslation?) {
         activeTranslationOverrides[messageId] = translation
+    }
+
+    func setActiveAudioLanguage(for messageId: String, language: String?) {
+        activeAudioLanguageOverrides[messageId] = language
     }
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {

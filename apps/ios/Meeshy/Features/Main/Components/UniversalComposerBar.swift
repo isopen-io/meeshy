@@ -164,8 +164,6 @@ struct UniversalComposerBar: View {
     @State var showAttachOptions = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
-    @State private var previousStoryId: String? = nil
-
     // Voice recording
     @State var isRecording = false
     @State var recordingDuration: TimeInterval = 0
@@ -433,51 +431,43 @@ struct UniversalComposerBar: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
-        .onChange(of: attachments.count) { _ in notifyContentChange() }
-        .onChange(of: effectiveIsRecording) { _ in notifyContentChange() }
+        .onChange(of: attachments.count) { _, _ in notifyContentChange() }
+        .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
-            previousStoryId = storyId
             // Load initial draft if available
             if let id = storyId, let draft = getDraft?(id) {
                 text = draft.text
                 attachments = draft.attachments
             }
         }
-        .onChange(of: selectedLanguage) { newValue in
+        .onChange(of: selectedLanguage) { _, newValue in
             currentLanguage = newValue
         }
-        .onChange(of: storyId) { newId in
-            // Save draft for previous story (stop recording if in progress)
-            if let prevId = previousStoryId {
-                if isRecording {
-                    forceStopRecording()
-                }
-                onSaveDraft?(prevId, text, attachments)
+        .onChange(of: storyId) { oldId, newId in
+            if let oldId {
+                if isRecording { forceStopRecording() }
+                onSaveDraft?(oldId, text, attachments)
             }
-            // Load draft for new story
-            if let newId = newId, let draft = getDraft?(newId) {
+            if let newId, let draft = getDraft?(newId) {
                 text = draft.text
                 attachments = draft.attachments
             } else {
                 text = ""
                 attachments = []
             }
-            // Reset transient UI state
             showAttachOptions = false
             isFocused = false
             textAnalyzer.reset()
-            previousStoryId = newId
             notifyContentChange()
         }
-        .onChange(of: isFocused) { focused in
+        .onChange(of: isFocused) { _, focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = focused
             }
             if focused {
                 onAnyInteraction?()
             }
-            // Close attach menu when typing
             if focused && showAttachOptions {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachOptions = false
@@ -485,7 +475,7 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
-        .onChange(of: text) { newValue in
+        .onChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
@@ -510,14 +500,14 @@ struct UniversalComposerBar: View {
             // Clipboard content: auto-create when pasting 2000+ chars
             handleClipboardCheck(newValue)
         }
-        .onChange(of: textBinding?.wrappedValue) { newValue in
+        .onChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
             text = newValue
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
             LanguagePickerSheet(analyzer: textAnalyzer)
         }
-        .onChange(of: injectedEmoji.wrappedValue) { emoji in
+        .onChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {
                 text += emoji
                 DispatchQueue.main.async {
@@ -701,7 +691,27 @@ struct UniversalComposerBar: View {
     // ========================================================================
 
     private var composerBackground: some View {
-        Color.clear
+        let accent = Color(hex: accentColor)
+        let isDark = theme.mode.isDark
+
+        return ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(isFocused ? 1.0 : 0.8)
+
+            accent
+                .opacity(isFocused
+                    ? (isDark ? 0.15 : 0.08)
+                    : (isDark ? 0.06 : 0.03))
+
+            VStack {
+                Rectangle()
+                    .fill(accent.opacity(isFocused ? (isDark ? 0.4 : 0.25) : (isDark ? 0.12 : 0.06)))
+                    .frame(height: 0.5)
+                Spacer()
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isFocused)
     }
 
     // ========================================================================

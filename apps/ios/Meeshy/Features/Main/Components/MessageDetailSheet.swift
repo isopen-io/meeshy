@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 import NaturalLanguage
 
 // MARK: - DetailTab
@@ -135,7 +136,10 @@ struct MessageDetailSheet: View {
     var canDelete: Bool = false
     var actions: [MessageAction]? = nil
     var textTranslations: [MessageTranslation] = []
+    var transcription: MessageTranscription? = nil
+    var translatedAudios: [MessageTranslatedAudio] = []
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
+    var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onDismissAction: (() -> Void)? = nil
 
@@ -184,7 +188,7 @@ struct MessageDetailSheet: View {
     // Views sub-filter
     @State private var viewsFilter: ViewsFilter = .sent
 
-    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, textTranslations: [MessageTranslation] = [], onSelectTranslation: ((MessageTranslation?) -> Void)? = nil, onRequestTranslation: ((String, String) -> Void)? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
+    init(message: Message, contactColor: String, conversationId: String, initialTab: DetailTab? = nil, canDelete: Bool = false, actions: [MessageAction]? = nil, textTranslations: [MessageTranslation] = [], transcription: MessageTranscription? = nil, translatedAudios: [MessageTranslatedAudio] = [], onSelectTranslation: ((MessageTranslation?) -> Void)? = nil, onSelectAudioLanguage: ((String?) -> Void)? = nil, onRequestTranslation: ((String, String) -> Void)? = nil, onDismissAction: (() -> Void)? = nil, onReact: ((String) -> Void)? = nil, onReport: ((String, String?) -> Void)? = nil, onDelete: (() -> Void)? = nil, externalTabSelection: Binding<DetailTab?>? = nil) {
         self.message = message
         self.contactColor = contactColor
         self.conversationId = conversationId
@@ -192,7 +196,10 @@ struct MessageDetailSheet: View {
         self.canDelete = canDelete
         self.actions = actions
         self.textTranslations = textTranslations
+        self.transcription = transcription
+        self.translatedAudios = translatedAudios
         self.onSelectTranslation = onSelectTranslation
+        self.onSelectAudioLanguage = onSelectAudioLanguage
         self.onRequestTranslation = onRequestTranslation
         self.onDismissAction = onDismissAction
         self.onReact = onReact
@@ -385,21 +392,6 @@ struct MessageDetailSheet: View {
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
 
-    // MARK: - Language Color System (aligned with web V2 theme)
-
-    private static let languageColors: [String: String] = [
-        "fr": "5E60CE", "en": "2A9D8F", "es": "F4A261", "zh": "C1292E",
-        "ja": "F28482", "ar": "E9C46A", "de": "264653", "pt": "2A9D8F",
-        "ru": "5E60CE", "ko": "C1292E", "it": "E76F51", "hi": "F4845F",
-        "tr": "577590", "nl": "43AA8B", "pl": "4D908E", "vi": "90BE6D",
-        "th": "F9C74F", "sv": "277DA1"
-    ]
-    private static let defaultLanguageColor = "6B7280"
-
-    private static func colorForLanguage(_ code: String) -> String {
-        languageColors[code] ?? defaultLanguageColor
-    }
-
     private static let supportedLanguages: [(code: String, flag: String, name: String)] = [
         ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
         ("en", "\u{1F1EC}\u{1F1E7}", "English"),
@@ -425,7 +417,7 @@ struct MessageDetailSheet: View {
 
     private var languageTabContent: some View {
         let originalLang = message.originalLanguage
-        let originalColor = Color(hex: Self.colorForLanguage(originalLang))
+        let originalColor = Color(hex: LanguageDisplay.colorHex(for:originalLang))
 
         return VStack(alignment: .leading, spacing: 14) {
             // Original language banner
@@ -457,18 +449,29 @@ struct MessageDetailSheet: View {
                     )
             )
 
-            // Original content preview
+            // Original content preview (text or transcription for audio messages)
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
                     .font(.system(size: 13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(3)
                     .padding(.horizontal, 4)
+            } else if let transcription {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(originalColor.opacity(0.7))
+                    Text(transcription.text)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(3)
+                }
+                .padding(.horizontal, 4)
             }
 
             // Selected translation display
             if let selectedCode = selectedLanguageCode, let translated = translations[selectedCode] {
-                let langColor = Color(hex: Self.colorForLanguage(selectedCode))
+                let langColor = Color(hex: LanguageDisplay.colorHex(for:selectedCode))
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
@@ -521,7 +524,7 @@ struct MessageDetailSheet: View {
     }
 
     private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
-        let langColor = Color(hex: Self.colorForLanguage(lang.code))
+        let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
         let isTranslating = translatingLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
@@ -544,8 +547,24 @@ struct MessageDetailSheet: View {
                         confidenceScore: nil
                     )
                     onSelectTranslation?(mt)
+                    if !translatedAudios.isEmpty {
+                        onSelectAudioLanguage?(lang.code)
+                    }
                 } else if isSelected {
                     onSelectTranslation?(nil)
+                    if !translatedAudios.isEmpty {
+                        onSelectAudioLanguage?(nil)
+                    }
+                }
+            } else if translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
+                // Audio-only translation available — toggle selection
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedLanguageCode = isSelected ? nil : lang.code
+                }
+                if !isSelected {
+                    onSelectAudioLanguage?(lang.code)
+                } else {
+                    onSelectAudioLanguage?(nil)
                 }
             } else {
                 Task { await translateTo(lang.code, from: originalLang) }
@@ -585,6 +604,21 @@ struct MessageDetailSheet: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                } else if let audioForLang = translatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(langColor.opacity(0.6))
+                        Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: 180, alignment: .trailing)
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.system(size: 12, weight: .medium))

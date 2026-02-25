@@ -106,6 +106,7 @@ struct OnboardingFlowView: View {
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Color(.systemGray6).opacity(0.9)))
                 }
+                .bounceOnTap(scale: 0.9)
             } else {
                 Button(action: {
                     dismiss()
@@ -117,6 +118,7 @@ struct OnboardingFlowView: View {
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(Color(.systemGray6).opacity(0.9)))
                 }
+                .bounceOnTap(scale: 0.88)
             }
 
             Spacer()
@@ -176,6 +178,7 @@ struct OnboardingFlowView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
+                .bounceOnTap(scale: 0.94)
                 .padding(.top, 4)
             }
         }

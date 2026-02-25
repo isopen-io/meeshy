@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
 DERIVED_DATA="build"

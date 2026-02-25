@@ -166,6 +166,8 @@ class ConversationListViewModel: ObservableObject {
                     await LocalStore.shared.saveConversations(conversations)
                     await LocalStore.shared.cleanupStaleMessageCaches()
                 }
+
+                prefetchMessages(for: response.data, userId: userId)
             }
         } catch { }
 
@@ -357,6 +359,37 @@ class ConversationListViewModel: ObservableObject {
                 body: ["emoji": emoji]
             )
         } catch { }
+    }
+
+    // MARK: - Message Prefetch
+
+    private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
+        let toFetch = Array(apiConversations.prefix(20))
+
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                for apiConversation in toFetch {
+                    let conversationId = apiConversation.id
+                    let cached = await LocalStore.shared.loadMessages(for: conversationId)
+                    if !cached.isEmpty { continue }
+
+                    group.addTask {
+                        do {
+                            let response = try await MessageService.shared.list(
+                                conversationId: conversationId,
+                                limit: 20
+                            )
+                            if response.success {
+                                let messages = response.data.reversed().map {
+                                    $0.toMessage(currentUserId: userId)
+                                }
+                                await LocalStore.shared.saveMessages(Array(messages), for: conversationId)
+                            }
+                        } catch { }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Helpers

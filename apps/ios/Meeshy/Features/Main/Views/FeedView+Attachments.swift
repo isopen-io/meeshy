@@ -685,7 +685,7 @@ struct FeedComposerSheet: View {
             }
             .ignoresSafeArea()
         }
-        .onChange(of: selectedPhotoItems) { items in
+        .onChange(of: selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         .onAppear {

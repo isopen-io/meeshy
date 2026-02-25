@@ -26,13 +26,13 @@ struct MessageComposer: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(composerBackground)
-        .onChange(of: text) { newText in
+        .onChange(of: text) { _, newText in
             textAnalyzer.analyze(text: newText)
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
             LanguagePickerSheet(analyzer: textAnalyzer)
         }
-        .onChange(of: isFocused) { newValue in
+        .onChange(of: isFocused) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = newValue
             }

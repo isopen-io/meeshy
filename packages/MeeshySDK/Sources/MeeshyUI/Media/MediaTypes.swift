@@ -147,9 +147,13 @@ public struct TranscriptionDisplaySegment: Identifiable {
     }
 
     public static func buildFrom(_ transcription: MessageTranscription) -> [TranscriptionDisplaySegment] {
+        buildFrom(segments: transcription.segments)
+    }
+
+    public static func buildFrom(segments: [MessageTranscriptionSegment]) -> [TranscriptionDisplaySegment] {
         var speakerMap: [String: Int] = [:]
         var nextIndex = 0
-        return transcription.segments.map { seg in
+        return segments.map { seg in
             let sid = seg.speakerId ?? "default"
             if speakerMap[sid] == nil {
                 speakerMap[sid] = nextIndex

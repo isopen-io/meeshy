@@ -327,7 +327,7 @@ extension ConversationListView {
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
-        .onChange(of: isSearching) { newValue in
+        .onChange(of: isSearching) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
             }

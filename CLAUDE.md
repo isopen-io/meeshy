@@ -23,10 +23,15 @@ Message recu → Detection langue originale → Traduction auto (NLLB-200 via tr
 ```
 
 ### Resolution de langue
+La resolution respecte les booleens de preference utilisateur (`useCustomDestination`, `translateToSystemLanguage`, `translateToRegionalLanguage`) :
 1. Override manuel utilisateur (selection explicite dans l'onglet Language)
-2. Langue principale configuree dans le profil
-3. Langues secondaires configurees
-4. Contenu original (fallback)
+2. `customDestinationLanguage` (si `useCustomDestination` = true)
+3. `systemLanguage` (si `translateToSystemLanguage` = true)
+4. `regionalLanguage` (si `translateToRegionalLanguage` = true)
+5. `systemLanguage` (fallback inconditionnel)
+6. Locale appareil (fallback final)
+
+Source de verite : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
 
 ## Architecture
 

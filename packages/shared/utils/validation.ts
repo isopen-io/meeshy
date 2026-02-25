@@ -251,6 +251,20 @@ export const updateAvatarSchema = z.object({
 }).strict();
 
 /**
+ * Schéma de validation pour l'upload de bannière
+ */
+export const updateBannerSchema = z.object({
+  banner: z.string().refine(
+    (data) => {
+      return data.startsWith('http://') ||
+             data.startsWith('https://') ||
+             data.startsWith('data:image/');
+    },
+    'Format bannière invalide. Doit être une URL ou une image base64'
+  )
+}).strict();
+
+/**
  * Schéma de validation pour le changement de mot de passe
  */
 export const updatePasswordSchema = z.object({
@@ -2385,6 +2399,7 @@ export type VConversationLinkType = z.infer<typeof conversationLinkTypeEnum>;
 // User profile update types
 export type VUpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 export type VUpdateAvatar = z.infer<typeof updateAvatarSchema>;
+export type VUpdateBanner = z.infer<typeof updateBannerSchema>;
 export type VUpdatePassword = z.infer<typeof updatePasswordSchema>;
 export type VUpdateUsername = z.infer<typeof updateUsernameSchema>;
 

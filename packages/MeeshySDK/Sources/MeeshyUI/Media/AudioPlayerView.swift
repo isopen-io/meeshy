@@ -29,7 +29,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var loadTask: Task<Void, Never>?
-    private(set) var currentUrl: String?
+    public private(set) var currentUrl: String?
     private var listenStartTime: Date?
 
     public override init() {
@@ -146,10 +146,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         seek(to: min(1, max(0, fraction)))
     }
 
-    public func cycleSpeed() {
-        speed = speed.next()
+    public func skip(seconds: Double) {
+        guard let player = player else { return }
+        let target = max(0, min(player.duration, player.currentTime + seconds))
+        player.currentTime = target
+        currentTime = target
+        progress = player.duration > 0 ? target / player.duration : 0
+    }
+
+    public func setSpeed(_ newSpeed: PlaybackSpeed) {
+        speed = newSpeed
         player?.rate = Float(speed.rawValue)
         HapticFeedback.light()
+    }
+
+    public func cycleSpeed() {
+        setSpeed(speed.next())
     }
 
     // MARK: - Playback Finished (called by delegate)
@@ -212,7 +224,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         loadTask?.cancel()
     }
 
-    @MainActor func unregisterFromCoordinator() {
+    @MainActor public func unregisterFromCoordinator() {
         PlaybackCoordinator.shared.unregister(self)
     }
 
@@ -260,6 +272,8 @@ public struct AudioPlayerView: View {
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
+    private var externalLanguage: Binding<String?>?
+    private var bottomSlot: AnyView?
 
     @StateObject private var player = AudioPlaybackManager()
     @ObservedObject private var theme = ThemeManager.shared
@@ -270,6 +284,11 @@ public struct AudioPlayerView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
+        if selectedAudioLanguage != "orig",
+           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }),
+           !translated.segments.isEmpty {
+            return TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
+        }
         guard let t = transcription else { return [] }
         return TranscriptionDisplaySegment.buildFrom(t)
     }
@@ -286,12 +305,17 @@ public struct AudioPlayerView: View {
                 onFullscreen: (() -> Void)? = nil,
                 onRequestTranscription: (() -> Void)? = nil,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
-                onPlayingChange: ((Bool) -> Void)? = nil) {
+                onPlayingChange: ((Bool) -> Void)? = nil,
+                externalLanguage: Binding<String?>? = nil,
+                @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
+        self.externalLanguage = externalLanguage
+        let content = bottomContent()
+        self.bottomSlot = content is EmptyView ? nil : AnyView(content)
     }
 
     private var fullTranscriptionText: String {
@@ -326,6 +350,22 @@ public struct AudioPlayerView: View {
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
+        }
+        .onChange(of: externalLanguage?.wrappedValue) { newLang in
+            let code = newLang ?? "orig"
+            guard code != selectedAudioLanguage else { return }
+            switchToLanguage(code)
+        }
+    }
+
+    private func switchToLanguage(_ code: String) {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            selectedAudioLanguage = code
+        }
+        if code == "orig" {
+            player.play(urlString: attachment.fileUrl)
+        } else if let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
+            player.play(urlString: translated.url)
         }
     }
 
@@ -365,20 +405,7 @@ public struct AudioPlayerView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
-                if isLongTranscription {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isTranscriptionExpanded.toggle()
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 20)
-                    }
-                }
+                transcriptionFooterRow
             }
         } else if let onRequest = onRequestTranscription {
             VStack(spacing: 0) {
@@ -399,8 +426,43 @@ public struct AudioPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                 }
+
+                if let slot = bottomSlot {
+                    slot.padding(.horizontal, 10).padding(.bottom, 6)
+                }
+            }
+        } else if let slot = bottomSlot {
+            VStack(spacing: 0) {
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slot.padding(.horizontal, 10).padding(.vertical, 6)
             }
         }
+    }
+
+    // MARK: - Transcription Footer Row (chevron centered + bottomSlot below)
+    @ViewBuilder
+    private var transcriptionFooterRow: some View {
+        VStack(spacing: 2) {
+            if isLongTranscription {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isTranscriptionExpanded.toggle()
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 20)
+                }
+            }
+            if let slot = bottomSlot {
+                slot.padding(.horizontal, 10)
+            }
+        }
+        .padding(.bottom, 6)
     }
 
     private var truncatedSegments: [TranscriptionDisplaySegment] {
@@ -550,6 +612,12 @@ public struct AudioPlayerView: View {
             }
             .padding(.leading, 4)
 
+            Spacer()
+
+            Text(formatMediaDuration(estimatedDuration))
+                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
+
             if let onFullscreen = onFullscreen {
                 Button { onFullscreen() } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -558,12 +626,6 @@ public struct AudioPlayerView: View {
                 }
                 .padding(.leading, 4)
             }
-
-            Spacer()
-
-            Text(formatMediaDuration(estimatedDuration))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
-                .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }
     }
 
@@ -627,12 +689,8 @@ public struct AudioPlayerView: View {
 
     private func audioLanguagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {
         Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedAudioLanguage = code
-            }
-            if code != "orig", let translated = translatedAudios.first(where: { $0.targetLanguage == code }) {
-                player.play(urlString: translated.url)
-            }
+            switchToLanguage(code)
+            externalLanguage?.wrappedValue = code == "orig" ? nil : code
             HapticFeedback.light()
         } label: {
             HStack(spacing: 3) {

@@ -872,7 +872,7 @@ struct FeedView: View {
                         .padding(.top, 4)
                 }
                 .scaleEffect(composerBounce ? 1.01 : 1.0)
-                .onChange(of: isComposerFocused) { newValue in
+                .onChange(of: isComposerFocused) { _, newValue in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                         composerBounce = newValue
                     }
@@ -958,7 +958,7 @@ struct FeedView: View {
                 handleFeedLocationSelection(coordinate: coordinate, address: address)
             }
         }
-        .onChange(of: selectedPhotoItems) { items in
+        .onChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
         }
     }

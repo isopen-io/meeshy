@@ -236,7 +236,7 @@ struct CommentsSheetView: View {
                         )
                 )
                 .scaleEffect(commentBounce ? 1.02 : 1.0)
-                .onChange(of: isComposerFocused) { newValue in
+                .onChange(of: isComposerFocused) { _, newValue in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                         commentBounce = newValue
                     }

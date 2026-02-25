@@ -99,7 +99,12 @@ extension ConversationView {
                         detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
                         detailSheetInitialTab = .language
                         showMessageDetailSheet = true
-                    }
+                    },
+                    allAudioItems: viewModel.allAudioItems,
+                    onScrollToMessage: { messageId in
+                        scrollToMessageId = messageId
+                    },
+                    activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil
                 )
                 .background(
                     GeometryReader { geo in

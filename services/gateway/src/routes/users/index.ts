@@ -5,6 +5,7 @@ import {
   getUserTest,
   updateUserProfile,
   updateUserAvatar,
+  updateUserBanner,
   updateUserPassword,
   updateUsername,
   getUserByUsername,
@@ -60,6 +61,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserTest(fastify);
   await updateUserProfile(fastify);
   await updateUserAvatar(fastify);
+  await updateUserBanner(fastify);
   await updateUserPassword(fastify);
   await updateUsername(fastify);
   await getUserByUsername(fastify);

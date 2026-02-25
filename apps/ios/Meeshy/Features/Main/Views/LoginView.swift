@@ -100,6 +100,7 @@ struct LoginView: View {
                                     )
                             )
                     )
+                    .bounceOnFocus(focusedField == .username)
 
                     // Password
                     HStack(spacing: MeeshySpacing.md) {
@@ -130,6 +131,7 @@ struct LoginView: View {
                                     )
                             )
                     )
+                    .bounceOnFocus(focusedField == .password)
 
                     // Error message
                     if let error = authManager.errorMessage, showError {
@@ -166,6 +168,7 @@ struct LoginView: View {
                     }
                     .disabled(authManager.isLoading || username.isEmpty || password.isEmpty)
                     .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
+                    .bounceOnTap()
                     .padding(.top, MeeshySpacing.sm)
                     .accessibilityLabel("Se connecter")
                     .accessibilityHint("Connexion avec le nom d'utilisateur et le mot de passe saisis")
@@ -176,6 +179,7 @@ struct LoginView: View {
                                 .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                                 .foregroundColor(theme.textMuted)
                         }
+                        .bounceOnTap(scale: 0.94)
                         .accessibilityLabel("Mot de passe oublie")
                         .accessibilityHint("Ouvre le formulaire de reinitialisation du mot de passe")
 
@@ -194,6 +198,7 @@ struct LoginView: View {
                                     )
                                 )
                         }
+                        .bounceOnTap(scale: 0.94)
                         .accessibilityLabel("Connexion sans mot de passe")
                         .accessibilityHint("Ouvre le formulaire de connexion par lien magique")
                     }
@@ -220,6 +225,7 @@ struct LoginView: View {
                     }
                     .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 }
+                .bounceOnTap(scale: 0.94)
                 .accessibilityLabel("Creer un compte")
                 .accessibilityHint("Ouvre le formulaire d'inscription")
                 .padding(.bottom, MeeshySpacing.xxxl)
@@ -245,7 +251,7 @@ struct LoginView: View {
                 showFields = true
             }
         }
-        .onChange(of: authManager.errorMessage) { newValue in
+        .onChange(of: authManager.errorMessage) { _, newValue in
             if newValue != nil {
                 withAnimation(MeeshyAnimation.springDefault) {
                     showError = true

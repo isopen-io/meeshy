@@ -361,8 +361,13 @@ struct ConversationView: View {
                         initialTab: detailSheetInitialTab,
                         canDelete: msg.isMe || isCurrentUserAdminOrMod,
                         textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                        transcription: viewModel.messageTranscriptions[msg.id],
+                        translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                         onSelectTranslation: { translation in
                             viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                        },
+                        onSelectAudioLanguage: { langCode in
+                            viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
                         },
                         onRequestTranslation: { messageId, lang in
                             MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
@@ -523,8 +528,8 @@ struct ConversationView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .onChange(of: viewModel.isLoadingInitial) { _, isLoading in
-                if !isLoading, let last = viewModel.messages.last {
+            .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
+                if wasLoading && !isLoading, let last = viewModel.messages.last {
                     viewModel.markProgrammaticScroll()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         withAnimation(.easeOut(duration: 0.4)) { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -538,8 +543,8 @@ struct ConversationView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
                 } else { unreadBadgeCount += 1 }
             }
-            .onChange(of: viewModel.isLoadingOlder) { _, isLoading in
-                if !isLoading, let anchorId = viewModel.scrollAnchorId {
+            .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in
+                if wasLoading && !isLoading, let anchorId = viewModel.scrollAnchorId {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         proxy.scrollTo(anchorId, anchor: .top); viewModel.scrollAnchorId = nil
                     }
@@ -696,8 +701,13 @@ struct ConversationView: View {
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                transcription: viewModel.messageTranscriptions[msg.id],
+                translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                 onSelectTranslation: { translation in
                     viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                },
+                onSelectAudioLanguage: { langCode in
+                    viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
                 },
                 onRequestTranslation: { messageId, lang in
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)

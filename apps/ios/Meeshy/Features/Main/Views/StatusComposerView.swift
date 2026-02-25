@@ -146,7 +146,7 @@ struct StatusComposerView: View {
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
-            .onChange(of: statusText) { newValue in
+            .onChange(of: statusText) { _, newValue in
                 if newValue.count > 140 {
                     statusText = String(newValue.prefix(140))
                 }

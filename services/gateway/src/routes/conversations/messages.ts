@@ -2145,30 +2145,29 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Search in content (Prisma text search)
-      const contentMatches = await prisma.message.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          conversationId: true,
-          content: true,
-          originalLanguage: true,
-          messageType: true,
-          translations: true,
-          createdAt: true,
-          senderId: true,
-          sender: {
-            select: { id: true, username: true, displayName: true, avatar: true }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: searchLimit + 1 // +1 to check hasMore
-      });
+      const messageSelect = {
+        id: true,
+        conversationId: true,
+        content: true,
+        originalLanguage: true,
+        messageType: true,
+        translations: true,
+        createdAt: true,
+        senderId: true,
+        sender: {
+          select: { id: true, username: true, displayName: true, avatar: true }
+        }
+      };
 
-      // Also search in translations (Json field - in-memory filter)
-      let translationMatches: any[] = [];
-      if (contentMatches.length < searchLimit) {
-        const translationCandidates = await prisma.message.findMany({
+      // Search content AND translations in parallel
+      const [contentMatches, translationCandidates] = await Promise.all([
+        prisma.message.findMany({
+          where: whereClause,
+          select: messageSelect,
+          orderBy: { createdAt: 'desc' },
+          take: searchLimit + 1
+        }),
+        prisma.message.findMany({
           where: {
             conversationId,
             isDeleted: false,
@@ -2176,31 +2175,19 @@ export function registerMessagesRoutes(
             translations: { not: null },
             ...(cursor ? { createdAt: whereClause.createdAt } : {})
           },
-          select: {
-            id: true,
-            conversationId: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            translations: true,
-            createdAt: true,
-            senderId: true,
-            sender: {
-              select: { id: true, username: true, displayName: true, avatar: true }
-            }
-          },
+          select: messageSelect,
           orderBy: { createdAt: 'desc' },
-          take: 200 // Scan a batch for translation matches
-        });
+          take: 200
+        })
+      ]);
 
-        translationMatches = translationCandidates.filter((msg: any) => {
-          if (!msg.translations || typeof msg.translations !== 'object') return false;
-          return Object.values(msg.translations).some((t: any) => {
-            const text = typeof t === 'string' ? t : t?.text || t?.content || '';
-            return text.toLowerCase().includes(queryLower);
-          });
+      const translationMatches = translationCandidates.filter((msg: any) => {
+        if (!msg.translations || typeof msg.translations !== 'object') return false;
+        return Object.values(msg.translations).some((t: any) => {
+          const text = typeof t === 'string' ? t : t?.text || t?.content || '';
+          return text.toLowerCase().includes(queryLower);
         });
-      }
+      });
 
       // Merge and deduplicate results
       const seenIds = new Set(contentMatches.map(m => m.id));
@@ -2219,9 +2206,17 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
+      // Transform translations JSON → array format for SDK compatibility
+      const mappedResults = results.map((msg: any) => ({
+        ...msg,
+        translations: msg.translations
+          ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
+          : undefined
+      }));
+
       reply.send({
         success: true,
-        data: results,
+        data: mappedResults,
         cursorPagination: {
           hasMore,
           nextCursor: hasMore ? lastId : null,

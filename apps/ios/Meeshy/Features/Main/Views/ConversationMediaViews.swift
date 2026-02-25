@@ -265,11 +265,18 @@ struct AudioMediaView: View {
     @ObservedObject var theme: ThemeManager
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
+    var textTranslations: [MessageTranslation] = []
+    var allAudioItems: [ConversationViewModel.AudioItem] = []
+    var onScrollToMessage: ((String) -> Void)?
     var onShareFile: ((URL) -> Void)?
+    var onShowTranslationDetail: ((String) -> Void)?
+    var onRequestTranslation: ((String, String) -> Void)?
+    var activeAudioLanguageOverride: String? = nil
 
     @State private var isCached = false
     @State private var isAudioPlaying = false
     @State private var showAudioFullscreen = false
+    @State private var selectedAudioLangCode: String? = nil
     @StateObject private var downloader = AttachmentDownloader()
 
     private var timeString: String {
@@ -293,8 +300,11 @@ struct AudioMediaView: View {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isAudioPlaying = playing
                             }
-                        }
-                    )
+                        },
+                        externalLanguage: $selectedAudioLangCode
+                    ) {
+                        audioMetaRow
+                    }
                     .transition(.opacity)
                 } else {
                     audioPlaceholder
@@ -307,14 +317,6 @@ struct AudioMediaView: View {
                     audioDurationBadge(seconds: Double(dur) / 1000.0)
                         .padding(.trailing, 8)
                         .padding(.top, 6)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !isAudioPlaying {
-                    audioTimestampOverlay
-                        .padding(.trailing, 8)
-                        .padding(.bottom, 6)
-                        .transition(.opacity)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -337,12 +339,16 @@ struct AudioMediaView: View {
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
-                attachment: attachment,
-                message: message,
+                allAudioItems: allAudioItems,
+                startAttachmentId: attachment.id,
                 contactColor: contactColor,
-                transcription: transcription,
-                translatedAudios: translatedAudios
+                onDismissToMessage: onScrollToMessage
             )
+        }
+        .onChange(of: activeAudioLanguageOverride) { _, newLang in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                selectedAudioLangCode = newLang
+            }
         }
         .task {
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
@@ -357,23 +363,77 @@ struct AudioMediaView: View {
         }
     }
 
-    private var audioTimestampOverlay: some View {
+    private var audioMetaRow: some View {
         let isDark = theme.mode.isDark
-        return HStack(spacing: 3) {
+        let accent = Color(hex: contactColor)
+        let origCode = message.originalLanguage.lowercased()
+        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
+
+        return HStack(spacing: 4) {
+            if !translatedAudios.isEmpty {
+                audioFlagPill(code: origCode, isOriginal: true, isDark: isDark, accent: accent)
+
+                ForEach(translatedAudios, id: \.id) { audio in
+                    let code = audio.targetLanguage.lowercased()
+                    if code != origCode {
+                        audioFlagPill(code: code, isOriginal: false, isDark: isDark, accent: accent)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if !translatedAudios.isEmpty, onShowTranslationDetail != nil {
+                Button {
+                    onShowTranslationDetail?(message.id)
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "translate")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(hex: "4ECDC4"))
+                }
+            }
+
             Text(timeString)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(metaColor)
 
             if message.isMe {
                 audioDeliveryCheckmark(isDark: isDark)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule()
-                .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
-        )
+    }
+
+    private func audioFlagPill(code: String, isOriginal: Bool, isDark: Bool, accent: Color) -> some View {
+        let display = LanguageDisplay.from(code: code)
+        let isSelected = selectedAudioLangCode?.lowercased() == code.lowercased()
+            || (selectedAudioLangCode == nil && isOriginal)
+        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+
+        return Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                selectedAudioLangCode = isOriginal ? nil : code
+            }
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 2) {
+                Text(display?.flag ?? "🏳️")
+                    .font(.system(size: 10))
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 0.5)
+                        .fill(langColor)
+                        .frame(width: 8, height: 1.5)
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(isSelected
+                    ? langColor.opacity(isDark ? 0.2 : 0.12)
+                    : Color.clear)
+            )
+        }
+        .accessibilityLabel(display?.name ?? code)
     }
 
     @ViewBuilder

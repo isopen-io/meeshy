@@ -35,6 +35,65 @@ public final class UserService {
         return response.data.user
     }
 
+    public func updateBanner(url: String) async throws -> MeeshyUser {
+        struct Body: Encodable { let banner: String }
+        let response: APIResponse<UpdateProfileResponse> = try await api.patch(
+            endpoint: "/users/me/banner", body: Body(banner: url)
+        )
+        return response.data.user
+    }
+
+    public func uploadImage(_ imageData: Data, filename: String = "image.jpg") async throws -> String {
+        let boundary = UUID().uuidString
+        var body = Data()
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"files\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        guard let url = URL(string: "\(api.baseURL)/attachments/upload") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = api.authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(
+                (response as? HTTPURLResponse)?.statusCode ?? 500,
+                "Upload failed"
+            )
+        }
+
+        struct UploadResponse: Decodable {
+            let success: Bool
+            let data: UploadData
+        }
+        struct UploadData: Decodable {
+            let attachments: [UploadedAttachment]
+        }
+        struct UploadedAttachment: Decodable {
+            let url: String
+        }
+
+        let decoded = try JSONDecoder().decode(UploadResponse.self, from: data)
+        guard let fileURL = decoded.data.attachments.first?.url else {
+            throw APIError.noData
+        }
+        return fileURL
+    }
+
     public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
         let encoded = idOrUsername.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? idOrUsername
         let response: APIResponse<MeeshyUser> = try await api.request(

@@ -339,7 +339,7 @@ struct ConversationListView: View {
                     GeometryReader { geo in
                         let offset = geo.frame(in: .named("scroll")).minY
                         Color.clear
-                            .onChange(of: offset) { newOffset in
+                            .onChange(of: offset) { _, newOffset in
                                 handleScrollChange(newOffset)
                             }
                     }
@@ -399,8 +399,8 @@ struct ConversationListView: View {
                     }
 
                     Color.clear.frame(height: 280)
-                        .onChange(of: draggingConversation) { newValue in
-                            if newValue == nil {
+                        .onChange(of: draggingConversation) { oldValue, newValue in
+                            if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil
                                 }
@@ -481,10 +481,9 @@ struct ConversationListView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
-        .onChange(of: hideSearchBar) { newValue in
-            isScrollingDown = newValue
-            // Dismiss keyboard and overlay when hiding search bar
-            if newValue {
+        .onChange(of: hideSearchBar) { wasHidden, isHidden in
+            isScrollingDown = isHidden
+            if !wasHidden && isHidden {
                 isSearching = false
                 showSearchOverlay = false
             }
@@ -499,13 +498,13 @@ struct ConversationListView: View {
         .task {
             await conversationViewModel.loadConversations()
         }
-        .onChange(of: conversationViewModel.userCategories) { categories in
+        .onChange(of: conversationViewModel.userCategories) { _, categories in
             for cat in categories where cat.isExpanded {
                 expandedSections.insert(cat.id)
             }
         }
         // Show search bar when filtered list is empty
-        .onChange(of: filtered.isEmpty) { isEmpty in
+        .onChange(of: filtered.isEmpty) { _, isEmpty in
             if isEmpty && hideSearchBar {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     hideSearchBar = false
@@ -514,16 +513,15 @@ struct ConversationListView: View {
             }
         }
         // Show search bar when category changes
-        .onChange(of: selectedFilter) { _ in
+        .onChange(of: selectedFilter) { _, _ in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 hideSearchBar = false
                 isScrollingDown = false
             }
         }
         // Show search bar when Feed is closed (user comes back from Feed)
-        .onChange(of: feedIsVisible) { isVisible in
-            if !isVisible {
-                // Feed just closed, show search bar
+        .onChange(of: feedIsVisible) { wasVisible, isVisible in
+            if wasVisible && !isVisible {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     hideSearchBar = false
                     isScrollingDown = false

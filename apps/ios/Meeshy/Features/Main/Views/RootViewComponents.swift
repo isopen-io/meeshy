@@ -462,8 +462,7 @@ struct ThemedFeedComposer: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: text.isEmpty)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
-        .onChange(of: isFocused) { focused in
-            // Hide attachment menu when focusing on text
+        .onChange(of: isFocused) { _, focused in
             if focused && showAttachmentMenu {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachmentMenu = false

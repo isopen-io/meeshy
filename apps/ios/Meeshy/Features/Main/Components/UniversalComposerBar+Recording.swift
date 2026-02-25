@@ -56,7 +56,7 @@ extension UniversalComposerBar {
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
                     .font(.system(size: 16))
-                    .onChange(of: text) { newValue in
+                    .onChange(of: text) { _, newValue in
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
                         }

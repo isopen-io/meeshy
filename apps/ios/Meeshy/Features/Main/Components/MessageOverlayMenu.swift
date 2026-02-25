@@ -17,7 +17,10 @@ struct MessageOverlayMenu: View {
     var onEdit: (() -> Void)?
     var onPin: (() -> Void)?
     var textTranslations: [MessageTranslation] = []
+    var transcription: MessageTranscription? = nil
+    var translatedAudios: [MessageTranslatedAudio] = []
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
+    var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onReact: ((String) -> Void)?
     var onReport: ((String, String?) -> Void)?
@@ -27,6 +30,7 @@ struct MessageOverlayMenu: View {
     @State private var isVisible = false
     @State private var dragOffset: CGFloat = 0
     @State private var forceTab: DetailTab? = nil
+    @State private var isEmojiPickerOpen = false
 
     private let previewCharLimit = 500
     private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
@@ -136,7 +140,8 @@ struct MessageOverlayMenu: View {
         let isDark = theme.mode.isDark
         return Button {
             HapticFeedback.light()
-            forceTab = .react
+            isEmojiPickerOpen.toggle()
+            forceTab = isEmojiPickerOpen ? .react : .language
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 11, weight: .bold))
@@ -405,7 +410,10 @@ struct MessageOverlayMenu: View {
                     canDelete: canDelete,
                     actions: overlayActions,
                     textTranslations: textTranslations,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios,
                     onSelectTranslation: onSelectTranslation,
+                    onSelectAudioLanguage: onSelectAudioLanguage,
                     onRequestTranslation: onRequestTranslation,
                     onDismissAction: { dismiss() },
                     onReact: { emoji in onReact?(emoji) },

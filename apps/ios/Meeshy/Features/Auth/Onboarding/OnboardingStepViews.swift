@@ -73,6 +73,7 @@ struct GlassTextField: View {
                     )
             )
             .shadow(color: isFocused ? accentColor.opacity(0.1) : .clear, radius: 8, y: 4)
+            .bounceOnFocus(isFocused)
 
             if let error = errorMessage {
                 HStack(spacing: 4) {
@@ -216,6 +217,7 @@ struct StepPseudoView: View {
                                     .overlay(Capsule().stroke(viewModel.currentStep.accentColor.opacity(0.3), lineWidth: 1))
                             )
                     }
+                    .bounceOnTap(scale: 0.9)
                 }
             }
         }
@@ -273,6 +275,7 @@ struct StepPhoneView: View {
                         .padding(14)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemGray6)))
                     }
+                    .bounceOnTap()
 
                     HStack(spacing: 12) {
                         Image(systemName: "phone")
@@ -306,6 +309,7 @@ struct StepPhoneView: View {
                                     )
                             )
                     )
+                    .bounceOnFocus(isFocused)
                 }
 
                 if let error = viewModel.phoneError {
@@ -326,6 +330,7 @@ struct StepPhoneView: View {
                     }
                     .foregroundColor(.secondary)
                 }
+                .bounceOnTap(scale: 0.94)
 
                 infoCard
             }
@@ -846,6 +851,7 @@ struct StepLanguageView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .bounceOnTap(scale: 0.94)
     }
 
     private func languageCard(_ lang: MeeshyUI.LanguageOption) -> some View {
@@ -881,6 +887,7 @@ struct StepLanguageView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .bounceOnTap(scale: 0.94)
     }
 
     private var conversationExampleCard: some View {
@@ -1225,6 +1232,7 @@ struct StepRecapView: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .bounceOnTap(scale: 0.96)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6).opacity(0.6)))
     }

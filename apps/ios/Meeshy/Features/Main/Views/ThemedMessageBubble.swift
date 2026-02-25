@@ -24,8 +24,12 @@ struct ThemedMessageBubble: View {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onShowTranslationDetail: ((String) -> Void)? = nil
+    var allAudioItems: [ConversationViewModel.AudioItem] = []
+    var onScrollToMessage: ((String) -> Void)? = nil
+    var activeAudioLanguage: String? = nil
 
-    @State private var showingOriginal = false
+    @State private var activeDisplayLangCode: String? = nil
+    @State private var secondaryLangCode: String? = nil
     @State private var selectedProfileUser: ProfileSheetUser?
     @State var showShareSheet = false // internal for cross-file extension access
     @State var shareURL: URL? = nil // internal for cross-file extension access
@@ -48,15 +52,34 @@ struct ThemedMessageBubble: View {
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
 
+    private var currentDisplayLangCode: String {
+        activeDisplayLangCode ?? preferredTranslation?.targetLanguage.lowercased() ?? message.originalLanguage.lowercased()
+    }
+
     private var effectiveContent: String {
-        if let translation = preferredTranslation, !showingOriginal {
+        let code = currentDisplayLangCode
+        if code.lowercased() == message.originalLanguage.lowercased() {
+            return message.content
+        }
+        if let translation = textTranslations.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
             return translation.translatedContent
         }
-        return message.content
+        return preferredTranslation?.translatedContent ?? message.content
     }
 
     private var isDisplayingTranslation: Bool {
-        preferredTranslation != nil && !showingOriginal
+        currentDisplayLangCode.lowercased() != message.originalLanguage.lowercased()
+            || secondaryLangCode != nil
+    }
+
+    private var secondaryContent: String? {
+        guard let code = secondaryLangCode else { return nil }
+        if code.lowercased() == message.originalLanguage.lowercased() {
+            return message.content
+        }
+        return textTranslations.first(where: {
+            $0.targetLanguage.lowercased() == code.lowercased()
+        })?.translatedContent
     }
 
     private var bubbleColor: String {
@@ -397,6 +420,10 @@ struct ThemedMessageBubble: View {
                                     if !message.content.isEmpty {
                                         expandableTextView
                                     }
+
+                                    secondaryContentView
+
+                                    messageMetaRow(insideBubble: true)
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
@@ -409,12 +436,8 @@ struct ThemedMessageBubble: View {
                                         .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
                                 }
                             }
-                            .overlay(alignment: .bottomTrailing) {
-                                messageMetaRow(insideBubble: true)
-                                    .padding(.trailing, 10)
-                                    .padding(.bottom, 8)
-                            }
                             .background(bubbleBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
                             .shadow(
                                 color: Color(hex: bubbleColor).opacity(message.isMe ? 0.3 : 0.2),
                                 radius: 6,
@@ -583,10 +606,6 @@ struct ThemedMessageBubble: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 2)
                 }
-
-                if isDisplayingTranslation {
-                    translatedBadge(textColor: textColor)
-                }
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -608,37 +627,101 @@ struct ThemedMessageBubble: View {
                             .padding(.top, 2)
                     }
                 }
-
-                if isDisplayingTranslation {
-                    translatedBadge(textColor: textColor)
-                }
             }
         }
     }
 
+    // translationFlagStrip replaced by inlineFlagStrip inside messageMetaRow
+
     @ViewBuilder
-    private func translatedBadge(textColor: Color) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showingOriginal.toggle()
+    private func swapFlagButton(code: String, textColor: Color) -> some View {
+        let display = LanguageDisplay.from(code: code)
+        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
+        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
+        let isShowingSecondary = secondaryLangCode?.lowercased() == code.lowercased()
+
+        VStack(spacing: 1) {
+            Text(display?.flag ?? "🏳️")
+                .font(.system(size: isShowingSecondary ? 12 : 10))
+                .scaleEffect(isShowingSecondary ? 1.05 : 1.0)
+
+            if isShowingSecondary {
+                RoundedRectangle(cornerRadius: 0.5)
+                    .fill(langColor)
+                    .frame(width: 10, height: 1.5)
+            }
+        }
+        .animation(.spring(response: 0.2), value: isShowingSecondary)
+        .onTapGesture {
+            if !hasContent {
+                onRequestTranslation?(message.id, code)
+                HapticFeedback.light()
+                return
+            }
+            if isOriginal {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    activeDisplayLangCode = code
+                    secondaryLangCode = nil
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    secondaryLangCode = isShowingSecondary ? nil : code
+                }
             }
             HapticFeedback.light()
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: "translate")
-                    .font(.system(size: 9, weight: .medium))
-                Text(showingOriginal ? "Voir traduction" : "Voir l'original")
-                    .font(.system(size: 9, weight: .medium))
-            }
-            .foregroundColor(textColor.opacity(0.5))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(textColor.opacity(0.08))
-            )
         }
-        .accessibilityLabel(showingOriginal ? "Voir la traduction" : "Voir le texte original")
+        .onLongPressGesture(minimumDuration: 0.4) {
+            guard hasContent else {
+                onRequestTranslation?(message.id, code)
+                HapticFeedback.light()
+                return
+            }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = code
+                secondaryLangCode = nil
+            }
+            HapticFeedback.medium()
+        }
+        .accessibilityLabel(display?.name ?? code)
+    }
+
+    // MARK: - Secondary Content (inline translation)
+
+    @ViewBuilder
+    private var secondaryContentView: some View {
+        if let content = secondaryContent, let code = secondaryLangCode {
+            let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+            let display = LanguageDisplay.from(code: code)
+            let secondaryTextColor: Color = message.isMe
+                ? .white.opacity(0.85)
+                : theme.textPrimary.opacity(0.8)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                    Circle().fill(langColor).frame(width: 4, height: 4)
+                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    if let display = display {
+                        HStack(spacing: 4) {
+                            Text(display.flag).font(.system(size: 11))
+                            Text(display.name)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(langColor)
+                        }
+                    }
+                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(langColor.opacity(0.12))
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
     }
 
     private static func truncateAtWord(_ text: String, limit: Int) -> String {
@@ -656,15 +739,8 @@ struct ThemedMessageBubble: View {
         return formatter.string(from: message.createdAt)
     }
 
-    /// Invisible trailing Text that reserves room for the timestamp overlay so it
-    /// never covers actual message content. Concatenated via `+` to the content Text.
     private var timestampSpacerText: Text {
-        let spacer = message.isMe
-            ? "\u{00A0}\u{00A0}\u{00A0}\(timeString)\u{00A0}\u{2713}\u{2713}"
-            : "\u{00A0}\u{00A0}\u{00A0}\(timeString)"
-        return Text(spacer)
-            .font(.system(size: 10))
-            .foregroundColor(.clear)
+        Text("")
     }
 
     @ViewBuilder
@@ -672,8 +748,15 @@ struct ThemedMessageBubble: View {
         let metaColor: Color = insideBubble && message.isMe
             ? .white.opacity(0.7)
             : theme.textSecondary.opacity(0.6)
+        let textColor = message.isMe ? Color.white : theme.textPrimary
 
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
+            if insideBubble && !textTranslations.isEmpty {
+                inlineFlagStrip(textColor: textColor)
+            }
+
+            Spacer(minLength: 0)
+
             if !textTranslations.isEmpty {
                 Image(systemName: "translate")
                     .font(.system(size: 10, weight: .medium))
@@ -693,6 +776,41 @@ struct ThemedMessageBubble: View {
                     .onTapGesture {
                         onShowInfo?()
                     }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func inlineFlagStrip(textColor: Color) -> some View {
+        let activeLang = currentDisplayLangCode.lowercased()
+        let origLower = message.originalLanguage.lowercased()
+        let user = AuthManager.shared.currentUser
+
+        let availableFlags: [String] = {
+            var all: [String] = [origLower]
+            var seen: Set<String> = [origLower]
+
+            if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
+                all.append(pc); seen.insert(pc)
+            }
+
+            if let reg = user?.regionalLanguage?.lowercased(), !seen.contains(reg),
+               textTranslations.contains(where: { $0.targetLanguage.lowercased() == reg }) {
+                all.append(reg); seen.insert(reg)
+            }
+
+            if user?.useCustomDestination == true,
+               let custom = user?.customDestinationLanguage?.lowercased(), !seen.contains(custom),
+               textTranslations.contains(where: { $0.targetLanguage.lowercased() == custom }) {
+                all.append(custom); seen.insert(custom)
+            }
+
+            return all.filter { $0 != activeLang }
+        }()
+
+        HStack(spacing: 4) {
+            ForEach(availableFlags, id: \.self) { code in
+                swapFlagButton(code: code, textColor: textColor)
             }
         }
     }
@@ -1201,10 +1319,16 @@ struct ThemedMessageBubble: View {
                 theme: theme,
                 transcription: transcription,
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                textTranslations: textTranslations,
+                allAudioItems: allAudioItems,
+                onScrollToMessage: onScrollToMessage,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
-                }
+                },
+                onShowTranslationDetail: onShowTranslationDetail,
+                onRequestTranslation: onRequestTranslation,
+                activeAudioLanguageOverride: activeAudioLanguage
             )
 
         default:

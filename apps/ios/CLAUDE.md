@@ -133,13 +133,17 @@ Le Prisme Linguistique garantit que l'utilisateur consomme le contenu dans sa la
 ```
 ConversationViewModel
   ├── messageTranslations: [String: [MessageTranslation]]  → Cache des traductions par message
-  ├── preferredTranslation(for:) → Resolution automatique de la meilleure traduction
+  ├── preferredTranslation(for:) → Resolution auto (miroir de resolveUserLanguage gateway)
   └── activeTranslationOverrides: [String: MessageTranslation?] → Override manuelle utilisateur
 
 ThemedMessageBubble
-  ├── effectiveContent → Affiche le contenu traduit OU original
-  ├── isDisplayingTranslation → Indicateur discret (icone translate dans meta row)
-  └── translatedBadge → Toggle "Voir l'original" / "Voir traduction"
+  ├── effectiveContent → Affiche toujours la traduction preferee (ou original si aucune)
+  ├── isDisplayingTranslation → true quand preferredTranslation existe
+  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom, max 3)
+  ├── flagButton → Drapeau cliquable avec underline colore et animation
+  ├── secondaryLanguageCode → Code langue du contenu secondaire affiche (nil = rien)
+  ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
+  └── secondaryContentView → Panneau inline (fond pastel, separateur colore, texte)
 
 MessageDetailSheet (onglet Language)
   ├── Listing des langues avec preview de chaque traduction
@@ -149,12 +153,14 @@ MessageDetailSheet (onglet Language)
 ```
 
 ### UX Translation Flow
-- **Affichage par defaut** : `effectiveContent` retourne `preferredTranslation.translatedContent` si disponible, sinon `message.content`
+- **Affichage par defaut** : `effectiveContent` retourne toujours `preferredTranslation.translatedContent` si disponible, sinon `message.content`
 - **Indicateur discret** : Icone `translate` dans le meta row quand des traductions existent
+- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom, max 3, dedupliques)
+- **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
+- **Tap meme drapeau** : Masque le contenu secondaire avec animation
 - **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
 - **Tap icone translate** : Ouvre directement l'onglet Language
 - **Selection langue** : Met a jour la bulle via `activeTranslationOverrides` dans le ViewModel
-- **Badge toggle** : Permet de basculer entre traduction et original sans ouvrir de sheet
 
 ### Regles
 - Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row

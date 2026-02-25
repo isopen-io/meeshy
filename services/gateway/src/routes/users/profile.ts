@@ -7,6 +7,7 @@ import { buildPaginationMeta } from '../../utils/pagination';
 import {
   updateUserProfileSchema,
   updateAvatarSchema,
+  updateBannerSchema,
   updatePasswordSchema,
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
@@ -311,7 +312,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                avatar: { type: 'string', description: 'Updated avatar URL' },
+                user: userSchema,
                 message: { type: 'string', example: 'Avatar updated successfully' }
               }
             }
@@ -353,7 +354,23 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         select: {
           id: true,
           username: true,
-          avatar: true
+          firstName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          displayName: true,
+          avatar: true,
+          banner: true,
+          bio: true,
+          isOnline: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          lastActiveAt: true,
+          createdAt: true,
+          updatedAt: true
         }
       });
 
@@ -362,7 +379,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          avatar: updatedUser.avatar,
+          user: updatedUser,
           message: 'Avatar updated successfully'
         }
       });
@@ -378,6 +395,120 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update user avatar error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+}
+
+/**
+ * Update user banner
+ */
+export async function updateUserBanner(fastify: FastifyInstance) {
+  fastify.patch('/users/me/banner', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user banner image. Accepts a URL pointing to the banner image.',
+      tags: ['users'],
+      summary: 'Update user banner',
+      body: {
+        type: 'object',
+        required: ['banner'],
+        properties: {
+          banner: { type: 'string', format: 'uri', description: 'Banner image URL' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Banner updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Invalid image format' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const userId = authContext.userId;
+
+      fastify.log.info(`[BANNER_UPDATE] User ${userId} updating banner`);
+
+      const body = updateBannerSchema.parse(request.body);
+
+      const updatedUser = await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { banner: body.banner },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          displayName: true,
+          avatar: true,
+          banner: true,
+          bio: true,
+          isOnline: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          lastActiveAt: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
+
+      return reply.send({
+        success: true,
+        data: {
+          user: updatedUser,
+          message: 'Banner updated successfully'
+        }
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.errors)}`);
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid image format',
+          details: error.errors
+        });
+      }
+
+      logError(fastify.log, 'Update user banner error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'
