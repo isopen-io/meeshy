@@ -4,6 +4,7 @@ import MeeshySDK
 @main
 struct MeeshyApp: App {
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showSplash = true
     @State private var hasCheckedSession = false
@@ -33,10 +34,14 @@ struct MeeshyApp: App {
                     }
                 }
                 .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .task {
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
+                }
+                .onOpenURL { url in
+                    let _ = deepLinkRouter.handle(url: url)
                 }
             }
         }

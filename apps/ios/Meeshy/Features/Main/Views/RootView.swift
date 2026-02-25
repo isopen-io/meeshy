@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // Components extracted to RootViewComponents.swift:
 // ThemedFloatingButton, ThemedActionButton, ThemedFeedOverlay,
@@ -11,6 +12,7 @@ struct RootView: View {
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
+    @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
@@ -18,6 +20,8 @@ struct RootView: View {
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
     @State private var selectedStoryGroupIndexFromConv = 0
+    @State private var joinFlowIdentifier: String?
+    @State private var showJoinFlow = false
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -145,6 +149,51 @@ struct RootView: View {
                 router.navigateToConversation(conversation)
             }
         }
+        .sheet(isPresented: $showJoinFlow) {
+            if let identifier = joinFlowIdentifier {
+                JoinFlowSheet(identifier: identifier) { joinResponse in
+                    handleJoinSuccess(joinResponse)
+                }
+            }
+        }
+        .onChange(of: deepLinkRouter.pendingDeepLink) { _, newValue in
+            handleDeepLink(newValue)
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    private func handleDeepLink(_ deepLink: DeepLink?) {
+        guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+
+        switch deepLink {
+        case .joinLink(let identifier):
+            joinFlowIdentifier = identifier
+            showJoinFlow = true
+
+        case .conversation(let id):
+            let conv = Conversation(
+                id: id, identifier: id, type: .group,
+                title: nil, lastMessageAt: Date(), createdAt: Date(), updatedAt: Date()
+            )
+            router.navigateToConversation(conv)
+
+        case .magicLink:
+            break
+        }
+    }
+
+    private func handleJoinSuccess(_ response: AnonymousJoinResponse) {
+        let conv = Conversation(
+            id: response.conversation.id,
+            identifier: response.conversation.id,
+            type: response.conversation.type.lowercased() == "group" ? .group : .direct,
+            title: response.conversation.title,
+            lastMessageAt: Date(),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        router.navigateToConversation(conv)
     }
 
     // MARK: - Handle Story Reply

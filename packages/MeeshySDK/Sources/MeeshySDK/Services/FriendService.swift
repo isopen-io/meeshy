@@ -51,7 +51,7 @@ public final class FriendService {
     // MARK: - Delete Friend Request
 
     public func deleteRequest(requestId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.delete(
+        let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/friend-requests/\(requestId)"
         )
     }

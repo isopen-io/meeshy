@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Participant Model
 
@@ -48,6 +49,10 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
+    @State private var isCreatingShareLink = false
+    @State private var createdShareLinkId: String?
+    @State private var showShareSheet = false
+    @State private var showLeaveConfirmation = false
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
@@ -81,6 +86,7 @@ struct ConversationInfoSheet: View {
         VStack(spacing: 0) {
             headerBar
             conversationHeader
+            actionButtons
             tabSelector
             tabContent
         }
@@ -91,6 +97,14 @@ struct ConversationInfoSheet: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 appearAnimation = true
             }
+        }
+        .alert("Quitter la conversation", isPresented: $showLeaveConfirmation) {
+            Button("Annuler", role: .cancel) {}
+            Button("Quitter", role: .destructive) {
+                Task { await leaveConversation() }
+            }
+        } message: {
+            Text("Vous ne recevrez plus de messages de cette conversation.")
         }
     }
 
@@ -522,6 +536,111 @@ struct ConversationInfoSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    // MARK: - Action Buttons
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            actionButton(
+                icon: "link.badge.plus",
+                label: "Partager",
+                color: "4ECDC4",
+                isLoading: isCreatingShareLink
+            ) {
+                Task { await createShareLink() }
+            }
+
+            actionButton(
+                icon: "rectangle.portrait.and.arrow.right",
+                label: "Quitter",
+                color: "FF6B6B"
+            ) {
+                showLeaveConfirmation = true
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .opacity(appearAnimation ? 1 : 0)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.03), value: appearAnimation)
+    }
+
+    private func actionButton(
+        icon: String,
+        label: String,
+        color: String,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(Color(hex: color))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(Color(hex: color))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: color).opacity(theme.mode.isDark ? 0.12 : 0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color(hex: color).opacity(0.2), lineWidth: 1)
+            )
+        }
+        .disabled(isLoading)
+    }
+
+    // MARK: - Share Link Actions
+
+    private func createShareLink() async {
+        isCreatingShareLink = true
+        defer { isCreatingShareLink = false }
+
+        do {
+            let request = CreateShareLinkRequest(
+                conversationId: conversation.id,
+                name: conversation.name,
+                allowAnonymousMessages: true
+            )
+            let result = try await ShareLinkService.shared.createShareLink(request: request)
+            createdShareLinkId = result.linkId
+
+            let shareURL = "https://meeshy.me/join/\(result.linkId)"
+            await MainActor.run {
+                let activityVC = UIActivityViewController(
+                    activityItems: [shareURL],
+                    applicationActivities: nil
+                )
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first?.rootViewController {
+                    var topVC = rootVC
+                    while let presented = topVC.presentedViewController { topVC = presented }
+                    activityVC.popoverPresentationController?.sourceView = topVC.view
+                    topVC.present(activityVC, animated: true)
+                }
+            }
+        } catch {
+            // Silently fail
+        }
+    }
+
+    private func leaveConversation() async {
+        do {
+            try await ConversationService.shared.delete(conversationId: conversation.id)
+            dismiss()
+        } catch {
+            // Silently fail
+        }
     }
 
     // MARK: - Helpers
