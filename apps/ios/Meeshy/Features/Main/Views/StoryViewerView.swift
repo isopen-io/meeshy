@@ -38,16 +38,7 @@ struct StoryViewerView: View {
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
     @State private var showLanguageOptions = false
-    private let storyLanguages: [(code: String, flag: String, name: String)] = [
-        ("fr", "🇫🇷", "Français"),
-        ("en", "🇺🇸", "English"),
-        ("es", "🇪🇸", "Español"),
-        ("de", "🇩🇪", "Deutsch"),
-        ("pt", "🇧🇷", "Português"),
-        ("ar", "🇸🇦", "العربية"),
-        ("zh", "🇨🇳", "中文"),
-        ("ja", "🇯🇵", "日本語")
-    ]
+    @State private var showFullLanguagePicker = false
     @StateObject private var keyboard = KeyboardObserver()
 
     // === Transition states ===
@@ -139,6 +130,20 @@ struct StoryViewerView: View {
         }
         .onDisappear {
             timerCancellable?.cancel()
+        }
+        .sheet(isPresented: $showFullLanguagePicker) {
+            LanguagePickerSheet(style: .dark) { lang in
+                guard let story = currentStory else { return }
+                Task {
+                    let body: [String: String] = ["targetLanguage": lang.id]
+                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
+                        endpoint: "/posts/\(story.id)/translate",
+                        body: body
+                    )
+                }
+            } onDismiss: {
+                showFullLanguagePicker = false
+            }
         }
     }
 
@@ -391,14 +396,8 @@ struct StoryViewerView: View {
             }
             .zIndex(10)
 
-            // Reply (focus composer)
-            sidebarButton(icon: "arrowshape.turn.up.left.fill", color: .white) {
-                HapticFeedback.light()
-                composerFocusTrigger = true
-            }
-
-            // Reshare
-            sidebarButton(icon: "arrow.2.squarepath", color: .white) {
+            // Reshare / Transfer
+            sidebarButton(icon: "arrowshape.turn.up.right.fill", color: .white) {
                 reshareStory()
             }
 
@@ -416,16 +415,16 @@ struct StoryViewerView: View {
             .overlay(alignment: .trailing) {
                 if showLanguageOptions {
                     EmojiReactionPicker(
-                        quickEmojis: storyLanguages.map(\.flag),
+                        quickEmojis: TranslationLanguage.quickStrip.map(\.flag),
                         style: .dark,
                         onReact: { flag in
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showLanguageOptions = false
                             }
-                            if let lang = storyLanguages.first(where: { $0.flag == flag }),
+                            if let lang = TranslationLanguage.quickStrip.first(where: { $0.flag == flag }),
                                let story = currentStory {
                                 Task {
-                                    let body: [String: String] = ["targetLanguage": lang.code]
+                                    let body: [String: String] = ["targetLanguage": lang.id]
                                     let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
                                         endpoint: "/posts/\(story.id)/translate",
                                         body: body
@@ -437,6 +436,12 @@ struct StoryViewerView: View {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showLanguageOptions = false
                             }
+                        },
+                        onExpandFullPicker: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showLanguageOptions = false
+                            }
+                            showFullLanguagePicker = true
                         }
                     )
                     .fixedSize()

@@ -30,7 +30,15 @@ struct MessageComposer: View {
             textAnalyzer.analyze(text: newText)
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
+            LanguagePickerSheet(
+                style: .dark,
+                onSelect: { lang in
+                    let detected = DetectedLanguage.find(code: lang.id) ??
+                        DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
+                    textAnalyzer.setLanguageOverride(detected)
+                },
+                onDismiss: { textAnalyzer.showLanguagePicker = false }
+            )
         }
         .onChange(of: isFocused) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {

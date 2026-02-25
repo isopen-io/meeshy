@@ -515,7 +515,15 @@ struct UniversalComposerBar: View {
             text = newValue
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
+            LanguagePickerSheet(
+                style: theme.mode.isDark ? .dark : .light,
+                onSelect: { lang in
+                    let detected = DetectedLanguage.find(code: lang.id) ??
+                        DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
+                    textAnalyzer.setLanguageOverride(detected)
+                },
+                onDismiss: { textAnalyzer.showLanguagePicker = false }
+            )
         }
         .onChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {

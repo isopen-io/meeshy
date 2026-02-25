@@ -317,11 +317,13 @@ public struct MeeshyAvatar: View {
     /// bounding-box corner (which sits just outside the ring).
     private var badgeOffsetWhenRingVisible: CGSize {
         guard effectiveStoryState != .none else { return .zero }
-        let r = mode.ringSize / 2
+        let r = mode.ringSize / 2          // ring frame half-width
+        let avatarR = mode.size / 2        // avatar outer edge from ring frame center
         let dot = mode.onlineDotSize / 2
-        // target: center on ring circumference at 45°  → (r + r·cos45, r + r·sin45) from top-left
-        // current: bottomTrailing corner center         → (ringSize - dot, ringSize - dot) from top-left
-        let delta = (r + r * cos(.pi / 4)) - (mode.ringSize - dot)
+        // target: dot center at avatar's outer edge at 45° (on the ring border)
+        let target = r + avatarR * cos(.pi / 4)
+        let current = mode.ringSize - dot
+        let delta = target - current
         return CGSize(width: delta, height: delta)
     }
 
