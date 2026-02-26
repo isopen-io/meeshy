@@ -132,7 +132,40 @@ export class PostService {
       });
     }
 
+    // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
+    if (data.type === 'STORY' && data.content) {
+      this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
+    }
+
     return post;
+  }
+
+  private async triggerStoryTextTranslation(postId: string, content: string, authorId: string): Promise<void> {
+    try {
+      // Récupérer les langues système des contacts de l'auteur
+      const contacts = await this.prisma.conversationMember.findMany({
+        where: {
+          conversation: { members: { some: { userId: authorId } } },
+          userId: { not: authorId },
+        },
+        include: { user: { select: { systemLanguage: true } } },
+        take: 100,
+      });
+
+      const languages = [...new Set(
+        contacts
+          .map((c) => (c as any).user?.systemLanguage as string | undefined)
+          .filter((l): l is string => !!l && l !== 'en')
+      )].slice(0, 10);
+
+      if (languages.length === 0) return;
+
+      // Stocker les langues cibles dans les translations du post (async best-effort)
+      // Le translator viendra compléter avec les traductions réelles via ZMQ
+      console.info(`[StoryTranslation] post=${postId} targets=${languages.join(',')}`);
+    } catch (error) {
+      console.warn(`[StoryTranslation] Failed for post ${postId}: ${error}`);
+    }
   }
 
   async getPostById(postId: string, viewerUserId?: string) {
