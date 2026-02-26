@@ -85,6 +85,49 @@ public struct StoryTextPosition: Codable, Sendable {
     public static let bottom = StoryTextPosition(x: 0.5, y: 0.8)
 }
 
+// MARK: - Story Voice Transcription
+
+public struct StoryVoiceTranscription: Codable, Sendable {
+    public let language: String
+    public let content: String
+
+    public init(language: String, content: String) {
+        self.language = language
+        self.content = content
+    }
+}
+
+// MARK: - Story Background Audio Entry
+
+public struct StoryBackgroundAudioEntry: Codable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let uploaderName: String?
+    public let duration: Int
+    public let fileUrl: String
+    public let usageCount: Int
+    public let isPublic: Bool
+
+    public init(id: String, title: String, uploaderName: String? = nil,
+                duration: Int, fileUrl: String, usageCount: Int = 0, isPublic: Bool = true) {
+        self.id = id; self.title = title; self.uploaderName = uploaderName
+        self.duration = duration; self.fileUrl = fileUrl
+        self.usageCount = usageCount; self.isPublic = isPublic
+    }
+}
+
+// MARK: - Story Translation
+
+public struct StoryTranslation: Codable, Sendable {
+    public let language: String
+    public let content: String
+
+    public init(language: String, content: String) {
+        self.language = language
+        self.content = content
+    }
+}
+
 // MARK: - Story Sticker
 
 public struct StorySticker: Codable, Identifiable, Sendable {
@@ -163,22 +206,41 @@ public struct StoryEffects: Codable, Sendable {
     public var stickerObjects: [StorySticker]?
     public var textPositionPoint: StoryTextPosition?
     public var drawingData: Data?
+    // Background audio (bibliothèque ou enregistrement)
+    public var backgroundAudioId: String?
+    public var backgroundAudioVolume: Float?
+    public var backgroundAudioStart: TimeInterval?
+
+    // Audio vocal (transcrit + traduit par Whisper/NLLB)
+    public var voiceAttachmentId: String?
+    public var voiceTranscriptions: [StoryVoiceTranscription]?
+
+    // Deprecated — conservé pour compatibilité ascendante
+    @available(*, deprecated, renamed: "backgroundAudioId")
     public var musicTrackId: String?
+    @available(*, deprecated, renamed: "backgroundAudioStart")
     public var musicStartTime: TimeInterval?
+    @available(*, deprecated, renamed: "backgroundAudioStart")
     public var musicEndTime: TimeInterval?
 
     public init(background: String? = nil, textStyle: String? = nil, textColor: String? = nil,
                 textPosition: String? = nil, filter: String? = nil, stickers: [String]? = nil,
                 textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
-                drawingData: Data? = nil, musicTrackId: String? = nil,
-                musicStartTime: TimeInterval? = nil, musicEndTime: TimeInterval? = nil) {
+                drawingData: Data? = nil,
+                backgroundAudioId: String? = nil, backgroundAudioVolume: Float? = nil,
+                backgroundAudioStart: TimeInterval? = nil,
+                voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
         self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
-        self.drawingData = drawingData; self.musicTrackId = musicTrackId
-        self.musicStartTime = musicStartTime; self.musicEndTime = musicEndTime
+        self.drawingData = drawingData
+        self.backgroundAudioId = backgroundAudioId
+        self.backgroundAudioVolume = backgroundAudioVolume
+        self.backgroundAudioStart = backgroundAudioStart
+        self.voiceAttachmentId = voiceAttachmentId
+        self.voiceTranscriptions = voiceTranscriptions
     }
 
     public var parsedTextStyle: StoryTextStyle? {

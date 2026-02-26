@@ -1,10 +1,14 @@
 import SwiftUI
+import PhotosUI
 import MeeshySDK
 
 public struct CommunitySettingsView: View {
     @StateObject private var viewModel: CommunitySettingsViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+
+    @State private var avatarItem: PhotosPickerItem? = nil
+    @State private var bannerItem: PhotosPickerItem? = nil
 
     public var onUpdated: ((MeeshyCommunity) -> Void)? = nil
     public var onDeleted: (() -> Void)? = nil
@@ -70,6 +74,14 @@ public struct CommunitySettingsView: View {
             Button("Annuler", role: .cancel) {}
         } message: {
             Text("Vous n'aurez plus accès aux canaux et messages de cette communauté.")
+        }
+        .onChange(of: avatarItem) { item in
+            guard let item = item else { return }
+            Task { await viewModel.uploadAvatar(item) }
+        }
+        .onChange(of: bannerItem) { item in
+            guard let item = item else { return }
+            Task { await viewModel.uploadBanner(item) }
         }
     }
 
@@ -154,24 +166,62 @@ public struct CommunitySettingsView: View {
                         }
                 }
 
-                // Avatar URL
-                settingsField(label: "URL Avatar") {
-                    TextField("https://...", text: $viewModel.avatarUrl)
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                // Avatar
+                settingsField(label: "Avatar") {
+                    HStack {
+                        if !viewModel.avatarUrl.isEmpty {
+                            AsyncImage(url: URL(string: viewModel.avatarUrl)) { image in
+                                image.resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle())
+                            } placeholder: {
+                                Circle().fill(theme.backgroundSecondary).frame(width: 40, height: 40)
+                            }
+                        }
+                        
+                        PhotosPicker(selection: $avatarItem, matching: .images) {
+                            Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "4ECDC4"))
+                        }
+                        .disabled(viewModel.isUploadingAvatar)
+
+                        if !viewModel.avatarUrl.isEmpty {
+                            Spacer()
+                            Button(role: .destructive) {
+                                viewModel.avatarUrl = ""
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
                 }
 
-                // Banner URL
-                settingsField(label: "URL Bannière") {
-                    TextField("https://...", text: $viewModel.bannerUrl)
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
+                // Banner
+                settingsField(label: "Bannière") {
+                    HStack {
+                        if !viewModel.bannerUrl.isEmpty {
+                            AsyncImage(url: URL(string: viewModel.bannerUrl)) { image in
+                                image.resizable().scaledToFill().frame(width: 60, height: 30).clipShape(RoundedRectangle(cornerRadius: 6))
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 6).fill(theme.backgroundSecondary).frame(width: 60, height: 30)
+                            }
+                        }
+                        
+                        PhotosPicker(selection: $bannerItem, matching: .images) {
+                            Text(viewModel.isUploadingBanner ? "Upload en cours..." : "Changer la bannière")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(hex: "4ECDC4"))
+                        }
+                        .disabled(viewModel.isUploadingBanner)
+
+                        if !viewModel.bannerUrl.isEmpty {
+                            Spacer()
+                            Button(role: .destructive) {
+                                viewModel.bannerUrl = ""
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -323,6 +373,8 @@ final class CommunitySettingsViewModel: ObservableObject {
     @Published var bannerUrl: String
     @Published var localColor: String
     @Published var localEmoji: String
+    @Published var isUploadingAvatar = false
+    @Published var isUploadingBanner = false
     @Published var isSaving = false
     @Published var showError = false
     @Published var errorMessage: String?
@@ -402,6 +454,46 @@ final class CommunitySettingsViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+            return nil
+        }
+    }
+
+    func uploadAvatar(_ item: PhotosPickerItem) async {
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+        if let url = await uploadPhotoItem(item) {
+            avatarUrl = url
+        }
+    }
+
+    func uploadBanner(_ item: PhotosPickerItem) async {
+        isUploadingBanner = true
+        defer { isUploadingBanner = false }
+        if let url = await uploadPhotoItem(item) {
+            bannerUrl = url
+        }
+    }
+
+    private func uploadPhotoItem(_ item: PhotosPickerItem) async -> String? {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return nil }
+            let fileName = "community_upload_\(UUID().uuidString).jpg"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            try data.write(to: tempURL)
+            
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin),
+                  let token = APIClient.shared.authToken else { return nil }
+            
+            let manager = TusUploadManager(baseURL: baseURL)
+            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", token: token)
+            try? FileManager.default.removeItem(at: tempURL)
+            return result.fileUrl
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.showError = true
+            }
             return nil
         }
     }

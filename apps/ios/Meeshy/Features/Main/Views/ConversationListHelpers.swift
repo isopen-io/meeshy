@@ -320,6 +320,7 @@ struct ConversationPreviewView: View {
 // MARK: - Themed Community Card
 struct ThemedCommunityCard: View {
     let community: Community
+    var action: (() -> Void)? = nil
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
     @State private var displayColor: String = "4ECDC4"
@@ -381,11 +382,11 @@ struct ThemedCommunityCard: View {
         }
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .scaleEffect(isPressed ? 0.95 : 1)
         .onAppear {
             displayColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color
             displayEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? community.emoji
         }
+        .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                 isPressed = true
@@ -394,6 +395,7 @@ struct ThemedCommunityCard: View {
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                     isPressed = false
                 }
+                action?()
             }
             HapticFeedback.light()
         }

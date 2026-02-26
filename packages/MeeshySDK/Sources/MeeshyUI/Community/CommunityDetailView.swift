@@ -18,6 +18,7 @@ public struct CommunityDetailView: View {
     @State private var isLeaving = false
     @State private var localColor: String? = nil
     @State private var localEmoji: String? = nil
+    @State private var selectedTab: Int = 0 // 0: Channels, 1: Posts
 
     public init(communityId: String,
                 onSelectConversation: ((APIConversation) -> Void)? = nil,
@@ -46,7 +47,21 @@ public struct CommunityDetailView: View {
                         headerSection(community)
                         statsSection(community)
                         actionsSection(community)
-                        conversationsSection
+                        
+                        // Section Segmentée : Channels / Posts
+                        Picker("", selection: $selectedTab) {
+                            Text("Channels").tag(0)
+                            Text("Feed").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        
+                        if selectedTab == 0 {
+                            conversationsSection
+                        } else {
+                            postsSection
+                        }
                     }
                 }
 
@@ -145,14 +160,12 @@ public struct CommunityDetailView: View {
 
             Spacer()
 
-            if viewModel.isMember {
+            if viewModel.isAdmin {
                 Menu {
-                    if viewModel.isAdmin {
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Label("Reglages", systemImage: "gearshape.fill")
-                        }
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("Reglages", systemImage: "gearshape.fill")
                     }
 
                     if !viewModel.isCreator {
@@ -164,6 +177,18 @@ public struct CommunityDetailView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.35))
+                        .clipShape(Circle())
+                }
+            } else {
+                Button {
+                    HapticFeedback.light()
+                    // Reagir a la communaute
+                } label: {
+                    Image(systemName: "heart.fill")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
@@ -363,70 +388,46 @@ public struct CommunityDetailView: View {
     @ViewBuilder
     private func actionsSection(_ community: MeeshyCommunity) -> some View {
         VStack(spacing: 12) {
-            if viewModel.isMember {
-                HStack(spacing: 12) {
-                    actionButton(icon: "person.2.fill", title: "Membres") {
-                        onOpenMembers?(community.id)
-                    }
+            HStack(spacing: 12) {
+                actionButton(icon: "person.2.fill", title: "Membres") {
+                    onOpenMembers?(community.id)
+                }
 
+                if viewModel.isMember {
                     actionButton(icon: "person.badge.plus", title: "Inviter") {
                         onInvite?(community.id)
                     }
+                }
 
-                    if viewModel.isAdmin {
-                        actionButton(icon: "plus.bubble.fill", title: "Channel") {
-                            showAddChannel = true
-                        }
+                if viewModel.isAdmin {
+                    actionButton(icon: "plus.bubble.fill", title: "Channel") {
+                        showAddChannel = true
                     }
-
                     actionButton(icon: "gearshape.fill", title: "Reglages") {
                         showSettings = true
                     }
-                }
-
-                if !viewModel.isCreator {
-                    Button {
-                        showLeaveConfirm = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                            Text("Quitter la communaute")
-                        }
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(Color(hex: "FF2E63"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color(hex: "FF2E63").opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                } else if !viewModel.isMember {
+                    actionButton(icon: "arrow.right.circle.fill", title: "Rejoindre") {
+                        Task { await viewModel.joinCommunity() }
                     }
                 }
-            } else {
+            }
+
+            if viewModel.isMember && !viewModel.isCreator {
                 Button {
-                    Task { await viewModel.joinCommunity() }
+                    showLeaveConfirm = true
                 } label: {
                     HStack(spacing: 6) {
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Rejoindre la communaute")
-                        }
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                        Text("Quitter la communaute")
                     }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(Color(hex: "FF2E63"))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, 10)
+                    .background(Color(hex: "FF2E63").opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .disabled(viewModel.isLoading)
             }
         }
         .padding(.horizontal, 16)
@@ -455,16 +456,13 @@ public struct CommunityDetailView: View {
     @ViewBuilder
     private var conversationsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Channels")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-                .padding(.horizontal, 16)
-
             if viewModel.conversations.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
                     title: "No Channels Yet",
-                    subtitle: "Conversations will appear here"
+                    subtitle: "Conversations will appear here",
+                    actionLabel: "Créer un Channel",
+                    onAction: { showAddChannel = true }
                 )
                 .frame(height: 200)
             } else {
@@ -479,6 +477,43 @@ public struct CommunityDetailView: View {
                     }
                 }
             }
+        }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var postsSection: some View {
+        // Placeholder for Community Posts / Stories
+        VStack(spacing: 8) {
+            // Community Story Tray Header Placeholder
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            Circle().fill(theme.backgroundSecondary).frame(width: 60, height: 60)
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(Color(hex: "A855F7"))
+                        }
+                        Text("Story")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+
+            EmptyStateView(
+                icon: "photo.on.rectangle.angled",
+                title: "No Posts Yet",
+                subtitle: "Community feed will appear here",
+                actionLabel: "Créer un post",
+                onAction: { 
+                    // To do: Show post creator
+                }
+            )
+            .frame(height: 200)
         }
         .padding(.top, 8)
     }

@@ -217,12 +217,11 @@ extension ConversationListView {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(Array(userCommunities.enumerated()), id: \.element.id) { index, community in
-                        ThemedCommunityCard(community: community)
-                            .staggeredAppear(index: index, baseDelay: 0.06)
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                router.push(.communityDetail(community.id))
-                            }
+                        ThemedCommunityCard(community: community) {
+                            HapticFeedback.light()
+                            router.push(.communityDetail(community.id))
+                        }
+                        .staggeredAppear(index: index, baseDelay: 0.06)
                     }
                 }
                 .padding(.horizontal, 16)
