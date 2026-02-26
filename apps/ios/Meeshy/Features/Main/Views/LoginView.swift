@@ -6,25 +6,38 @@ struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @ObservedObject private var theme = ThemeManager.shared
 
+    // Normal login form state
     @State private var username = ""
     @State private var password = ""
+
+    // Account picker state
+    @State private var selectedAccount: SavedAccount? = nil
+    @State private var accountPassword = ""
+    @State private var showNormalLogin = false
+
+    // UI state
     @State private var glowPulse = false
     @State private var showFields = false
     @State private var showError = false
     @State private var showRegister = false
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
+
     @FocusState private var focusedField: Field?
 
-    private enum Field { case username, password }
+    private enum Field { case username, password, accountPassword }
 
     private var isDark: Bool { theme.mode.isDark }
+    private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
+
+    // On simulator only: prefill test credentials
+    private static let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil
 
     init() {
-        #if DEBUG
-        _username = State(initialValue: "atabeth")
-        _password = State(initialValue: "pD5p1ir9uxLUf2X2FpNE")
-        #endif
+        if Self.isSimulator {
+            _username = State(initialValue: "atabeth")
+            _password = State(initialValue: "pD5p1ir9uxLUf2X2FpNE")
+        }
     }
 
     var body: some View {
@@ -32,7 +45,6 @@ struct LoginView: View {
             theme.backgroundGradient
                 .ignoresSafeArea()
 
-            // Ambient orbs from theme
             ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
                 Circle()
                     .fill(Color(hex: orb.color).opacity(orb.opacity))
@@ -68,145 +80,11 @@ struct LoginView: View {
                     .padding(.bottom, 48)
                     .accessibilityAddTraits(.isHeader)
 
-                VStack(spacing: MeeshySpacing.lg) {
-                    // Username
-                    HStack(spacing: MeeshySpacing.md) {
-                        Image(systemName: "person.fill")
-                            .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
-                            .frame(width: 20)
-                            .accessibilityHidden(true)
-                        TextField("Nom d'utilisateur", text: $username)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($focusedField, equals: .username)
-                            .foregroundColor(theme.textPrimary)
-                            .submitLabel(.next)
-                            .onSubmit { focusedField = .password }
-                            .accessibilityLabel("Nom d'utilisateur")
-                    }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md + 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.inputBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                    .stroke(
-                                        focusedField == .username
-                                            ? Color(hex: "8B5CF6").opacity(0.6)
-                                            : theme.inputBorder.opacity(0.3),
-                                        lineWidth: 1
-                                    )
-                            )
-                    )
-                    .bounceOnFocus(focusedField == .username)
-
-                    // Password
-                    HStack(spacing: MeeshySpacing.md) {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
-                            .frame(width: 20)
-                            .accessibilityHidden(true)
-                        SecureField("Mot de passe", text: $password)
-                            .textContentType(.password)
-                            .focused($focusedField, equals: .password)
-                            .foregroundColor(theme.textPrimary)
-                            .submitLabel(.go)
-                            .onSubmit { attemptLogin() }
-                            .accessibilityLabel("Mot de passe")
-                    }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md + 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .fill(theme.inputBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                    .stroke(
-                                        focusedField == .password
-                                            ? Color(hex: "8B5CF6").opacity(0.6)
-                                            : theme.inputBorder.opacity(0.3),
-                                        lineWidth: 1
-                                    )
-                            )
-                    )
-                    .bounceOnFocus(focusedField == .password)
-
-                    // Error message
-                    if let error = authManager.errorMessage, showError {
-                        Text(error)
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.coral)
-                            .multilineTextAlignment(.center)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    // Login button
-                    Button(action: attemptLogin) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [MeeshyColors.coral, MeeshyColors.cyan],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(height: 52)
-                                .shadow(color: MeeshyColors.coral.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
-
-                            if authManager.isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text("Se connecter")
-                                    .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                    .disabled(authManager.isLoading || username.isEmpty || password.isEmpty)
-                    .opacity(username.isEmpty || password.isEmpty ? 0.6 : 1)
-                    .bounceOnTap()
-                    .padding(.top, MeeshySpacing.sm)
-                    .accessibilityLabel("Se connecter")
-                    .accessibilityHint("Connexion avec le nom d'utilisateur et le mot de passe saisis")
-
-                    HStack(spacing: MeeshySpacing.lg) {
-                        Button { showForgotPassword = true } label: {
-                            Text("Mot de passe oublie ?")
-                                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .bounceOnTap(scale: 0.94)
-                        .accessibilityLabel("Mot de passe oublie")
-                        .accessibilityHint("Ouvre le formulaire de reinitialisation du mot de passe")
-
-                        Text("·")
-                            .foregroundColor(theme.textMuted.opacity(0.5))
-                            .accessibilityHidden(true)
-
-                        Button { showMagicLink = true } label: {
-                            Text("Connexion sans mot de passe")
-                                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [Color(hex: "A855F7"), MeeshyColors.cyan],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        }
-                        .bounceOnTap(scale: 0.94)
-                        .accessibilityLabel("Connexion sans mot de passe")
-                        .accessibilityHint("Ouvre le formulaire de connexion par lien magique")
-                    }
-                    .padding(.top, MeeshySpacing.xs)
+                if showPicker {
+                    accountPickerSection
+                } else {
+                    normalLoginSection
                 }
-                .padding(.horizontal, MeeshySpacing.xxxl)
-                .opacity(showFields ? 1 : 0)
-                .offset(y: showFields ? 0 : 30)
 
                 Spacer()
 
@@ -261,11 +139,383 @@ struct LoginView: View {
         .onTapGesture { focusedField = nil }
     }
 
+    // MARK: - Account Picker Section
+
+    private var accountPickerSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            if let account = selectedAccount {
+                selectedAccountView(account)
+            } else {
+                savedAccountsList
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : 30)
+    }
+
+    private var savedAccountsList: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            ForEach(authManager.savedAccounts) { account in
+                savedAccountRow(account)
+            }
+
+            errorRow
+
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showNormalLogin = true
+                }
+            } label: {
+                Text("Autre compte")
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.md)
+            }
+            .bounceOnTap(scale: 0.94)
+            .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    private func savedAccountRow(_ account: SavedAccount) -> some View {
+        Button {
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                selectedAccount = account
+                username = account.username
+                accountPassword = ""
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focusedField = .accountPassword
+            }
+        } label: {
+            HStack(spacing: MeeshySpacing.md) {
+                accountAvatar(account, size: 44)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account.shortName)
+                        .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text("@\(account.username)")
+                        .font(.system(size: MeeshyFont.captionSize, weight: .regular))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textMuted.opacity(0.5))
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(theme.inputBorder.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .bounceOnTap()
+    }
+
+    private func selectedAccountView(_ account: SavedAccount) -> some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            // Back + selected account header
+            HStack(spacing: MeeshySpacing.md) {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        selectedAccount = nil
+                        accountPassword = ""
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle().fill(theme.inputBackground)
+                        )
+                }
+                .bounceOnTap(scale: 0.90)
+
+                accountAvatar(account, size: 40)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(account.shortName)
+                        .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                    Text("@\(account.username)")
+                        .font(.system(size: MeeshyFont.captionSize))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                Spacer()
+            }
+
+            // Password field
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "lock.fill")
+                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                SecureField("Mot de passe", text: $accountPassword)
+                    .textContentType(.password)
+                    .focused($focusedField, equals: .accountPassword)
+                    .foregroundColor(theme.textPrimary)
+                    .submitLabel(.go)
+                    .onSubmit { attemptAccountLogin() }
+                    .accessibilityLabel("Mot de passe")
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .accountPassword
+                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .accountPassword)
+
+            errorRow
+
+            // Login button
+            loginButton(action: attemptAccountLogin, disabled: accountPassword.isEmpty)
+        }
+    }
+
+    // MARK: - Normal Login Section
+
+    private var normalLoginSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            if showNormalLogin && !authManager.savedAccounts.isEmpty {
+                // Back to picker button
+                HStack {
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            showNormalLogin = false
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Comptes sauvegardés")
+                                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        }
+                        .foregroundColor(theme.textMuted)
+                    }
+                    .bounceOnTap(scale: 0.94)
+                    Spacer()
+                }
+            }
+
+            // Username
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "person.fill")
+                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                TextField("Nom d'utilisateur", text: $username)
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: .username)
+                    .foregroundColor(theme.textPrimary)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .password }
+                    .accessibilityLabel("Nom d'utilisateur")
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .username
+                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .username)
+
+            // Password
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "lock.fill")
+                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                SecureField("Mot de passe", text: $password)
+                    .textContentType(.password)
+                    .focused($focusedField, equals: .password)
+                    .foregroundColor(theme.textPrimary)
+                    .submitLabel(.go)
+                    .onSubmit { attemptLogin() }
+                    .accessibilityLabel("Mot de passe")
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .password
+                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .password)
+
+            errorRow
+
+            loginButton(action: attemptLogin, disabled: username.isEmpty || password.isEmpty)
+
+            HStack(spacing: MeeshySpacing.lg) {
+                Button { showForgotPassword = true } label: {
+                    Text("Mot de passe oublie ?")
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel("Mot de passe oublie")
+
+                Text("·")
+                    .foregroundColor(theme.textMuted.opacity(0.5))
+                    .accessibilityHidden(true)
+
+                Button { showMagicLink = true } label: {
+                    Text("Connexion sans mot de passe")
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "A855F7"), MeeshyColors.cyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel("Connexion sans mot de passe")
+            }
+            .padding(.top, MeeshySpacing.xs)
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : 30)
+    }
+
+    // MARK: - Reusable subviews
+
+    private var errorRow: some View {
+        Group {
+            if let error = authManager.errorMessage, showError {
+                Text(error)
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .foregroundColor(MeeshyColors.coral)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func loginButton(action: @escaping () -> Void, disabled: Bool) -> some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(
+                        LinearGradient(
+                            colors: [MeeshyColors.coral, MeeshyColors.cyan],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 52)
+                    .shadow(color: MeeshyColors.coral.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
+
+                if authManager.isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Text("Se connecter")
+                        .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .disabled(authManager.isLoading || disabled)
+        .opacity(disabled ? 0.6 : 1)
+        .bounceOnTap()
+        .padding(.top, MeeshySpacing.sm)
+        .accessibilityLabel("Se connecter")
+    }
+
+    private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
+        Group {
+            if let urlString = account.avatarURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    initialsAvatar(account, size: size)
+                }
+            } else {
+                initialsAvatar(account, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private func initialsAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [MeeshyColors.coral.opacity(0.8), MeeshyColors.purple],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text(account.username.prefix(1).uppercased())
+                .font(.system(size: size * 0.4, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
+
+    // MARK: - Actions
+
     private func attemptLogin() {
         focusedField = nil
         showError = false
         Task {
             await authManager.login(username: username, password: password)
+        }
+    }
+
+    private func attemptAccountLogin() {
+        focusedField = nil
+        showError = false
+        guard let account = selectedAccount else { return }
+        Task {
+            await authManager.login(username: account.username, password: accountPassword)
         }
     }
 }

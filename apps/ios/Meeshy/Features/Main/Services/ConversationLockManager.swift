@@ -9,33 +9,56 @@ class ConversationLockManager: ObservableObject {
     @Published private(set) var lockedConversationIds: Set<String> = []
 
     private let keychainService = "me.meeshy.app.conversation-locks"
+    private let globalPinKey = "globalConversationPin"
 
     private init() {
         loadLockedIds()
     }
 
-    // MARK: - Public API
+    // MARK: - Conversation Lock
 
     func isLocked(_ conversationId: String) -> Bool {
         lockedConversationIds.contains(conversationId)
     }
 
-    func setLock(conversationId: String, password: String) {
-        let hash = sha256(password)
-        saveToKeychain(key: conversationId, value: hash)
+    func setLock(conversationId: String) {
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
     }
 
     func removeLock(conversationId: String) {
-        deleteFromKeychain(key: conversationId)
         lockedConversationIds.remove(conversationId)
         saveLockedIds()
     }
 
+    // MARK: - Global PIN (4 digits)
+
+    func hasGlobalPin() -> Bool {
+        readFromKeychain(key: globalPinKey) != nil
+    }
+
+    func setGlobalPin(_ pin: String) {
+        saveToKeychain(key: globalPinKey, value: sha256(pin))
+    }
+
+    func verifyGlobalPin(_ pin: String) -> Bool {
+        guard let storedHash = readFromKeychain(key: globalPinKey) else { return false }
+        return sha256(pin) == storedHash
+    }
+
+    func removeGlobalPin() {
+        deleteFromKeychain(key: globalPinKey)
+    }
+
+    // MARK: - Backward-compat shim (context menu uses these)
+
+    func setLock(conversationId: String, password: String) {
+        if !hasGlobalPin() { setGlobalPin(password) }
+        setLock(conversationId: conversationId)
+    }
+
     func verifyPassword(conversationId: String, password: String) -> Bool {
-        guard let storedHash = readFromKeychain(key: conversationId) else { return false }
-        return sha256(password) == storedHash
+        verifyGlobalPin(password)
     }
 
     // MARK: - Hashing
@@ -46,7 +69,7 @@ class ConversationLockManager: ObservableObject {
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - Keychain Operations
+    // MARK: - Keychain
 
     private func saveToKeychain(key: String, value: String) {
         let data = Data(value.utf8)
@@ -84,7 +107,7 @@ class ConversationLockManager: ObservableObject {
         SecItemDelete(query as CFDictionary)
     }
 
-    // MARK: - Persist locked IDs list (UserDefaults for the ID set, passwords in Keychain)
+    // MARK: - Persistence
 
     private func saveLockedIds() {
         UserDefaults.standard.set(Array(lockedConversationIds), forKey: "meeshy.lockedConversationIds")

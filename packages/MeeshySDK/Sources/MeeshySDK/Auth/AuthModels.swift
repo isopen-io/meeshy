@@ -260,3 +260,23 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
 public struct MeResponseData: Decodable {
     public let user: MeeshyUser
 }
+
+// MARK: - Saved Account (multi-account support)
+
+public struct SavedAccount: Codable, Identifiable, Sendable {
+    public let id: String         // userId
+    public let username: String
+    public let displayName: String?
+    public let avatarURL: String?
+    public let lastActiveAt: Date
+
+    public var shortName: String { displayName ?? username }
+
+    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatarURL = avatarURL
+        self.lastActiveAt = lastActiveAt
+    }
+}

@@ -10,6 +10,13 @@ struct SecurityView: View {
 
     @State private var showChangePassword = false
 
+    // Conversation lock PIN
+    @ObservedObject private var lockManager = ConversationLockManager.shared
+    @State private var showPinSetupSheet = false
+    @State private var showPinVerifyForChange = false
+    @State private var showPinChangeSetup = false
+    @State private var showPinRemoveSheet = false
+
     // Email change
     @State private var isEditingEmail = false
     @State private var newEmail = ""
@@ -42,6 +49,51 @@ struct SecurityView: View {
         }
         .sheet(isPresented: $showChangePassword) {
             ChangePasswordView()
+        }
+        // PIN setup (no existing PIN)
+        .sheet(isPresented: $showPinSetupSheet) {
+            ConversationLockSheet(
+                mode: .setPassword,
+                conversationId: nil,
+                conversationName: "toutes les conversations",
+                onSuccess: {}
+            )
+            .environmentObject(theme)
+        }
+        // Verify current PIN before changing
+        .sheet(isPresented: $showPinVerifyForChange) {
+            ConversationLockSheet(
+                mode: .verifyPassword,
+                conversationId: nil,
+                conversationName: "changement de PIN",
+                onSuccess: {
+                    showPinVerifyForChange = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showPinChangeSetup = true
+                    }
+                }
+            )
+            .environmentObject(theme)
+        }
+        // Set new PIN after verification
+        .sheet(isPresented: $showPinChangeSetup) {
+            ConversationLockSheet(
+                mode: .setPassword,
+                conversationId: nil,
+                conversationName: "toutes les conversations",
+                onSuccess: {}
+            )
+            .environmentObject(theme)
+        }
+        // Remove global PIN
+        .sheet(isPresented: $showPinRemoveSheet) {
+            ConversationLockSheet(
+                mode: .removeGlobalPin,
+                conversationId: nil,
+                conversationName: "toutes les conversations",
+                onSuccess: {}
+            )
+            .environmentObject(theme)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active, emailSent {
@@ -89,6 +141,7 @@ struct SecurityView: View {
                 passwordSection
                 emailSection
                 phoneSection
+                conversationLockSection
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -458,6 +511,100 @@ struct SecurityView: View {
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
+        }
+    }
+
+    // MARK: - Conversation Lock PIN Section
+
+    private var conversationLockSection: some View {
+        let hasPIN = lockManager.hasGlobalPin()
+        let lockColor = "FF6B6B"
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)
+
+            VStack(spacing: 0) {
+                // Status row
+                HStack(spacing: 12) {
+                    fieldIcon("lock.shield.fill", color: lockColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Code PIN")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                        Text(hasPIN ? "Configuré" : "Non configuré")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(hasPIN ? Color(hex: "4ADE80") : theme.textMuted)
+                    }
+
+                    Spacer()
+
+                    if hasPIN {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: "4ADE80"))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                // Actions
+                HStack(spacing: 10) {
+                    if !hasPIN {
+                        Button {
+                            HapticFeedback.medium()
+                            showPinSetupSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 12))
+                                Text("Configurer")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(Color(hex: lockColor))
+                            )
+                        }
+                    } else {
+                        Button {
+                            HapticFeedback.light()
+                            showPinVerifyForChange = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.system(size: 12))
+                                Text("Modifier")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(Color(hex: lockColor))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color(hex: lockColor).opacity(0.12)))
+                        }
+
+                        Button {
+                            HapticFeedback.medium()
+                            showPinRemoveSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash.circle.fill")
+                                    .font(.system(size: 12))
+                                Text("Supprimer")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(Color(hex: "EF4444"))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color(hex: "EF4444").opacity(0.10)))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+            }
+            .background(sectionBackground(tint: lockColor))
         }
     }
 

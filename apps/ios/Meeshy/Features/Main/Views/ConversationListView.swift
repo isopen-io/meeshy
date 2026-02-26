@@ -312,7 +312,9 @@ struct ConversationListView: View {
     // MARK: - Swipe Actions
 
     private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        [
+        let lockManager = ConversationLockManager.shared
+        let isLocked = lockManager.isLocked(conversation.id)
+        return [
             SwipeAction(
                 icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
                 label: conversation.isPinned
@@ -330,27 +332,90 @@ struct ConversationListView: View {
                 color: Color(hex: "6B7280")
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
+            },
+            SwipeAction(
+                icon: isLocked ? "lock.open.fill" : "lock.fill",
+                label: isLocked
+                    ? String(localized: "swipe.unlock", defaultValue: "D\u{00e9}verrouiller")
+                    : String(localized: "swipe.lock", defaultValue: "Verrouiller"),
+                color: Color(hex: "F59E0B")
+            ) {
+                if isLocked {
+                    lockSheetMode = .removePassword
+                    lockSheetConversation = conversation
+                } else if lockManager.hasGlobalPin() {
+                    lockManager.setLock(conversationId: conversation.id)
+                    HapticFeedback.success()
+                } else {
+                    lockSheetMode = .setPassword
+                    lockSheetConversation = conversation
+                }
             }
         ]
     }
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        [
+        let isArchived = !conversation.isActive
+        let isRead = conversation.unreadCount == 0
+        var actions: [SwipeAction] = [
             SwipeAction(
-                icon: "archivebox.fill",
-                label: String(localized: "swipe.archive", defaultValue: "Archiver"),
+                icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
+                label: isArchived
+                    ? String(localized: "swipe.unarchive", defaultValue: "D\u{00e9}sarchiver")
+                    : String(localized: "swipe.archive", defaultValue: "Archiver"),
                 color: MeeshyColors.orange
             ) {
-                Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                if isArchived {
+                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                }
             },
             SwipeAction(
-                icon: "trash.fill",
-                label: String(localized: "swipe.delete", defaultValue: "Supprimer"),
-                color: Color(hex: "EF4444")
+                icon: isRead ? "envelope.badge.fill" : "envelope.open.fill",
+                label: isRead
+                    ? String(localized: "swipe.mark_unread", defaultValue: "Non lu")
+                    : String(localized: "swipe.mark_read", defaultValue: "Lu"),
+                color: Color(hex: "8B5CF6")
             ) {
-                Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                if isRead {
+                    Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
+                }
             }
         ]
+
+        if conversation.type == .direct, let userId = conversation.participantUserId {
+            let isBlocked = BlockService.shared.isBlocked(userId: userId)
+            actions.append(SwipeAction(
+                icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
+                label: isBlocked
+                    ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
+                    : String(localized: "swipe.block", defaultValue: "Bloquer"),
+                color: Color(hex: "EF4444")
+            ) {
+                if isBlocked {
+                    Task {
+                        try? await BlockService.shared.unblockUser(userId: userId)
+                        HapticFeedback.success()
+                    }
+                } else {
+                    blockTargetConversation = conversation
+                    showBlockConfirmation = true
+                }
+            })
+        }
+
+        actions.append(SwipeAction(
+            icon: "trash.fill",
+            label: String(localized: "swipe.delete", defaultValue: "Supprimer"),
+            color: Color(hex: "EF4444")
+        ) {
+            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+        })
+
+        return actions
     }
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
@@ -663,6 +728,7 @@ struct ConversationListView: View {
                       let targetUserId = conv.participantUserId else { return }
                 Task {
                     try? await BlockService.shared.blockUser(userId: targetUserId)
+                    await conversationViewModel.archiveConversation(conversationId: conv.id)
                     HapticFeedback.success()
                 }
             }

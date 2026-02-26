@@ -348,6 +348,24 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Unarchive Conversation
+
+    func unarchiveConversation(conversationId: String) async {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        let wasActive = conversations[index].isActive
+
+        conversations[index].isActive = true
+
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.put(
+                endpoint: "/user-preferences/conversations/\(conversationId)",
+                body: ["isArchived": false]
+            )
+        } catch {
+            conversations[index].isActive = wasActive
+        }
+    }
+
     // MARK: - Delete Conversation
 
     func deleteConversation(conversationId: String) async {
