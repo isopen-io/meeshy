@@ -17,7 +17,7 @@ public struct SwipeAction: Identifiable {
 // Comportement :
 // • Les actions apparaissent PAR DERRIÈRE le contenu qui glisse (fond solide, sans transparence)
 // • Le contenu revient TOUJOURS à sa position initiale après relâchement (élastique)
-// • Swipe rapide ou ample → déclenche la première action, retour immédiat
+// • Déclenchement UNIQUEMENT au pull complet (≥ 100 % de la zone) ou swipe très rapide (≥ 85 % + 700 pts/s)
 // • Pas d'état "ouvert" persistant
 //
 public struct SwipeableRow<Content: View>: View {
@@ -31,10 +31,8 @@ public struct SwipeableRow<Content: View>: View {
     private let actionWidth: CGFloat = 76
     // Résistance élastique au-delà de la zone d'action (1 = aucune résistance, 0 = bloqué)
     private let rubberFactor: CGFloat = 0.18
-    // Seuil de vitesse pour déclencher l'action sur swipe rapide (pts/s)
-    private let triggerVelocity: CGFloat = 380
-    // Ratio de la zone d'action à dépasser pour déclencher (0–1)
-    private let triggerRatio: CGFloat = 0.62
+    // Seuil de vélocité pour le déclenchement rapide (pts/s) — nécessite aussi 85 % de pull
+    private let triggerVelocity: CGFloat = 700
 
     public init(
         leadingActions: [SwipeAction] = [],
@@ -168,13 +166,14 @@ public struct SwipeableRow<Content: View>: View {
         // Vélocité prédite : différence entre position prédite et position actuelle
         let velocity = value.predictedEndTranslation.width - value.translation.width
 
+        // Déclenchement au pull complet OU swipe très rapide avec pull ≥ 85 %
         let leadingFired = !leadingActions.isEmpty && (
-            translation > totalLeadingWidth * triggerRatio ||
-            (translation > 20 && velocity > triggerVelocity)
+            translation >= totalLeadingWidth ||
+            (translation >= totalLeadingWidth * 0.85 && velocity > triggerVelocity)
         )
         let trailingFired = !trailingActions.isEmpty && (
-            translation < -totalTrailingWidth * triggerRatio ||
-            (translation < -20 && velocity < -triggerVelocity)
+            translation <= -totalTrailingWidth ||
+            (translation <= -totalTrailingWidth * 0.85 && velocity < -triggerVelocity)
         )
 
         if leadingFired {

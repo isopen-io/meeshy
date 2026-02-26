@@ -20,22 +20,22 @@ extension ConversationView {
         let isActiveSwipe = swipedMessageId == msg.id
 
         ZStack {
-            // Reply icon revealed behind the bubble
-            if isActiveSwipe && abs(swipeOffset) > 20 {
+            // Icône répondre/transférer révélée élastiquement derrière la bulle
+            if isActiveSwipe {
+                let progress = min(abs(swipeOffset) / 72.0, 1.0)
+                let isReplyDir = swipeOffset * replyDirection > 0
+                let iconColor = isReplyDir ? "4ECDC4" : "F8B500"
                 HStack {
-                    if !msg.isMe {
-                        Spacer()
-                    }
-                    Image(systemName: swipeOffset * replyDirection > 0 ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
+                    // L'icône se place du côté révélé (opposé au déplacement de la bulle)
+                    if swipeOffset <= 0 { Spacer() }
+                    Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500"))
+                        .foregroundStyle(Color(hex: iconColor))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500").opacity(0.15)))
-                        .scaleEffect(min(abs(swipeOffset) / 60.0, 1.0))
-                        .opacity(min(abs(swipeOffset) / 40.0, 1.0))
-                    if msg.isMe {
-                        Spacer()
-                    }
+                        .background(Circle().fill(Color(hex: iconColor).opacity(0.15)))
+                        .scaleEffect(0.4 + 0.6 * progress)
+                        .opacity(min(progress * 2.5, 1.0))
+                    if swipeOffset > 0 { Spacer() }
                 }
                 .padding(.horizontal, 16)
             }
@@ -152,24 +152,37 @@ extension ConversationView {
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
             .simultaneousGesture(
-                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 50)
+                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 15)
                     .onChanged { value in
-                        // Only allow clearly horizontal swipes (2:1 ratio minimum)
-                        guard abs(value.translation.width) > abs(value.translation.height) * 2 else { return }
-                        guard abs(value.translation.width) > 30 else { return }
+                        let h = value.translation.width
+                        let v = abs(value.translation.height)
+                        // Geste clairement horizontal (ratio 2:1)
+                        guard abs(h) > v * 2 else { return }
+                        guard abs(h) > 12 else { return }
                         swipedMessageId = msg.id
-                        let raw = value.translation.width
-                        let clamped = raw > 0 ? min(raw, 80) : max(raw, -80)
-                        swipeOffset = clamped
+                        // Rubber-band : libre jusqu'à 72 pt, résistance 15 % au-delà
+                        let zone: CGFloat = 72
+                        let absH = abs(h)
+                        let sign: CGFloat = h > 0 ? 1 : -1
+                        if absH > zone {
+                            swipeOffset = sign * (zone + (absH - zone) * 0.15)
+                        } else {
+                            swipeOffset = h
+                        }
                     }
                     .onEnded { value in
-                        let threshold: CGFloat = 60
-                        if swipeOffset * replyDirection > threshold {
+                        let directed = swipeOffset * replyDirection
+                        // Déclenchement à ≥ 92 % de la zone (≈ 66 pt sur 72 pt)
+                        if directed >= 66 {
                             triggerReply(for: msg)
-                        } else if swipeOffset * replyDirection < -threshold {
+                            HapticFeedback.success()
+                        } else if directed <= -66 {
                             forwardMessage = msg
+                            HapticFeedback.success()
+                        } else if abs(swipeOffset) > 15 {
+                            HapticFeedback.light()
                         }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.62, blendDuration: 0.04)) {
                             swipeOffset = 0
                             swipedMessageId = nil
                         }
