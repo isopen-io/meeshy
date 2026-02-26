@@ -15,9 +15,10 @@ public struct SwipeAction: Identifiable {
 // MARK: - SwipeableRow
 //
 // Comportement :
-// • Les actions apparaissent PAR DERRIÈRE le contenu qui glisse (fond solide, sans transparence)
-// • Le contenu revient TOUJOURS à sa position initiale après relâchement (élastique)
-// • Déclenchement UNIQUEMENT au pull complet (≥ 100 % de la zone) ou swipe très rapide (≥ 85 % + 700 pts/s)
+// • Les actions apparaissent PAR DERRIÈRE le contenu qui glisse (fond opaque, sans transparence)
+// • Pull complet (≥ 100 %) → déclenchement : l'item reste ouvert ~350 ms puis revient élastiquement
+// • Swipe très rapide (≥ 85 % + 700 pts/s) → déclenchement identique
+// • À plein déploiement, la première action grossit pour signaler qu'elle est armée
 // • Pas d'état "ouvert" persistant
 //
 public struct SwipeableRow<Content: View>: View {
@@ -26,12 +27,15 @@ public struct SwipeableRow<Content: View>: View {
     public let trailingActions: [SwipeAction]
 
     @GestureState private var dragOffset: CGFloat = 0
+    // Maintient la position ouverte le temps que l'utilisateur voie l'action sélectionnée
+    @State private var firedOffset: CGFloat = 0
+    @State private var holdTask: Task<Void, Never>? = nil
 
     // Layout
     private let actionWidth: CGFloat = 76
-    // Résistance élastique au-delà de la zone d'action (1 = aucune résistance, 0 = bloqué)
+    // Résistance élastique au-delà de la zone d'action
     private let rubberFactor: CGFloat = 0.18
-    // Seuil de vélocité pour le déclenchement rapide (pts/s) — nécessite aussi 85 % de pull
+    // Seuil de vélocité pour le déclenchement rapide (nécessite aussi ≥ 85 % de pull)
     private let triggerVelocity: CGFloat = 700
 
     public init(
@@ -49,10 +53,12 @@ public struct SwipeableRow<Content: View>: View {
     private var totalLeadingWidth: CGFloat { CGFloat(leadingActions.count) * actionWidth }
     private var totalTrailingWidth: CGFloat { CGFloat(trailingActions.count) * actionWidth }
 
-    /// Offset élastique : suit le doigt fidèlement dans la zone d'action,
-    /// puis applique une résistance progressive au-delà.
+    /// Drag actif prioritaire sur le hold post-déclenchement
+    private var effectiveDrag: CGFloat { dragOffset != 0 ? dragOffset : firedOffset }
+
+    /// Offset élastique : suit le doigt dans la zone, puis résistance progressive au-delà.
     private var elasticOffset: CGFloat {
-        let raw = dragOffset
+        let raw = effectiveDrag
         if raw > 0 {
             guard !leadingActions.isEmpty else { return raw * rubberFactor }
             if raw > totalLeadingWidth {
@@ -76,60 +82,58 @@ public struct SwipeableRow<Content: View>: View {
 
     public var body: some View {
         ZStack(alignment: .leading) {
-            // Fond gauche – actions leading (révélées par glissement vers la droite)
+            // Fond gauche – actions leading
             if !leadingActions.isEmpty {
                 leadingBackground
             }
 
-            // Fond droit – actions trailing (révélées par glissement vers la gauche)
+            // Fond droit – actions trailing
             if !trailingActions.isEmpty {
                 trailingBackground
             }
 
-            // Contenu principal opaque – glisse par-dessus les fonds d'action
+            // Contenu principal – glisse par-dessus les fonds d'action
             content
                 .offset(x: elasticOffset)
                 .gesture(swipeGesture)
         }
         .clipped()
-        // L'animation spring se déclenche quand dragOffset revient à 0 (fin du geste)
-        .animation(
-            .spring(response: 0.46, dampingFraction: 0.64, blendDuration: 0.06),
-            value: dragOffset
-        )
+        // Animation déclenchée par le drag en cours
+        .animation(.spring(response: 0.46, dampingFraction: 0.64, blendDuration: 0.06), value: dragOffset)
+        // Animation déclenchée par le hold post-déclenchement (retour après 350 ms)
+        .animation(.spring(response: 0.46, dampingFraction: 0.64, blendDuration: 0.06), value: firedOffset)
     }
 
     // MARK: - Fonds d'action
 
     private var leadingBackground: some View {
-        HStack(spacing: 0) {
+        let isArmed = leadingReveal >= totalLeadingWidth
+        return HStack(spacing: 0) {
             ForEach(Array(leadingActions.enumerated()), id: \.element.id) { index, action in
-                // Chaque action s'anime indépendamment selon sa progression locale
                 let localReveal = max(0, leadingReveal - CGFloat(index) * actionWidth)
                 let progress = min(localReveal / actionWidth, 1.0)
-                actionCell(action, progress: progress)
+                actionCell(action, progress: progress, isArmed: index == 0 && isArmed)
             }
             Spacer(minLength: 0)
         }
     }
 
     private var trailingBackground: some View {
-        HStack(spacing: 0) {
+        let isArmed = trailingReveal >= totalTrailingWidth
+        return HStack(spacing: 0) {
             Spacer(minLength: 0)
             // Rendu en ordre inversé : trailingActions[0] apparaît le plus à droite
-            // (première révélée lors du swipe gauche) et déclenche l'action sur fort swipe.
             ForEach(Array(trailingActions.reversed().enumerated()), id: \.element.id) { revIdx, action in
                 let origIdx = trailingActions.count - 1 - revIdx
                 let localReveal = max(0, trailingReveal - CGFloat(origIdx) * actionWidth)
                 let progress = min(localReveal / actionWidth, 1.0)
-                actionCell(action, progress: progress)
+                actionCell(action, progress: progress, isArmed: origIdx == 0 && isArmed)
             }
         }
     }
 
-    /// Cellule d'action : couleur pleine + icône qui grandit au fur et à mesure de la révélation.
-    /// Opacité 0 au repos → apparaît progressivement dès le début du swipe.
-    private func actionCell(_ action: SwipeAction, progress: CGFloat) -> some View {
+    /// Cellule d'action : grandit progressivement, grossit quand armée (prête à déclencher).
+    private func actionCell(_ action: SwipeAction, progress: CGFloat, isArmed: Bool = false) -> some View {
         ZStack {
             action.color
             VStack(spacing: 4) {
@@ -139,11 +143,12 @@ public struct SwipeableRow<Content: View>: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(.white)
-            // Grossit progressivement au fil de la révélation (0.4x → 1x)
-            .scaleEffect(0.4 + 0.6 * progress)
+            // 0.4x → 1.0x au fil de la révélation ; 1.25x quand armée
+            .scaleEffect(isArmed ? 1.25 : (0.4 + 0.6 * progress))
+            .animation(.spring(response: 0.25, dampingFraction: 0.58), value: isArmed)
         }
         .frame(width: actionWidth)
-        // Invisible au repos, apparaît rapidement dès le début du swipe (visible dès ~40% de révélation)
+        // Invisible au repos, visible rapidement dès le début du swipe
         .opacity(min(progress * 2.5, 1.0))
     }
 
@@ -163,7 +168,6 @@ public struct SwipeableRow<Content: View>: View {
 
     private func handleDragEnd(_ value: DragGesture.Value) {
         let translation = value.translation.width
-        // Vélocité prédite : différence entre position prédite et position actuelle
         let velocity = value.predictedEndTranslation.width - value.translation.width
 
         // Déclenchement au pull complet OU swipe très rapide avec pull ≥ 85 %
@@ -176,17 +180,36 @@ public struct SwipeableRow<Content: View>: View {
             (translation <= -totalTrailingWidth * 0.85 && velocity < -triggerVelocity)
         )
 
+        // Annule un éventuel hold précédent avant d'en démarrer un nouveau
+        holdTask?.cancel()
+
         if leadingFired {
-            leadingActions[0].action()
+            // Reste ouvert côté gauche le temps de confirmer visuellement
+            firedOffset = totalLeadingWidth
             HapticFeedback.success()
+            holdTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard !Task.isCancelled else { return }
+                firedOffset = 0
+                leadingActions[0].action()
+            }
         } else if trailingFired {
-            trailingActions[0].action()
+            // Reste ouvert côté droit
+            firedOffset = -totalTrailingWidth
             HapticFeedback.success()
-        } else if abs(translation) > 12 {
-            // Léger retour haptique même sans déclenchement d'action
-            HapticFeedback.light()
+            holdTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard !Task.isCancelled else { return }
+                firedOffset = 0
+                trailingActions[0].action()
+            }
+        } else {
+            // Annule tout hold en cours et revient en place
+            firedOffset = 0
+            if abs(translation) > 12 {
+                HapticFeedback.light()
+            }
         }
         // dragOffset revient à 0 automatiquement via @GestureState
-        // → l'animation .spring() ci-dessus produit le retour élastique
     }
 }

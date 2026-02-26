@@ -139,7 +139,9 @@ struct ThemedConversationRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(heatBackground)
+                // Base opaque : empêche les couleurs des actions de swipe de transpa­raître
+                .fill(theme.backgroundSecondary)
+                .overlay(RoundedRectangle(cornerRadius: 18).fill(heatBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(
