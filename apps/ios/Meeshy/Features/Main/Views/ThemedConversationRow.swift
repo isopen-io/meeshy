@@ -22,6 +22,41 @@ struct ThemedConversationRow: View {
 
     private var accentColor: String { conversation.accentColor }
 
+    // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
+    private var conversationHeat: CGFloat {
+        guard !conversation.isMuted else { return 0.05 }
+
+        let seconds = Date().timeIntervalSince(conversation.lastMessageAt)
+        let recency: CGFloat
+        if seconds < 300 { recency = 1.0 }
+        else if seconds < 3_600 { recency = 0.8 }
+        else if seconds < 86_400 { recency = 0.5 }
+        else if seconds < 604_800 { recency = 0.2 }
+        else { recency = 0.0 }
+
+        let unread  = min(CGFloat(conversation.unreadCount) / 10.0, 1.0)
+        let members = min(CGFloat(conversation.memberCount) / 50.0, 1.0)
+        let pinned: CGFloat = conversation.isPinned ? 1.0 : 0.0
+
+        return 0.40 * recency + 0.35 * unread + 0.15 * members + 0.10 * pinned
+    }
+
+    /// Gradient de fond calibré sur l'activité : pastel (faible) → vibrant (forte)
+    private var heatBackground: LinearGradient {
+        let heat = conversationHeat
+        let isDark = theme.mode.isDark
+        let topOpacity = isDark ? (0.05 + heat * 0.23) : (0.03 + heat * 0.16)
+        let botOpacity = topOpacity * 0.30
+        return LinearGradient(
+            colors: [
+                Color(hex: accentColor).opacity(topOpacity),
+                Color(hex: conversation.colorPalette.secondary).opacity(botOpacity)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     // Calculate visible tags based on available width
     private var visibleTagsInfo: (tags: [ConversationTag], remaining: Int) {
         guard !conversation.tags.isEmpty else { return ([], 0) }
@@ -104,17 +139,21 @@ struct ThemedConversationRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(theme.surfaceGradient(tint: accentColor))
+                .fill(heatBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(
                             isDragging ?
                             LinearGradient(colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            theme.border(tint: accentColor),
+                            theme.border(tint: accentColor, intensity: 0.18 + Double(conversationHeat) * 0.44),
                             lineWidth: isDragging ? 2 : 1
                         )
                 )
-                .shadow(color: Color(hex: accentColor).opacity(isDragging ? 0.4 : (theme.mode.isDark ? 0.15 : 0.1)), radius: isDragging ? 16 : 8, y: isDragging ? 8 : 4)
+                .shadow(
+                    color: Color(hex: accentColor).opacity(isDragging ? 0.4 : (0.04 + Double(conversationHeat) * (theme.mode.isDark ? 0.20 : 0.14))),
+                    radius: isDragging ? 16 : (6 + conversationHeat * 6),
+                    y: isDragging ? 8 : (3 + conversationHeat * 3)
+                )
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)

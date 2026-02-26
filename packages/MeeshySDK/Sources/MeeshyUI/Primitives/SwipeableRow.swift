@@ -118,8 +118,11 @@ public struct SwipeableRow<Content: View>: View {
     private var trailingBackground: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            ForEach(Array(trailingActions.enumerated()), id: \.element.id) { index, action in
-                let localReveal = max(0, trailingReveal - CGFloat(index) * actionWidth)
+            // Rendu en ordre inversé : trailingActions[0] apparaît le plus à droite
+            // (première révélée lors du swipe gauche) et déclenche l'action sur fort swipe.
+            ForEach(Array(trailingActions.reversed().enumerated()), id: \.element.id) { revIdx, action in
+                let origIdx = trailingActions.count - 1 - revIdx
+                let localReveal = max(0, trailingReveal - CGFloat(origIdx) * actionWidth)
                 let progress = min(localReveal / actionWidth, 1.0)
                 actionCell(action, progress: progress)
             }
