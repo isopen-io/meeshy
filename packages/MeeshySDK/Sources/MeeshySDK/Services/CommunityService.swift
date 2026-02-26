@@ -46,8 +46,12 @@ public final class CommunityService {
 
     // MARK: - Update Community
 
-    public func update(communityId: String, name: String? = nil, identifier: String? = nil, description: String? = nil, isPrivate: Bool? = nil) async throws -> APICommunity {
-        let body = UpdateCommunityRequest(name: name, identifier: identifier, description: description, isPrivate: isPrivate)
+    public func update(communityId: String, name: String? = nil, identifier: String? = nil,
+                       description: String? = nil, isPrivate: Bool? = nil,
+                       avatar: String? = nil, banner: String? = nil) async throws -> APICommunity {
+        let body = UpdateCommunityRequest(name: name, identifier: identifier,
+                                          description: description, isPrivate: isPrivate,
+                                          avatar: avatar, banner: banner)
         let response: APIResponse<APICommunity> = try await api.put(endpoint: "/communities/\(communityId)", body: body)
         return response.data
     }

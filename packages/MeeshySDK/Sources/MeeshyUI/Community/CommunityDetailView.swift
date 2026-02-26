@@ -16,6 +16,8 @@ public struct CommunityDetailView: View {
     @State private var showAddChannel = false
     @State private var showSettings = false
     @State private var isLeaving = false
+    @State private var localColor: String? = nil
+    @State private var localEmoji: String? = nil
 
     public init(communityId: String,
                 onSelectConversation: ((APIConversation) -> Void)? = nil,
@@ -32,7 +34,7 @@ public struct CommunityDetailView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             theme.backgroundPrimary.ignoresSafeArea()
 
             if viewModel.isLoading && viewModel.community == nil {
@@ -41,13 +43,17 @@ public struct CommunityDetailView: View {
             } else if let community = viewModel.community {
                 ScrollView {
                     VStack(spacing: 0) {
-                        navigationHeader(community)
                         headerSection(community)
                         statsSection(community)
                         actionsSection(community)
                         conversationsSection
                     }
                 }
+
+                // Navigation header flottant par-dessus la bannière
+                navigationHeader(community)
+                    .padding(.top, 8)
+
             } else if let error = viewModel.errorMessage {
                 EmptyStateView(
                     icon: "exclamationmark.triangle",
@@ -58,7 +64,11 @@ public struct CommunityDetailView: View {
                 )
             }
         }
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            localColor = UserDefaults.standard.string(forKey: "community.color.\(viewModel.communityId)")
+            localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(viewModel.communityId)")
+        }
         .alert("Quitter la communaute ?", isPresented: $showLeaveConfirm) {
             Button("Annuler", role: .cancel) {}
             Button("Quitter", role: .destructive) {
@@ -88,6 +98,8 @@ public struct CommunityDetailView: View {
                     community: community,
                     onUpdated: { updated in
                         showSettings = false
+                        localColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)")
+                        localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)")
                         Task { await viewModel.load() }
                     },
                     onDeleted: {
@@ -111,7 +123,7 @@ public struct CommunityDetailView: View {
         }
     }
 
-    // MARK: - Navigation Header
+    // MARK: - Navigation Header (flottant)
 
     @ViewBuilder
     private func navigationHeader(_ community: MeeshyCommunity) -> some View {
@@ -125,9 +137,9 @@ public struct CommunityDetailView: View {
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial)
+                    .background(Color.black.opacity(0.35))
                     .clipShape(Circle())
             }
 
@@ -153,57 +165,149 @@ public struct CommunityDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundColor(.white)
                         .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial)
+                        .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
                 }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.top, 4)
     }
 
-    // MARK: - Header
+    // MARK: - Header (bannière + avatar + infos)
 
     @ViewBuilder
     private func headerSection(_ community: MeeshyCommunity) -> some View {
-        VStack(spacing: 12) {
-            communityAvatar(community)
+        let color = localColor ?? (community.color.isEmpty ? DynamicColorGenerator.colorForName(community.name) : community.color)
 
-            Text(community.name)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+        VStack(spacing: 0) {
+            // Bannière
+            ZStack(alignment: .bottomLeading) {
+                bannerView(community, color: color)
+                    .frame(height: 190)
+                    .clipped()
 
-            if let desc = community.description, !desc.isEmpty {
-                Text(desc)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundColor(theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                // Gradient overlay en bas pour lisibilité du header
+                LinearGradient(
+                    colors: [.clear, Color.black.opacity(0.3)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 190)
+
+                // Avatar overlapping
+                communityAvatar(community, color: color)
+                    .padding(.leading, 16)
+                    .offset(y: 36)
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: community.isPrivate ? "lock.fill" : "globe")
-                    .font(.system(size: 11))
-                Text(community.isPrivate ? "Private" : "Public")
-                    .font(.system(size: 12, weight: .medium))
+            // Infos communauté
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(community.name)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
+
+                    if let desc = community.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.system(size: 13, design: .rounded))
+                            .foregroundColor(theme.textSecondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.top, 44)
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: community.isPrivate ? "lock.fill" : "globe")
+                        .font(.system(size: 11))
+                    Text(community.isPrivate ? "Privee" : "Publique")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(theme.textMuted)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(theme.backgroundSecondary)
+                .clipShape(Capsule())
+                .padding(.top, 44)
             }
-            .foregroundColor(theme.textMuted)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(theme.backgroundSecondary)
-            .clipShape(Capsule())
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
-        .padding(.vertical, 20)
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
-    private func communityAvatar(_ community: MeeshyCommunity) -> some View {
-        let color = community.color.isEmpty ? DynamicColorGenerator.colorForName(community.name) : community.color
-        RoundedRectangle(cornerRadius: 22)
+    private func bannerView(_ community: MeeshyCommunity, color: String) -> some View {
+        if let bannerUrl = community.banner, !bannerUrl.isEmpty, let url = URL(string: bannerUrl) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    LinearGradient(
+                        colors: [Color(hex: color), Color(hex: color).opacity(0.5)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+            }
+        } else {
+            LinearGradient(
+                colors: [Color(hex: color), Color(hex: color).opacity(0.5)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func communityAvatar(_ community: MeeshyCommunity, color: String) -> some View {
+        let emoji = localEmoji.flatMap { $0.isEmpty ? nil : $0 } ?? (community.emoji.isEmpty ? nil : community.emoji)
+
+        ZStack {
+            if let avatarUrl = community.avatar, !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        avatarFallback(emoji: emoji, color: color, name: community.name)
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+            } else {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: color), Color(hex: color).opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 72, height: 72)
+                    .overlay {
+                        if let e = emoji {
+                            Text(e).font(.system(size: 32))
+                        } else {
+                            Text(String(community.name.prefix(2)).uppercased())
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                    }
+            }
+        }
+        .shadow(color: Color(hex: color).opacity(0.4), radius: 8, y: 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(theme.backgroundPrimary, lineWidth: 3)
+        )
+    }
+
+    @ViewBuilder
+    private func avatarFallback(emoji: String?, color: String, name: String) -> some View {
+        RoundedRectangle(cornerRadius: 18)
             .fill(
                 LinearGradient(
                     colors: [Color(hex: color), Color(hex: color).opacity(0.6)],
@@ -211,18 +315,15 @@ public struct CommunityDetailView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 80, height: 80)
             .overlay {
-                if !community.emoji.isEmpty {
-                    Text(community.emoji)
-                        .font(.system(size: 36))
+                if let e = emoji {
+                    Text(e).font(.system(size: 32))
                 } else {
-                    Text(String(community.name.prefix(2)).uppercased())
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                    Text(String(name.prefix(2)).uppercased())
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                 }
             }
-            .shadow(color: Color(hex: color).opacity(0.3), radius: 10, y: 4)
     }
 
     // MARK: - Stats

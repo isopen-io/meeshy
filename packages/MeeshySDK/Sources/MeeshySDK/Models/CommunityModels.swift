@@ -111,6 +111,7 @@ public struct APICommunity: Decodable, Identifiable {
     public let name: String
     public let description: String?
     public let avatar: String?
+    public let banner: String?
     public let isPrivate: Bool
     public let createdBy: String
     public let createdAt: Date
@@ -128,6 +129,7 @@ extension APICommunity {
             name: name,
             description: description,
             avatar: avatar,
+            banner: banner,
             isPrivate: isPrivate,
             createdBy: createdBy,
             createdAt: createdAt,
@@ -192,12 +194,17 @@ public struct UpdateCommunityRequest: Encodable {
     public let identifier: String?
     public let description: String?
     public let isPrivate: Bool?
+    public let avatar: String?
+    public let banner: String?
 
-    public init(name: String? = nil, identifier: String? = nil, description: String? = nil, isPrivate: Bool? = nil) {
+    public init(name: String? = nil, identifier: String? = nil, description: String? = nil,
+                isPrivate: Bool? = nil, avatar: String? = nil, banner: String? = nil) {
         self.name = name
         self.identifier = identifier
         self.description = description
         self.isPrivate = isPrivate
+        self.avatar = avatar
+        self.banner = banner
     }
 }
 
