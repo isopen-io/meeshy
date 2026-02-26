@@ -54,9 +54,11 @@ public struct StoryComposerView: View {
     @State private var backgroundColor: Color = Color(hex: "0F0C29")
     @State private var selectedImage: UIImage? = nil
 
-    @State private var musicTrack: StoryMusicTrack? = nil
-    @State private var musicTrimStart: TimeInterval = 0
-    @State private var musicTrimEnd: TimeInterval = 15
+    // Audio — sera remplacé par StoryAudioPanel (Phase 2c)
+    @State private var selectedAudioId: String? = nil
+    @State private var selectedAudioTitle: String? = nil
+    @State private var audioVolume: Float = 0.7
+    @State private var audioTrimStart: TimeInterval = 0
 
     @State private var activePanel: StoryComposerPanel = .none
     @State private var showPhotoPicker = false
@@ -258,9 +260,8 @@ public struct StoryComposerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .music:
-            StoryMusicPicker(selectedTrack: $musicTrack, trimStart: $musicTrimStart, trimEnd: $musicTrimEnd)
-                .frame(height: 380)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            // TODO Phase 2c: remplacer par StoryAudioPanel(...)
+            EmptyView()
 
         case .background:
             backgroundPicker
@@ -368,9 +369,9 @@ public struct StoryComposerView: View {
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             textPositionPoint: textPosition,
             drawingData: drawingData,
-            musicTrackId: musicTrack?.id,
-            musicStartTime: musicTrack != nil ? musicTrimStart : nil,
-            musicEndTime: musicTrack != nil ? musicTrimEnd : nil
+            backgroundAudioId: selectedAudioId,
+            backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
+            backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil
         )
     }
 

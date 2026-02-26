@@ -278,6 +278,10 @@ public struct StoryEffects: Codable, Sendable {
                 ["emoji": s.emoji, "x": s.x, "y": s.y, "scale": s.scale, "rotation": s.rotation] as [String: Any]
             }
         } else if let st = stickers { dict["stickers"] = st }
+        if let aid = backgroundAudioId { dict["backgroundAudioId"] = aid }
+        if let vol = backgroundAudioVolume { dict["backgroundAudioVolume"] = vol }
+        if let start = backgroundAudioStart { dict["backgroundAudioStart"] = start }
+        if let vid = voiceAttachmentId { dict["voiceAttachmentId"] = vid }
         return dict
     }
 }
@@ -316,6 +320,8 @@ public struct StoryItem: Identifiable {
     public let expiresAt: Date?
     public let repostOfId: String?
     public var isViewed: Bool
+    public let translations: [StoryTranslation]?
+    public let backgroundAudio: StoryBackgroundAudioEntry?
 
     public var timeAgo: String {
         let seconds = Int(-createdAt.timeIntervalSinceNow)
@@ -325,10 +331,20 @@ public struct StoryItem: Identifiable {
         return "\(seconds / 86400)d"
     }
 
+    /// Résout le contenu dans la langue préférée via le Prisme Linguistique.
+    /// Retourne la traduction si disponible, sinon le contenu original.
+    public func resolvedContent(preferredLanguage: String?) -> String? {
+        guard let lang = preferredLanguage,
+              let translations = translations, !translations.isEmpty else { return content }
+        return translations.first { $0.language == lang }?.content ?? content
+    }
+
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
-                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, isViewed: Bool = false) {
+                createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil, isViewed: Bool = false,
+                translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId; self.isViewed = isViewed
+        self.translations = translations; self.backgroundAudio = backgroundAudio
     }
 }
 
