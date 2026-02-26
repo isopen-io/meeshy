@@ -238,10 +238,10 @@ extension ConversationListView {
                     ThemedFilterChip(
                         title: filter.rawValue,
                         color: filter.color,
-                        isSelected: selectedFilter == filter
+                        isSelected: conversationViewModel.selectedFilter == filter
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedFilter = filter
+                            conversationViewModel.selectedFilter = filter
                         }
                     }
                 }
@@ -279,15 +279,15 @@ extension ConversationListView {
             .accessibilityLabel(String(localized: "accessibility.search", defaultValue: "Rechercher"))
             .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
 
-            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $searchText)
+            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
                 .focused($isSearching)
                 .foregroundColor(theme.textPrimary)
                 .font(.system(size: 15))
                 .accessibilityLabel("Rechercher des conversations")
 
-            if !searchText.isEmpty {
+            if !conversationViewModel.searchText.isEmpty {
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchText = "" }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { conversationViewModel.searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(MeeshyColors.coral)
@@ -350,7 +350,7 @@ extension ConversationListView {
                 .shadow(color: isActive ? MeeshyColors.teal.opacity(0.25) : .clear, radius: 12, y: 5)
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)
         .onChange(of: isSearching) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue

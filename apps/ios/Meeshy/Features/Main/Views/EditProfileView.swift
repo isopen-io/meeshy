@@ -439,7 +439,7 @@ struct EditProfileView: View {
                     displayName: displayName.isEmpty ? nil : displayName,
                     bio: bio
                 )
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.put(
+                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.patch(
                     endpoint: "/users/me",
                     body: body
                 )
@@ -452,6 +452,10 @@ struct EditProfileView: View {
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 dismiss()
+            } catch let error as MeeshyError {
+                HapticFeedback.error()
+                errorMessage = error.errorDescription
+                isUploadingAvatar = false
             } catch let error as APIError {
                 HapticFeedback.error()
                 errorMessage = error.errorDescription

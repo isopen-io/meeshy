@@ -68,8 +68,6 @@ struct ConversationListView: View {
     @State private var showStatusBubble = false
     @State private var selectedStatusEntry: StatusEntry?
     @State private var moodBadgeAnchor: CGPoint = .zero
-    @State var searchText = ""
-    @State var selectedFilter: ConversationFilter = .all
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
@@ -115,69 +113,13 @@ struct ConversationListView: View {
         self.onStoryViewRequest = onStoryViewRequest
     }
 
-    private var filtered: [Conversation] {
-        conversationViewModel.conversations.filter { c in
-            let filterMatch: Bool
-            switch selectedFilter {
-            case .all: filterMatch = c.isActive
-            case .unread: filterMatch = c.unreadCount > 0
-            case .personnel: filterMatch = c.type == .direct && c.isActive
-            case .privee: filterMatch = c.type == .group && c.isActive
-            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
-            case .globales: filterMatch = c.type == .global && c.isActive
-            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
-            case .archived: filterMatch = !c.isActive
-            }
-            let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
-            return filterMatch && searchMatch
-        }
-    }
+    // The filtered and grouped conversations are now calculated on a background queue 
+    // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
 
-    // Group conversations by section (user categories from backend + pinned + uncategorized)
-    private var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] {
-        var result: [(section: ConversationSection, conversations: [Conversation])] = []
-
-        // First: Pinned section (conversations pinned without a category)
-        let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
-        if !pinnedOnly.isEmpty {
-            result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-        }
-
-        // Then: User categories from backend (dynamic)
-        let categories = conversationViewModel.userCategories
-        let categoryIds = Set(categories.map(\.id))
-        for category in categories {
-            let sectionConvs = filtered.filter { $0.sectionId == category.id }
-            if !sectionConvs.isEmpty {
-                let sorted = sectionConvs.sorted { a, b in
-                    if a.isPinned != b.isPinned { return a.isPinned }
-                    return a.lastMessageAt > b.lastMessageAt
-                }
-                result.append((category, sorted))
-            }
-        }
-
-        // Conversations with unknown sectionId (category deleted or not yet synced)
-        let orphaned = filtered.filter { conv in
-            guard let sid = conv.sectionId else { return false }
-            return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
-        }
-
-        // Finally: Uncategorized ("Mes conversations") -- no sectionId + not pinned, plus orphaned
-        let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
-        let allUncategorized = uncategorized + orphaned
-        if !allUncategorized.isEmpty {
-            result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-        }
-
-        return result
-    }
-
-    // MARK: - Sections Content (extracted for compiler)
     @ViewBuilder
     private var sectionsContent: some View {
         LazyVStack(spacing: 8) {
-            ForEach(groupedConversations, id: \.section.id) { group in
+            ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
                 sectionView(for: group)
             }
         }
@@ -252,7 +194,6 @@ struct ConversationListView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
-                isSearching = false
                 if ConversationLockManager.shared.isLocked(conversation.id) {
                     lockSheetMode = .verifyPassword
                     lockSheetConversation = conversation
@@ -466,16 +407,6 @@ struct ConversationListView: View {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Scroll position tracker
-                    GeometryReader { geo in
-                        let offset = geo.frame(in: .named("scroll")).minY
-                        Color.clear
-                            .onChange(of: offset) { _, newOffset in
-                                handleScrollChange(newOffset)
-                            }
-                    }
-                    .frame(height: 0)
-
                     // Top spacer
                     Color.clear.frame(height: 70)
 
@@ -490,7 +421,7 @@ struct ConversationListView: View {
                         .padding(.top, 4)
 
                     // Sectioned conversation list (skeleton -> content -> empty)
-                    if conversationViewModel.isLoading && filtered.isEmpty {
+                    if conversationViewModel.isLoading && conversationViewModel.filteredConversations.isEmpty {
                         LazyVStack(spacing: 8) {
                             ForEach(0..<8, id: \.self) { index in
                                 SkeletonConversationRow()
@@ -499,7 +430,7 @@ struct ConversationListView: View {
                         }
                         .padding(.horizontal, 16)
                         .transition(.opacity)
-                    } else if filtered.isEmpty {
+                    } else if conversationViewModel.filteredConversations.isEmpty {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
                             title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
@@ -539,50 +470,43 @@ struct ConversationListView: View {
                             }
                         }
                 }
+                // Background view to track scroll changes cleanly without fighting ScrollView gestures
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.onChange(of: proxy.frame(in: .named("scroll")).minY) { oldVal, newVal in
+                            let delta = newVal - oldVal
+                            // The delta is calculated per frame (e.g. 1/60th or 1/120th of a sec)
+                            // Therefore, values strictly > 2 or < -2 are ample to detect user intent avoiding jitters.
+                            
+                            // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
+                            if delta < -2 && !hideSearchBar && newVal < -20 {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    hideSearchBar = true
+                                    isScrollingDown = true
+                                }
+                            } else if (delta > 4 || newVal > -5) && hideSearchBar {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    hideSearchBar = false
+                                    isScrollingDown = false
+                                }
+                            }
+                        }
+                    }
+                )
             }
             .coordinateSpace(name: "scroll")
             .refreshable {
                 HapticFeedback.medium()
                 await conversationViewModel.forceRefresh()
+                
+                // Show the search bar seamlessly after reloading finishes
+                if hideSearchBar {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        hideSearchBar = false
+                        isScrollingDown = false
+                    }
+                }
             }
-            // Gesture for scroll detection with velocity
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { value in
-                        let verticalMovement = value.translation.height
-                        // Scrolling down (finger moving up) = hide immediately
-                        if verticalMovement < -20 && !hideSearchBar {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                hideSearchBar = true
-                                isScrollingDown = true
-                            }
-                        }
-                        // Scrolling up (finger moving down) = show if moved enough
-                        // This makes the search bar appear with any noticeable upward scroll
-                        if verticalMovement > 40 && hideSearchBar {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                hideSearchBar = false
-                                isScrollingDown = false
-                            }
-                            HapticFeedback.light()
-                        }
-                    }
-                    .onEnded { value in
-                        // Calculate velocity (points per second)
-                        let velocity = value.predictedEndLocation.y - value.location.y
-                        let isScrollingUp = velocity > 0
-                        let hasMinimalVelocity = abs(velocity) > 30 // Much lower threshold for sensitivity
-
-                        // Show on any scroll UP with minimal velocity
-                        if isScrollingUp && hasMinimalVelocity && hideSearchBar {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                hideSearchBar = false
-                                isScrollingDown = false
-                            }
-                            HapticFeedback.light()
-                        }
-                    }
-            )
 
             // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
             VStack(spacing: 0) {
@@ -611,12 +535,11 @@ struct ConversationListView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
         .onChange(of: hideSearchBar) { wasHidden, isHidden in
             isScrollingDown = isHidden
             if !wasHidden && isHidden {
-                isSearching = false
                 showSearchOverlay = false
             }
         }
@@ -637,7 +560,7 @@ struct ConversationListView: View {
             }
         }
         // Show search bar when filtered list is empty
-        .onChange(of: filtered.isEmpty) { _, isEmpty in
+        .onChange(of: conversationViewModel.filteredConversations.isEmpty) { _, isEmpty in
             if isEmpty && hideSearchBar {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     hideSearchBar = false
@@ -646,7 +569,7 @@ struct ConversationListView: View {
             }
         }
         // Show search bar when category changes
-        .onChange(of: selectedFilter) { _, _ in
+        .onChange(of: conversationViewModel.selectedFilter) { _, _ in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 hideSearchBar = false
                 isScrollingDown = false
@@ -780,36 +703,7 @@ struct ConversationListView: View {
 
     // MARK: - Handle Scroll Change
     private func handleScrollChange(_ offset: CGFloat) {
-        // Initialize on first call
-        guard let last = lastScrollOffset else {
-            lastScrollOffset = offset
-            return
-        }
-
-        let delta = offset - last
-
-        // Pull-to-refresh detection: offset > threshold means user pulled past the top
-        // This happens when the content is at the top and user pulls down
-        if offset > pullToShowThreshold && hideSearchBar {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                hideSearchBar = false
-                isScrollingDown = false
-            }
-            HapticFeedback.light()
-        }
-
-        // Scrolling down (negative delta) = hide
-        // No velocity check needed for hiding - hide immediately
-        // But only hide if we're not in pull-to-refresh zone
-        if delta < -scrollThreshold && !hideSearchBar && offset < 0 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                hideSearchBar = true
-                isScrollingDown = true
-            }
-        }
-        // Note: Showing is handled by DragGesture with velocity check
-
-        lastScrollOffset = offset
+        // Obsolete (geometric proxy removed)
     }
 
     // MARK: - Handle Drop

@@ -23,6 +23,12 @@ class ConversationListViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var hasMore = true
 
+    // MARK: - Reactive Filters & Prepared Data
+    @Published var searchText: String = ""
+    @Published var selectedFilter: ConversationFilter = .all
+    @Published var filteredConversations: [Conversation] = []
+    @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.unreadCount }
     }
@@ -48,6 +54,83 @@ class ConversationListViewModel: ObservableObject {
         observeSocketReconnect()
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
+        setupBackgroundProcessing()
+    }
+
+    // MARK: - Background Processing
+    private func setupBackgroundProcessing() {
+        // Offload filtering and grouping to a background queue to prevent Main Thread freezes
+        Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            // Only debounce if there is text to avoid delay on initial load or simple filter taps
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
+            .map { [weak self] (convs, text, filter) -> [Conversation] in
+                guard self != nil else { return [] }
+                return convs.filter { c in
+                    let filterMatch: Bool
+                    switch filter {
+                    case .all: filterMatch = c.isActive
+                    case .unread: filterMatch = c.unreadCount > 0
+                    case .personnel: filterMatch = c.type == .direct && c.isActive
+                    case .privee: filterMatch = c.type == .group && c.isActive
+                    case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
+                    case .globales: filterMatch = c.type == .global && c.isActive
+                    case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
+                    case .archived: filterMatch = !c.isActive
+                    }
+                    let searchMatch = text.isEmpty || c.name.localizedCaseInsensitiveContains(text)
+                    return filterMatch && searchMatch
+                }
+            }
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$filteredConversations)
+
+        Publishers.CombineLatest($filteredConversations, $userCategories)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
+                var result: [(section: ConversationSection, conversations: [Conversation])] = []
+
+                // Pinned section
+                let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
+                if !pinnedOnly.isEmpty {
+                    result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                // User categories
+                let categoryIds = Set(categories.map(\.id))
+                for category in categories {
+                    let sectionConvs = filtered.filter { $0.sectionId == category.id }
+                    if !sectionConvs.isEmpty {
+                        let sorted = sectionConvs.sorted { a, b in
+                            if a.isPinned != b.isPinned { return a.isPinned }
+                            return a.lastMessageAt > b.lastMessageAt
+                        }
+                        result.append((category, sorted))
+                    }
+                }
+
+                // Orphaned and uncategorized
+                let orphaned = filtered.filter { conv in
+                    guard let sid = conv.sectionId else { return false }
+                    return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
+                }
+                let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
+                let allUncategorized = uncategorized + orphaned
+                if !allUncategorized.isEmpty {
+                    result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                return result
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newGroups in
+                // Wraps the background-calculated grouping in a smooth animation
+                // This will dynamically animate the lists and sorting natively!
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    self?.groupedConversations = newGroups
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // Re-seed presence when Socket.IO reconnects (online → offline → online)
@@ -392,7 +475,7 @@ class ConversationListViewModel: ObservableObject {
         Task {
             do {
                 let body: [String: String?] = ["categoryId": newSectionId]
-                let _: APIResponse<[String: String]> = try await api.put(
+                let _: APIResponse<[String: AnyCodable]> = try await api.put(
                     endpoint: "/user-preferences/conversations/\(conversationId)",
                     body: body
                 )

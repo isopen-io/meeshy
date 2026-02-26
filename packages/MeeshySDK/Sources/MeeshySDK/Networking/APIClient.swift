@@ -118,13 +118,13 @@ public final class APIClient {
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         if let token = authToken {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
         if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = body
         }
 
@@ -211,13 +211,21 @@ public final class APIClient {
         return try await request(endpoint: endpoint, queryItems: queryItems)
     }
 
+    // MARK: - JSON Encoder (shared, ISO 8601 dates)
+
+    private static let jsonEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
     // MARK: - POST with Encodable body
 
     public func post<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "POST", body: data)
     }
 
@@ -227,7 +235,7 @@ public final class APIClient {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "PUT", body: data)
     }
 
@@ -237,7 +245,7 @@ public final class APIClient {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "PATCH", body: data)
     }
 
@@ -253,7 +261,7 @@ public final class APIClient {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "DELETE", body: data)
     }
 }
