@@ -91,43 +91,23 @@ extension ConversationView {
                 }
             }
         } else {
-            // Collapsed: avatar trigger — tap morphs into band
-            ThemedAvatarButton(
+            // Collapsed: avatar trigger — tap expands band, long press shows context menu
+            MeeshyAvatar(
                 name: conversation?.name ?? "?",
-                color: accentColor,
+                mode: .conversationHeader,
+                accentColor: accentColor,
                 secondaryColor: secondaryColor,
-                isExpanded: false,
-                hasStoryRing: headerHasStoryRing,
                 avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                presenceState: headerPresenceState
-            ) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    showOptions = true
-                }
-            }
-            .contextMenu {
-                if headerHasStoryRing {
-                    Button {
-                        if let userId = conversation?.participantUserId,
-                           let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                            storyGroupIndexForHeader = groupIndex
-                            showStoryViewerFromHeader = true
-                        }
-                    } label: {
-                        Label("Voir les stories", systemImage: "play.circle.fill")
+                storyState: headerHasStoryRing ? .unread : .none,
+                presenceState: headerPresenceState,
+                onTap: {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showOptions = true
                     }
-                }
-                Button {
-                    showConversationInfo = true
-                } label: {
-                    Label("Voir le profil", systemImage: "person.fill")
-                }
-                Button {
-                    showConversationInfo = true
-                } label: {
-                    Label("Infos conversation", systemImage: "info.circle.fill")
-                }
-            }
+                },
+                contextMenuItems: collapsedAvatarContextMenu
+            )
         }
     }
 
@@ -278,6 +258,27 @@ extension ConversationView {
         })
         items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
             Task { await self.navigateToDM(with: userId, name: name) }
+        })
+        return items
+    }
+
+    // Helper: context menu items for the collapsed avatar (before header is opened)
+    var collapsedAvatarContextMenu: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if let userId = conversation?.participantUserId, storyViewModel.hasStories(forUserId: userId) {
+            items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
+                if let uid = self.conversation?.participantUserId,
+                   let groupIndex = self.storyViewModel.groupIndex(forUserId: uid) {
+                    self.storyGroupIndexForHeader = groupIndex
+                    self.showStoryViewerFromHeader = true
+                }
+            })
+        }
+        items.append(.init(label: "Voir le profil", icon: "person.fill") {
+            self.showConversationInfo = true
+        })
+        items.append(.init(label: "Infos conversation", icon: "info.circle.fill") {
+            self.showConversationInfo = true
         })
         return items
     }

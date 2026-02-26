@@ -12,99 +12,176 @@ public struct SwipeAction: Identifiable {
     }
 }
 
+// MARK: - SwipeableRow
+//
+// Comportement :
+// • Les actions apparaissent PAR DERRIÈRE le contenu qui glisse (fond solide, sans transparence)
+// • Le contenu revient TOUJOURS à sa position initiale après relâchement (élastique)
+// • Swipe rapide ou ample → déclenche la première action, retour immédiat
+// • Pas d'état "ouvert" persistant
+//
 public struct SwipeableRow<Content: View>: View {
     public let content: Content
     public let leadingActions: [SwipeAction]
     public let trailingActions: [SwipeAction]
 
-    @State private var offset: CGFloat = 0
-    @State private var activeSwipeSide: SwipeSide = .none
     @GestureState private var dragOffset: CGFloat = 0
 
-    private let actionWidth: CGFloat = 72
-    private let snapThreshold: CGFloat = 50
-    private let fullSwipeThreshold: CGFloat = 160
+    // Layout
+    private let actionWidth: CGFloat = 76
+    // Résistance élastique au-delà de la zone d'action (1 = aucune résistance, 0 = bloqué)
+    private let rubberFactor: CGFloat = 0.18
+    // Seuil de vitesse pour déclencher l'action sur swipe rapide (pts/s)
+    private let triggerVelocity: CGFloat = 380
+    // Ratio de la zone d'action à dépasser pour déclencher (0–1)
+    private let triggerRatio: CGFloat = 0.62
 
-    private enum SwipeSide { case none, leading, trailing }
-
-    public init(leadingActions: [SwipeAction] = [], trailingActions: [SwipeAction] = [], @ViewBuilder content: () -> Content) {
-        self.leadingActions = leadingActions; self.trailingActions = trailingActions; self.content = content()
+    public init(
+        leadingActions: [SwipeAction] = [],
+        trailingActions: [SwipeAction] = [],
+        @ViewBuilder content: () -> Content
+    ) {
+        self.leadingActions = leadingActions
+        self.trailingActions = trailingActions
+        self.content = content()
     }
+
+    // MARK: - Computed geometry
 
     private var totalLeadingWidth: CGFloat { CGFloat(leadingActions.count) * actionWidth }
     private var totalTrailingWidth: CGFloat { CGFloat(trailingActions.count) * actionWidth }
 
-    public var body: some View {
-        ZStack {
-            if !leadingActions.isEmpty {
-                HStack(spacing: 0) { ForEach(leadingActions) { action in actionButton(action) }; Spacer() }
-                    .opacity(currentOffset > 0 ? 1 : 0)
+    /// Offset élastique : suit le doigt fidèlement dans la zone d'action,
+    /// puis applique une résistance progressive au-delà.
+    private var elasticOffset: CGFloat {
+        let raw = dragOffset
+        if raw > 0 {
+            guard !leadingActions.isEmpty else { return raw * rubberFactor }
+            if raw > totalLeadingWidth {
+                return totalLeadingWidth + (raw - totalLeadingWidth) * rubberFactor
             }
-            if !trailingActions.isEmpty {
-                HStack(spacing: 0) { Spacer(); ForEach(trailingActions) { action in actionButton(action) } }
-                    .opacity(currentOffset < 0 ? 1 : 0)
+        } else if raw < 0 {
+            guard !trailingActions.isEmpty else { return raw * rubberFactor }
+            let abs = -raw
+            if abs > totalTrailingWidth {
+                return -(totalTrailingWidth + (abs - totalTrailingWidth) * rubberFactor)
             }
-            content
-                .offset(x: currentOffset)
-                .gesture(
-                    DragGesture(minimumDistance: 20)
-                        .updating($dragOffset) { value, state, _ in
-                            let horizontal = value.translation.width
-                            let vertical = abs(value.translation.height)
-                            guard abs(horizontal) > vertical else { return }
-                            state = horizontal
-                        }
-                        .onEnded { value in handleDragEnd(value) }
-                )
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: offset)
         }
-        .clipped()
-    }
-
-    private var currentOffset: CGFloat {
-        let raw = offset + dragOffset
-        if raw > 0 && leadingActions.isEmpty { return 0 }
-        if raw < 0 && trailingActions.isEmpty { return 0 }
-        let maxLeading = totalLeadingWidth; let maxTrailing = totalTrailingWidth
-        if raw > maxLeading { return maxLeading + (raw - maxLeading) * 0.3 }
-        if raw < -maxTrailing { return -(maxTrailing + (abs(raw) - maxTrailing) * 0.3) }
         return raw
     }
 
-    private func handleDragEnd(_ value: DragGesture.Value) {
-        let horizontal = value.translation.width
-        let velocity = value.predictedEndTranslation.width - value.translation.width
-        if horizontal > fullSwipeThreshold && !leadingActions.isEmpty {
-            leadingActions[0].action(); HapticFeedback.medium()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { offset = 0; activeSwipeSide = .none }; return
+    // Pixels révélés de chaque côté
+    private var leadingReveal: CGFloat { max(0, elasticOffset) }
+    private var trailingReveal: CGFloat { max(0, -elasticOffset) }
+
+    // MARK: - Body
+
+    public var body: some View {
+        ZStack(alignment: .leading) {
+            // Fond gauche – actions leading (révélées par glissement vers la droite)
+            if !leadingActions.isEmpty {
+                leadingBackground
+            }
+
+            // Fond droit – actions trailing (révélées par glissement vers la gauche)
+            if !trailingActions.isEmpty {
+                trailingBackground
+            }
+
+            // Contenu principal opaque – glisse par-dessus les fonds d'action
+            content
+                .offset(x: elasticOffset)
+                .gesture(swipeGesture)
         }
-        if horizontal < -fullSwipeThreshold && !trailingActions.isEmpty {
-            trailingActions[0].action(); HapticFeedback.medium()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { offset = 0; activeSwipeSide = .none }; return
-        }
-        if horizontal > snapThreshold && !leadingActions.isEmpty && velocity >= 0 {
-            offset = totalLeadingWidth; activeSwipeSide = .leading; HapticFeedback.light()
-        } else if horizontal < -snapThreshold && !trailingActions.isEmpty && velocity <= 0 {
-            offset = -totalTrailingWidth; activeSwipeSide = .trailing; HapticFeedback.light()
-        } else { offset = 0; activeSwipeSide = .none }
+        .clipped()
+        // L'animation spring se déclenche quand dragOffset revient à 0 (fin du geste)
+        .animation(
+            .spring(response: 0.46, dampingFraction: 0.64, blendDuration: 0.06),
+            value: dragOffset
+        )
     }
 
-    private func actionButton(_ action: SwipeAction) -> some View {
-        Button {
-            action.action(); HapticFeedback.medium()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { offset = 0; activeSwipeSide = .none }
-        } label: {
+    // MARK: - Fonds d'action
+
+    private var leadingBackground: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(leadingActions.enumerated()), id: \.element.id) { index, action in
+                // Chaque action s'anime indépendamment selon sa progression locale
+                let localReveal = max(0, leadingReveal - CGFloat(index) * actionWidth)
+                let progress = min(localReveal / actionWidth, 1.0)
+                actionCell(action, progress: progress)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var trailingBackground: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ForEach(Array(trailingActions.enumerated()), id: \.element.id) { index, action in
+                let localReveal = max(0, trailingReveal - CGFloat(index) * actionWidth)
+                let progress = min(localReveal / actionWidth, 1.0)
+                actionCell(action, progress: progress)
+            }
+        }
+    }
+
+    /// Cellule d'action : couleur pleine + icône qui grandit au fur et à mesure de la révélation.
+    private func actionCell(_ action: SwipeAction, progress: CGFloat) -> some View {
+        ZStack {
+            action.color
             VStack(spacing: 4) {
-                Image(systemName: action.icon).font(.system(size: 18, weight: .semibold))
-                Text(action.label).font(.system(size: 10, weight: .medium))
+                Image(systemName: action.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(action.label)
+                    .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(.white)
-            .frame(width: actionWidth, height: 72)
-            .background(action.color)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            // Grossit progressivement au fil de la révélation (0.4x → 1x)
+            .scaleEffect(0.4 + 0.6 * progress)
         }
-        .padding(.horizontal, 2)
+        .frame(width: actionWidth)
     }
 
-    public func resetSwipe() { /* NOTE: This would need a binding pattern to work from outside */ }
+    // MARK: - Geste
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 15)
+            .updating($dragOffset) { value, state, _ in
+                let h = value.translation.width
+                let v = abs(value.translation.height)
+                // N'active le swipe horizontal que si le geste est clairement horizontal
+                guard abs(h) > v else { return }
+                state = h
+            }
+            .onEnded(handleDragEnd)
+    }
+
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        let translation = value.translation.width
+        // Vélocité prédite : différence entre position prédite et position actuelle
+        let velocity = value.predictedEndTranslation.width - value.translation.width
+
+        let leadingFired = !leadingActions.isEmpty && (
+            translation > totalLeadingWidth * triggerRatio ||
+            (translation > 20 && velocity > triggerVelocity)
+        )
+        let trailingFired = !trailingActions.isEmpty && (
+            translation < -totalTrailingWidth * triggerRatio ||
+            (translation < -20 && velocity < -triggerVelocity)
+        )
+
+        if leadingFired {
+            leadingActions[0].action()
+            HapticFeedback.success()
+        } else if trailingFired {
+            trailingActions[0].action()
+            HapticFeedback.success()
+        } else if abs(translation) > 12 {
+            // Léger retour haptique même sans déclenchement d'action
+            HapticFeedback.light()
+        }
+        // dragOffset revient à 0 automatiquement via @GestureState
+        // → l'animation .spring() ci-dessus produit le retour élastique
+    }
 }

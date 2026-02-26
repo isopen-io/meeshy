@@ -6,6 +6,23 @@ import Contacts
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Swipe-to-go-back enabler
+// Réactive le geste de retour par bord gauche d'iOS quand la nav bar est masquée.
+
+private struct InteractivePopEnabler: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> PopEnablerVC { PopEnablerVC() }
+    func updateUIViewController(_ vc: PopEnablerVC, context: Context) {}
+
+    final class PopEnablerVC: UIViewController {
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+            // delegate = nil permet le geste même sans barre de navigation visible
+            navigationController?.interactivePopGestureRecognizer?.delegate = nil
+        }
+    }
+}
+
 // MARK: - Message Frame PreferenceKey
 
 struct MessageFrameKey: PreferenceKey {
@@ -304,6 +321,8 @@ struct ConversationView: View {
 
     var body: some View {
         bodyContent
+            // Réactive le swipe de bord gauche pour revenir en arrière (désactivé par navigationBarHidden)
+            .background(InteractivePopEnabler())
             .task { await viewModel.loadMessages(); MessageSocketManager.shared.connect() }
             .onAppear {
                 if let context = replyContext { pendingReplyReference = context.toReplyReference }
@@ -439,17 +458,26 @@ struct ConversationView: View {
 
             VStack {
                 Spacer()
-                if showTextEmojiPicker {
-                    EmojiKeyboardPanel(
-                        style: theme.mode.isDark ? .dark : .light,
-                        onSelect: { emoji in
-                            emojiToInject = emoji
-                        }
-                    )
-                    .frame(height: 260)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                VStack(spacing: 0) {
+                    if showTextEmojiPicker {
+                        EmojiKeyboardPanel(
+                            style: theme.mode.isDark ? .dark : .light,
+                            onSelect: { emoji in
+                                emojiToInject = emoji
+                            }
+                        )
+                        .frame(height: 260)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    themedComposer
                 }
-                themedComposer
+                .background(
+                    theme.mode.isDark
+                        ? Color.black.opacity(0.6)
+                        : Color(UIColor.systemBackground).opacity(0.95)
+                )
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
             .zIndex(50)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)

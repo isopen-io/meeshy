@@ -709,25 +709,7 @@ struct UniversalComposerBar: View {
     // ========================================================================
 
     private var composerBackground: some View {
-        let accent = Color(hex: accentColor)
-        let isDark = theme.mode.isDark
-
-        return ZStack {
-            Color.clear
-
-            accent
-                .opacity(isFocused
-                    ? (isDark ? 0.10 : 0.05)
-                    : (isDark ? 0.03 : 0.01))
-
-            VStack {
-                Rectangle()
-                    .fill(accent.opacity(isFocused ? (isDark ? 0.4 : 0.25) : (isDark ? 0.12 : 0.06)))
-                    .frame(height: 0.5)
-                Spacer()
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: isFocused)
+        Color.clear
     }
 
     // ========================================================================

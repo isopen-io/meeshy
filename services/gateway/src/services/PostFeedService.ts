@@ -158,18 +158,20 @@ export class PostFeedService {
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
     ]);
-    const viewerIds = [...new Set([userId, ...friendIds, ...dmContactIds])];
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
+
+    const where: any = {
+      isDeleted: false,
+      type: 'STORY',
+      AND: [
+        visibilityFilter,
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      ],
+    };
 
     const stories = await this.prisma.post.findMany({
-      where: {
-        isDeleted: false,
-        type: 'STORY',
-        authorId: { in: viewerIds },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: now } },
-        ],
-      },
+      where,
       include: feedPostInclude,
       orderBy: { createdAt: 'desc' },
       take: 50,

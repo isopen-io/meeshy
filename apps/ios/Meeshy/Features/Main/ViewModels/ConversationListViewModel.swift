@@ -32,6 +32,18 @@ class ConversationListViewModel: ObservableObject {
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
 
+    private var lastFetchedAt: Date? = nil
+    private let cacheTTL: TimeInterval = 30
+
+    private var isCacheValid: Bool {
+        guard let ts = lastFetchedAt else { return false }
+        return Date().timeIntervalSince(ts) < cacheTTL
+    }
+
+    func invalidateCache() {
+        lastFetchedAt = nil
+    }
+
     init() {
         observeSocketReconnect()
         subscribeToSocketEvents()
@@ -63,6 +75,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                invalidateCache()
                 if let idx = self.conversations.firstIndex(where: { $0.id == event.conversationId }) {
                     self.conversations[idx].unreadCount = event.unreadCount
                 }
@@ -74,6 +87,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
+                invalidateCache()
                 let convId = apiMsg.conversationId
                 guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
 
@@ -136,6 +150,10 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Load Conversations
 
     func loadConversations() async {
+        if isCacheValid && !conversations.isEmpty {
+            return
+        }
+
         guard !isLoading else { return }
         isLoading = true
         currentOffset = 0
@@ -163,6 +181,7 @@ class ConversationListViewModel: ObservableObject {
                 conversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset = conversations.count
+                lastFetchedAt = Date()
 
                 // Update cache in background
                 Task.detached(priority: .utility) { [conversations] in
@@ -184,6 +203,7 @@ class ConversationListViewModel: ObservableObject {
         isLoading = false
         hasMore = true
         currentOffset = 0
+        invalidateCache()
         await loadConversations()
     }
 
@@ -221,6 +241,17 @@ class ConversationListViewModel: ObservableObject {
         currentOffset = 0
         hasMore = true
         await loadConversations()
+    }
+
+    // MARK: - Persist Category Expansion
+
+    func persistCategoryExpansion(id: String, isExpanded: Bool) {
+        Task {
+            let _: APIResponse<AnyCodable>? = try? await api.patch(
+                endpoint: "/me/preferences/categories/\(id)",
+                body: ["isExpanded": isExpanded]
+            )
+        }
     }
 
     // MARK: - Toggle Pin

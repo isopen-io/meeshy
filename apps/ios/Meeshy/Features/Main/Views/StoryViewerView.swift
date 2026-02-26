@@ -271,16 +271,13 @@ struct StoryViewerView: View {
                 Spacer()
             }
 
-            // === Layer 8: Right action sidebar — anchored to bottom-right, above composer ===
-            VStack(spacing: 0) {
+            // === Layer 8: Right action sidebar — centered vertically, right side ===
+            HStack {
                 Spacer()
-                HStack {
-                    Spacer()
-                    storyActionSidebar
-                        .padding(.trailing, 6)
-                        .padding(.bottom, 90 + geometry.safeAreaInsets.bottom)
-                }
+                storyActionSidebar
+                    .padding(.trailing, 6)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {

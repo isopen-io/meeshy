@@ -166,9 +166,6 @@ public struct MeeshyAvatar: View {
 
     @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
-    @State private var showAvatarMenu = false
-    @State private var longPressScale: CGFloat = 1.0
-    @State private var menuPosition: CGPoint = .zero
     @ObservedObject private var theme = ThemeManager.shared
 
     private var resolvedAccent: String {
@@ -247,7 +244,6 @@ public struct MeeshyAvatar: View {
             badge.offset(badgeOffsetWhenRingVisible)
         }
         .scaleEffect(tapScale)
-        .scaleEffect(longPressScale)
         .onAppear {
             if effectiveStoryState == .unread {
                 withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
@@ -271,56 +267,16 @@ public struct MeeshyAvatar: View {
         }
 
         if hasContextMenu {
-            ZStack {
-                tappable
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: AvatarPositionKey.self,
-                                value: geo.frame(in: .global).origin
-                            )
+            tappable
+                .contextMenu {
+                    ForEach(effectiveContextMenuItems) { item in
+                        Button(role: item.role) {
+                            item.action()
+                        } label: {
+                            Label(item.label, systemImage: item.icon)
                         }
-                    )
-                    .onPreferenceChange(AvatarPositionKey.self) { position in
-                        menuPosition = position
-                    }
-                    .onLongPressGesture(minimumDuration: 0.5) {
-                        // Animation terminée : afficher le menu
-                        HapticFeedback.medium()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showAvatarMenu = true
-                        }
-                    } onPressingChanged: { pressing in
-                        if pressing {
-                            // Début du press : rétrécir puis zoomer
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
-                                longPressScale = 0.85
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                                    longPressScale = 1.15
-                                }
-                            }
-                        } else {
-                            // Release avant la fin : revenir à la normale
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                longPressScale = 1.0
-                            }
-                        }
-                    }
-
-                if showAvatarMenu {
-                    contextMenuOverlay
-                }
-            }
-            .onChange(of: showAvatarMenu) { newValue in
-                if !newValue {
-                    // Menu fermé : revenir à la taille normale
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                        longPressScale = 1.0
                     }
                 }
-            }
         } else { tappable }
     }
 
@@ -455,85 +411,5 @@ public struct MeeshyAvatar: View {
         return parts.isEmpty ? String(name.prefix(1)).uppercased() : parts
     }
 
-    // MARK: - Context Menu Overlay
-
-    private var contextMenuOverlay: some View {
-        ZStack {
-            // Background tap to dismiss
-            Color.black.opacity(0.001)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        showAvatarMenu = false
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(effectiveContextMenuItems.enumerated()), id: \.element.id) { index, item in
-                    Button {
-                        HapticFeedback.light()
-                        showAvatarMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            item.action()
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(item.role == .destructive ? Color(hex: "FF2E63") : .white)
-                                .frame(width: 20)
-
-                            Text(item.label)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(item.role == .destructive ? Color(hex: "FF2E63") : .white)
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            Color.white.opacity(0.1)
-                                .opacity(item.role == .destructive ? 0.5 : 1.0)
-                        )
-                    }
-
-                    if index < effectiveContextMenuItems.count - 1 {
-                        Divider()
-                            .background(Color.white.opacity(0.15))
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color(hex: resolvedAccent).opacity(0.4), Color.white.opacity(0.2)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .shadow(color: Color(hex: resolvedAccent).opacity(0.3), radius: 20, y: 8)
-            .frame(width: 220)
-            .position(
-                x: menuPosition.x + mode.size / 2,
-                y: menuPosition.y + mode.size + 70
-            )
-            .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
-        }
-    }
 }
 
-// MARK: - Avatar Position Preference Key
-
-private struct AvatarPositionKey: PreferenceKey {
-    static var defaultValue: CGPoint = .zero
-    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
-        value = nextValue()
-    }
-}

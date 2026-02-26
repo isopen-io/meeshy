@@ -62,6 +62,16 @@ extension ConversationListView {
             Label(String(localized: "context.details", defaultValue: "Détails"), systemImage: "info.circle.fill")
         }
 
+        // Partager — créer un lien d'invitation si droits suffisants
+        if canCreateShareLink(for: conversation) {
+            Button {
+                HapticFeedback.medium()
+                Task { await shareConversationLink(for: conversation) }
+            } label: {
+                Label(String(localized: "context.share", defaultValue: "Partager"), systemImage: "square.and.arrow.up")
+            }
+        }
+
         // React to last message
         if let lastMsgId = conversation.lastMessageId {
             Menu {

@@ -24,15 +24,19 @@ public enum MessageTextRenderer {
     /// Render raw text into a styled SwiftUI `Text`.
     ///
     /// Links use the `.link` attribute on `AttributedString` so they open in Safari.
-    /// Control link color with `.tint()` on the enclosing view.
+    /// Pass `mentionColor` to override mention (`@username`) link color.
+    /// Pass `accentColor` to override m+token and URL link color.
+    /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
         fontSize: CGFloat = 15,
-        color: Color
+        color: Color,
+        mentionColor: Color? = nil,
+        accentColor: Color? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text)
-        return buildText(segments, fontSize: fontSize, color: color)
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor)
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -79,7 +83,9 @@ public enum MessageTextRenderer {
 
     enum Segment {
         case text(String, Styles)
-        case link(display: String, url: URL)
+        case mentionLink(display: String, url: URL, username: String)
+        case meeshyTokenLink(display: String, url: URL, token: String)
+        case urlLink(display: String, url: URL)
     }
 
     // MARK: - Rule Definitions
@@ -176,20 +182,20 @@ public enum MessageTextRenderer {
                 let token = ns.substring(with: match.range(at: 1))
                 let display = ns.substring(with: match.range)
                 if let url = URL(string: "https://meeshy.me/l/\(token)") {
-                    segments.append(.link(display: display, url: url))
+                    segments.append(.meeshyTokenLink(display: display, url: url, token: token))
                 }
 
             case .mention:
                 let username = ns.substring(with: match.range(at: 1))
                 let display = ns.substring(with: match.range)
                 if let url = URL(string: "https://meeshy.me/u/\(username)") {
-                    segments.append(.link(display: display, url: url))
+                    segments.append(.mentionLink(display: display, url: url, username: username))
                 }
 
             case .url:
                 if let url = match.url {
                     let display = ns.substring(with: match.range)
-                    segments.append(.link(display: display, url: url))
+                    segments.append(.urlLink(display: display, url: url))
                 } else {
                     segments.append(.text(ns.substring(with: match.range), inherited))
                 }
@@ -206,7 +212,9 @@ public enum MessageTextRenderer {
     private static func buildText(
         _ segments: [Segment],
         fontSize: CGFloat,
-        color: Color
+        color: Color,
+        mentionColor: Color?,
+        accentColor: Color?
     ) -> Text {
         var result = AttributedString()
 
@@ -225,10 +233,31 @@ public enum MessageTextRenderer {
                 if styles.contains(.underline) { attr.underlineStyle = .single }
                 result.append(attr)
 
-            case .link(let display, let url):
+            case .mentionLink(let display, let url, _):
                 var attr = AttributedString(display)
                 attr.link = url
                 attr.font = .system(size: fontSize, weight: .medium)
+                if let mentionColor {
+                    attr.foregroundColor = mentionColor
+                }
+                result.append(attr)
+
+            case .meeshyTokenLink(let display, let url, _):
+                var attr = AttributedString(display)
+                attr.link = url
+                attr.font = .system(size: fontSize, weight: .medium)
+                if let accentColor {
+                    attr.foregroundColor = accentColor
+                }
+                result.append(attr)
+
+            case .urlLink(let display, let url):
+                var attr = AttributedString(display)
+                attr.link = url
+                attr.font = .system(size: fontSize, weight: .medium)
+                if let accentColor {
+                    attr.foregroundColor = accentColor
+                }
                 result.append(attr)
             }
         }

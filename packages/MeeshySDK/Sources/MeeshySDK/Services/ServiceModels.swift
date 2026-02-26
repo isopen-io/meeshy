@@ -103,11 +103,22 @@ public struct TranslateRequest: Encodable {
     public init(text: String, sourceLanguage: String, targetLanguage: String) {
         self.text = text; self.sourceLanguage = sourceLanguage; self.targetLanguage = targetLanguage
     }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case sourceLanguage = "source_language"
+        case targetLanguage = "target_language"
+    }
 }
 
 public struct TranslateResponse: Decodable {
     public let translatedText: String
     public let detectedLanguage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case translatedText = "translated_text"
+        case detectedLanguage = "source_language"
+    }
 }
 
 // MARK: - User Search

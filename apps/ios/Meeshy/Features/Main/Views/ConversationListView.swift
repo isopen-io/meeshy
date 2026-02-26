@@ -267,7 +267,45 @@ struct ConversationListView: View {
             }
             .contextMenu {
                 conversationContextMenu(for: conversation)
+            } preview: {
+                ConversationPreviewView(conversation: conversation)
             }
+        }
+    }
+
+    // MARK: - Share Link Permission
+
+    func canCreateShareLink(for conversation: Conversation) -> Bool {
+        if conversation.type == .direct { return false }
+        if conversation.type == .group {
+            let role = conversation.currentUserRole?.lowercased() ?? "member"
+            return ["admin", "moderator", "owner", "co-owner", "bigboss"].contains(role)
+        }
+        return true
+    }
+
+    func shareConversationLink(for conversation: Conversation) async {
+        do {
+            let request = CreateShareLinkRequest(
+                conversationId: conversation.id,
+                name: conversation.name,
+                allowAnonymousMessages: true
+            )
+            let result = try await ShareLinkService.shared.createShareLink(request: request)
+            let shareURL = "https://meeshy.me/join/\(result.linkId)"
+            await MainActor.run {
+                let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first?.rootViewController {
+                    var topVC = rootVC
+                    while let presented = topVC.presentedViewController { topVC = presented }
+                    activityVC.popoverPresentationController?.sourceView = topVC.view
+                    topVC.present(activityVC, animated: true)
+                }
+            }
+            HapticFeedback.success()
+        } catch {
+            HapticFeedback.error()
         }
     }
 
@@ -333,6 +371,10 @@ struct ConversationListView: View {
             }
         }
         HapticFeedback.light()
+        let isUserCategory = conversationViewModel.userCategories.contains(where: { $0.id == sectionId })
+        if isUserCategory {
+            conversationViewModel.persistCategoryExpansion(id: sectionId, isExpanded: expandedSections.contains(sectionId))
+        }
     }
 
     var body: some View {

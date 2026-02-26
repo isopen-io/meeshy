@@ -595,7 +595,7 @@ struct ThemedMessageBubble: View {
     private static let textTruncateLimit = 512
 
     private var linkTint: Color {
-        message.isMe ? .white : Color(hex: "45B7D1")
+        message.isMe ? .white : Color(hex: contactColor)
     }
 
     @ViewBuilder
@@ -607,7 +607,7 @@ struct ThemedMessageBubble: View {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor)
+                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, accentColor: linkTint)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -626,7 +626,7 @@ struct ThemedMessageBubble: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(content, fontSize: 15, color: textColor)
+                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, accentColor: linkTint)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -730,7 +730,7 @@ struct ThemedMessageBubble: View {
                                 .foregroundColor(langColor)
                         }
                     }
-                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor)
+                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor, accentColor: linkTint)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 8)
