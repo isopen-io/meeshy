@@ -127,6 +127,7 @@ public struct SwipeableRow<Content: View>: View {
     }
 
     /// Cellule d'action : couleur pleine + icône qui grandit au fur et à mesure de la révélation.
+    /// Opacité 0 au repos → apparaît progressivement dès le début du swipe.
     private func actionCell(_ action: SwipeAction, progress: CGFloat) -> some View {
         ZStack {
             action.color
@@ -141,6 +142,8 @@ public struct SwipeableRow<Content: View>: View {
             .scaleEffect(0.4 + 0.6 * progress)
         }
         .frame(width: actionWidth)
+        // Invisible au repos, apparaît rapidement dès le début du swipe (visible dès ~40% de révélation)
+        .opacity(min(progress * 2.5, 1.0))
     }
 
     // MARK: - Geste
