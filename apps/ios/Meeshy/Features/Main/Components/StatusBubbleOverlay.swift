@@ -22,8 +22,9 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 48, 240)
-            let bubbleX = min(max(anchor.x, bubbleW / 2 + 16), bounds.width - bubbleW / 2 - 16)
+            let bubbleW: CGFloat = min(screenWidth - 48, 250)
+            // Décalé à droite de l'avatar : bord gauche de la bulle à anchor.x + 12
+            let bubbleX = min(anchor.x + 12 + bubbleW / 2, bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
             let dx = bubbleX - anchor.x
 
@@ -59,8 +60,8 @@ struct StatusBubbleOverlay: View {
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
-                    .position(x: bubbleX, y: anchor.y + dir * 50)
-                    .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottom : .top)
+                    .position(x: bubbleX, y: anchor.y + dir * 52)
+                    .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottomLeading : .topLeading)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.28, dampingFraction: 0.72).delay(0.05), value: appearAnimation)
             }
@@ -82,27 +83,23 @@ struct StatusBubbleOverlay: View {
             .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
     }
 
-    // MARK: - Bubble Content — une seule ligne
+    // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
+            // Ligne 1 : temps seulement (emoji déjà visible sur le badge avatar)
             Text(status.timeAgo)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(theme.textMuted)
-                .fixedSize()
 
-            Text(status.moodEmoji)
-                .font(.system(size: 16))
-                .fixedSize()
-
+            // Ligne(s) suivante(s) : contenu texte ou audio
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                audioPlayerInline(urlString: audioUrl)
+                audioPlayerRow(urlString: audioUrl)
             } else if let content = status.content, !content.isEmpty {
                 Text(content)
                     .font(.system(size: 13))
                     .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 12)
@@ -125,9 +122,9 @@ struct StatusBubbleOverlay: View {
         )
     }
 
-    // MARK: - Audio Player inline
+    // MARK: - Audio Player
 
-    private func audioPlayerInline(urlString: String) -> some View {
+    private func audioPlayerRow(urlString: String) -> some View {
         HStack(spacing: 6) {
             Button {
                 audioPlayer.togglePlayPause()
@@ -145,7 +142,6 @@ struct StatusBubbleOverlay: View {
                 .frame(maxWidth: .infinity)
                 .scaleEffect(y: 0.6, anchor: .center)
         }
-        .frame(maxWidth: .infinity)
         .onAppear {
             audioPlayer.play(urlString: urlString)
         }
