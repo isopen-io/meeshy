@@ -2,6 +2,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const log = enhancedLogger.child({ module: 'PostService' });
 
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
@@ -155,15 +158,15 @@ export class PostService {
         });
       }
 
-      // Trigger server-side Whisper transcription for any audio PostMedia (fire-and-forget)
-      if (audioMedia) {
+      // Trigger server-side Whisper transcription only when no mobile transcription was provided (fire-and-forget)
+      if (audioMedia && !data.mobileTranscription) {
         PostAudioService.shared.processPostAudio({
           postId: post.id,
           postMediaId: audioMedia.id,
           fileUrl: audioMedia.fileUrl ?? '',
           authorId: post.authorId,
         }).catch((err: unknown) => {
-          console.error(`[PostService] Post audio processing failed for post ${post.id}:`, err);
+          log.error('Post audio processing failed', err, { postId: post.id });
         });
       }
     }
@@ -198,9 +201,9 @@ export class PostService {
 
       // Stocker les langues cibles dans les translations du post (async best-effort)
       // Le translator viendra compléter avec les traductions réelles via ZMQ
-      console.info(`[StoryTranslation] post=${postId} targets=${languages.join(',')}`);
+      log.info('StoryTranslation targets resolved', { postId, targets: languages });
     } catch (error) {
-      console.warn(`[StoryTranslation] Failed for post ${postId}: ${error}`);
+      log.warn('StoryTranslation failed', { err: error, postId });
     }
   }
 

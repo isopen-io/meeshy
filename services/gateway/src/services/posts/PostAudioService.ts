@@ -171,41 +171,45 @@ export class PostAudioService {
   async handleTranscriptionReady(params: HandleTranscriptionReadyParams): Promise<void> {
     const { postId, postMediaId, transcription } = params;
 
-    log.info('Post transcription ready — persisting', { postId, postMediaId, lang: transcription.language });
+    try {
+      log.info('Post transcription ready — persisting', { postId, postMediaId, lang: transcription.language });
 
-    const transcriptionPayload: Prisma.InputJsonValue = {
-      text: transcription.text,
-      language: transcription.language,
-      confidence: transcription.confidence ?? 0,
-      durationMs: transcription.durationMs ?? 0,
-      source: transcription.source ?? 'whisper',
-      model: transcription.model ?? 'whisper_medium',
-      segments: transcription.segments ?? [],
-      speakerCount: transcription.speakerCount,
-      primarySpeakerId: transcription.primarySpeakerId,
-      senderVoiceIdentified: transcription.senderVoiceIdentified,
-      senderSpeakerId: transcription.senderSpeakerId,
-    };
+      const transcriptionPayload: Prisma.InputJsonValue = {
+        text: transcription.text,
+        language: transcription.language,
+        confidence: transcription.confidence ?? 0,
+        durationMs: transcription.durationMs ?? 0,
+        source: transcription.source ?? 'whisper',
+        model: transcription.model ?? 'whisper_medium',
+        segments: transcription.segments ?? [],
+        speakerCount: transcription.speakerCount,
+        primarySpeakerId: transcription.primarySpeakerId,
+        senderVoiceIdentified: transcription.senderVoiceIdentified,
+        senderSpeakerId: transcription.senderSpeakerId,
+      };
 
-    await this.prisma.postMedia.update({
-      where: { id: postMediaId },
-      data: { transcription: transcriptionPayload },
-    });
+      await this.prisma.postMedia.update({
+        where: { id: postMediaId },
+        data: { transcription: transcriptionPayload },
+      });
 
-    log.info('Transcription persisted — fetching post for broadcast', { postId, postMediaId });
+      log.info('Transcription persisted — fetching post for broadcast', { postId, postMediaId });
 
-    const post = await this.prisma.post.findFirst({
-      where: { id: postId, isDeleted: false },
-      include: postInclude,
-    });
+      const post = await this.prisma.post.findFirst({
+        where: { id: postId, isDeleted: false },
+        include: postInclude,
+      });
 
-    if (!post) {
-      log.warn('Post not found after transcription update — skipping broadcast', { postId });
-      return;
+      if (!post) {
+        log.warn('Post not found after transcription update — skipping broadcast', { postId });
+        return;
+      }
+
+      await this.socialEvents.broadcastPostUpdated(post as unknown as Post, post.authorId);
+
+      log.info('post:updated broadcast sent after transcription', { postId });
+    } catch (err: unknown) {
+      log.error('handleTranscriptionReady failed', err, { postId, postMediaId });
     }
-
-    await this.socialEvents.broadcastPostUpdated(post as unknown as Post, post.authorId);
-
-    log.info('post:updated broadcast sent after transcription', { postId });
   }
 }
