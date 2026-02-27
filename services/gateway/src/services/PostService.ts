@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
+import { PostAudioService } from './posts/PostAudioService';
 
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
@@ -134,27 +135,36 @@ export class PostService {
         data: { postId: post.id },
       });
 
-      // If a mobileTranscription is provided, persist it in the first audio PostMedia
-      if (data.mobileTranscription) {
-        const audioMedia = await this.prisma.postMedia.findFirst({
-          where: { id: { in: data.mediaIds }, mimeType: { startsWith: 'audio/' } },
-          orderBy: { order: 'asc' },
-          select: { id: true },
-        });
+      // Locate the first audio PostMedia for transcription processing
+      const audioMedia = await this.prisma.postMedia.findFirst({
+        where: { id: { in: data.mediaIds }, mimeType: { startsWith: 'audio/' } },
+        orderBy: { order: 'asc' },
+        select: { id: true, fileUrl: true },
+      });
 
-        if (audioMedia) {
-          const transcriptionPayload: Prisma.InputJsonValue = {
-            ...data.mobileTranscription,
-            segments: data.mobileTranscription.segments ?? [],
-            source: 'mobile',
-          };
-          await this.prisma.postMedia.update({
-            where: { id: audioMedia.id },
-            data: { transcription: transcriptionPayload },
-          });
-          // TODO(Task 6): PostAudioService fire-and-forget
-          // PostAudioService.shared.processPostAudio({ postId: post.id, postMediaId: audioMedia.id }).catch(() => {});
-        }
+      // If a mobileTranscription is provided, persist it in the audio PostMedia
+      if (data.mobileTranscription && audioMedia) {
+        const transcriptionPayload: Prisma.InputJsonValue = {
+          ...data.mobileTranscription,
+          segments: data.mobileTranscription.segments ?? [],
+          source: 'mobile',
+        };
+        await this.prisma.postMedia.update({
+          where: { id: audioMedia.id },
+          data: { transcription: transcriptionPayload },
+        });
+      }
+
+      // Trigger server-side Whisper transcription for any audio PostMedia (fire-and-forget)
+      if (audioMedia) {
+        PostAudioService.shared.processPostAudio({
+          postId: post.id,
+          postMediaId: audioMedia.id,
+          fileUrl: audioMedia.fileUrl ?? '',
+          authorId: post.authorId,
+        }).catch((err: unknown) => {
+          console.error(`[PostService] Post audio processing failed for post ${post.id}:`, err);
+        });
       }
     }
 

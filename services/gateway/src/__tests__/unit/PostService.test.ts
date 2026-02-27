@@ -12,6 +12,17 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../../services/PostService';
 import { PostCommentService } from '../../services/PostCommentService';
 
+// PostAudioService uses a singleton that requires initialization — mock it entirely
+// so PostService tests don't depend on ZMQ / SocialEventsHandler setup.
+jest.mock('../../services/posts/PostAudioService', () => ({
+  PostAudioService: {
+    shared: {
+      processPostAudio: jest.fn().mockReturnValue(Promise.resolve()),
+    },
+    init: jest.fn(),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Mock helpers
 // ---------------------------------------------------------------------------
@@ -112,6 +123,7 @@ describe('PostService', () => {
     it('creates a post and links mediaIds without mobileTranscription', async () => {
       const post = makePost();
       prisma.post.create.mockResolvedValue(post);
+      prisma.postMedia.findFirst.mockResolvedValue(null);
 
       await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
 
@@ -119,7 +131,13 @@ describe('PostService', () => {
         where: { id: { in: ['media-1', 'media-2'] } },
         data: { postId: 'post-1' },
       });
-      expect(prisma.postMedia.findFirst).not.toHaveBeenCalled();
+      // findFirst is called to detect audio media for Whisper processing
+      expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['media-1', 'media-2'] }, mimeType: { startsWith: 'audio/' } },
+        }),
+      );
+      // No audio media found — update is not called
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
     });
 
@@ -135,7 +153,7 @@ describe('PostService', () => {
     it('saves mobileTranscription in the first audio PostMedia when provided', async () => {
       const post = makePost();
       prisma.post.create.mockResolvedValue(post);
-      prisma.postMedia.findFirst.mockResolvedValue({ id: 'media-audio' });
+      prisma.postMedia.findFirst.mockResolvedValue({ id: 'media-audio', fileUrl: '/uploads/audio.m4a' });
       prisma.postMedia.update.mockResolvedValue({});
 
       const mobileTranscription = {
@@ -154,7 +172,7 @@ describe('PostService', () => {
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: { in: ['media-audio', 'media-img'] }, mimeType: { startsWith: 'audio/' } },
-          select: { id: true },
+          select: { id: true, fileUrl: true },
         }),
       );
 
@@ -188,15 +206,23 @@ describe('PostService', () => {
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
     });
 
-    it('does not look for audio PostMedia when mobileTranscription is absent but mediaIds present', async () => {
+    it('always looks for audio PostMedia when mediaIds present to enable Whisper processing', async () => {
       prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
 
       await service.createPost(
         { ...basePostData, mediaIds: ['media-img'] },
         'user-1',
       );
 
-      expect(prisma.postMedia.findFirst).not.toHaveBeenCalled();
+      // findFirst is always called to detect audio media (for Whisper fire-and-forget)
+      expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['media-img'] }, mimeType: { startsWith: 'audio/' } },
+        }),
+      );
+      // No audio media → no transcription update
+      expect(prisma.postMedia.update).not.toHaveBeenCalled();
     });
   });
 

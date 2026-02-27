@@ -1263,9 +1263,38 @@ export class MessageTranslationService extends EventEmitter {
       speakerAnalysis?: any;
     };
     processingTimeMs: number;
+    postId?: string;
+    postMediaId?: string;
   }) {
     try {
       const startTime = Date.now();
+
+      // Post audio requests have no messageAttachment — emit and return immediately
+      // so MeeshySocketIOManager can route to PostAudioService.
+      if (data.postId && data.postMediaId) {
+        this.emit('transcriptionReady', {
+          taskId: data.taskId,
+          messageId: data.messageId,
+          attachmentId: data.attachmentId,
+          transcription: {
+            id: data.attachmentId,
+            text: data.transcription.text,
+            language: data.transcription.language,
+            confidence: data.transcription.confidence,
+            source: data.transcription.source,
+            segments: data.transcription.segments,
+            durationMs: data.transcription.durationMs,
+            speakerCount: data.transcription.speakerCount,
+            primarySpeakerId: data.transcription.primarySpeakerId,
+            senderVoiceIdentified: data.transcription.senderVoiceIdentified,
+            senderSpeakerId: data.transcription.senderSpeakerId,
+          },
+          processingTimeMs: data.processingTimeMs,
+          postId: data.postId,
+          postMediaId: data.postMediaId,
+        });
+        return;
+      }
 
       logger.info(
         `🎯 [TranslationService] Transcription READY (avant traduction): ${data.attachmentId} | ` +
