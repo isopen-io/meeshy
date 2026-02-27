@@ -65,10 +65,6 @@ struct ConversationListView: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
-    // Status bubble overlay state
-    @State private var showStatusBubble = false
-    @State private var selectedStatusEntry: StatusEntry?
-    @State private var moodBadgeAnchor: CGPoint = .zero
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
@@ -418,6 +414,7 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        .withStatusBubble()
     }
 
     private var mainContent: some View {
@@ -602,17 +599,6 @@ struct ConversationListView: View {
                 }
             }
         }
-        .overlay {
-            // Status bubble overlay
-            if showStatusBubble, let status = selectedStatusEntry {
-                StatusBubbleOverlay(
-                    status: status,
-                    anchorPoint: moodBadgeAnchor,
-                    isPresented: $showStatusBubble
-                )
-                .zIndex(200)
-            }
-        }
         .sheet(item: $lockSheetConversation) { conversation in
             ConversationLockSheet(
                 mode: lockSheetMode,
@@ -697,9 +683,7 @@ struct ConversationListView: View {
         guard conversation.type == .direct,
               let userId = conversation.participantUserId,
               let status = statusViewModel.statusForUser(userId: userId) else { return }
-        selectedStatusEntry = status
-        moodBadgeAnchor = anchor
-        showStatusBubble = true
+        StatusBubbleController.shared.show(entry: status, anchor: anchor)
     }
 
     // See ConversationListView+Overlays.swift for conversationContextMenu
