@@ -1,7 +1,56 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Transcription View (synchronized, speaker-colored)
+// MARK: - Flow Layout (text-like wrapping)
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangeSubviews(
+            proposal: ProposedViewSize(width: bounds.width, height: nil),
+            subviews: subviews
+        )
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func arrangeSubviews(
+        proposal: ProposedViewSize,
+        subviews: Subviews
+    ) -> (size: CGSize, positions: [CGPoint]) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth && x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width
+        }
+
+        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+    }
+}
+
+// MARK: - Transcription View (synchronized, flow text with colored segments)
 
 public struct MediaTranscriptionView: View {
     public let segments: [TranscriptionDisplaySegment]
@@ -27,82 +76,74 @@ public struct MediaTranscriptionView: View {
     public var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                        segmentRow(segment, index: index)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                flowTranscription
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
             }
             .frame(maxHeight: maxHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04), lineWidth: 0.5)
-                    )
-            )
+            .background(transcriptionBackground)
             .onChange(of: activeIndex) { idx in
                 if let idx = idx {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(segments[idx].id, anchor: .center)
+                        proxy.scrollTo("segment-\(idx)", anchor: .center)
                     }
                 }
             }
         }
     }
 
-    // MARK: - Segment Row
-    @ViewBuilder
-    private func segmentRow(_ segment: TranscriptionDisplaySegment, index: Int) -> some View {
-        let isActive = index == activeIndex
-        let speakerColor = Color(hex: segment.speakerColor)
+    // MARK: - Flow Transcription
 
-        Button {
+    private var flowTranscription: some View {
+        FlowLayout(spacing: 0) {
+            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                segmentSpan(segment, index: index)
+                    .id("segment-\(index)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func segmentSpan(_ segment: TranscriptionDisplaySegment, index: Int) -> some View {
+        let isActive = index == activeIndex
+        let isPast = activeIndex != nil && index < activeIndex!
+
+        return Button {
             onSeek?(segment.startTime)
             HapticFeedback.light()
         } label: {
-            HStack(alignment: .top, spacing: 8) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(speakerColor.opacity(isActive ? 1 : 0.4))
-                    .frame(width: 3)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    if let sid = segment.speakerId,
-                       index == 0 || segments[index - 1].speakerId != sid {
-                        Text("Locuteur \(sid)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(speakerColor)
-                            .textCase(.uppercase)
-                    }
-
-                    Text(segment.text)
-                        .font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                        .foregroundColor(
-                            isActive
-                            ? (isDark ? .white : .black)
-                            : (isDark ? .white.opacity(0.6) : .black.opacity(0.5))
-                        )
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-
-                Text(formatMediaDuration(segment.startTime))
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.2))
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? speakerColor.opacity(isDark ? 0.12 : 0.06) : Color.clear)
-            )
-            .id(segment.id)
+            Text(segment.text + " ")
+                .font(.system(size: 14, weight: isActive ? .bold : .regular))
+                .foregroundColor(segmentColor(isActive: isActive, isPast: isPast))
+                .padding(.horizontal, isActive ? 2 : 0)
+                .padding(.vertical, isActive ? 1 : 0)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                )
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.2), value: isActive)
+        .animation(.easeInOut(duration: 0.15), value: isActive)
+    }
+
+    // MARK: - Colors
+
+    private func segmentColor(isActive: Bool, isPast: Bool) -> Color {
+        if isActive {
+            return Color(hex: accentColor)
+        }
+        if isPast {
+            return isDark ? Color.white.opacity(0.7) : Color.black.opacity(0.6)
+        }
+        return isDark ? Color.white.opacity(0.35) : Color.black.opacity(0.25)
+    }
+
+    private var transcriptionBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04), lineWidth: 0.5)
+            )
     }
 }

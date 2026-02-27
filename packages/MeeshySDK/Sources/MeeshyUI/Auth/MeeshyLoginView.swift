@@ -3,6 +3,7 @@ import MeeshySDK
 
 public struct MeeshyLoginView: View {
     @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var username = ""
     @State private var password = ""
@@ -12,10 +13,10 @@ public struct MeeshyLoginView: View {
     @State private var showForgotPassword = false
     @State private var showRegister = false
 
-    /// Callback when login succeeds
     public var onLoginSuccess: (() -> Void)?
-    /// Callback when user taps register
     public var onRegister: (() -> Void)?
+
+    private var isDark: Bool { theme.mode.isDark }
 
     public init(onLoginSuccess: (() -> Void)? = nil, onRegister: (() -> Void)? = nil) {
         self.onLoginSuccess = onLoginSuccess
@@ -25,13 +26,8 @@ public struct MeeshyLoginView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                LinearGradient(
-                    colors: [Color(hex: "252538"), Color(hex: "1E2A35"), Color(hex: "1E1E2E")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                theme.backgroundGradient
+                    .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 28) {
@@ -46,11 +42,11 @@ public struct MeeshyLoginView: View {
 
                             Text("Meeshy")
                                 .font(.largeTitle.weight(.bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(theme.textPrimary)
 
                             Text("Connectez-vous pour continuer")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(theme.textSecondary)
                         }
                         .padding(.top, 60)
 
@@ -75,7 +71,7 @@ public struct MeeshyLoginView: View {
                         if let error = authManager.errorMessage {
                             Text(error)
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(MeeshyColors.coral)
                                 .padding(.horizontal, 24)
                         }
 
@@ -105,7 +101,7 @@ public struct MeeshyLoginView: View {
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                             .foregroundStyle(.white)
                         }
                         .disabled(username.isEmpty || password.isEmpty || authManager.isLoading)
@@ -114,11 +110,11 @@ public struct MeeshyLoginView: View {
 
                         // Divider
                         HStack {
-                            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                            Rectangle().fill(theme.inputBorder.opacity(0.3)).frame(height: 1)
                             Text("ou")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                                .foregroundStyle(theme.textSecondary)
+                            Rectangle().fill(theme.inputBorder.opacity(0.3)).frame(height: 1)
                         }
                         .padding(.horizontal, 24)
 
@@ -133,7 +129,7 @@ public struct MeeshyLoginView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(
-                                RoundedRectangle(cornerRadius: 14)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                     .strokeBorder(Color(hex: "4ECDC4").opacity(0.4), lineWidth: 1)
                             )
                             .foregroundStyle(Color(hex: "4ECDC4"))
@@ -154,7 +150,7 @@ public struct MeeshyLoginView: View {
                         // Register link
                         HStack(spacing: 4) {
                             Text("Pas de compte ?")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(theme.textSecondary)
                             Button {
                                 if let onRegister {
                                     onRegister()
@@ -195,7 +191,7 @@ public struct MeeshyLoginView: View {
     private var magicLinkSheet: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "1E1E2E").ignoresSafeArea()
+                theme.backgroundPrimary.ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     if magicLinkSent {
@@ -205,15 +201,15 @@ public struct MeeshyLoginView: View {
 
                         Text("Lien envoye !")
                             .font(.title2.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.textPrimary)
 
                         Text("Verifiez votre boite mail \(magicLinkEmail)")
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.textSecondary)
                     } else {
                         Text("Entrez votre adresse email pour recevoir un lien de connexion.")
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.textSecondary)
 
                         AuthTextField(
                             title: "Email",
@@ -242,7 +238,7 @@ public struct MeeshyLoginView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(Color(hex: "4ECDC4"))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                             .foregroundStyle(.white)
                         }
                         .disabled(magicLinkEmail.isEmpty || authManager.isLoading)
@@ -251,7 +247,7 @@ public struct MeeshyLoginView: View {
                         if let error = authManager.errorMessage {
                             Text(error)
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(MeeshyColors.coral)
                         }
                     }
                 }

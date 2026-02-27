@@ -5,6 +5,7 @@ import MeeshySDK
 
 public struct GlassCard: ViewModifier {
     public var cornerRadius: CGFloat = 20
+    @ObservedObject private var theme = ThemeManager.shared
 
     public func body(content: Content) -> some View {
         content
@@ -12,7 +13,7 @@ public struct GlassCard: ViewModifier {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(MeeshyColors.glassBorderGradient, lineWidth: 1)
+                    .stroke(MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
     }
@@ -205,6 +206,46 @@ public struct FloatingAnimation: ViewModifier {
     }
 }
 
+// MARK: - Bounce On Tap
+
+public struct BounceOnTap: ViewModifier {
+    public let scale: CGFloat
+    @State private var isPressed = false
+
+    public init(scale: CGFloat = 0.92) {
+        self.scale = scale
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressed ? scale : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPressed { isPressed = true }
+                    }
+                    .onEnded { _ in isPressed = false }
+            )
+    }
+}
+
+// MARK: - Bounce On Focus (text fields)
+
+public struct BounceOnFocus: ViewModifier {
+    public let focused: Bool
+
+    public init(focused: Bool) {
+        self.focused = focused
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .scaleEffect(focused ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: focused)
+    }
+}
+
 // MARK: - Rounded Corner Shape
 
 public struct RoundedCorner: Shape {
@@ -259,6 +300,14 @@ extension View {
 
     public func floating(range: CGFloat = 15, duration: Double = 4.0) -> some View {
         modifier(FloatingAnimation(offsetRange: range, duration: duration))
+    }
+
+    public func bounceOnTap(scale: CGFloat = 0.92) -> some View {
+        modifier(BounceOnTap(scale: scale))
+    }
+
+    public func bounceOnFocus(_ focused: Bool) -> some View {
+        modifier(BounceOnFocus(focused: focused))
     }
 
     public func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {

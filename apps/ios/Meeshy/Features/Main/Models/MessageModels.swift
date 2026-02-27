@@ -1,124 +1,7 @@
 import Foundation
 import MeeshySDK
 
-// MARK: - API Message Models (aligned with gateway GET /conversations/:id/messages)
-
-struct APIMessageSender: Decodable {
-    let id: String
-    let username: String
-    let displayName: String?
-    let avatar: String?
-}
-
-struct APIMessageAttachment: Decodable {
-    let id: String
-    let fileName: String?
-    let originalName: String?
-    let mimeType: String?
-    let fileSize: Int?
-    let fileUrl: String?
-    let thumbnailUrl: String?
-    let width: Int?
-    let height: Int?
-    let duration: Int? // ms
-    let latitude: Double?
-    let longitude: Double?
-}
-
-struct APIMessageReplyTo: Decodable {
-    let id: String
-    let content: String?
-    let senderId: String?
-    let sender: APIMessageSender?
-    let attachments: [APIMessageAttachment]?
-}
-
-struct APIForwardedFrom: Decodable {
-    let id: String
-    let content: String?
-    let messageType: String?
-    let createdAt: Date?
-    let sender: APIMessageSender?
-    let attachments: [APIMessageAttachment]?
-}
-
-struct APIForwardedFromConversation: Decodable {
-    let id: String
-    let title: String?
-    let identifier: String?
-    let type: String?
-    let avatar: String?
-}
-
-struct APIMessage: Decodable {
-    let id: String
-    let conversationId: String
-    let senderId: String?
-    let anonymousSenderId: String?
-    let content: String?
-    let originalLanguage: String?
-    let messageType: String?
-    let messageSource: String?
-    let isEdited: Bool?
-    let isDeleted: Bool?
-    let replyToId: String?
-    let forwardedFromId: String?
-    let forwardedFromConversationId: String?
-    let pinnedAt: String?
-    let pinnedBy: String?
-    let isViewOnce: Bool?
-    let isBlurred: Bool?
-    let createdAt: Date
-    let updatedAt: Date?
-    let sender: APIMessageSender?
-    let attachments: [APIMessageAttachment]?
-    let replyTo: APIMessageReplyTo?
-    let reactionSummary: [String: Int]?
-    let reactionCount: Int?
-    let currentUserReactions: [String]?
-    let forwardedFrom: APIForwardedFrom?
-    let forwardedFromConversation: APIForwardedFromConversation?
-    let deliveredToAllAt: Date?
-    let readByAllAt: Date?
-    let deliveredCount: Int?
-    let readCount: Int?
-    let isEncrypted: Bool?
-    let encryptionMode: String?
-}
-
-// MARK: - Messages API Response
-
-struct MessagesAPIResponse: Decodable {
-    let success: Bool
-    let data: [APIMessage]
-    let pagination: OffsetPagination?
-    let cursorPagination: CursorPagination?
-    let hasNewer: Bool?  // Present in "around" mode responses
-}
-
-// MARK: - Send Message Request
-
-struct SendMessageRequest: Encodable {
-    var content: String? = nil
-    var originalLanguage: String? = nil
-    var replyToId: String? = nil
-    var forwardedFromId: String? = nil
-    var forwardedFromConversationId: String? = nil
-    var attachmentIds: [String]? = nil
-}
-
-// MARK: - Send Message Response
-
-struct SendMessageResponseData: Decodable {
-    let id: String
-    let conversationId: String
-    let senderId: String?
-    let content: String?
-    let messageType: String?
-    let createdAt: Date
-}
-
-// MARK: - Search Result Item
+// MARK: - Search Result Item (app-only)
 
 struct SearchResultItem: Identifiable {
     let id: String
@@ -131,7 +14,7 @@ struct SearchResultItem: Identifiable {
     let createdAt: Date
 }
 
-// MARK: - APIMessage → Message Conversion
+// MARK: - APIMessage -> Message Conversion
 
 extension APIMessage {
     func toMessage(currentUserId: String) -> Message {
@@ -176,11 +59,17 @@ extension APIMessage {
             )
         }
 
+        let userReactionSet = Set(currentUserReactions ?? [])
         let uiReactions: [Reaction] = {
             guard let summary = reactionSummary else { return [] }
             return summary.flatMap { emoji, count in
-                (0..<count).map { _ in
-                    Reaction(messageId: id, emoji: emoji)
+                let meReacted = userReactionSet.contains(emoji)
+                return (0..<count).map { index in
+                    Reaction(
+                        messageId: id,
+                        userId: (meReacted && index == 0) ? currentUserId : nil,
+                        emoji: emoji
+                    )
                 }
             }
         }()
@@ -265,6 +154,7 @@ extension APIMessage {
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
+            expiresAt: expiresAt,
             isViewOnce: isViewOnce ?? false,
             isBlurred: isBlurred ?? false,
             pinnedAt: parsedPinnedAt,
@@ -281,7 +171,11 @@ extension APIMessage {
             senderColor: DynamicColorGenerator.colorForName(sender?.username ?? "?"),
             senderAvatarURL: sender?.avatar,
             deliveryStatus: status,
-            isMe: senderId == currentUserId
+            isMe: senderId == currentUserId,
+            deliveredToAllAt: deliveredToAllAt,
+            readByAllAt: readByAllAt,
+            deliveredCount: deliveredCount ?? 0,
+            readCount: readCount ?? 0
         )
     }
 }

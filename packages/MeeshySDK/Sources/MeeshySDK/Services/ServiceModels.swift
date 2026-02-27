@@ -38,10 +38,14 @@ public struct CreatePostRequest: Encodable {
     public let visibility: String
     public let moodEmoji: String?
     public let visibilityUserIds: [String]?
+    public let mediaIds: [String]?
+    public let audioUrl: String?
+    public let audioDuration: Int?
 
-    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil) {
+    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
+        self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
     }
 }
 
@@ -50,6 +54,17 @@ public struct CreateCommentRequest: Encodable {
 
     public init(content: String) {
         self.content = content
+    }
+}
+
+public struct CreateStoryRequest: Encodable {
+    public let type = "STORY"
+    public let content: String?
+    public let storyEffects: StoryEffects?
+    public let visibility: String
+
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC") {
+        self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
     }
 }
 
@@ -88,11 +103,22 @@ public struct TranslateRequest: Encodable {
     public init(text: String, sourceLanguage: String, targetLanguage: String) {
         self.text = text; self.sourceLanguage = sourceLanguage; self.targetLanguage = targetLanguage
     }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case sourceLanguage = "source_language"
+        case targetLanguage = "target_language"
+    }
 }
 
 public struct TranslateResponse: Decodable {
     public let translatedText: String
     public let detectedLanguage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case translatedText = "translated_text"
+        case detectedLanguage = "source_language"
+    }
 }
 
 // MARK: - User Search
@@ -103,6 +129,26 @@ public struct UserSearchResult: Decodable {
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+}
+
+// MARK: - Attachment Status
+
+public struct AttachmentStatusUser: Decodable, Identifiable {
+    public let userId: String
+    public let username: String
+    public let avatar: String?
+    public let viewedAt: Date?
+    public let downloadedAt: Date?
+    public let listenedAt: Date?
+    public let watchedAt: Date?
+    public let listenCount: Int?
+    public let watchCount: Int?
+    public let listenedComplete: Bool?
+    public let watchedComplete: Bool?
+    public let lastPlayPositionMs: Int?
+    public let lastWatchPositionMs: Int?
+
+    public var id: String { userId }
 }
 
 // MARK: - Generic empty success for fire-and-forget

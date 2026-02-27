@@ -9,6 +9,7 @@ import {
   getSizeLimit,
   UPLOAD_LIMITS,
 } from '@meeshy/shared/types/attachment';
+import jwt from 'jsonwebtoken';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -56,6 +57,27 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         throw { status_code: 401, body: 'Authentication required\n' };
       }
 
+      // Extract userId from JWT or sessionToken
+      let userId = 'anonymous';
+      let isAnonymous = false;
+      if (authHeader) {
+        const token = String(authHeader).replace(/^Bearer\s+/i, '');
+        try {
+          const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
+          userId = payload.userId || payload.sub || 'anonymous';
+        } catch {
+          try {
+            const payload = jwt.decode(token) as any;
+            userId = payload?.userId || payload?.sub || 'anonymous';
+          } catch {
+            logger.warn('[TUS] Failed to decode JWT for userId extraction');
+          }
+        }
+      } else if (sessionToken) {
+        userId = String(sessionToken);
+        isAnonymous = true;
+      }
+
       const mimeType = upload.metadata?.filetype || 'application/octet-stream';
       const attachmentType = getAttachmentType(mimeType, upload.metadata?.filename ?? undefined);
       const sizeLimit = getSizeLimit(attachmentType);
@@ -70,6 +92,8 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       return {
         metadata: {
           ...upload.metadata,
+          userId,
+          isAnonymous: isAnonymous ? 'true' : 'false',
           uploadedAt: new Date().toISOString(),
         },
       };

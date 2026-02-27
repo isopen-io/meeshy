@@ -65,14 +65,18 @@ public struct FeedMedia: Identifiable {
 public struct RepostContent: Identifiable {
     public let id: String
     public let author: String
+    public let authorId: String
     public let authorColor: String
+    public let authorAvatarURL: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
 
-    public init(id: String = UUID().uuidString, author: String, content: String, timestamp: Date = Date(), likes: Int = 0) {
-        self.id = id; self.author = author
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+                content: String, timestamp: Date = Date(), likes: Int = 0) {
+        self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(author)
+        self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes
     }
 }
@@ -81,15 +85,19 @@ public struct RepostContent: Identifiable {
 public struct FeedComment: Identifiable {
     public let id: String
     public let author: String
+    public let authorId: String
     public let authorColor: String
+    public let authorAvatarURL: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
     public var replies: Int
 
-    public init(id: String = UUID().uuidString, author: String, content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0) {
-        self.id = id; self.author = author
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+                content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0) {
+        self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(author)
+        self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
     }
 }
@@ -98,7 +106,9 @@ public struct FeedComment: Identifiable {
 public struct FeedPost: Identifiable {
     public let id: String
     public let author: String
+    public let authorId: String
     public let authorColor: String
+    public let authorAvatarURL: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
@@ -112,11 +122,13 @@ public struct FeedPost: Identifiable {
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
 
-    public init(id: String = UUID().uuidString, author: String, content: String, timestamp: Date = Date(), likes: Int = 0,
+    public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
+                content: String, timestamp: Date = Date(), likes: Int = 0,
                 comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
                 media: [FeedMedia] = [], mediaUrl: String? = nil) {
-        self.id = id; self.author = author
+        self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(author)
+        self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes
         self.comments = comments; self.commentCount = commentCount ?? comments.count
         self.repost = repost; self.repostAuthor = repostAuthor

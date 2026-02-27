@@ -2,11 +2,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import bcrypt from 'bcryptjs';
-import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber } from '../../utils/normalize';
+import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber, normalizePhoneWithCountry } from '../../utils/normalize';
 import { buildPaginationMeta } from '../../utils/pagination';
 import {
   updateUserProfileSchema,
   updateAvatarSchema,
+  updateBannerSchema,
   updatePasswordSchema,
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
@@ -231,6 +232,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
           phoneNumber: true,
           displayName: true,
           avatar: true,
+          banner: true,
           bio: true,
           isOnline: true,
           systemLanguage: true,
@@ -311,7 +313,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                avatar: { type: 'string', description: 'Updated avatar URL' },
+                user: userSchema,
                 message: { type: 'string', example: 'Avatar updated successfully' }
               }
             }
@@ -353,7 +355,23 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
         select: {
           id: true,
           username: true,
-          avatar: true
+          firstName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          displayName: true,
+          avatar: true,
+          banner: true,
+          bio: true,
+          isOnline: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          lastActiveAt: true,
+          createdAt: true,
+          updatedAt: true
         }
       });
 
@@ -362,7 +380,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          avatar: updatedUser.avatar,
+          user: updatedUser,
           message: 'Avatar updated successfully'
         }
       });
@@ -378,6 +396,120 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update user avatar error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  });
+}
+
+/**
+ * Update user banner
+ */
+export async function updateUserBanner(fastify: FastifyInstance) {
+  fastify.patch('/users/me/banner', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: 'Update the authenticated user banner image. Accepts a URL pointing to the banner image.',
+      tags: ['users'],
+      summary: 'Update user banner',
+      body: {
+        type: 'object',
+        required: ['banner'],
+        properties: {
+          banner: { type: 'string', format: 'uri', description: 'Banner image URL' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: userSchema,
+                message: { type: 'string', example: 'Banner updated successfully' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: 'Invalid image format' },
+            details: { type: 'array', items: { type: 'object' } }
+          }
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as AuthenticatedRequest).authContext;
+      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const userId = authContext.userId;
+
+      fastify.log.info(`[BANNER_UPDATE] User ${userId} updating banner`);
+
+      const body = updateBannerSchema.parse(request.body);
+
+      const updatedUser = await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { banner: body.banner },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          displayName: true,
+          avatar: true,
+          banner: true,
+          bio: true,
+          isOnline: true,
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          role: true,
+          isActive: true,
+          lastActiveAt: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
+
+      return reply.send({
+        success: true,
+        data: {
+          user: updatedUser,
+          message: 'Banner updated successfully'
+        }
+      });
+
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.errors)}`);
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid image format',
+          details: error.errors
+        });
+      }
+
+      logError(fastify.log, 'Update user banner error:', error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'
@@ -750,6 +882,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
           lastName: true,
           displayName: true,
           avatar: true,
+          banner: true,
           bio: true,
           role: true,
           isOnline: true,
@@ -865,6 +998,7 @@ export async function getUserById(fastify: FastifyInstance) {
           lastName: true,
           displayName: true,
           avatar: true,
+          banner: true,
           bio: true,
           role: true,
           isOnline: true,
@@ -914,6 +1048,200 @@ export async function getUserById(fastify: FastifyInstance) {
         success: false,
         error: 'Internal server error'
       });
+    }
+  });
+}
+
+// Shared Prisma select & profile builder for dedicated lookup endpoints
+const publicUserSelect = {
+  id: true,
+  username: true,
+  firstName: true,
+  lastName: true,
+  displayName: true,
+  avatar: true,
+  banner: true,
+  bio: true,
+  role: true,
+  isOnline: true,
+  lastActiveAt: true,
+  systemLanguage: true,
+  regionalLanguage: true,
+  customDestinationLanguage: true,
+  isActive: true,
+  deactivatedAt: true,
+  createdAt: true,
+  updatedAt: true
+} as const;
+
+function buildPublicProfile(user: Record<string, unknown>) {
+  return {
+    ...user,
+    autoTranslateEnabled: true,
+    translateToSystemLanguage: true,
+    translateToRegionalLanguage: false,
+    useCustomDestination: false,
+    email: '',
+    phoneNumber: undefined,
+    permissions: undefined,
+    isAnonymous: false,
+    isMeeshyer: true,
+  };
+}
+
+export async function getUserByEmail(fastify: FastifyInstance) {
+  fastify.get('/users/email/:email', {
+    schema: {
+      description: 'Get public user profile by email address (case-insensitive)',
+      tags: ['users'],
+      summary: 'Get user profile by email',
+      params: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email', description: 'User email address' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' }
+          }
+        },
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest<{ Params: { email: string } }>, reply: FastifyReply) => {
+    try {
+      const email = normalizeEmail(request.params.email);
+
+      fastify.log.info(`[USER_PROFILE] Fetching user profile by email`);
+
+      const user = await fastify.prisma.user.findFirst({
+        where: { email },
+        select: publicUserSelect
+      });
+
+      if (!user) {
+        return reply.status(404).send({ success: false, error: 'User not found' });
+      }
+
+      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+    } catch (error) {
+      logError(fastify.log, 'Get user by email error:', error);
+      return reply.status(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+}
+
+export async function getUserByIdDedicated(fastify: FastifyInstance) {
+  fastify.get('/users/id/:id', {
+    schema: {
+      description: 'Get public user profile by MongoDB ObjectId',
+      tags: ['users'],
+      summary: 'Get user profile by UUID/ObjectId',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', pattern: '^[a-f\\d]{24}$', description: 'MongoDB ObjectId (24 hex chars)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' }
+          }
+        },
+        400: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    try {
+      const { id } = request.params;
+
+      if (!/^[a-f\d]{24}$/i.test(id)) {
+        return reply.status(400).send({ success: false, error: 'Invalid ObjectId format' });
+      }
+
+      fastify.log.info(`[USER_PROFILE] Fetching user profile by ObjectId: ${id}`);
+
+      const user = await fastify.prisma.user.findFirst({
+        where: { id },
+        select: publicUserSelect
+      });
+
+      if (!user) {
+        return reply.status(404).send({ success: false, error: 'User not found' });
+      }
+
+      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+    } catch (error) {
+      logError(fastify.log, 'Get user by ID error:', error);
+      return reply.status(500).send({ success: false, error: 'Internal server error' });
+    }
+  });
+}
+
+export async function getUserByPhone(fastify: FastifyInstance) {
+  fastify.get('/users/phone/:phone', {
+    schema: {
+      description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
+      tags: ['users'],
+      summary: 'Get user profile by phone number',
+      params: {
+        type: 'object',
+        required: ['phone'],
+        properties: {
+          phone: { type: 'string', description: 'Phone number with country indicator (e.g. 336199909344)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' }
+          }
+        },
+        400: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest<{ Params: { phone: string } }>, reply: FastifyReply) => {
+    try {
+      const rawPhone = request.params.phone.trim();
+      const phoneInput = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`;
+
+      const normalized = normalizePhoneWithCountry(phoneInput);
+
+      if (!normalized || !normalized.isValid) {
+        return reply.status(400).send({ success: false, error: 'Invalid phone number format' });
+      }
+
+      fastify.log.info(`[USER_PROFILE] Fetching user profile by phone: ${normalized.countryCode}`);
+
+      const user = await fastify.prisma.user.findFirst({
+        where: { phoneNumber: normalized.phoneNumber },
+        select: publicUserSelect
+      });
+
+      if (!user) {
+        return reply.status(404).send({ success: false, error: 'User not found' });
+      }
+
+      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+    } catch (error) {
+      logError(fastify.log, 'Get user by phone error:', error);
+      return reply.status(500).send({ success: false, error: 'Internal server error' });
     }
   });
 }

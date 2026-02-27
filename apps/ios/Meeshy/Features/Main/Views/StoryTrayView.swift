@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
@@ -8,7 +9,7 @@ struct StoryTrayView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
     @State private var addButtonGlow = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,13 +20,22 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 108)
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
+            StoryComposerView(
+                onPublish: { effects, content, image in
+                    Task {
+                        await viewModel.publishStory(effects: effects, content: content, image: image)
+                    }
+                },
+                onDismiss: {
+                    viewModel.showStoryComposer = false
+                }
+            )
         }
     }
 
@@ -54,50 +64,55 @@ struct StoryTrayView: View {
     // MARK: - Add Story Button
 
     private var addStoryButton: some View {
-        VStack(spacing: 5) {
-            ZStack {
-                // Radial ambient glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color(hex: "FF2E63").opacity(0.3), Color.clear],
-                            center: .center,
-                            startRadius: 22,
-                            endRadius: 44
+        Button {
+            viewModel.showStoryComposer = true
+            HapticFeedback.medium()
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    // Radial ambient glow
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color(hex: "FF2E63").opacity(0.3), Color.clear],
+                                center: .center,
+                                startRadius: 22,
+                                endRadius: 44
+                            )
                         )
-                    )
-                    .frame(width: 84, height: 84)
-                    .opacity(addButtonGlow ? 1 : 0.4)
+                        .frame(width: 84, height: 84)
+                        .opacity(addButtonGlow ? 1 : 0.4)
 
-                // Main gradient circle
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057"), Color(hex: "08D9D6")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    // Main gradient circle
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "FF2E63"), Color(hex: "E94057"), Color(hex: "08D9D6")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 62, height: 62)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 12, y: 4)
+                        .frame(width: 62, height: 62)
+                        .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 12, y: 4)
 
-                // Camera icon
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
-            }
-            .scaleEffect(addButtonGlow ? 1.04 : 1.0)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                    addButtonGlow = true
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                 }
-            }
+                .scaleEffect(addButtonGlow ? 1.04 : 1.0)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                        addButtonGlow = true
+                    }
+                }
 
-            Text("Story")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+                Text("Story")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+            }
         }
+        .accessibilityLabel("Create new story")
     }
 
     // MARK: - Story Ring
@@ -117,7 +132,7 @@ struct StoryTrayView: View {
                             onViewStory(index)
                         },
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = group.username
+                            selectedProfileUser = .from(storyGroup: group)
                         }
                     ]
                 )

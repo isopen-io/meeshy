@@ -3,6 +3,36 @@
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 
+## Prisme Linguistique — Philosophie Produit
+
+Le Prisme Linguistique est le principe fondamental de l'experience Meeshy :
+
+**Par defaut, l'utilisateur consomme tout le contenu dans sa langue principale configuree.** Les traductions sont appliquees automatiquement, de maniere elegante et discrete — l'utilisateur ne devrait jamais ressentir de friction linguistique.
+
+### Principes
+- **Transparence** : Le contenu traduit s'affiche comme du contenu natif. Pas de popup, pas de banniere intrusive
+- **Discretion** : Un indicateur subtil (icone translate, badge langue) signale qu'une traduction est active, sans distraire
+- **Exploration** : L'utilisateur peut a tout moment voir l'original ou explorer d'autres langues via un geste naturel (long press, tap icone)
+- **Automatisme** : La resolution de langue preferee est automatique (langue principale > langues secondaires > original)
+- **Coherence** : Le prisme s'applique a TOUT le contenu — messages texte, transcriptions audio, metadonnees, previews
+
+### Pipeline technique
+```
+Message recu → Detection langue originale → Traduction auto (NLLB-200 via translator)
+→ Stockage MongoDB (MessageTranslation[]) → Push Socket.IO → Client affiche dans langue preferee
+```
+
+### Resolution de langue
+La resolution respecte les booleens de preference utilisateur (`useCustomDestination`, `translateToSystemLanguage`, `translateToRegionalLanguage`) :
+1. Override manuel utilisateur (selection explicite dans l'onglet Language)
+2. `customDestinationLanguage` (si `useCustomDestination` = true)
+3. `systemLanguage` (si `translateToSystemLanguage` = true)
+4. `regionalLanguage` (si `translateToRegionalLanguage` = true)
+5. `systemLanguage` (fallback inconditionnel)
+6. Locale appareil (fallback final)
+
+Source de verite : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
+
 ## Architecture
 
 ```
@@ -73,6 +103,83 @@ Each increment leaves the codebase in a working state.
 - **Testing**: Jest/Vitest + React Testing Library (web), pytest (Python), XCTest (iOS)
 - **Validation**: Zod (TypeScript), Pydantic (Python)
 - **State**: Zustand (web), SwiftUI @Published (iOS)
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately - don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes - don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests - then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Parallel Worktree Strategy
+
+Pour les larges feature sets, utiliser git worktrees pour le travail agent parallele:
+
+### Setup
+```bash
+git worktree add ../v2_meeshy-{branch-name} -b {branch-name} main
+```
+
+### Regles
+1. Chaque worktree possede des fichiers specifiques -- JAMAIS deux worktrees sur le meme fichier
+2. project.pbxproj: gere par le DERNIER worktree a merger uniquement
+3. Ordre de merge: branches pure-UI d'abord, branches avec fichiers partages en dernier
+4. Chaque agent lance `./apps/ios/meeshy.sh build` dans son worktree pour verifier
+5. Apres tous les merges, clean build depuis main pour catcher les problemes d'integration
+
+### Convention de nommage
+```
+feat/{area}-{feature}  ex: feat/settings-legal, feat/settings-account
+```
+
+### Worktree Directory
+```
+../v2_meeshy-{branch-name}  (sibling du repo principal)
+```
+
+## Task Management
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+## Core Principles
+- **Simplicity First**: Make every change as simple as possible. Minimal code impact.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
 ## Critical Rules
 

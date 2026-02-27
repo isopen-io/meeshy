@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from FeedView.swift
 
@@ -18,7 +19,7 @@ struct FeedPostCard: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
     @State private var showCommentsSheet = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
 
@@ -67,13 +68,10 @@ struct FeedPostCard: View {
         .sheet(isPresented: $showCommentsSheet) {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -85,10 +83,10 @@ struct FeedPostCard: View {
                 name: post.author,
                 mode: .custom(44),
                 accentColor: accentColor,
-                onViewProfile: { profileAlertName = post.author },
+                onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                        profileAlertName = post.author
+                        selectedProfileUser = .from(feedPost: post)
                     }
                 ]
             )
@@ -209,21 +207,21 @@ struct FeedPostCard: View {
                         // Burst ring behind heart
                         if isLiked {
                             Circle()
-                                .stroke(Color(hex: "FF6B6B").opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
+                                .stroke(MeeshyColors.coral.opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
                                 .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
                                 .animation(.easeOut(duration: 0.4), value: likeAnimating)
                         }
 
                         Image(systemName: isLiked ? "heart.fill" : "heart")
                             .font(.system(size: 18))
-                            .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textSecondary)
+                            .foregroundColor(isLiked ? MeeshyColors.coral : theme.textSecondary)
                             .scaleEffect(likeAnimating ? 1.3 : (isLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                     }
 
                     Text("\(post.likes + (isLiked ? 1 : 0))")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textSecondary)
+                        .foregroundColor(isLiked ? MeeshyColors.coral : theme.textSecondary)
                         .contentTransition(.numericText())
                 }
             }
@@ -358,10 +356,10 @@ struct FeedPostCard: View {
                     name: comment.author,
                     mode: .messageBubble,
                     accentColor: comment.authorColor,
-                    onViewProfile: { profileAlertName = comment.author },
+                    onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = comment.author
+                            selectedProfileUser = .from(feedComment: comment)
                         }
                     ]
                 )
@@ -384,7 +382,7 @@ struct FeedPostCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "heart.fill")
                                 .font(.system(size: 11))
-                                .foregroundColor(Color(hex: "FF6B6B"))
+                                .foregroundColor(MeeshyColors.coral)
                             Text("\(comment.likes)")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(theme.textMuted)

@@ -17,7 +17,7 @@
  */
 
 import { MultiLevelCache } from './MultiLevelCache';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'ConversationListCache' });

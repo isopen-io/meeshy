@@ -10,9 +10,11 @@ struct MeeshyWidgetBundle: WidgetBundle {
         UnreadCountWidget()
         QuickReplyWidget()
         FavoriteContactsWidget()
+        #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
             MeeshyLiveActivity()
         }
+        #endif
     }
 }
 
@@ -38,7 +40,6 @@ struct ConversationProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<ConversationEntry>) -> ()) {
         var entries: [ConversationEntry] = []
 
-        // Generate timeline entries for the next hour
         let currentDate = Date()
         for minuteOffset in 0 ..< 60 where minuteOffset % 15 == 0 {
             let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
@@ -55,8 +56,7 @@ struct ConversationProvider: TimelineProvider {
     }
 
     private func loadConversations() -> [Conversation] {
-        // Load from shared container
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return ConversationEntry.sampleConversations
         }
 
@@ -69,7 +69,7 @@ struct ConversationProvider: TimelineProvider {
     }
 
     private func getUnreadCount() -> Int {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return 0
         }
         return sharedDefaults.integer(forKey: "unread_count")
@@ -184,6 +184,7 @@ struct SmallConversationView: View {
             Spacer()
         }
         .padding()
+        .containerBackground(.background, for: .widget)
         .widgetURL(URL(string: "meeshy://conversations/recent"))
     }
 }
@@ -248,6 +249,7 @@ struct MediumConversationView: View {
             Spacer()
         }
         .padding()
+        .containerBackground(.background, for: .widget)
     }
 }
 
@@ -316,6 +318,7 @@ struct LargeConversationView: View {
             Spacer()
         }
         .padding()
+        .containerBackground(.background, for: .widget)
     }
 }
 
@@ -329,7 +332,11 @@ struct UnreadCountWidget: Widget {
         }
         .configurationDisplayName("Unread Messages")
         .description("Keep track of your unread messages")
+        #if os(iOS)
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        #else
+        .supportedFamilies([.systemSmall])
+        #endif
     }
 }
 
@@ -341,12 +348,14 @@ struct UnreadCountWidgetView: View {
         switch family {
         case .systemSmall:
             SmallUnreadView(count: entry.unreadCount)
+        #if os(iOS)
         case .accessoryCircular:
             CircularUnreadView(count: entry.unreadCount)
         case .accessoryRectangular:
             RectangularUnreadView(entry: entry)
         case .accessoryInline:
             InlineUnreadView(count: entry.unreadCount)
+        #endif
         default:
             EmptyView()
         }
@@ -357,31 +366,30 @@ struct SmallUnreadView: View {
     let count: Int
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 8) {
+            Image(systemName: count > 0 ? "message.badge.filled.fill" : "message.fill")
+                .font(.largeTitle)
+                .foregroundColor(.white)
+
+            if count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Text("Unread")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.9))
+            } else {
+                Text("All Read")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+        }
+        .containerBackground(for: .widget) {
             LinearGradient(
                 colors: [Color.blue, Color.blue.opacity(0.7)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-
-            VStack(spacing: 8) {
-                Image(systemName: count > 0 ? "message.badge.filled.fill" : "message.fill")
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
-
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    Text("Unread")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.9))
-                } else {
-                    Text("All Read")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-            }
         }
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
@@ -490,6 +498,7 @@ struct QuickReplyWidgetView: View {
             Spacer()
         }
         .padding()
+        .containerBackground(.background, for: .widget)
     }
 }
 
@@ -540,7 +549,7 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     private func loadFavorites() -> [FavoriteContact] {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let data = sharedDefaults.data(forKey: "favorite_contacts"),
               let contacts = try? JSONDecoder().decode([FavoriteContact].self, from: data) else {
             return FavoriteContactsEntry.sampleContacts
@@ -619,5 +628,6 @@ struct FavoriteContactsWidgetView: View {
             Spacer()
         }
         .padding()
+        .containerBackground(.background, for: .widget)
     }
 }

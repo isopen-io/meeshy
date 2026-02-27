@@ -8,6 +8,12 @@ public struct APIResponse<T: Decodable>: Decodable {
     public let error: String?
 }
 
+public struct SimpleAPIResponse: Decodable {
+    public let success: Bool
+    public let message: String?
+    public let error: String?
+}
+
 public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let success: Bool
     public let data: T
@@ -69,11 +75,7 @@ public final class APIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
 
-    // Auth token — set after login
-    public var authToken: String? {
-        get { UserDefaults.standard.string(forKey: "meeshy_auth_token") }
-        set { UserDefaults.standard.set(newValue, forKey: "meeshy_auth_token") }
-    }
+    public var authToken: String?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -103,7 +105,7 @@ public final class APIClient {
         queryItems: [URLQueryItem]? = nil
     ) async throws -> T {
         guard var components = URLComponents(string: "\(baseURL)\(endpoint)") else {
-            throw APIError.invalidURL
+            throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
 
         if let queryItems, !queryItems.isEmpty {
@@ -111,18 +113,24 @@ public final class APIClient {
         }
 
         guard let url = components.url else {
-            throw APIError.invalidURL
+            throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
 
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Client identification headers (version, device, locale, geo)
+        let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
+        for (key, value) in clientHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
 
         if let token = authToken {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
         if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = body
         }
 
@@ -130,28 +138,54 @@ public final class APIClient {
             let (data, response) = try await session.data(for: urlRequest)
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.noData
+                throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
             }
 
-            if httpResponse.statusCode == 401 {
-                Task { @MainActor in
-                    AuthManager.shared.handleUnauthorized()
-                }
-                throw APIError.unauthorized
-            }
+            let statusCode = httpResponse.statusCode
 
-            guard (200...299).contains(httpResponse.statusCode) else {
+            guard (200...299).contains(statusCode) else {
                 let errorMsg = try? decoder.decode(APIResponse<String>.self, from: data).error
-                throw APIError.serverError(httpResponse.statusCode, errorMsg)
+
+                if statusCode == 401 {
+                    Task { @MainActor in
+                        AuthManager.shared.handleUnauthorized()
+                    }
+                    throw MeeshyError.auth(.sessionExpired)
+                }
+
+                if statusCode == 403 {
+                    throw MeeshyError.auth(.accountLocked)
+                }
+
+                if statusCode == 429 {
+                    throw MeeshyError.server(statusCode: 429, message: "Trop de requetes")
+                }
+
+                if statusCode >= 500 {
+                    throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur serveur")
+                }
+
+                throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
             }
 
             return try decoder.decode(T.self, from: data)
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
             throw error
         } catch let error as DecodingError {
-            throw APIError.decodingError(error)
+            throw MeeshyError.server(statusCode: 0, message: "Erreur de decodage des donnees: \(error.localizedDescription)")
+        } catch let error as URLError {
+            switch error.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                throw MeeshyError.network(.noConnection)
+            case .timedOut:
+                throw MeeshyError.network(.timeout)
+            case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+                throw MeeshyError.network(.serverUnreachable)
+            default:
+                throw MeeshyError.network(.noConnection)
+            }
         } catch {
-            throw APIError.networkError(error)
+            throw MeeshyError.unknown(error)
         }
     }
 
@@ -183,13 +217,21 @@ public final class APIClient {
         return try await request(endpoint: endpoint, queryItems: queryItems)
     }
 
+    // MARK: - JSON Encoder (shared, ISO 8601 dates)
+
+    private static let jsonEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
     // MARK: - POST with Encodable body
 
     public func post<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "POST", body: data)
     }
 
@@ -199,13 +241,33 @@ public final class APIClient {
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
-        let data = try JSONEncoder().encode(body)
+        let data = try APIClient.jsonEncoder.encode(body)
         return try await request(endpoint: endpoint, method: "PUT", body: data)
+    }
+
+    // MARK: - PATCH with Encodable body
+
+    public func patch<T: Decodable, U: Encodable>(
+        endpoint: String,
+        body: U
+    ) async throws -> APIResponse<T> {
+        let data = try APIClient.jsonEncoder.encode(body)
+        return try await request(endpoint: endpoint, method: "PATCH", body: data)
     }
 
     // MARK: - DELETE
 
     public func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
         return try await request(endpoint: endpoint, method: "DELETE")
+    }
+
+    // MARK: - DELETE with Encodable body
+
+    public func delete<T: Decodable, U: Encodable>(
+        endpoint: String,
+        body: U
+    ) async throws -> APIResponse<T> {
+        let data = try APIClient.jsonEncoder.encode(body)
+        return try await request(endpoint: endpoint, method: "DELETE", body: data)
     }
 }

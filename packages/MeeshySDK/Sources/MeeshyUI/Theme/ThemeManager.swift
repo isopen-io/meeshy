@@ -54,7 +54,9 @@ public enum ThemePreference: String, CaseIterable {
 public class ThemeManager: ObservableObject {
     public static let shared = ThemeManager()
 
-    @Published public var mode: ThemeMode = .dark
+    @Published public var mode: ThemeMode = {
+        UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
+    }()
     @Published public var preference: ThemePreference = .system {
         didSet {
             UserDefaults.standard.set(preference.rawValue, forKey: "themePreference")
@@ -237,6 +239,14 @@ public class ThemeManager: ObservableObject {
     public var glassMaterial: some ShapeStyle {
         .ultraThinMaterial
     }
+
+    // MARK: - Semantic Colors
+
+    public var success: Color { Color(hex: "4ADE80") }
+    public var error: Color { Color(hex: "FF6B6B") }
+    public var warning: Color { Color(hex: "F59E0B") }
+    public var info: Color { Color(hex: "45B7D1") }
+    public var readReceipt: Color { Color(hex: "34B7F1") }
 }
 
 // MARK: - Environment Key

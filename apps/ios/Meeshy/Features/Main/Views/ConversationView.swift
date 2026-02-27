@@ -2,7 +2,26 @@ import SwiftUI
 import PhotosUI
 import CoreLocation
 import AVFoundation
+import Contacts
 import MeeshySDK
+import MeeshyUI
+
+// MARK: - Swipe-to-go-back enabler
+// Réactive le geste de retour par bord gauche d'iOS quand la nav bar est masquée.
+
+private struct InteractivePopEnabler: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> PopEnablerVC { PopEnablerVC() }
+    func updateUIViewController(_ vc: PopEnablerVC, context: Context) {}
+
+    final class PopEnablerVC: UIViewController {
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+            // delegate = nil permet le geste même sans barre de navigation visible
+            navigationController?.interactivePopGestureRecognizer?.delegate = nil
+        }
+    }
+}
 
 // MARK: - Message Frame PreferenceKey
 
@@ -31,15 +50,14 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var presenceManager = PresenceManager.shared
+    @ObservedObject var socketManager = MessageSocketManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
-    @StateObject var locationManager = LocationManager()
     @State var messageText = ""
     @State var showOptions = false
-    @State var showAttachOptions = false
     @State var actionAlert: String? = nil
     @State var forwardMessage: Message? = nil
     @State var showConversationInfo = false
@@ -54,10 +72,10 @@ struct ConversationView: View {
     @State var showFilePicker = false
     @State var selectedPhotoItems: [PhotosPickerItem] = []
     @State var isLoadingLocation = false
+    @State var isUploading = false
+    @State var uploadProgress: UploadQueueProgress?
+    @State var showLocationPicker = false
     @FocusState var isTyping: Bool
-    @State var typingBounce: Bool = false
-    @StateObject var textAnalyzer = TextAnalyzer()
-    @State private var showLanguagePicker = false
     @State var pendingReplyReference: ReplyReference?
     @State var editingMessageId: String?
     @State var editingOriginalContent: String?
@@ -69,13 +87,15 @@ struct ConversationView: View {
     @State var showOverlayMenu = false
     @State var overlayMessageFrame: CGRect = .zero
     @State var messageFrames: [String: CGRect] = [:]
-    @State var showMessageInfoSheet = false
-    @State var infoSheetMessage: Message? = nil
     @State var longPressEnabled = false
+
+    // Detail sheet state
+    @State var showMessageDetailSheet = false
+    @State var detailSheetMessage: Message? = nil
+    @State var detailSheetInitialTab: DetailTab? = nil
 
     // Reaction bar state
     @State var quickReactionMessageId: String? = nil
-    @State var showEmojiPickerSheet = false
     @State var emojiOnlyMode: Bool = false
     @State var deleteConfirmMessageId: String? = nil
 
@@ -86,6 +106,10 @@ struct ConversationView: View {
     @State var scrollToMessageId: String? = nil
     @State var highlightedMessageId: String? = nil
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
+    @StateObject var pendingAudioPlayer = AudioPlayerManager()
+    @State var previewingPendingImage: UIImage? = nil
+    @State var imageToPreview: UIImage? = nil
+    @State var videoToPreview: URL? = nil
 
     // Search state
     @State var showSearch = false
@@ -93,16 +117,26 @@ struct ConversationView: View {
     // searchResultIds and searchCurrentIndex removed — backend search uses viewModel.searchResults
     @FocusState var isSearchFocused: Bool
 
+    // Conversation-level media gallery
+    @State var galleryStartAttachment: MessageAttachment? = nil
+
     // Swipe state
     @State var swipedMessageId: String? = nil
     @State var swipeOffset: CGFloat = 0
+
+    // Contact picker state
+    @State var showContactPicker = false
+
+    // Emoji picker state
+    @State var showTextEmojiPicker = false
+    @State var emojiToInject = ""
 
     // Typing dot state
     @State var typingDotPhase: Int = 0
     let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     @State var inlineTypingDotPhase: Int = 0
 
-    let quickEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉"]
+    let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
 
     // MARK: - Computed Properties
 
@@ -160,10 +194,16 @@ struct ConversationView: View {
             .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
     }
 
+    private var isCurrentUserAdminOrMod: Bool {
+        let role = conversation?.currentUserRole?.uppercased() ?? ""
+        return ["ADMIN", "MODERATOR", "BIGBOSS"].contains(role)
+    }
+
     var composerHeight: CGFloat {
-        var height: CGFloat = 100
+        var height: CGFloat = 130 // UCB base + topToolbar
         if !pendingAttachments.isEmpty { height += 110 }
-        if audioRecorder.isRecording { height += 10 }
+        if editingMessageId != nil { height += 52 }
+        if pendingReplyReference != nil && editingMessageId == nil { height += 52 }
         return height
     }
 
@@ -247,6 +287,8 @@ struct ConversationView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Unread Separator
@@ -254,30 +296,47 @@ struct ConversationView: View {
     private var unreadSeparator: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(Color(hex: "FF6B6B").opacity(0.5))
+                .fill(MeeshyColors.coral.opacity(0.5))
                 .frame(height: 1)
+                .accessibilityHidden(true)
             Text("Nouveaux messages")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
                 .lineLimit(1)
                 .fixedSize()
             Rectangle()
-                .fill(Color(hex: "FF6B6B").opacity(0.5))
+                .fill(MeeshyColors.coral.opacity(0.5))
                 .frame(height: 1)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 4)
         .id("unread_separator")
         .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Nouveaux messages non lus")
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Body
 
     var body: some View {
         bodyContent
+            // Réactive le swipe de bord gauche pour revenir en arrière (désactivé par navigationBarHidden)
+            .background(InteractivePopEnabler())
             .task { await viewModel.loadMessages(); MessageSocketManager.shared.connect() }
             .onAppear {
                 if let context = replyContext { pendingReplyReference = context.toReplyReference }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { longPressEnabled = true }
+            }
+            .onChange(of: isNearBottom) { _, _ in
+                if showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+                }
+            }
+            .onChange(of: isTyping) { _, focused in
+                if focused && showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+                }
             }
             .fullScreenCover(isPresented: $showStoryViewerFromHeader) {
                 if storyGroupIndexForHeader < storyViewModel.storyGroups.count {
@@ -297,23 +356,55 @@ struct ConversationView: View {
                     deleteConfirmMessageId = nil
                 }
             } message: { Text("Cette action est irréversible.") }
-            .sheet(isPresented: $showEmojiPickerSheet) {
-                EmojiPickerSheet(quickReactions: quickEmojis, onSelect: { emoji in
-                    if let messageId = quickReactionMessageId { viewModel.toggleReaction(messageId: messageId, emoji: emoji) }
-                    showEmojiPickerSheet = false; closeReactionBar()
-                })
-                .presentationDetents([.medium, .large] as Set<PresentationDetent>)
-            }
             .sheet(item: $forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { forwardMessage = nil }
                     .presentationDetents([.medium, .large])
             }
             .onPreferenceChange(MessageFrameKey.self) { frames in messageFrames = frames }
             .overlay { overlayMenuContent }
-            .sheet(isPresented: $showMessageInfoSheet) {
-                if let msg = infoSheetMessage {
-                    MessageInfoSheet(message: msg, contactColor: accentColor)
-                        .presentationDetents([.medium] as Set<PresentationDetent>)
+            .fullScreenCover(item: $galleryStartAttachment) { startAttachment in
+                ConversationMediaGalleryView(
+                    allAttachments: viewModel.allVisualAttachments,
+                    startAttachmentId: startAttachment.id,
+                    accentColor: accentColor,
+                    captionMap: viewModel.mediaCaptionMap,
+                    senderInfoMap: viewModel.mediaSenderInfoMap
+                )
+            }
+            .sheet(isPresented: $showMessageDetailSheet) {
+                if let msg = detailSheetMessage {
+                    MessageDetailSheet(
+                        message: msg,
+                        contactColor: conversation?.accentColor ?? "#FF2E63",
+                        conversationId: viewModel.conversationId,
+                        initialTab: detailSheetInitialTab,
+                        canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                        textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                        transcription: viewModel.messageTranscriptions[msg.id],
+                        translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                        onSelectTranslation: { translation in
+                            viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                        },
+                        onSelectAudioLanguage: { langCode in
+                            viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                        },
+                        onRequestTranslation: { messageId, lang in
+                            MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                        },
+                        onReact: { emoji in
+                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                        },
+                        onReport: { type, reason in
+                            Task {
+                                let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                                if success { HapticFeedback.success() }
+                                else { HapticFeedback.error() }
+                            }
+                        },
+                        onDelete: {
+                            Task { await viewModel.deleteMessage(messageId: msg.id) }
+                        }
+                    )
                 }
             }
     }
@@ -329,11 +420,34 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
-            if quickReactionMessageId != nil {
-                Color.clear.contentShape(Rectangle())
-                    .onTapGesture { closeReactionBar() }
-                    .zIndex(10)
+            // Connection status banner
+            VStack {
+                Color.clear.frame(height: showOptions ? 72 : 56)
+                ConnectionBanner()
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
+                Spacer()
             }
+            .zIndex(98)
+            .allowsHitTesting(false)
+
+            // Status bar gradient — from very top edge of screen through status bar
+            VStack(spacing: 0) {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.75), location: 0),
+                        .init(color: Color.black.opacity(0.4), location: 0.55),
+                        .init(color: Color.clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 100)
+                Spacer()
+            }
+            .ignoresSafeArea(edges: .top)
+            .zIndex(99)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             if !isNearBottom {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
@@ -342,8 +456,31 @@ struct ConversationView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
             }
 
-            VStack { Spacer(); themedComposer }.zIndex(50)
-            attachOptionsLadder
+            VStack {
+                Spacer()
+                VStack(spacing: 0) {
+                    if showTextEmojiPicker {
+                        EmojiKeyboardPanel(
+                            style: theme.mode.isDark ? .dark : .light,
+                            onSelect: { emoji in
+                                emojiToInject = emoji
+                            }
+                        )
+                        .frame(height: 260)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    themedComposer
+                }
+                .background(
+                    theme.mode.isDark
+                        ? Color.black.opacity(0.6)
+                        : Color(UIColor.systemBackground).opacity(0.95)
+                )
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea(.container, edges: .bottom)
+            }
+            .zIndex(50)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
 
             searchResultsBlurOverlay
             returnToLatestButton
@@ -376,6 +513,14 @@ struct ConversationView: View {
                     }
 
                     Color.clear.frame(height: 70)
+
+                    if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+                        ForEach(0..<6, id: \.self) { index in
+                            SkeletonMessageBubble(index: index)
+                                .staggeredAppear(index: index, baseDelay: 0.04)
+                        }
+                        .transition(.opacity)
+                    }
 
                     ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
                         if shouldShowDateSection(at: index) { dateSectionView(for: msg.createdAt) }
@@ -411,41 +556,39 @@ struct ConversationView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .onChange(of: viewModel.isLoadingInitial) { isLoading in
-                if !isLoading, let last = viewModel.messages.last {
+            .onChange(of: viewModel.isLoadingInitial) { wasLoading, isLoading in
+                if wasLoading && !isLoading, let last = viewModel.messages.last {
                     viewModel.markProgrammaticScroll()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         withAnimation(.easeOut(duration: 0.4)) { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
             }
-            .onChange(of: viewModel.newMessageAppended) { _ in
+            .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard let lastMsg = viewModel.messages.last else { return }
                 if isNearBottom || lastMsg.isMe {
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
                 } else { unreadBadgeCount += 1 }
             }
-            .onChange(of: viewModel.isLoadingOlder) { isLoading in
-                if !isLoading, let anchorId = viewModel.scrollAnchorId {
+            .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in
+                if wasLoading && !isLoading, let anchorId = viewModel.scrollAnchorId {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         proxy.scrollTo(anchorId, anchor: .top); viewModel.scrollAnchorId = nil
                     }
                 }
             }
-            .onChange(of: pendingAttachments.count) { _ in
+            .onChange(of: pendingAttachments.count) { _, _ in
                 if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
-            .onChange(of: audioRecorder.isRecording) { _ in
+            .onChange(of: audioRecorder.isRecording) { _, _ in
                 if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
-            .onChange(of: scrollToBottomTrigger) { _ in
-                if let last = viewModel.messages.last {
-                    viewModel.markProgrammaticScroll()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+            .onChange(of: scrollToBottomTrigger) { _, _ in
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
             }
-            .onChange(of: scrollToMessageId) { targetId in
+            .onChange(of: scrollToMessageId) { _, targetId in
                 guard let targetId else { return }
                 scrollToMessageId = nil
                 scrollToAndHighlight(targetId, proxy: proxy)
@@ -492,41 +635,55 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var expandedHeaderBand: some View {
-        VStack(alignment: .leading, spacing: showOptions ? 4 : 0) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 ThemedBackButton(color: accentColor, compactMode: showOptions) { HapticFeedback.light(); dismiss() }
 
                 if showOptions {
-                    HStack(spacing: 4) {
-                        Button { showConversationInfo = true } label: {
-                            Text(conversation?.name ?? "Conversation")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundColor(.white).lineLimit(1)
+                    // Title row: name + tags scroll + call buttons + search icon
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Button { showConversationInfo = true } label: {
+                                Text(conversation?.name ?? "Conversation")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white).lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .accessibilityLabel(conversation?.name ?? "Conversation")
+                            .accessibilityHint("Ouvre les informations de la conversation")
+                            if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
+                            Spacer(minLength: 4)
+                            headerCallButtons
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
+                                isSearchFocused = true
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 28, height: 28)
+                                    .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                            }
+                            .accessibilityLabel("Rechercher dans la conversation")
                         }
-                        if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
+
+                        // Tags row: aligned with title, scrolls under the search icon
+                        headerTagsRow
+                            .mask(
+                                HStack(spacing: 0) {
+                                    Color.black
+                                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                                        .frame(width: 24)
+                                }
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-                    Spacer(minLength: 4)
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
-                        isSearchFocused = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
-                    }
-                    .transition(.opacity)
                 } else {
                     Spacer()
                 }
 
                 headerAvatarView
-            }
-
-            if showOptions {
-                headerTagsRow.transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.horizontal, showOptions ? 10 : 0)
@@ -557,17 +714,45 @@ struct ConversationView: View {
     private var overlayMenuContent: some View {
         if showOverlayMenu, let msg = overlayMessage {
             MessageOverlayMenu(
-                message: msg, contactColor: accentColor, messageBubbleFrame: overlayMessageFrame,
+                message: msg,
+                contactColor: accentColor,
+                conversationId: viewModel.conversationId,
+                messageBubbleFrame: overlayMessageFrame,
                 isPresented: $showOverlayMenu,
+                canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
-                onEdit: { editingMessageId = msg.id; editingOriginalContent = msg.content; messageText = msg.content; isTyping = true; HapticFeedback.light() },
-                onForward: { forwardMessage = msg },
-                onDelete: { deleteConfirmMessageId = msg.id },
+                onEdit: {
+                    editingMessageId = msg.id
+                    editingOriginalContent = msg.content
+                    messageText = msg.content
+                },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
-                onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
-                onShowInfo: { infoSheetMessage = msg; showMessageInfoSheet = true },
-                onAddReaction: { quickReactionMessageId = msg.id; showEmojiPickerSheet = true }
+                textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                transcription: viewModel.messageTranscriptions[msg.id],
+                translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                onSelectTranslation: { translation in
+                    viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                },
+                onSelectAudioLanguage: { langCode in
+                    viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                },
+                onRequestTranslation: { messageId, lang in
+                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                },
+                onReact: { emoji in
+                    viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                },
+                onReport: { type, reason in
+                    Task {
+                        let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                        if success { HapticFeedback.success() }
+                        else { HapticFeedback.error() }
+                    }
+                },
+                onDelete: {
+                    Task { await viewModel.deleteMessage(messageId: msg.id) }
+                }
             )
             .transition(.opacity).zIndex(999)
         }

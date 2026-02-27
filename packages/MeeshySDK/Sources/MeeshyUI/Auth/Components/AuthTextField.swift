@@ -13,6 +13,7 @@ public struct AuthTextField: View {
     @State private var isShowingPassword = false
     @State private var validationError: String?
     @FocusState private var isFocused: Bool
+    @ObservedObject private var theme = ThemeManager.shared
 
     public init(title: String, icon: String, text: Binding<String>,
                 isSecure: Bool = false, keyboardType: UIKeyboardType = .default,
@@ -31,7 +32,7 @@ public struct AuthTextField: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .foregroundStyle(isFocused ? Color(hex: "4ECDC4") : .secondary)
+                    .foregroundStyle(isFocused ? Color(hex: "4ECDC4") : theme.textMuted)
                     .frame(width: 20)
 
                 if isSecure && !isShowingPassword {
@@ -51,22 +52,22 @@ public struct AuthTextField: View {
                         isShowingPassword.toggle()
                     } label: {
                         Image(systemName: isShowingPassword ? "eye.slash" : "eye")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(hex: "2D2D40").opacity(0.6))
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
                         isFocused ? Color(hex: "4ECDC4").opacity(0.6) :
                             validationError != nil ? Color.red.opacity(0.5) :
-                            Color.white.opacity(0.08),
+                            theme.inputBorder.opacity(0.3),
                         lineWidth: 1
                     )
             )

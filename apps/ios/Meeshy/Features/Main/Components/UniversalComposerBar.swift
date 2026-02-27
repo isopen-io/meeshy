@@ -1,10 +1,10 @@
 import SwiftUI
 import AVFoundation
-import CoreLocation
 import Combine
+import MeeshySDK
 
 // See ComposerModels.swift for: ComposerAttachmentType, ComposerAttachment,
-// LanguageOption, KeyboardObserver, ComposerLocationHelper, ComposerWaveformBar
+// LanguageOption, KeyboardObserver, ComposerWaveformBar
 
 // See UniversalComposerBar+Recording.swift for recording views & logic
 // See UniversalComposerBar+Attachments.swift for attachment views & logic
@@ -73,6 +73,34 @@ struct UniversalComposerBar: View {
     var onVoiceRecord: ((URL, TimeInterval) -> Void)? = nil
     var onLocationRequest: (() -> Void)? = nil
 
+    // MARK: - External text binding (edit mode)
+
+    var textBinding: Binding<String>? = nil
+
+    // MARK: - Banners & custom content
+
+    var editBanner: AnyView? = nil
+    var replyBanner: AnyView? = nil
+    var customAttachmentsPreview: AnyView? = nil
+
+    // MARK: - Edit mode
+
+    var isEditMode: Bool = false
+    var onCustomSend: (() -> Void)? = nil
+    var onTextChange: ((String) -> Void)? = nil
+
+    // MARK: - Recording delegation (parent manages real AVAudioRecorder)
+
+    var onStartRecording: (() -> Void)? = nil
+    var onStopRecording: (() -> Void)? = nil
+    var externalIsRecording: Bool? = nil
+    var externalRecordingDuration: TimeInterval? = nil
+    var externalAudioLevels: [CGFloat]? = nil
+
+    // MARK: - External content flag
+
+    var externalHasContent: Bool = false
+
     // MARK: - Attachment ladder callbacks
 
     var onPhotoLibrary: (() -> Void)? = nil
@@ -84,6 +112,22 @@ struct UniversalComposerBar: View {
 
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
+
+    // MARK: - Ephemeral mode
+
+    /// Binding to the ephemeral duration (nil = off). Parent owns the state.
+    var ephemeralDuration: Binding<EphemeralDuration?> = .constant(nil)
+
+    /// When true, the ephemeral toggle is hidden (e.g. in edit mode)
+    var hideEphemeral: Bool = false
+
+    // MARK: - Blur mode
+
+    /// Binding to blur state. When true, next message is sent blurred (tap to reveal).
+    var isBlurEnabled: Binding<Bool> = .constant(false)
+
+    /// When true, the blur toggle is hidden (e.g. in edit mode)
+    var hideBlur: Bool = false
 
     // MARK: - External attachment injection
 
@@ -104,6 +148,10 @@ struct UniversalComposerBar: View {
     /// Called on ANY user interaction (tap, type, record, attach, etc.) — use to pause stories
     var onAnyInteraction: (() -> Void)? = nil
 
+    /// When set to true externally, immediately focuses the text field.
+    /// Caller must reset to false after triggering.
+    var focusTrigger: Binding<Bool> = .constant(false)
+
     /// Called when recording state changes (true = started, false = stopped)
     var onRecordingChange: ((Bool) -> Void)? = nil
 
@@ -120,8 +168,6 @@ struct UniversalComposerBar: View {
     @State var showAttachOptions = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
-    @State private var previousStoryId: String? = nil
-
     // Voice recording
     @State var isRecording = false
     @State var recordingDuration: TimeInterval = 0
@@ -135,8 +181,8 @@ struct UniversalComposerBar: View {
     @State private var dragOffsetY: CGFloat = 0
     @State var clipboardContent: ClipboardContent? = nil
 
-    // Location
-    @StateObject var locationHelper = ComposerLocationHelper()
+    // Ephemeral picker
+    @State var showEphemeralPicker = false
 
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
@@ -160,19 +206,27 @@ struct UniversalComposerBar: View {
     }
 
     var hasContent: Bool {
-        hasText || !allAttachments.isEmpty
+        hasText || !allAttachments.isEmpty || externalHasContent
     }
 
     var allAttachments: [ComposerAttachment] {
         attachments + externalAttachments
     }
 
-    private var textColor: Color {
+    var textColor: Color {
         style == .dark ? .white : theme.textPrimary
     }
 
-    private var placeholderColor: Color {
+    var placeholderColor: Color {
         style == .dark ? .white.opacity(0.4) : theme.textMuted
+    }
+
+    var effectiveIsRecording: Bool {
+        externalIsRecording ?? isRecording
+    }
+
+    var effectiveDuration: TimeInterval {
+        externalRecordingDuration ?? recordingDuration
     }
 
     private var currentLangOption: LanguageOption {
@@ -304,15 +358,23 @@ struct UniversalComposerBar: View {
 
     private var expandedComposer: some View {
         VStack(spacing: 0) {
-            // Clipboard content preview (for pasted text > 2000 chars)
-            if let clip = clipboardContent {
-                clipboardContentPreview(clip)
+            // Edit banner
+            if let banner = editBanner { banner }
+            // Reply banner
+            if let banner = replyBanner { banner }
+
+            // Custom attachments (real thumbnails from parent) or default chips
+            if let custom = customAttachmentsPreview {
+                custom
+                    .transition(.scale.combined(with: .opacity))
+            } else if !allAttachments.isEmpty {
+                attachmentsPreview
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // Attachments preview (above the composer, like web MessageComposer)
-            if !allAttachments.isEmpty {
-                attachmentsPreview
+            // Clipboard content preview (for pasted text > 2000 chars)
+            if let clip = clipboardContent {
+                clipboardContentPreview(clip)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -323,7 +385,13 @@ struct UniversalComposerBar: View {
                     swipeHandle
                 }
 
-                // Top toolbar (sentiment, language, recording indicator, char counter)
+                // Ephemeral duration picker (slides up from toolbar)
+                if showEphemeralPicker {
+                    ephemeralDurationPicker
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // Top toolbar (ephemeral, sentiment, language, recording indicator, char counter)
                 topToolbar
                     .padding(.horizontal, 8)
                     .padding(.top, 6)
@@ -334,7 +402,7 @@ struct UniversalComposerBar: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     // Left: (+) attach button with ladder overlay above it
                     Group {
-                        if isRecording {
+                        if effectiveIsRecording {
                             stopRecordingButton
                                 .transition(.scale.combined(with: .opacity))
                         } else if resolvedShowAttachment {
@@ -342,14 +410,14 @@ struct UniversalComposerBar: View {
                         }
                     }
                     .overlay(alignment: .bottom) {
-                        if showAttachOptions && resolvedShowAttachment && !isRecording {
+                        if showAttachOptions && resolvedShowAttachment && !effectiveIsRecording {
                             attachmentLadder
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                         }
                     }
 
                     // Center: text field or recording waveform
-                    if isRecording {
+                    if effectiveIsRecording {
                         voiceRecordingView
                     } else {
                         textInputField
@@ -359,66 +427,57 @@ struct UniversalComposerBar: View {
                     actionButton
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isRecording)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: effectiveIsRecording)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             }
             .background(composerBackground)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
-        .onChange(of: attachments.count) { _ in notifyContentChange() }
-        .onChange(of: isRecording) { _ in notifyContentChange() }
+        .onChange(of: attachments.count) { _, _ in notifyContentChange() }
+        .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
-            previousStoryId = storyId
             // Load initial draft if available
             if let id = storyId, let draft = getDraft?(id) {
                 text = draft.text
                 attachments = draft.attachments
             }
-            locationHelper.onLocationReceived = { lat, lng in
-                onAnyInteraction?()
-                let attachment = ComposerAttachment.location(lat: lat, lng: lng)
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    attachments.append(attachment)
-                }
-                onLocationRequest?()
-            }
         }
-        .onChange(of: selectedLanguage) { newValue in
+        .onChange(of: selectedLanguage) { _, newValue in
             currentLanguage = newValue
         }
-        .onChange(of: storyId) { newId in
-            // Save draft for previous story (stop recording if in progress)
-            if let prevId = previousStoryId {
-                if isRecording {
-                    forceStopRecording()
-                }
-                onSaveDraft?(prevId, text, attachments)
+        .onChange(of: storyId) { oldId, newId in
+            if let oldId {
+                if isRecording { forceStopRecording() }
+                onSaveDraft?(oldId, text, attachments)
             }
-            // Load draft for new story
-            if let newId = newId, let draft = getDraft?(newId) {
+            if let newId, let draft = getDraft?(newId) {
                 text = draft.text
                 attachments = draft.attachments
             } else {
                 text = ""
                 attachments = []
             }
-            // Reset transient UI state
             showAttachOptions = false
             isFocused = false
             textAnalyzer.reset()
-            previousStoryId = newId
             notifyContentChange()
         }
-        .onChange(of: isFocused) { focused in
+        .onChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
+            if shouldFocus {
+                isFocused = true
+                focusTrigger.wrappedValue = false
+            }
+        }
+        .onChange(of: isFocused) { _, focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = focused
             }
             if focused {
                 onAnyInteraction?()
             }
-            // Close attach menu when typing
             if focused && showAttachOptions {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachOptions = false
@@ -426,10 +485,15 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
-        .onChange(of: text) { newValue in
+        .onChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
+            onTextChange?(newValue)
+            // Sync to external binding
+            if let binding = textBinding, binding.wrappedValue != newValue {
+                binding.wrappedValue = newValue
+            }
             // Ripple wave on each keystroke
             if isFocused {
                 typeWave = true
@@ -446,10 +510,22 @@ struct UniversalComposerBar: View {
             // Clipboard content: auto-create when pasting 2000+ chars
             handleClipboardCheck(newValue)
         }
-        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
+        .onChange(of: textBinding?.wrappedValue) { _, newValue in
+            guard let newValue, newValue != text else { return }
+            text = newValue
         }
-        .onChange(of: injectedEmoji.wrappedValue) { emoji in
+        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
+            LanguagePickerSheet(
+                style: theme.mode.isDark ? .dark : .light,
+                onSelect: { lang in
+                    let detected = DetectedLanguage.find(code: lang.id) ??
+                        DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
+                    textAnalyzer.setLanguageOverride(detected)
+                },
+                onDismiss: { textAnalyzer.showLanguagePicker = false }
+            )
+        }
+        .onChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {
                 text += emoji
                 DispatchQueue.main.async {
@@ -465,6 +541,16 @@ struct UniversalComposerBar: View {
 
     private var topToolbar: some View {
         HStack(spacing: 6) {
+            // Ephemeral mode toggle
+            if !hideEphemeral {
+                ephemeralToggleButton
+            }
+
+            // Blur mode toggle
+            if !hideBlur {
+                blurToggleButton
+            }
+
             // Sentiment indicator
             Button {
                 onAnyInteraction?()
@@ -563,7 +649,7 @@ struct UniversalComposerBar: View {
 
     @ViewBuilder
     var actionButton: some View {
-        if isRecording || hasContent {
+        if effectiveIsRecording || hasContent {
             sendButton
                 .transition(.scale.combined(with: .opacity))
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
@@ -578,7 +664,12 @@ struct UniversalComposerBar: View {
     // ========================================================================
 
     var sendButton: some View {
-        Button {
+        let editColors = [Color(hex: "F8B500"), Color(hex: "E67E22")]
+        let sendColors = [Color(hex: "FF2E63"), Color(hex: "FF6B6B")]
+        let colors = isEditMode ? editColors : sendColors
+        let icon = isEditMode ? "checkmark" : "paperplane.fill"
+
+        return Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                 sendBounce = true
             }
@@ -591,19 +682,22 @@ struct UniversalComposerBar: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                            colors: colors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 44, height: 44)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
+                    .shadow(color: colors[0].opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
 
-                Image(systemName: "paperplane.fill")
+                Image(systemName: icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
-                    .rotationEffect(.degrees(sendBounce ? 55 : 45))
-                    .offset(x: sendBounce ? 2 : -1, y: sendBounce ? -2 : 1)
+                    .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
+                    .offset(
+                        x: isEditMode ? 0 : (sendBounce ? 2 : -1),
+                        y: isEditMode ? 0 : (sendBounce ? -2 : 1)
+                    )
             }
             .scaleEffect(sendBounce ? 1.2 : 1)
         }
@@ -624,6 +718,14 @@ struct UniversalComposerBar: View {
 
     private func handleSend() {
         onAnyInteraction?()
+
+        // Custom send (edit mode, recording, or parent-managed send)
+        if let onCustomSend {
+            onCustomSend()
+            HapticFeedback.light()
+            return
+        }
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !allAttachments.isEmpty else { return }
 
@@ -658,7 +760,7 @@ struct UniversalComposerBar: View {
 
     /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
     func notifyContentChange() {
-        onHasContentChange?(hasText || !attachments.isEmpty || isRecording)
+        onHasContentChange?(hasText || !attachments.isEmpty || effectiveIsRecording)
     }
 
     // ========================================================================
@@ -695,5 +797,179 @@ struct UniversalComposerBar: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 2)
+    }
+
+    // ========================================================================
+    // MARK: - Ephemeral Toggle Button
+    // ========================================================================
+
+    @ViewBuilder
+    private var ephemeralToggleButton: some View {
+        let isActive = ephemeralDuration.wrappedValue != nil
+
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            if isActive {
+                ephemeralDuration.wrappedValue = nil
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEphemeralPicker = false
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEphemeralPicker.toggle()
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "flame.fill" : "timer.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: "FF6B6B") : mutedColor)
+
+                if let duration = ephemeralDuration.wrappedValue {
+                    Text(duration.label)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: "FF6B6B"))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: "FF6B6B").opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: "FF6B6B").opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "Mode ephemere actif: \(ephemeralDuration.wrappedValue!.displayLabel)"
+                            : "Activer le mode ephemere")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - Ephemeral Duration Picker
+    // ========================================================================
+
+    private var ephemeralDurationPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button {
+                    HapticFeedback.light()
+                    ephemeralDuration.wrappedValue = nil
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEphemeralPicker = false
+                    }
+                } label: {
+                    Text("Off")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(ephemeralDuration.wrappedValue == nil
+                                      ? Color(hex: accentColor)
+                                      : style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                        )
+                }
+
+                ForEach(EphemeralDuration.allCases) { duration in
+                    Button {
+                        HapticFeedback.light()
+                        ephemeralDuration.wrappedValue = duration
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showEphemeralPicker = false
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 10))
+                            Text(duration.label)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : Color(hex: "FF6B6B"))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(ephemeralDuration.wrappedValue == duration
+                                      ? Color(hex: "FF6B6B")
+                                      : Color(hex: "FF6B6B").opacity(0.1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
+                                )
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(style == .dark ? Color.black.opacity(0.3) : theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(hex: "FF6B6B").opacity(0.2), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 8)
+    }
+
+    // ========================================================================
+    // MARK: - Blur Toggle Button
+    // ========================================================================
+
+    @ViewBuilder
+    private var blurToggleButton: some View {
+        let isActive = isBlurEnabled.wrappedValue
+
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isBlurEnabled.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "eye.slash.fill" : "eye.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? Color(hex: "A855F7") : mutedColor)
+
+                if isActive {
+                    Text("Blur")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(hex: "A855F7"))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? Color(hex: "A855F7").opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? Color(hex: "A855F7").opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? "Mode flou actif"
+                            : "Activer le mode flou")
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 }

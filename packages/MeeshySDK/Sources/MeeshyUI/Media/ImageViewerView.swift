@@ -190,42 +190,36 @@ public struct ImageFullscreen: View {
                 }
 
             if let url = imageUrl {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { scale = $0 }
-                                    .onEnded { _ in
-                                        withAnimation(.spring()) {
-                                            scale = max(1, min(5, scale))
-                                        }
-                                    }
-                            )
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { offset = $0.translation }
-                                    .onEnded { value in
-                                        if abs(value.translation.height) > 200 {
-                                            dismiss()
-                                        } else {
-                                            withAnimation(.spring()) { offset = .zero }
-                                        }
-                                    }
-                            )
-                            .onTapGesture(count: 2) {
-                                withAnimation(.spring()) {
-                                    scale = scale > 1 ? 1 : 2.5
-                                    offset = .zero
-                                }
+                CachedAsyncImage(url: url.absoluteString) {
+                    ProgressView().tint(.white)
+                }
+                .aspectRatio(contentMode: .fit)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    MagnificationGesture()
+                        .onChanged { scale = $0 }
+                        .onEnded { _ in
+                            withAnimation(.spring()) {
+                                scale = max(1, min(5, scale))
                             }
-                    default:
-                        ProgressView().tint(.white)
+                        }
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { offset = $0.translation }
+                        .onEnded { value in
+                            if abs(value.translation.height) > 200 {
+                                dismiss()
+                            } else {
+                                withAnimation(.spring()) { offset = .zero }
+                            }
+                        }
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.spring()) {
+                        scale = scale > 1 ? 1 : 2.5
+                        offset = .zero
                     }
                 }
             }

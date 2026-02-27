@@ -1,8 +1,9 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
-// MARK: - Real-time Translation/Transcription/Audio Types
+// MARK: - Real-time Translation Type (text translations, not in SDK)
 
 struct MessageTranslation: Identifiable {
     let id: String
@@ -14,37 +15,8 @@ struct MessageTranslation: Identifiable {
     let confidenceScore: Double?
 }
 
-struct MessageTranscriptionSegment: Identifiable {
-    let id = UUID()
-    let text: String
-    let startTime: Double?
-    let endTime: Double?
-    let speakerId: String?
-}
-
-struct MessageTranscription {
-    let attachmentId: String
-    let text: String
-    let language: String
-    let confidence: Double?
-    let durationMs: Int?
-    let segments: [MessageTranscriptionSegment]
-    let speakerCount: Int?
-}
-
-struct MessageTranslatedAudio: Identifiable {
-    let id: String
-    let attachmentId: String
-    let targetLanguage: String
-    let url: String
-    let transcription: String
-    let durationMs: Int
-    let format: String
-    let cloned: Bool
-    let quality: Double
-    let ttsModel: String
-    let segments: [MessageTranscriptionSegment]
-}
+// MessageTranscription, MessageTranscriptionSegment, MessageTranslatedAudio
+// are defined in MeeshySDK.TranscriptionModels — use those directly.
 
 @MainActor
 class ConversationViewModel: ObservableObject {
@@ -73,8 +45,23 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranscriptions: [String: MessageTranscription] = [:]
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
 
+    /// Manual translation override per message (user selected a specific language in Language tab)
+    /// nil value means user chose "show original"
+    @Published var activeTranslationOverrides: [String: MessageTranslation?] = [:]
+
+    /// Manual audio language override per message (user selected a language in Language tab for audio)
+    /// nil value means user chose "show original audio"
+    @Published var activeAudioLanguageOverrides: [String: String?] = [:]
+
+    /// Active live location sessions in this conversation
+    @Published var activeLiveLocations: [ActiveLiveLocation] = []
+
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
+
+    /// Detailed reaction data for a specific message (used by reaction detail sheet)
+    @Published var reactionDetails: [ReactionGroup] = []
+    @Published var isLoadingReactions = false
 
     /// ID of the first unread message (set once after initial load, cleared on scroll to bottom)
     @Published var firstUnreadMessageId: String?
@@ -82,6 +69,12 @@ class ConversationViewModel: ObservableObject {
     /// True during programmatic scrolls (initial load, send, scroll-to-bottom tap)
     /// When true, onAppear prefetch triggers are suppressed.
     @Published var isProgrammaticScroll = false
+
+    /// Selected ephemeral duration for next message
+    @Published var ephemeralDuration: EphemeralDuration?
+
+    /// When true, next message will be sent with blur (recipient must tap to reveal)
+    @Published var isBlurEnabled: Bool = false
 
     // MARK: - Search State
 
@@ -96,6 +89,88 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
+    // MARK: - Conversation-Wide Media
+
+    struct MediaSenderInfo {
+        let senderName: String
+        let senderAvatarURL: String?
+        let senderColor: String
+        let sentAt: Date
+    }
+
+    var mediaSenderInfoMap: [String: MediaSenderInfo] {
+        var map: [String: MediaSenderInfo] = [:]
+        for msg in messages {
+            let info = MediaSenderInfo(
+                senderName: msg.senderName ?? "?",
+                senderAvatarURL: msg.senderAvatarURL,
+                senderColor: msg.senderColor ?? "#999",
+                sentAt: msg.createdAt
+            )
+            for att in msg.attachments {
+                map[att.id] = info
+            }
+        }
+        return map
+    }
+
+    /// All visual attachments (images + videos) across every loaded message, in chronological order.
+    var allVisualAttachments: [MessageAttachment] {
+        messages.flatMap { msg in
+            msg.attachments.filter { [.image, .video].contains($0.type) }
+        }
+    }
+
+    // MARK: - Audio Items for Fullscreen Gallery
+
+    struct AudioItem: Identifiable {
+        let id: String // attachment.id
+        let attachment: MessageAttachment
+        let message: Message
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+    }
+
+    var allAudioItems: [AudioItem] {
+        messages.flatMap { msg in
+            msg.attachments
+                .filter { $0.type == .audio }
+                .map { att in
+                    AudioItem(
+                        id: att.id,
+                        attachment: att,
+                        message: msg,
+                        transcription: messageTranscriptions[msg.id],
+                        translatedAudios: messageTranslatedAudios[msg.id] ?? []
+                    )
+                }
+        }
+    }
+
+    /// Maps attachment.id -> caption text for the fullscreen gallery.
+    /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
+    var mediaCaptionMap: [String: String] {
+        var map: [String: String] = [:]
+        for msg in messages {
+            let visuals = msg.attachments.filter { [.image, .video].contains($0.type) }
+            for att in visuals {
+                if let caption = att.caption, !caption.isEmpty {
+                    map[att.id] = caption
+                } else if visuals.count == 1 && !msg.content.isEmpty {
+                    // Single visual + message text -> show as caption
+                    // Use translation if available, otherwise original content
+                    if let translations = messageTranslations[msg.id],
+                       let best = translations.first {
+                        map[att.id] = best.translatedContent
+                    } else {
+                        map[att.id] = msg.content
+                    }
+                }
+            }
+        }
+        return map
+    }
+
     // MARK: - Private
 
     let conversationId: String
@@ -107,6 +182,13 @@ class ConversationViewModel: ObservableObject {
     private var currentUserId: String {
         AuthManager.shared.currentUser?.id ?? ""
     }
+
+    // Pagination safety
+    private static let paginationRetryCount = 3
+    private static let paginationRetryDelay: UInt64 = 1_000_000_000  // 1s in nanoseconds
+    private static let paginationDebounceInterval: TimeInterval = 0.3
+    private var lastOlderPaginationTime: Date = .distantPast
+    private var lastNewerPaginationTime: Date = .distantPast
 
     // Typing emission state
     private var typingTimer: Timer?
@@ -123,12 +205,14 @@ class ConversationViewModel: ObservableObject {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
         subscribeToSocket()
+        subscribeToReconnect()
         joinRoom()
     }
 
     deinit {
         leaveRoom()
-        // Direct cleanup — can't call @MainActor methods from deinit
+        MessageSocketManager.shared.activeConversationId = nil
+        // Direct cleanup -- can't call @MainActor methods from deinit
         typingTimer?.invalidate()
         if isEmittingTyping {
             MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -139,6 +223,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Room Management
 
     private func joinRoom() {
+        MessageSocketManager.shared.activeConversationId = conversationId
         MessageSocketManager.shared.joinConversation(conversationId)
     }
 
@@ -199,19 +284,24 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
+        // Show cached messages immediately while fetching from API
+        if messages.isEmpty {
+            let cached = await LocalStore.shared.loadMessages(for: conversationId)
+            if !cached.isEmpty {
+                messages = cached
+            }
+        }
+
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "offset", value: "0"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
+            let response = try await MessageService.shared.list(
+                conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
             )
 
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
 
@@ -226,6 +316,12 @@ class ConversationViewModel: ObservableObject {
 
             // Mark conversation as read (fire-and-forget)
             markAsRead()
+
+            // Update cache in background
+            let conversationId = self.conversationId
+            Task.detached(priority: .utility) { [messages] in
+                await LocalStore.shared.saveMessages(messages, for: conversationId)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -236,8 +332,13 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Load Older Messages (infinite scroll)
 
     func loadOlderMessages() async {
-        guard hasOlderMessages, !isLoadingOlder else { return }
+        guard hasOlderMessages, !isLoadingOlder, !isProgrammaticScroll else { return }
         guard let oldestId = messages.first?.id else { return }
+
+        // Debounce: ignore calls that arrive too soon after the last one
+        let now = Date()
+        guard now.timeIntervalSince(lastOlderPaginationTime) >= Self.paginationDebounceInterval else { return }
+        lastOlderPaginationTime = now
 
         isLoadingOlder = true
         // Save anchor BEFORE prepend so the view can restore scroll position
@@ -245,28 +346,39 @@ class ConversationViewModel: ObservableObject {
 
         let beforeValue = nextMessageCursor ?? oldestId
 
-        do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "before", value: beforeValue),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
-            )
+        var lastError: Error?
+        for attempt in 1...Self.paginationRetryCount {
+            do {
+                let response = try await MessageService.shared.listBefore(
+                    conversationId: conversationId, before: beforeValue, limit: limit, includeReplies: true
+                )
 
-            let userId = currentUserId
-            let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                let userId = currentUserId
+                let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                extractAttachmentTranscriptions(from: response.data)
+                extractTextTranslations(from: response.data)
 
-            // Dedup and prepend
-            let existingIds = Set(messages.map(\.id))
-            let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
-            messages.insert(contentsOf: newMessages, at: 0)
+                // Dedup and prepend
+                let existingIds = Set(messages.map(\.id))
+                let newMessages = olderMessages.filter { !existingIds.contains($0.id) }
+                messages.insert(contentsOf: newMessages, at: 0)
 
-            self.nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
-        } catch {
-            self.error = error.localizedDescription
+                self.nextMessageCursor = response.cursorPagination?.nextCursor
+                hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                if attempt < Self.paginationRetryCount {
+                    Logger.messages.warning("loadOlderMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
+                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                }
+            }
+        }
+
+        if let lastError {
+            Logger.messages.error("loadOlderMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
+            self.error = lastError.localizedDescription
         }
 
         isLoadingOlder = false
@@ -274,14 +386,53 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil) async {
+    @discardableResult
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return }
+        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
         // Stop typing emission on send
         stopTypingEmission()
 
+        // Resolve ephemeral: use explicit param or ViewModel state
+        let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
+        let resolvedEphemeralDuration = ephemeralDuration?.rawValue
+
+        // Resolve view-once: explicit param or derive from ephemeralDuration
+        let resolvedIsViewOnce = isViewOnce ?? false
+        let resolvedMaxViewOnceCount = maxViewOnceCount
+
+        // Resolve blur: use explicit param or ViewModel state
+        let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
+
         isSending = true
+
+        // Build ReplyReference from quoted message
+        var replyRef: ReplyReference?
+        if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
+            let previewText: String = {
+                if !quoted.content.isEmpty { return quoted.content }
+                if let first = quoted.attachments.first {
+                    switch first.type {
+                    case .image: return "\u{1F4F7} Photo"
+                    case .video: return "\u{1F3AC} Video"
+                    case .audio: return "\u{1F3B5} Message vocal"
+                    case .file: return "\u{1F4CE} Fichier"
+                    default: return "\u{1F4CE} Piece jointe"
+                    }
+                }
+                return ""
+            }()
+            replyRef = ReplyReference(
+                messageId: replyId,
+                authorName: quoted.senderName ?? "Utilisateur",
+                previewText: previewText,
+                isMe: quoted.isMe,
+                authorColor: quoted.senderColor,
+                attachmentType: quoted.attachments.first?.type.rawValue,
+                attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+            )
+        }
 
         // Optimistic insert
         let tempId = "temp_\(UUID().uuidString)"
@@ -293,8 +444,14 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
+            expiresAt: resolvedExpiresAt,
+            isViewOnce: resolvedIsViewOnce,
+            maxViewOnceCount: resolvedMaxViewOnceCount,
+            viewOnceCount: 0,
+            isBlurred: resolvedBlur == true,
             createdAt: Date(),
             updatedAt: Date(),
+            replyTo: replyRef,
             deliveryStatus: .sending,
             isMe: true
         )
@@ -308,36 +465,57 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                expiresAt: resolvedExpiresAt,
+                ephemeralDuration: resolvedEphemeralDuration,
+                isViewOnce: resolvedIsViewOnce ? true : nil,
+                maxViewOnceCount: resolvedMaxViewOnceCount,
+                isBlurred: resolvedBlur
             )
-            let response: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
-                endpoint: "/conversations/\(conversationId)/messages",
-                body: body
+            let responseData = try await MessageService.shared.send(
+                conversationId: conversationId, request: body
             )
 
             // Replace temp message with server version
             if let idx = messages.firstIndex(where: { $0.id == tempId }) {
                 messages[idx] = Message(
-                    id: response.data.id,
+                    id: responseData.id,
                     conversationId: conversationId,
                     senderId: currentUserId,
                     content: text,
                     replyToId: replyToId,
-                    createdAt: response.data.createdAt,
-                    updatedAt: response.data.createdAt,
+                    expiresAt: resolvedExpiresAt,
+                    isViewOnce: resolvedIsViewOnce,
+                    maxViewOnceCount: resolvedMaxViewOnceCount,
+                    viewOnceCount: 0,
+                    isBlurred: resolvedBlur == true,
+                    createdAt: responseData.createdAt,
+                    updatedAt: responseData.createdAt,
+                    replyTo: replyRef,
                     deliveryStatus: .sent,
                     isMe: true
                 )
             }
+
+            // Clear ephemeral duration after successful send
+            if ephemeralDuration != nil {
+                ephemeralDuration = nil
+            }
+            // Clear blur after successful send
+            if isBlurEnabled {
+                isBlurEnabled = false
+            }
+            isSending = false
+            return true
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
             if let idx = messages.firstIndex(where: { $0.id == tempId }) {
                 messages[idx].deliveryStatus = .failed
             }
             self.error = error.localizedDescription
+            isSending = false
+            return false
         }
-
-        isSending = false
     }
 
     // MARK: - Retry Failed Message
@@ -359,6 +537,16 @@ class ConversationViewModel: ObservableObject {
         messages.removeAll { $0.id == messageId && $0.deliveryStatus == .failed }
     }
 
+    // MARK: - Handle Expired Messages
+
+    func removeExpiredMessages() {
+        let now = Date()
+        messages.removeAll { msg in
+            guard let expiresAt = msg.expiresAt else { return false }
+            return expiresAt <= now
+        }
+    }
+
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {
@@ -372,11 +560,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.userId == userId }
             // API call
             Task {
-                let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
-                    endpoint: "/reactions/\(messageId)/\(encoded)",
-                    method: "DELETE"
-                )
+                try? await ReactionService.shared.remove(messageId: messageId, emoji: emoji)
             }
         } else {
             // Optimistic add
@@ -384,15 +568,21 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.append(reaction)
             // API call
             Task {
-                struct AddReactionBody: Encodable {
-                    let messageId: String
-                    let emoji: String
-                }
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                    endpoint: "/reactions",
-                    body: AddReactionBody(messageId: messageId, emoji: emoji)
-                )
+                try? await ReactionService.shared.add(messageId: messageId, emoji: emoji)
             }
+        }
+    }
+
+    // MARK: - Fetch Reaction Details
+
+    func fetchReactionDetails(messageId: String) async {
+        isLoadingReactions = true
+        defer { isLoadingReactions = false }
+        do {
+            let result = try await ReactionService.shared.fetchDetails(messageId: messageId)
+            reactionDetails = result.reactions
+        } catch {
+            reactionDetails = []
         }
     }
 
@@ -406,10 +596,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/\(messageId)",
-                method: "DELETE"
-            )
+            try await MessageService.shared.delete(conversationId: conversationId, messageId: messageId)
         } catch {
             // Revert on failure
             if let idx = messages.firstIndex(where: { $0.id == messageId }) {
@@ -431,10 +618,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = nil
 
             do {
-                let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
-                    method: "DELETE"
-                )
+                try await MessageService.shared.unpin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = Date()
@@ -447,10 +631,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = AuthManager.shared.currentUser?.id
 
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin",
-                    method: "PUT"
-                )
+                try await MessageService.shared.pin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = nil
@@ -458,6 +639,41 @@ class ConversationViewModel: ObservableObject {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - Consume View-Once Message
+
+    func consumeViewOnce(messageId: String) async -> Bool {
+        do {
+            let result = try await MessageService.shared.consumeViewOnce(
+                conversationId: conversationId, messageId: messageId
+            )
+            if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[idx].viewOnceCount = result.viewOnceCount
+            }
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    func evictViewOnceMedia(message: Message) {
+        for attachment in message.attachments {
+            let urls = [attachment.fileUrl, attachment.thumbnailUrl].compactMap { $0 }.filter { !$0.isEmpty }
+            for urlStr in urls {
+                Task {
+                    let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
+                    await MediaCacheManager.shared.remove(for: resolved)
+                }
+            }
+        }
+    }
+
+    func markMessageAsConsumed(messageId: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages[idx].isBlurred = true
+        messages[idx].content = "[Message vu]"
     }
 
     // MARK: - Edit Message
@@ -475,11 +691,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            struct EditBody: Encodable { let content: String }
-            let _: APIResponse<[String: String]> = try await APIClient.shared.put(
-                endpoint: "/messages/\(messageId)",
-                body: EditBody(content: trimmed)
-            )
+            _ = try await MessageService.shared.edit(messageId: messageId, content: trimmed)
         } catch {
             // Revert on failure
             if let idx = messages.firstIndex(where: { $0.id == messageId }),
@@ -491,14 +703,23 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Report Message
+
+    func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
+        do {
+            try await ReportService.shared.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - Mark as Read
 
     func markAsRead() {
         Task {
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/mark-as-read",
-                method: "POST"
-            )
+            try? await ConversationService.shared.markRead(conversationId: conversationId)
         }
     }
 
@@ -616,7 +837,7 @@ class ConversationViewModel: ObservableObject {
                 if event.userId != userId, !self.typingUsernames.contains(event.username) {
                     self.typingUsernames.append(event.username)
                 }
-                // Reset safety timer (even if already in list — they're still typing)
+                // Reset safety timer (even if already in list -- they're still typing)
                 if event.userId != userId {
                     self.resetTypingSafetyTimer(for: event.username)
                 }
@@ -647,11 +868,27 @@ class ConversationViewModel: ObservableObject {
                     guard self.messages[i].isMe else { continue }
                     guard self.messages[i].deliveryStatus.rawValue != Message.DeliveryStatus.read.rawValue else { continue }
                     if self.messages[i].createdAt <= event.updatedAt {
-                        // Only upgrade status (sent → delivered → read), never downgrade
+                        // Only upgrade status (sent -> delivered -> read), never downgrade
                         let current = self.messages[i].deliveryStatus
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             self.messages[i].deliveryStatus = newStatus
                         }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // View-once consumed
+        socketManager.messageConsumed
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
+                    self.messages[idx].viewOnceCount = event.viewOnceCount
+                    if event.isFullyConsumed {
+                        self.evictViewOnceMedia(message: self.messages[idx])
+                        self.markMessageAsConsumed(messageId: event.messageId)
                     }
                 }
             }
@@ -764,6 +1001,94 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink(receiveValue: audioHandler)
             .store(in: &cancellables)
+
+        // Live location started
+        socketManager.liveLocationStarted
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let session = ActiveLiveLocation(
+                    userId: event.userId,
+                    username: event.username,
+                    latitude: event.latitude,
+                    longitude: event.longitude,
+                    expiresAt: event.expiresAt ?? Date().addingTimeInterval(TimeInterval(event.durationMinutes * 60)),
+                    startedAt: event.startedAt ?? Date()
+                )
+                self.activeLiveLocations.removeAll { $0.userId == event.userId }
+                self.activeLiveLocations.append(session)
+            }
+            .store(in: &cancellables)
+
+        // Live location updated
+        socketManager.liveLocationUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let idx = self.activeLiveLocations.firstIndex(where: { $0.userId == event.userId }) {
+                    self.activeLiveLocations[idx].latitude = event.latitude
+                    self.activeLiveLocations[idx].longitude = event.longitude
+                    self.activeLiveLocations[idx].speed = event.speed
+                    self.activeLiveLocations[idx].heading = event.heading
+                    self.activeLiveLocations[idx].lastUpdated = event.timestamp ?? Date()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Live location stopped
+        socketManager.liveLocationStopped
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                self.activeLiveLocations.removeAll { $0.userId == event.userId }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Reconnection Sync
+
+    private func subscribeToReconnect() {
+        MessageSocketManager.shared.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.syncMissedMessages()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func syncMissedMessages() async {
+        guard !messages.isEmpty else { return }
+        guard let lastMessage = messages.last else { return }
+
+        do {
+            let response = try await MessageService.shared.list(
+                conversationId: conversationId, offset: 0, limit: 50, includeReplies: true
+            )
+
+            let userId = currentUserId
+            let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
+
+            let existingIds = Set(messages.map(\.id))
+            let newMessages = fetchedMessages.filter { !existingIds.contains($0.id) }
+                .filter { $0.createdAt > lastMessage.createdAt }
+
+            if !newMessages.isEmpty {
+                messages.append(contentsOf: newMessages)
+                messages.sort { $0.createdAt < $1.createdAt }
+                newMessageAppended += 1
+                Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
+            }
+        } catch {
+            Logger.socket.error("Failed to sync missed messages: \(error)")
+        }
     }
 
     // MARK: - Search Messages
@@ -780,28 +1105,11 @@ class ConversationViewModel: ObservableObject {
         searchNextCursor = nil
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: trimmed),
-                    URLQueryItem(name: "limit", value: "20"),
-                ]
+            let response = try await MessageService.shared.search(
+                conversationId: conversationId, query: trimmed, limit: 20
             )
 
-            searchResults = response.data.map { apiMsg in
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-                let content = apiMsg.content ?? ""
-                return SearchResultItem(
-                    id: apiMsg.id,
-                    conversationId: apiMsg.conversationId,
-                    content: content,
-                    matchedText: content,
-                    matchType: "content",
-                    senderName: senderName,
-                    senderAvatar: apiMsg.sender?.avatar,
-                    createdAt: apiMsg.createdAt
-                )
-            }
+            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             searchNextCursor = response.cursorPagination?.nextCursor
             searchHasMore = response.cursorPagination?.hasMore ?? false
         } catch {
@@ -816,29 +1124,11 @@ class ConversationViewModel: ObservableObject {
         isSearching = true
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
-                queryItems: [
-                    URLQueryItem(name: "q", value: query),
-                    URLQueryItem(name: "limit", value: "20"),
-                    URLQueryItem(name: "cursor", value: cursor),
-                ]
+            let response = try await MessageService.shared.searchWithCursor(
+                conversationId: conversationId, query: query, cursor: cursor
             )
 
-            let newResults = response.data.map { apiMsg in
-                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-                let content = apiMsg.content ?? ""
-                return SearchResultItem(
-                    id: apiMsg.id,
-                    conversationId: apiMsg.conversationId,
-                    content: content,
-                    matchedText: content,
-                    matchType: "content",
-                    senderName: senderName,
-                    senderAvatar: apiMsg.sender?.avatar,
-                    createdAt: apiMsg.createdAt
-                )
-            }
+            let newResults = response.data.map { buildSearchResult($0, query: query) }
             searchResults.append(contentsOf: newResults)
             searchNextCursor = response.cursorPagination?.nextCursor
             searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -847,6 +1137,39 @@ class ConversationViewModel: ObservableObject {
         }
 
         isSearching = false
+    }
+
+    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
+        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
+        let content = apiMsg.content ?? ""
+        let queryLower = query.lowercased()
+
+        // Check if the match is in original content
+        if content.lowercased().contains(queryLower) {
+            return SearchResultItem(
+                id: apiMsg.id, conversationId: apiMsg.conversationId,
+                content: content, matchedText: content, matchType: "content",
+                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+            )
+        }
+
+        // Match is in a translation — find which one
+        if let translations = apiMsg.translations {
+            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
+                return SearchResultItem(
+                    id: apiMsg.id, conversationId: apiMsg.conversationId,
+                    content: content, matchedText: t.translatedContent, matchType: "translation",
+                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+                )
+            }
+        }
+
+        // Fallback (shouldn't happen but safe)
+        return SearchResultItem(
+            id: apiMsg.id, conversationId: apiMsg.conversationId,
+            content: content, matchedText: content, matchType: "content",
+            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
+        )
     }
 
     // MARK: - Jump to Message (load messages around a specific message)
@@ -860,17 +1183,14 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "around", value: messageId),
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                ]
+            let response = try await MessageService.shared.listAround(
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
             )
 
             let userId = currentUserId
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
             hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
             hasNewerMessages = response.hasNewer ?? false
@@ -881,42 +1201,54 @@ class ConversationViewModel: ObservableObject {
     }
 
     func loadNewerMessages() async {
-        guard isInJumpedState, hasNewerMessages, !isLoadingNewer else { return }
+        guard isInJumpedState, hasNewerMessages, !isLoadingNewer, !isProgrammaticScroll else { return }
         guard let lastMsg = messages.last else { return }
+
+        // Debounce: ignore calls that arrive too soon after the last one
+        let now = Date()
+        guard now.timeIntervalSince(lastNewerPaginationTime) >= Self.paginationDebounceInterval else { return }
+        lastNewerPaginationTime = now
+
         isLoadingNewer = true
 
-        do {
-            // Load messages after the last one we have (use createdAt as cursor)
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "include_replies", value: "true"),
-                    // We load in reverse order (newest first), so 'before' gives us older.
-                    // For newer, we need a different approach - load around the last message
-                    URLQueryItem(name: "around", value: lastMsg.id),
-                ]
-            )
+        var lastError: Error?
+        for attempt in 1...Self.paginationRetryCount {
+            do {
+                let response = try await MessageService.shared.listAround(
+                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
+                )
 
-            let userId = currentUserId
-            let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
-            let existingIds = Set(messages.map(\.id))
-            let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
+                let userId = currentUserId
+                let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                extractAttachmentTranscriptions(from: response.data)
+                extractTextTranslations(from: response.data)
+                let existingIds = Set(messages.map(\.id))
+                let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
 
-            if !genuinelyNew.isEmpty {
-                messages.append(contentsOf: genuinelyNew)
-                messages.sort { $0.createdAt < $1.createdAt }
+                if !genuinelyNew.isEmpty {
+                    messages.append(contentsOf: genuinelyNew)
+                    messages.sort { $0.createdAt < $1.createdAt }
+                }
+
+                hasNewerMessages = response.hasNewer ?? false
+                if !hasNewerMessages {
+                    isInJumpedState = false
+                    savedMessages = nil
+                    savedCursor = nil
+                }
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+                if attempt < Self.paginationRetryCount {
+                    Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
+                    try? await Task.sleep(nanoseconds: Self.paginationRetryDelay)
+                }
             }
+        }
 
-            hasNewerMessages = response.hasNewer ?? false
-            if !hasNewerMessages {
-                // We've caught up to the latest messages
-                isInJumpedState = false
-                savedMessages = nil
-                savedCursor = nil
-            }
-        } catch {
-            // Ignore pagination errors
+        if let lastError {
+            Logger.messages.error("loadNewerMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
         }
 
         isLoadingNewer = false
@@ -941,5 +1273,166 @@ class ConversationViewModel: ObservableObject {
         savedHasOlder = true
         isInJumpedState = false
         hasNewerMessages = false
+    }
+
+    // MARK: - Extract Text Translations from REST Responses
+
+    private func extractTextTranslations(from apiMessages: [APIMessage]) {
+        for msg in apiMessages {
+            guard let translations = msg.translations, !translations.isEmpty else { continue }
+            var existing = messageTranslations[msg.id] ?? []
+            for t in translations {
+                let mt = MessageTranslation(
+                    id: t.id,
+                    messageId: t.messageId,
+                    sourceLanguage: t.sourceLanguage ?? msg.originalLanguage ?? "auto",
+                    targetLanguage: t.targetLanguage,
+                    translatedContent: t.translatedContent,
+                    translationModel: t.translationModel,
+                    confidenceScore: t.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msg.id] = existing
+        }
+    }
+
+    func setActiveTranslation(for messageId: String, translation: MessageTranslation?) {
+        activeTranslationOverrides[messageId] = translation
+    }
+
+    func setActiveAudioLanguage(for messageId: String, language: String?) {
+        activeAudioLanguageOverrides[messageId] = language
+    }
+
+    func preferredTranslation(for messageId: String) -> MessageTranslation? {
+        // Manual override from Language tab takes priority
+        if let override = activeTranslationOverrides[messageId] {
+            return override  // nil means user chose "original"
+        }
+
+        // Automatic resolution — mirrors gateway resolveUserLanguage() logic
+        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+        let user = AuthManager.shared.currentUser
+
+        // Build priority list respecting boolean preferences (same as packages/shared resolveUserLanguage)
+        var preferred: [String] = []
+
+        if user?.useCustomDestination == true, let custom = user?.customDestinationLanguage {
+            preferred.append(custom)
+        }
+        if user?.translateToSystemLanguage == true, let sys = user?.systemLanguage {
+            preferred.append(sys)
+        }
+        if user?.translateToRegionalLanguage == true, let reg = user?.regionalLanguage {
+            preferred.append(reg)
+        }
+        // Fallback: systemLanguage (unconditional), then device locale
+        if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
+            preferred.append(sys)
+        }
+        if let deviceLang = Locale.current.language.languageCode?.identifier,
+           !preferred.contains(where: { $0.lowercased() == deviceLang.lowercased() }) {
+            preferred.append(deviceLang)
+        }
+
+        for lang in preferred {
+            if let match = translations.first(where: { $0.targetLanguage.lowercased() == lang.lowercased() }) {
+                return match
+            }
+        }
+        return translations.first
+    }
+
+    // MARK: - Extract Transcription/Translation Data from REST Responses
+
+    private func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
+        for msg in apiMessages {
+            for att in msg.attachments ?? [] {
+                if let t = att.transcription {
+                    let segments = (t.segments ?? []).map {
+                        MessageTranscriptionSegment(
+                            text: $0.text,
+                            startTime: $0.startTime,
+                            endTime: $0.endTime,
+                            speakerId: $0.speakerId
+                        )
+                    }
+                    messageTranscriptions[msg.id] = MessageTranscription(
+                        attachmentId: att.id,
+                        text: t.resolvedText,
+                        language: t.language ?? "?",
+                        confidence: t.confidence,
+                        durationMs: t.durationMs,
+                        segments: segments,
+                        speakerCount: t.speakerCount
+                    )
+                }
+                if let translations = att.translations {
+                    var audios: [MessageTranslatedAudio] = []
+                    for (lang, trans) in translations {
+                        guard let url = trans.url, !url.isEmpty else { continue }
+                        let segments = (trans.segments ?? []).map {
+                            MessageTranscriptionSegment(
+                                text: $0.text,
+                                startTime: $0.startTime,
+                                endTime: $0.endTime,
+                                speakerId: $0.speakerId
+                            )
+                        }
+                        audios.append(MessageTranslatedAudio(
+                            id: "\(att.id)_\(lang)",
+                            attachmentId: att.id,
+                            targetLanguage: lang,
+                            url: url,
+                            transcription: trans.transcription ?? "",
+                            durationMs: trans.durationMs ?? 0,
+                            format: trans.format ?? "mp3",
+                            cloned: trans.cloned ?? false,
+                            quality: trans.quality ?? 0,
+                            ttsModel: trans.ttsModel ?? "xtts",
+                            segments: segments
+                        ))
+                    }
+                    if !audios.isEmpty {
+                        messageTranslatedAudios[msg.id] = audios
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Location Sharing
+
+    func shareLocation(latitude: Double, longitude: Double, placeName: String? = nil, address: String? = nil) {
+        LocationService.shared.shareLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            placeName: placeName, address: address
+        )
+    }
+
+    func startLiveLocation(latitude: Double, longitude: Double, durationMinutes: Int) {
+        LocationService.shared.startLiveLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            durationMinutes: durationMinutes
+        )
+    }
+
+    func stopLiveLocation() {
+        LocationService.shared.stopLiveLocation(conversationId: conversationId)
+    }
+
+    func updateLiveLocation(latitude: Double, longitude: Double, speed: Double? = nil, heading: Double? = nil) {
+        LocationService.shared.updateLiveLocation(
+            conversationId: conversationId,
+            latitude: latitude, longitude: longitude,
+            speed: speed, heading: heading
+        )
     }
 }

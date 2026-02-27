@@ -1,6 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
+import os
 
 // MARK: - Socket.IO Event Data Models
 
@@ -112,10 +113,13 @@ public final class SocialSocketManager: ObservableObject {
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
 
     @Published public var isConnected = false
+    @Published public var connectionState: ConnectionState = .disconnected
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
+    private var reconnectAttempt: Int = 0
+    private var hadPreviousConnection = false
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -136,11 +140,13 @@ public final class SocialSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[SocialSocket] No auth token, skipping connect")
+            Logger.socket.warning("No auth token, skipping SocialSocket connect")
             return
         }
 
         guard let url = SocketConfig.baseURL else { return }
+
+        DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
@@ -148,8 +154,9 @@ public final class SocialSocketManager: ObservableObject {
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
             .reconnects(true),
-            .reconnectWait(3),
-            .reconnectWaitMax(30),
+            .reconnectWait(1),
+            .reconnectWaitMax(16),
+            .reconnectAttempts(-1),
         ])
 
         socket = manager?.defaultSocket
@@ -162,6 +169,9 @@ public final class SocialSocketManager: ObservableObject {
         socket = nil
         manager = nil
         isConnected = false
+        connectionState = .disconnected
+        reconnectAttempt = 0
+        hadPreviousConnection = false
     }
 
     // MARK: - Client Events
@@ -180,23 +190,41 @@ public final class SocialSocketManager: ObservableObject {
         guard let socket else { return }
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.isConnected = true }
-            self?.subscribeFeed()
-            print("[SocialSocket] Connected")
+            guard let self else { return }
+            self.reconnectAttempt = 0
+            self.hadPreviousConnection = true
+            DispatchQueue.main.async {
+                self.isConnected = true
+                self.connectionState = .connected
+            }
+            self.subscribeFeed()
+            Logger.socket.info("SocialSocket connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.isConnected = false }
-            print("[SocialSocket] Disconnected")
+            DispatchQueue.main.async {
+                self?.isConnected = false
+                if self?.hadPreviousConnection == true {
+                    self?.connectionState = .reconnecting(attempt: 0)
+                } else {
+                    self?.connectionState = .disconnected
+                }
+            }
+            Logger.socket.info("SocialSocket disconnected")
         }
 
-        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            print("[SocialSocket] Reconnected -- re-subscribing to feed")
-            self?.subscribeFeed()
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            guard let self else { return }
+            self.reconnectAttempt += 1
+            let attempt = self.reconnectAttempt
+            DispatchQueue.main.async {
+                self.connectionState = .reconnecting(attempt: attempt)
+            }
+            Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
         }
 
         socket.on(clientEvent: .error) { _, args in
-            print("[SocialSocket] Error: \(args)")
+            Logger.socket.error("SocialSocket error: \(args)")
         }
 
         // --- Post events ---
@@ -324,7 +352,7 @@ public final class SocialSocketManager: ObservableObject {
                 handler(decoded)
             }
         } catch {
-            print("[SocialSocket] Decode error for \(type): \(error)")
+            Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
         }
     }
 }

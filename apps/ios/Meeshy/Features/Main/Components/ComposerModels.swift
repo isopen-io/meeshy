@@ -1,6 +1,5 @@
 import SwiftUI
 import AVFoundation
-import CoreLocation
 import Combine
 
 // MARK: - Extracted from UniversalComposerBar.swift
@@ -134,39 +133,6 @@ class KeyboardObserver: ObservableObject {
 }
 
 // ============================================================================
-// MARK: - Location Helper
-// ============================================================================
-
-class ComposerLocationHelper: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    var onLocationReceived: ((Double, Double) -> Void)?
-
-    override init() {
-        super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-    }
-
-    func requestLocation() {
-        let status = manager.authorizationStatus
-        if status == .notDetermined {
-            manager.requestWhenInUseAuthorization()
-        }
-        manager.requestLocation()
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let loc = locations.first {
-            onLocationReceived?(loc.coordinate.latitude, loc.coordinate.longitude)
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("ComposerLocationHelper error:", error.localizedDescription)
-    }
-}
-
-// ============================================================================
 // MARK: - Waveform Bar Animation
 // ============================================================================
 
@@ -188,7 +154,7 @@ struct ComposerWaveformBar: View {
             )
             .frame(width: 3, height: height)
             .onAppear { animate() }
-            .onChange(of: isRecording) { rec in
+            .onChange(of: isRecording) { _, rec in
                 if rec { animate() } else { height = 4 }
             }
     }

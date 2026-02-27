@@ -25,6 +25,7 @@ export interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  storyReplyToId?: string;
   // Forwarding fields
   forwardedFromId?: string;
   forwardedFromConversationId?: string;
@@ -35,6 +36,9 @@ export interface SendMessageBody {
   isEncrypted?: boolean;
   // Audio attachments (pre-uploaded via /attachments/upload)
   attachmentIds?: string[];
+  // Ephemeral/blurred message fields
+  isBlurred?: boolean;
+  expiresAt?: string;
 }
 
 export interface MessagesQuery {

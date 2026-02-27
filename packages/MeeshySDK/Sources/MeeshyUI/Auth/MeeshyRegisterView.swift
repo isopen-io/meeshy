@@ -3,60 +3,26 @@ import MeeshySDK
 
 public struct MeeshyRegisterView: View {
     @ObservedObject private var authManager = AuthManager.shared
-
-    @State private var currentStep = 0
-    @State private var animateTransition = false
-
-    // Step 1: Username
-    @State private var username = ""
-    // Step 2: Phone (optional)
-    @State private var phoneNumber = ""
-    @State private var selectedCountry = CountryPicker.countries[0]
-    @State private var skipPhone = false
-    // Step 3: Email
-    @State private var email = ""
-    // Step 4: Identity
-    @State private var firstName = ""
-    @State private var lastName = ""
-    // Step 5: Password
-    @State private var password = ""
-    @State private var confirmPassword = ""
-    // Step 6: Languages
-    @State private var systemLanguage = "fr"
-    @State private var regionalLanguage = "fr"
-    // Step 7: Profile (optional)
-    @State private var bio = ""
-    // Step 8: Recap
-
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var acceptTerms = false
+    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var vm = RegistrationViewModel()
 
     public var onRegisterSuccess: (() -> Void)?
     public var onBack: (() -> Void)?
-
-    private let totalSteps = 8
 
     public init(onRegisterSuccess: (() -> Void)? = nil, onBack: (() -> Void)? = nil) {
         self.onRegisterSuccess = onRegisterSuccess
         self.onBack = onBack
     }
 
+    private var stepIndex: Int { vm.currentStep.rawValue }
+
     public var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color(hex: "252538"), Color(hex: "1E2A35"), Color(hex: "1E1E2E")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            theme.backgroundGradient
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header with progress
                 header
-
-                // Step content
                 ScrollView {
                     VStack(spacing: 24) {
                         stepContent
@@ -65,8 +31,6 @@ public struct MeeshyRegisterView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 100)
                 }
-
-                // Navigation buttons
                 navigationButtons
             }
         }
@@ -79,47 +43,45 @@ public struct MeeshyRegisterView: View {
         VStack(spacing: 12) {
             HStack {
                 Button {
-                    if currentStep > 0 {
-                        withAnimation(.spring(response: 0.3)) { currentStep -= 1 }
+                    if stepIndex > 0 {
+                        vm.previousStep()
                     } else {
                         onBack?()
                     }
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.textPrimary)
                 }
 
                 Spacer()
 
-                Text("Etape \(currentStep + 1)/\(totalSteps)")
+                Text("Etape \(stepIndex + 1)/\(vm.totalSteps)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                // Placeholder for symmetry
                 Color.clear.frame(width: 24, height: 24)
             }
             .padding(.horizontal, 24)
             .padding(.top, 8)
 
-            // Progress bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(theme.inputBorder.opacity(0.3))
                         .frame(height: 4)
 
                     RoundedRectangle(cornerRadius: 2)
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                colors: [vm.currentStep.accentColor, vm.currentStep.accentColor.opacity(0.7)],
                                 startPoint: .leading, endPoint: .trailing
                             )
                         )
-                        .frame(width: geo.size.width * CGFloat(currentStep + 1) / CGFloat(totalSteps), height: 4)
-                        .animation(.spring(response: 0.4), value: currentStep)
+                        .frame(width: geo.size.width * CGFloat(stepIndex + 1) / CGFloat(vm.totalSteps), height: 4)
+                        .animation(.spring(response: 0.4), value: stepIndex)
                 }
             }
             .frame(height: 4)
@@ -132,201 +94,302 @@ public struct MeeshyRegisterView: View {
 
     @ViewBuilder
     private var stepContent: some View {
-        switch currentStep {
-        case 0: stepUsername
-        case 1: stepPhone
-        case 2: stepEmail
-        case 3: stepIdentity
-        case 4: stepPassword
-        case 5: stepLanguages
-        case 6: stepProfile
-        case 7: stepRecap
-        default: EmptyView()
+        switch vm.currentStep {
+        case .pseudo: stepUsername
+        case .phone: stepPhone
+        case .email: stepEmail
+        case .identity: stepIdentity
+        case .password: stepPassword
+        case .language: stepLanguages
+        case .profile: stepProfile
+        case .recap: stepRecap
         }
     }
 
-    // MARK: Step 1 — Username
+    // MARK: Step 1 - Username
 
     @ViewBuilder
     private var stepUsername: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Choisissez votre nom d'utilisateur", subtitle: "C'est ainsi que les autres vous verront.")
+            stepHeader
 
-            UsernameField(username: $username)
-        }
-    }
+            HStack(spacing: 12) {
+                Image(systemName: "at")
+                    .foregroundStyle(vm.currentStep.accentColor)
+                    .frame(width: 20)
 
-    // MARK: Step 2 — Phone
+                TextField("Nom d'utilisateur", text: $vm.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
 
-    @ViewBuilder
-    private var stepPhone: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Numero de telephone", subtitle: "Optionnel. Permet la recuperation du compte.")
+                validationIcon(
+                    isValidating: vm.isValidatingUsername,
+                    available: vm.usernameAvailable
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.inputBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(
+                        validationBorderColor(available: vm.usernameAvailable).opacity(0.5),
+                        lineWidth: 1
+                    )
+            )
 
-            CountryPicker(selectedCountry: $selectedCountry, phoneNumber: $phoneNumber)
+            if let error = vm.usernameError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red.opacity(0.8))
+                    .padding(.leading, 4)
+            }
 
-            Button {
-                skipPhone = true
-                phoneNumber = ""
-                withAnimation(.spring(response: 0.3)) { currentStep += 1 }
-            } label: {
-                Text("Passer cette etape")
-                    .font(.subheadline)
-                    .foregroundStyle(Color(hex: "45B7D1"))
+            if !vm.usernameSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Suggestions :")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    FlowLayout(spacing: 6) {
+                        ForEach(vm.usernameSuggestions, id: \.self) { suggestion in
+                            Button {
+                                vm.selectSuggestion(suggestion)
+                            } label: {
+                                Text(suggestion)
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(vm.currentStep.accentColor.opacity(0.15))
+                                    .clipShape(Capsule())
+                                    .foregroundStyle(vm.currentStep.accentColor)
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 4)
             }
         }
     }
 
-    // MARK: Step 3 — Email
+    // MARK: Step 2 - Phone
+
+    @ViewBuilder
+    private var stepPhone: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            stepHeader
+
+            HStack(spacing: 8) {
+                CountryPicker(selectedCountry: $vm.selectedCountry, phoneNumber: $vm.phoneNumber)
+
+                validationIcon(
+                    isValidating: vm.isValidatingPhone,
+                    available: vm.phoneAvailable
+                )
+            }
+
+            if let error = vm.phoneError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red.opacity(0.8))
+                    .padding(.leading, 4)
+            }
+
+            Button {
+                vm.skipCurrentStep()
+            } label: {
+                Text("Passer cette etape")
+                    .font(.subheadline)
+                    .foregroundStyle(vm.currentStep.accentColor)
+            }
+        }
+    }
+
+    // MARK: Step 3 - Email
 
     @ViewBuilder
     private var stepEmail: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Adresse email", subtitle: "Requise pour la verification et la recuperation.")
+            stepHeader
 
-            AuthTextField(
-                title: "Email",
-                icon: "envelope.fill",
-                text: $email,
-                keyboardType: .emailAddress
+            HStack(spacing: 12) {
+                Image(systemName: "envelope.fill")
+                    .foregroundStyle(vm.currentStep.accentColor)
+                    .frame(width: 20)
+
+                TextField("Email", text: $vm.email)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.emailAddress)
+
+                validationIcon(
+                    isValidating: vm.isValidatingEmail,
+                    available: vm.emailAvailable
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.inputBackground)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(
+                        validationBorderColor(available: vm.emailAvailable).opacity(0.5),
+                        lineWidth: 1
+                    )
+            )
+
+            if let error = vm.emailError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red.opacity(0.8))
+                    .padding(.leading, 4)
+            }
         }
     }
 
-    // MARK: Step 4 — Identity
+    // MARK: Step 4 - Identity
 
     @ViewBuilder
     private var stepIdentity: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Votre identite", subtitle: "Prenom et nom (visibles sur votre profil).")
+            stepHeader
 
             AuthTextField(
                 title: "Prenom",
                 icon: "person.fill",
-                text: $firstName,
+                text: $vm.firstName,
                 autocapitalization: .words
             )
 
             AuthTextField(
                 title: "Nom",
                 icon: "person.fill",
-                text: $lastName,
+                text: $vm.lastName,
                 autocapitalization: .words
             )
         }
     }
 
-    // MARK: Step 5 — Password
+    // MARK: Step 5 - Password
 
     @ViewBuilder
     private var stepPassword: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Creez un mot de passe", subtitle: "8 caracteres minimum. Melangez majuscules, minuscules et chiffres.")
+            stepHeader
 
             AuthTextField(
                 title: "Mot de passe",
                 icon: "lock.fill",
-                text: $password,
+                text: $vm.password,
                 isSecure: true
             )
 
-            PasswordStrengthIndicator(password: password)
+            PasswordStrengthIndicator(password: vm.password)
 
             AuthTextField(
                 title: "Confirmer le mot de passe",
                 icon: "lock.fill",
-                text: $confirmPassword,
+                text: $vm.confirmPassword,
                 isSecure: true
             )
 
-            if !confirmPassword.isEmpty && password != confirmPassword {
+            if !vm.confirmPassword.isEmpty && vm.password != vm.confirmPassword {
                 Text("Les mots de passe ne correspondent pas")
                     .font(.caption)
                     .foregroundStyle(.red.opacity(0.8))
             }
+
+            if !vm.confirmPassword.isEmpty && vm.password == vm.confirmPassword && vm.password.count >= 8 {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                    Text("Les mots de passe correspondent")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            }
         }
     }
 
-    // MARK: Step 6 — Languages
+    // MARK: Step 6 - Languages
 
     @ViewBuilder
     private var stepLanguages: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Vos langues", subtitle: "Langue principale et langue regionale pour les traductions.")
+            stepHeader
 
-            LanguageSelector(title: "Langue systeme", selectedId: $systemLanguage)
-            LanguageSelector(title: "Langue regionale", selectedId: $regionalLanguage)
+            LanguageSelector(title: "Langue systeme", selectedId: $vm.systemLanguage)
+            LanguageSelector(title: "Langue regionale", selectedId: $vm.regionalLanguage)
         }
     }
 
-    // MARK: Step 7 — Profile
+    // MARK: Step 7 - Profile
 
     @ViewBuilder
     private var stepProfile: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Personnalisez votre profil", subtitle: "Optionnel. Vous pourrez modifier cela plus tard.")
+            stepHeader
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Bio")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                TextEditor(text: $bio)
+                TextEditor(text: $vm.bio)
                     .frame(height: 100)
                     .scrollContentBackground(.hidden)
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color(hex: "2D2D40").opacity(0.6))
+                            .fill(theme.inputBackground)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                            .strokeBorder(theme.inputBorder.opacity(0.3), lineWidth: 1)
                     )
             }
 
             Button {
-                withAnimation(.spring(response: 0.3)) { currentStep += 1 }
+                vm.skipCurrentStep()
             } label: {
                 Text("Passer cette etape")
                     .font(.subheadline)
-                    .foregroundStyle(Color(hex: "45B7D1"))
+                    .foregroundStyle(vm.currentStep.accentColor)
             }
         }
     }
 
-    // MARK: Step 8 — Recap
+    // MARK: Step 8 - Recap
 
     @ViewBuilder
     private var stepRecap: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepTitle("Recapitulatif", subtitle: "Verifiez vos informations avant de creer votre compte.")
+            stepHeader
 
             VStack(spacing: 12) {
-                recapRow(icon: "at", label: "Utilisateur", value: username)
-                recapRow(icon: "envelope.fill", label: "Email", value: email)
-                recapRow(icon: "person.fill", label: "Nom", value: "\(firstName) \(lastName)")
-                if !phoneNumber.isEmpty {
-                    recapRow(icon: "phone.fill", label: "Telephone", value: "\(selectedCountry.dialCode) \(phoneNumber)")
-                }
-                recapRow(icon: "globe", label: "Langues", value: "\(systemLanguage) / \(regionalLanguage)")
-                if !bio.isEmpty {
-                    recapRow(icon: "text.quote", label: "Bio", value: bio)
+                ForEach(Array(vm.summaryItems.enumerated()), id: \.offset) { _, item in
+                    recapRow(icon: item.icon, label: item.label, value: item.value)
                 }
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "2D2D40").opacity(0.6))
+                    .fill(theme.inputBackground)
             )
 
-            // Terms
             HStack(alignment: .top, spacing: 12) {
                 Button {
-                    acceptTerms.toggle()
+                    vm.acceptTerms.toggle()
                 } label: {
-                    Image(systemName: acceptTerms ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(acceptTerms ? Color(hex: "4ECDC4") : .secondary)
+                    Image(systemName: vm.acceptTerms ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(vm.acceptTerms ? vm.currentStep.accentColor : .secondary)
                         .font(.title3)
                 }
 
@@ -335,7 +398,7 @@ public struct MeeshyRegisterView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let error = errorMessage {
+            if let error = vm.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -348,36 +411,41 @@ public struct MeeshyRegisterView: View {
     @ViewBuilder
     private var navigationButtons: some View {
         VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(theme.inputBorder.opacity(0.3))
 
             HStack(spacing: 12) {
-                if currentStep > 0 {
+                if stepIndex > 0 {
                     Button {
-                        withAnimation(.spring(response: 0.3)) { currentStep -= 1 }
+                        vm.previousStep()
                     } label: {
                         Text("Retour")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                                    .strokeBorder(theme.inputBorder.opacity(0.4), lineWidth: 1)
                             )
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.textPrimary)
                     }
                 }
 
                 Button {
-                    if currentStep == totalSteps - 1 {
-                        Task { await submitRegistration() }
+                    if vm.currentStep == .recap {
+                        Task {
+                            await vm.register()
+                            if authManager.isAuthenticated {
+                                onRegisterSuccess?()
+                            }
+                        }
                     } else {
-                        withAnimation(.spring(response: 0.3)) { currentStep += 1 }
+                        vm.nextStep()
                     }
                 } label: {
                     HStack {
-                        if isLoading {
+                        if vm.isLoading {
                             ProgressView().tint(.white)
                         } else {
-                            Text(currentStep == totalSteps - 1 ? "Creer mon compte" : "Continuer")
+                            Text(vm.currentStep == .recap ? "Creer mon compte" : "Continuer")
                                 .fontWeight(.semibold)
                         }
                     }
@@ -385,89 +453,62 @@ public struct MeeshyRegisterView: View {
                     .padding(.vertical, 14)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                            colors: [vm.currentStep.accentColor, vm.currentStep.accentColor.opacity(0.7)],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .foregroundStyle(.white)
                 }
-                .disabled(!canProceed || isLoading)
-                .opacity(canProceed ? 1 : 0.5)
+                .disabled(!vm.canProceed || vm.isLoading)
+                .opacity(vm.canProceed ? 1 : 0.5)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(Color(hex: "1E1E2E").opacity(0.95))
-        }
-    }
-
-    // MARK: - Validation
-
-    private var canProceed: Bool {
-        switch currentStep {
-        case 0: return username.count >= 2 && username.count <= 16
-        case 1: return !phoneNumber.isEmpty || skipPhone
-        case 2: return email.contains("@") && email.contains(".")
-        case 3: return !firstName.isEmpty && !lastName.isEmpty
-        case 4: return password.count >= 8 && password == confirmPassword
-        case 5: return !systemLanguage.isEmpty
-        case 6: return true // Profile is optional
-        case 7: return acceptTerms
-        default: return false
-        }
-    }
-
-    // MARK: - Submit
-
-    private func submitRegistration() async {
-        isLoading = true
-        errorMessage = nil
-
-        let fullPhone = phoneNumber.isEmpty ? nil : selectedCountry.dialCode + phoneNumber
-
-        let request = RegisterRequest(
-            username: username,
-            password: password,
-            firstName: firstName,
-            lastName: lastName,
-            email: email,
-            phoneNumber: fullPhone,
-            phoneCountryCode: phoneNumber.isEmpty ? nil : selectedCountry.id,
-            systemLanguage: systemLanguage,
-            regionalLanguage: regionalLanguage
-        )
-
-        await authManager.register(request: request)
-
-        isLoading = false
-
-        if authManager.isAuthenticated {
-            onRegisterSuccess?()
-        } else {
-            errorMessage = authManager.errorMessage ?? "Erreur lors de l'inscription"
+            .background(theme.backgroundPrimary.opacity(0.95))
         }
     }
 
     // MARK: - Helpers
 
     @ViewBuilder
-    private func stepTitle(_ title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(.white)
+    private var stepHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: vm.currentStep.iconName)
+                .font(.title)
+                .foregroundStyle(vm.currentStep.accentColor)
 
-            Text(subtitle)
+            Text(vm.currentStep.funHeader)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(theme.textPrimary)
+
+            Text(vm.currentStep.funSubtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
     @ViewBuilder
+    private func validationIcon(isValidating: Bool, available: Bool?) -> some View {
+        if isValidating {
+            ProgressView()
+                .scaleEffect(0.8)
+        } else if let available {
+            Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(available ? .green : .red)
+        }
+    }
+
+    private func validationBorderColor(available: Bool?) -> Color {
+        guard let available else { return theme.inputBorder }
+        return available ? .green : .red
+    }
+
+    @ViewBuilder
     private func recapRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(Color(hex: "4ECDC4"))
+                .foregroundStyle(vm.currentStep.accentColor)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -476,10 +517,11 @@ public struct MeeshyRegisterView: View {
                     .foregroundStyle(.secondary)
                 Text(value)
                     .font(.subheadline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Spacer()
         }
     }
 }
+

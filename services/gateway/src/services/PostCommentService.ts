@@ -6,7 +6,6 @@ const authorSelect = {
   username: true,
   displayName: true,
   avatar: true,
-  avatarUrl: true,
 };
 
 export class PostCommentService {

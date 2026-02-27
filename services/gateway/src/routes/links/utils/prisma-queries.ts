@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 /**
  * Structure d'inclusion pour récupérer un lien de partage avec toutes ses relations
@@ -126,16 +126,6 @@ export async function getConversationMessages(
         select: {
           userId: true,
           readAt: true
-        }
-      },
-      translations: {
-        select: {
-          id: true,
-          targetLanguage: true,
-          translatedContent: true,
-          translationModel: true,
-          confidenceScore: true,
-          createdAt: true
         }
       }
     }
@@ -278,16 +268,6 @@ export async function getConversationMessagesWithDetails(
           emoji: true,
           userId: true,
           anonymousId: true,
-          createdAt: true
-        }
-      },
-      translations: {
-        select: {
-          id: true,
-          targetLanguage: true,
-          translatedContent: true,
-          translationModel: true,
-          confidenceScore: true,
           createdAt: true
         }
       }

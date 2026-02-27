@@ -9,6 +9,7 @@ class FeedViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var hasMore = true
+    @Published var hasLoaded = false
     @Published var error: String?
 
     /// Number of new posts received via Socket.IO while the user is scrolled down.
@@ -51,6 +52,7 @@ class FeedViewModel: ObservableObject {
         }
 
         isLoading = false
+        hasLoaded = true
     }
 
     // MARK: - Load More (Infinite Scroll)
@@ -144,19 +146,18 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func createPost(content: String, type: String = "POST", visibility: String = "PUBLIC") async {
-        let body: [String: String] = ["content": content, "type": type, "visibility": visibility]
+    func createPost(content: String, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) async {
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let response: APIResponse<APIPost> = try await api.request(
-                endpoint: "/posts",
-                method: "POST",
-                body: bodyData
+            let apiPost = try await PostService.shared.create(
+                content: content,
+                type: type,
+                visibility: visibility,
+                mediaIds: mediaIds,
+                audioUrl: audioUrl,
+                audioDuration: audioDuration
             )
-            if response.success {
-                let feedPost = response.data.toFeedPost()
-                posts.insert(feedPost, at: 0)
-            }
+            let feedPost = apiPost.toFeedPost()
+            posts.insert(feedPost, at: 0)
         } catch {
             // Silent failure
         }

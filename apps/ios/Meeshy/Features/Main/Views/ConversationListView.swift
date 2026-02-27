@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Scroll Offset Preference Key
 struct ScrollOffsetPreferenceKey: PreferenceKey {
@@ -57,26 +58,28 @@ struct ConversationListView: View {
     var onStoryViewRequest: ((Int, Bool) -> Void)? = nil  // (groupIndex, fromTray)
 
     @ObservedObject var theme = ThemeManager.shared
+    @ObservedObject var socketManager = MessageSocketManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
+    @EnvironmentObject var router: Router
 
     // Status bubble overlay state
     @State private var showStatusBubble = false
     @State private var selectedStatusEntry: StatusEntry?
     @State private var moodBadgeAnchor: CGPoint = .zero
-    @State var searchText = ""
-    @State var selectedFilter: ConversationFilter = .all
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
     @State private var animateGradient = false
+    @State var showGlobalSearch = false
 
     // Scroll tracking
     @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
-    @State private var profileAlertName: String? = nil
+    @State private var selectedProfileUser: ProfileSheetUser? = nil
+    @State var conversationInfoConversation: Conversation? = nil
     private let scrollThreshold: CGFloat = 15
     private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
 
@@ -90,6 +93,18 @@ struct ConversationListView: View {
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
 
+    // Lock & Block state
+    @State var lockSheetConversation: Conversation? = nil
+    @State var lockSheetMode: ConversationLockSheet.Mode = .setPassword
+    @State var showBlockConfirmation = false
+    @State var blockTargetConversation: Conversation? = nil
+
+    // Widget preview state
+    @State var showWidgetPreview = false
+
+    // Communities data (replaces SampleData)
+    @State var userCommunities: [MeeshyCommunity] = []
+
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
@@ -98,69 +113,13 @@ struct ConversationListView: View {
         self.onStoryViewRequest = onStoryViewRequest
     }
 
-    private var filtered: [Conversation] {
-        conversationViewModel.conversations.filter { c in
-            let filterMatch: Bool
-            switch selectedFilter {
-            case .all: filterMatch = c.isActive
-            case .unread: filterMatch = c.unreadCount > 0
-            case .personnel: filterMatch = c.type == .direct && c.isActive
-            case .privee: filterMatch = c.type == .group && c.isActive
-            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
-            case .globales: filterMatch = c.type == .global && c.isActive
-            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
-            case .archived: filterMatch = !c.isActive
-            }
-            let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
-            return filterMatch && searchMatch
-        }
-    }
+    // The filtered and grouped conversations are now calculated on a background queue 
+    // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
 
-    // Group conversations by section (user categories from backend + pinned + uncategorized)
-    private var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] {
-        var result: [(section: ConversationSection, conversations: [Conversation])] = []
-
-        // First: Pinned section (conversations pinned without a category)
-        let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
-        if !pinnedOnly.isEmpty {
-            result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-        }
-
-        // Then: User categories from backend (dynamic)
-        let categories = conversationViewModel.userCategories
-        let categoryIds = Set(categories.map(\.id))
-        for category in categories {
-            let sectionConvs = filtered.filter { $0.sectionId == category.id }
-            if !sectionConvs.isEmpty {
-                let sorted = sectionConvs.sorted { a, b in
-                    if a.isPinned != b.isPinned { return a.isPinned }
-                    return a.lastMessageAt > b.lastMessageAt
-                }
-                result.append((category, sorted))
-            }
-        }
-
-        // Conversations with unknown sectionId (category deleted or not yet synced)
-        let orphaned = filtered.filter { conv in
-            guard let sid = conv.sectionId else { return false }
-            return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
-        }
-
-        // Finally: Uncategorized ("Mes conversations") — no sectionId + not pinned, plus orphaned
-        let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
-        let allUncategorized = uncategorized + orphaned
-        if !allUncategorized.isEmpty {
-            result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
-        }
-
-        return result
-    }
-
-    // MARK: - Sections Content (extracted for compiler)
     @ViewBuilder
     private var sectionsContent: some View {
         LazyVStack(spacing: 8) {
-            ForEach(groupedConversations, id: \.section.id) { group in
+            ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
                 sectionView(for: group)
             }
         }
@@ -225,6 +184,9 @@ struct ConversationListView: View {
                 onViewProfile: {
                     handleProfileView(conversation)
                 },
+                onViewConversationInfo: {
+                    handleConversationInfoView(conversation)
+                },
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(conversation, at: anchor)
                 }
@@ -232,60 +194,169 @@ struct ConversationListView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
-                isSearching = false
-                onSelect(conversation)
-            }
-            .contextMenu {
-                conversationContextMenu(for: conversation)
-            } preview: {
-                ConversationPreviewView(conversation: conversation)
+                if ConversationLockManager.shared.isLocked(conversation.id) {
+                    lockSheetMode = .verifyPassword
+                    lockSheetConversation = conversation
+                } else {
+                    onSelect(conversation)
+                }
             }
             .onDrag {
                 draggingConversation = conversation
                 HapticFeedback.medium()
                 return NSItemProvider(object: conversation.id as NSString)
             }
+            .contextMenu {
+                conversationContextMenu(for: conversation)
+            } preview: {
+                ConversationPreviewView(conversation: conversation)
+            }
+        }
+    }
+
+    // MARK: - Share Link Permission
+
+    func canCreateShareLink(for conversation: Conversation) -> Bool {
+        if conversation.type == .direct { return false }
+        if conversation.type == .group {
+            let role = conversation.currentUserRole?.lowercased() ?? "member"
+            return ["admin", "moderator", "owner", "co-owner", "bigboss"].contains(role)
+        }
+        return true
+    }
+
+    func shareConversationLink(for conversation: Conversation) async {
+        do {
+            let request = CreateShareLinkRequest(
+                conversationId: conversation.id,
+                name: conversation.name,
+                allowAnonymousMessages: true
+            )
+            let result = try await ShareLinkService.shared.createShareLink(request: request)
+            let shareURL = "https://meeshy.me/join/\(result.linkId)"
+            await MainActor.run {
+                let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first?.rootViewController {
+                    var topVC = rootVC
+                    while let presented = topVC.presentedViewController { topVC = presented }
+                    activityVC.popoverPresentationController?.sourceView = topVC.view
+                    topVC.present(activityVC, animated: true)
+                }
+            }
+            HapticFeedback.success()
+        } catch {
+            HapticFeedback.error()
         }
     }
 
     // MARK: - Swipe Actions
 
     private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        [
+        let lockManager = ConversationLockManager.shared
+        let isLocked = lockManager.isLocked(conversation.id)
+        return [
             SwipeAction(
                 icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned ? "Désépingler" : "Épingler",
+                label: conversation.isPinned
+                    ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
+                    : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
                 color: Color(hex: "3B82F6")
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
                 icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.isMuted ? "Son" : "Silence",
+                label: conversation.isMuted
+                    ? String(localized: "swipe.unmute", defaultValue: "Son")
+                    : String(localized: "swipe.mute", defaultValue: "Silence"),
                 color: Color(hex: "6B7280")
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
+            },
+            SwipeAction(
+                icon: isLocked ? "lock.open.fill" : "lock.fill",
+                label: isLocked
+                    ? String(localized: "swipe.unlock", defaultValue: "D\u{00e9}verrouiller")
+                    : String(localized: "swipe.lock", defaultValue: "Verrouiller"),
+                color: Color(hex: "F59E0B")
+            ) {
+                if isLocked {
+                    lockSheetMode = .removePassword
+                    lockSheetConversation = conversation
+                } else if lockManager.hasGlobalPin() {
+                    lockManager.setLock(conversationId: conversation.id)
+                    HapticFeedback.success()
+                } else {
+                    lockSheetMode = .setPassword
+                    lockSheetConversation = conversation
+                }
             }
         ]
     }
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        [
+        let isArchived = !conversation.isActive
+        let isRead = conversation.unreadCount == 0
+        var actions: [SwipeAction] = [
             SwipeAction(
-                icon: "archivebox.fill",
-                label: "Archiver",
-                color: Color(hex: "F59E0B")
+                icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
+                label: isArchived
+                    ? String(localized: "swipe.unarchive", defaultValue: "D\u{00e9}sarchiver")
+                    : String(localized: "swipe.archive", defaultValue: "Archiver"),
+                color: MeeshyColors.orange
             ) {
-                Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                if isArchived {
+                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                }
             },
             SwipeAction(
-                icon: "trash.fill",
-                label: "Supprimer",
-                color: Color(hex: "EF4444")
+                icon: isRead ? "envelope.badge.fill" : "envelope.open.fill",
+                label: isRead
+                    ? String(localized: "swipe.mark_unread", defaultValue: "Non lu")
+                    : String(localized: "swipe.mark_read", defaultValue: "Lu"),
+                color: Color(hex: "8B5CF6")
             ) {
-                Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                if isRead {
+                    Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
+                }
             }
         ]
+
+        if conversation.type == .direct, let userId = conversation.participantUserId {
+            let isBlocked = BlockService.shared.isBlocked(userId: userId)
+            actions.append(SwipeAction(
+                icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
+                label: isBlocked
+                    ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
+                    : String(localized: "swipe.block", defaultValue: "Bloquer"),
+                color: Color(hex: "EF4444")
+            ) {
+                if isBlocked {
+                    Task {
+                        try? await BlockService.shared.unblockUser(userId: userId)
+                        HapticFeedback.success()
+                    }
+                } else {
+                    blockTargetConversation = conversation
+                    showBlockConfirmation = true
+                }
+            })
+        }
+
+        actions.append(SwipeAction(
+            icon: "trash.fill",
+            label: String(localized: "swipe.delete", defaultValue: "Supprimer"),
+            color: Color(hex: "EF4444")
+        ) {
+            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+        })
+
+        return actions
     }
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
@@ -306,94 +377,136 @@ struct ConversationListView: View {
             }
         }
         HapticFeedback.light()
+        let isUserCategory = conversationViewModel.userCategories.contains(where: { $0.id == sectionId })
+        if isUserCategory {
+            conversationViewModel.persistCategoryExpansion(id: sectionId, isExpanded: expandedSections.contains(sectionId))
+        }
     }
 
     var body: some View {
+        mainContent
+            .onChange(of: selectedProfileUser) { _, newValue in
+                if let user = newValue {
+                    selectedProfileUser = nil
+                    router.deepLinkProfileUser = user
+                }
+            }
+            .sheet(item: $conversationInfoConversation) { conversation in
+                ConversationInfoSheet(
+                    conversation: conversation,
+                    accentColor: conversation.accentColor,
+                    messages: []
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+    }
+
+    private var mainContent: some View {
         ZStack(alignment: .bottom) {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Scroll position tracker
-                    GeometryReader { geo in
-                        let offset = geo.frame(in: .named("scroll")).minY
-                        Color.clear
-                            .onChange(of: offset) { newOffset in
-                                handleScrollChange(newOffset)
-                            }
-                    }
-                    .frame(height: 0)
-
                     // Top spacer
                     Color.clear.frame(height: 70)
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel) { groupIndex in
-                        onStoryViewRequest?(groupIndex, true)  // fromTray = true → all groups
+                        onStoryViewRequest?(groupIndex, true)  // fromTray = true -> all groups
                     }
 
-                    // Sectioned conversation list
-                    sectionsContent
+                    // Connection status banner
+                    ConnectionBanner()
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
+                        .padding(.top, 4)
+
+                    // Sectioned conversation list (skeleton -> content -> empty)
+                    if conversationViewModel.isLoading && conversationViewModel.filteredConversations.isEmpty {
+                        LazyVStack(spacing: 8) {
+                            ForEach(0..<8, id: \.self) { index in
+                                SkeletonConversationRow()
+                                    .staggeredAppear(index: index, baseDelay: 0.04)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .transition(.opacity)
+                    } else if conversationViewModel.filteredConversations.isEmpty {
+                        EmptyStateView(
+                            icon: "bubble.left.and.bubble.right",
+                            title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
+                            subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
+                            actionLabel: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion"),
+                            onAction: {
+                                NotificationCenter.default.post(
+                                    name: Notification.Name("navigateToNewConversation"),
+                                    object: nil
+                                )
+                            }
+                        )
+                        .padding(.top, 60)
+                        .transition(.opacity)
+                    } else {
+                        sectionsContent
+                            .transition(.opacity)
+                    }
 
                     // Loading more indicator
                     if conversationViewModel.isLoadingMore {
                         HStack {
                             Spacer()
                             ProgressView()
-                                .tint(Color(hex: "08D9D6"))
+                                .tint(MeeshyColors.cyan)
                             Spacer()
                         }
                         .padding(.vertical, 16)
                     }
 
                     Color.clear.frame(height: 280)
-                        .onChange(of: draggingConversation) { newValue in
-                            if newValue == nil {
+                        .onChange(of: draggingConversation) { oldValue, newValue in
+                            if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil
                                 }
                             }
                         }
                 }
+                // Background view to track scroll changes cleanly without fighting ScrollView gestures
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.onChange(of: proxy.frame(in: .named("scroll")).minY) { oldVal, newVal in
+                            let delta = newVal - oldVal
+                            // The delta is calculated per frame (e.g. 1/60th or 1/120th of a sec)
+                            // Therefore, values strictly > 2 or < -2 are ample to detect user intent avoiding jitters.
+                            
+                            // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
+                            if delta < -2 && !hideSearchBar && newVal < -20 {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    hideSearchBar = true
+                                    isScrollingDown = true
+                                }
+                            } else if (delta > 4 || newVal > -5) && hideSearchBar {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    hideSearchBar = false
+                                    isScrollingDown = false
+                                }
+                            }
+                        }
+                    }
+                )
             }
             .coordinateSpace(name: "scroll")
-            // Gesture for scroll detection with velocity
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { value in
-                        let verticalMovement = value.translation.height
-                        // Scrolling down (finger moving up) = hide immediately
-                        if verticalMovement < -20 && !hideSearchBar {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                hideSearchBar = true
-                                isScrollingDown = true
-                            }
-                        }
-                        // Scrolling up (finger moving down) = show if moved enough
-                        // This makes the search bar appear with any noticeable upward scroll
-                        if verticalMovement > 40 && hideSearchBar {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                hideSearchBar = false
-                                isScrollingDown = false
-                            }
-                            HapticFeedback.light()
-                        }
+            .refreshable {
+                HapticFeedback.medium()
+                await conversationViewModel.forceRefresh()
+                
+                // Show the search bar seamlessly after reloading finishes
+                if hideSearchBar {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        hideSearchBar = false
+                        isScrollingDown = false
                     }
-                    .onEnded { value in
-                        // Calculate velocity (points per second)
-                        let velocity = value.predictedEndLocation.y - value.location.y
-                        let isScrollingUp = velocity > 0
-                        let hasMinimalVelocity = abs(velocity) > 30 // Much lower threshold for sensitivity
-
-                        // Show on any scroll UP with minimal velocity
-                        if isScrollingUp && hasMinimalVelocity && hideSearchBar {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                hideSearchBar = false
-                                isScrollingDown = false
-                            }
-                            HapticFeedback.light()
-                        }
-                    }
-            )
+                }
+            }
 
             // Bottom overlay: Search bar (always) + Communities & Filters (when loupe tapped)
             VStack(spacing: 0) {
@@ -422,13 +535,11 @@ struct ConversationListView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
-        .onChange(of: hideSearchBar) { newValue in
-            isScrollingDown = newValue
-            // Dismiss keyboard and overlay when hiding search bar
-            if newValue {
-                isSearching = false
+        .onChange(of: hideSearchBar) { wasHidden, isHidden in
+            isScrollingDown = isHidden
+            if !wasHidden && isHidden {
                 showSearchOverlay = false
             }
         }
@@ -441,14 +552,15 @@ struct ConversationListView: View {
         }
         .task {
             await conversationViewModel.loadConversations()
+            await loadUserCommunities()
         }
-        .onChange(of: conversationViewModel.userCategories) { categories in
+        .onChange(of: conversationViewModel.userCategories) { _, categories in
             for cat in categories where cat.isExpanded {
                 expandedSections.insert(cat.id)
             }
         }
         // Show search bar when filtered list is empty
-        .onChange(of: filtered.isEmpty) { isEmpty in
+        .onChange(of: conversationViewModel.filteredConversations.isEmpty) { _, isEmpty in
             if isEmpty && hideSearchBar {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     hideSearchBar = false
@@ -457,16 +569,15 @@ struct ConversationListView: View {
             }
         }
         // Show search bar when category changes
-        .onChange(of: selectedFilter) { _ in
+        .onChange(of: conversationViewModel.selectedFilter) { _, _ in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 hideSearchBar = false
                 isScrollingDown = false
             }
         }
         // Show search bar when Feed is closed (user comes back from Feed)
-        .onChange(of: feedIsVisible) { isVisible in
-            if !isVisible {
-                // Feed just closed, show search bar
+        .onChange(of: feedIsVisible) { wasVisible, isVisible in
+            if wasVisible && !isVisible {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     hideSearchBar = false
                     isScrollingDown = false
@@ -505,13 +616,48 @@ struct ConversationListView: View {
                 .zIndex(200)
             }
         }
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK") { profileAlertName = nil }
+        .sheet(item: $lockSheetConversation) { conversation in
+            ConversationLockSheet(
+                mode: lockSheetMode,
+                conversationId: conversation.id,
+                conversationName: conversation.name,
+                onSuccess: {
+                    if lockSheetMode == .verifyPassword {
+                        onSelect(conversation)
+                    }
+                }
+            )
+            .environmentObject(theme)
+        }
+        .sheet(isPresented: $showWidgetPreview) {
+            WidgetPreviewView()
+                .environmentObject(conversationViewModel)
+                .environmentObject(router)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showGlobalSearch) {
+            GlobalSearchView()
+                .environmentObject(conversationViewModel)
+                .environmentObject(router)
+        }
+        .confirmationDialog(
+            String(localized: "block.confirm.title", defaultValue: "Bloquer cet utilisateur ?"),
+            isPresented: $showBlockConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "action.block", defaultValue: "Bloquer"), role: .destructive) {
+                guard let conv = blockTargetConversation,
+                      let targetUserId = conv.participantUserId else { return }
+                Task {
+                    try? await BlockService.shared.blockUser(userId: targetUserId)
+                    await conversationViewModel.archiveConversation(conversationId: conv.id)
+                    HapticFeedback.success()
+                }
+            }
+            Button(String(localized: "action.cancel", defaultValue: "Annuler"), role: .cancel) {}
         } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+            Text(String(localized: "block.confirm.message", defaultValue: "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."))
         }
     }
 
@@ -533,7 +679,14 @@ struct ConversationListView: View {
 
     // MARK: - Handle Profile View
     private func handleProfileView(_ conversation: Conversation) {
-        profileAlertName = conversation.name
+        // Open user profile sheet (works for DM, uses participant data)
+        selectedProfileUser = .from(conversation: conversation)
+    }
+
+    // MARK: - Handle Conversation Info View
+    private func handleConversationInfoView(_ conversation: Conversation) {
+        // Open conversation info sheet (works for all conversation types)
+        conversationInfoConversation = conversation
     }
 
     // MARK: - Handle Mood Badge Tap (opens status bubble)
@@ -550,36 +703,7 @@ struct ConversationListView: View {
 
     // MARK: - Handle Scroll Change
     private func handleScrollChange(_ offset: CGFloat) {
-        // Initialize on first call
-        guard let last = lastScrollOffset else {
-            lastScrollOffset = offset
-            return
-        }
-
-        let delta = offset - last
-
-        // Pull-to-refresh detection: offset > threshold means user pulled past the top
-        // This happens when the content is at the top and user pulls down
-        if offset > pullToShowThreshold && hideSearchBar {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                hideSearchBar = false
-                isScrollingDown = false
-            }
-            HapticFeedback.light()
-        }
-
-        // Scrolling down (negative delta) = hide
-        // No velocity check needed for hiding - hide immediately
-        // But only hide if we're not in pull-to-refresh zone
-        if delta < -scrollThreshold && !hideSearchBar && offset < 0 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                hideSearchBar = true
-                isScrollingDown = true
-            }
-        }
-        // Note: Showing is handled by DragGesture with velocity check
-
-        lastScrollOffset = offset
+        // Obsolete (geometric proxy removed)
     }
 
     // MARK: - Handle Drop
@@ -596,6 +720,16 @@ struct ConversationListView: View {
         }
 
         return true
+    }
+
+    // MARK: - Load Communities
+    private func loadUserCommunities() async {
+        do {
+            let response = try await CommunityService.shared.list(offset: 0, limit: 10)
+            userCommunities = response.data.map { $0.toCommunity() }
+        } catch {
+            print("[ConversationListView] Error loading communities: \(error)")
+        }
     }
 
     // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar

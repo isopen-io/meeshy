@@ -196,8 +196,26 @@ public struct MeeshyAvatar: View {
         mode.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
     }
 
+    private var effectiveContextMenuItems: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if let onViewProfile {
+            items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+        }
+        if let onViewStory {
+            items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+        }
+        if let custom = contextMenuItems {
+            for item in custom {
+                if !items.contains(where: { $0.label == item.label }) {
+                    items.append(item)
+                }
+            }
+        }
+        return items
+    }
+
     private var hasContextMenu: Bool {
-        mode.isTappable && !(contextMenuItems ?? []).isEmpty
+        mode.isTappable && !effectiveContextMenuItems.isEmpty
     }
 
     private func handleTap() {
@@ -222,7 +240,9 @@ public struct MeeshyAvatar: View {
                     .allowsHitTesting(false)
             }
         }
-        .overlay(alignment: .bottomTrailing) { badge }
+        .overlay(alignment: .bottomTrailing) {
+            badge.offset(badgeOffsetWhenRingVisible)
+        }
         .scaleEffect(tapScale)
         .onAppear {
             if effectiveStoryState == .unread {
@@ -247,13 +267,16 @@ public struct MeeshyAvatar: View {
         }
 
         if hasContextMenu {
-            tappable.contextMenu {
-                ForEach(contextMenuItems!) { item in
-                    Button(role: item.role) { item.action() } label: {
-                        Label(item.label, systemImage: item.icon)
+            tappable
+                .contextMenu {
+                    ForEach(effectiveContextMenuItems) { item in
+                        Button(role: item.role) {
+                            item.action()
+                        } label: {
+                            Label(item.label, systemImage: item.icon)
+                        }
                     }
                 }
-            }
         } else { tappable }
     }
 
@@ -308,6 +331,21 @@ public struct MeeshyAvatar: View {
         case .none:
             EmptyView()
         }
+    }
+
+    /// When a story ring is visible, shift the badge so its center lands on
+    /// the ring circumference at the 45° bottom-right angle instead of the
+    /// bounding-box corner (which sits just outside the ring).
+    private var badgeOffsetWhenRingVisible: CGSize {
+        guard effectiveStoryState != .none else { return .zero }
+        let r = mode.ringSize / 2          // ring frame half-width
+        let avatarR = mode.size / 2        // avatar outer edge from ring frame center
+        let dot = mode.onlineDotSize / 2
+        // target: dot center at avatar's outer edge at 45° (on the ring border)
+        let target = r + avatarR * cos(.pi / 4)
+        let current = mode.ringSize - dot
+        let delta = target - current
+        return CGSize(width: delta, height: delta)
     }
 
     // MARK: - Badge
@@ -372,4 +410,6 @@ public struct MeeshyAvatar: View {
             .uppercased()
         return parts.isEmpty ? String(name.prefix(1)).uppercased() : parts
     }
+
 }
+

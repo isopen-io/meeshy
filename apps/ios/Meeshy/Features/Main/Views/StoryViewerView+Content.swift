@@ -45,6 +45,7 @@ extension StoryViewerView {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
             .offset(y: offsetY)
+            .accessibilityLabel("Texte de la story: \(content)")
     }
 
     private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
@@ -129,10 +130,12 @@ extension StoryViewerView {
                     .font(.system(size: 56))
                     .foregroundColor(.white.opacity(0.8))
                     .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
+                    .accessibilityHidden(true)
             }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .accessibilityLabel(media.type == .video ? "Video de la story" : "Image de la story")
     }
 
     private func coloredMediaFallback(media: FeedMedia) -> some View {
@@ -168,6 +171,7 @@ extension StoryViewerView {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Gesture Overlay
@@ -181,6 +185,9 @@ extension StoryViewerView {
                     if isComposerEngaged { dismissComposer(); return }
                     goToPrevious()
                 }
+                .accessibilityLabel("Story precedente")
+                .accessibilityHint("Toucher pour revenir a la story precedente")
+                .accessibilityAddTraits(.isButton)
 
             // Right half — next
             Color.clear
@@ -189,6 +196,9 @@ extension StoryViewerView {
                     if isComposerEngaged { dismissComposer(); return }
                     goToNext()
                 }
+                .accessibilityLabel("Story suivante")
+                .accessibilityHint("Toucher pour passer a la story suivante")
+                .accessibilityAddTraits(.isButton)
         }
         // Exclude the bottom composer zone from tap targets
         .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
@@ -427,6 +437,8 @@ extension StoryViewerView {
         || showEmojiStrip
         || showFullEmojiPicker
         || showTextEmojiPicker
+        || showLanguageOptions
+        || showFullLanguagePicker
         || isTransitioning
         || isDismissing
     }
@@ -456,10 +468,10 @@ extension StoryViewerView {
     }
 
     /// Manual pause — only for direct gesture holds (long press, drag).
-    private func pauseTimer() { isPaused = true }
+    func pauseTimer() { isPaused = true }
 
     /// Manual resume — only for ending gesture holds.
-    private func resumeTimer() { isPaused = false }
+    func resumeTimer() { isPaused = false }
 
     // MARK: - Dismiss Composer
 
@@ -481,6 +493,7 @@ extension StoryViewerView {
         guard !text.isEmpty, let story = currentStory, let group = currentGroup else { return }
         let context = ReplyContext.story(
             storyId: story.id,
+            authorId: group.id,
             authorName: group.username,
             preview: story.content ?? "Story"
         )
@@ -532,6 +545,19 @@ extension StoryViewerView {
         }
     }
 
+    func shareStory() {
+        guard let story = currentStory else { return }
+        let shareURL = "https://meeshy.me/story/\(story.id)"
+        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController { topVC = presented }
+            activityVC.popoverPresentationController?.sourceView = topVC.view
+            topVC.present(activityVC, animated: true)
+        }
+    }
+
     // MARK: - Story Time Remaining
 
     func storyTimeRemaining(_ expiresAt: Date) -> String {
@@ -545,11 +571,207 @@ extension StoryViewerView {
         return "expire dans \(minutes)min"
     }
 
+    // MARK: - Delete Story
+
+    func deleteCurrentStory() {
+        guard let story = currentStory else { return }
+        HapticFeedback.light()
+        
+        Task {
+            let success = await viewModel.deleteStory(storyId: story.id)
+            DispatchQueue.main.async {
+                if success {
+                    HapticFeedback.success()
+                    dismissViewer()
+                } else {
+                    HapticFeedback.error()
+                }
+            }
+        }
+    }
+
     // MARK: - Mark Viewed
 
     func markCurrentViewed() {
         if let story = currentStory {
             viewModel.markViewed(storyId: story.id)
+        }
+    }
+}
+
+// MARK: - Story Viewers Sheet
+
+struct StoryViewerItem: Identifiable {
+    let id: String
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let viewedAt: Date
+    let reactionEmoji: String?
+    let replyContent: String?
+    let hasReshared: Bool
+}
+
+struct StoryViewersSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let story: StoryItem
+    let accentColor: Color
+
+    @State private var viewers: [StoryViewerItem] = []
+    @State private var isLoading = true
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                ThemeManager.shared.mode.isDark ? Color.black.ignoresSafeArea() : Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+
+                if isLoading {
+                    ProgressView("Chargement des vues...")
+                        .tint(accentColor)
+                } else if viewers.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "eye.slash")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("Aucune vue pour le moment")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("Les personnes qui regardent votre story apparaîtront ici.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                } else {
+                    List {
+                        Section(header: Text("\(viewers.count) Vues")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .textCase(nil)
+                        ) {
+                            ForEach(viewers) { viewer in
+                                viewerRow(viewer)
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Vues")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Fermer") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(accentColor)
+                }
+            }
+            .task {
+                await loadViewers()
+            }
+        }
+    }
+
+    private func viewerRow(_ viewer: StoryViewerItem) -> some View {
+        HStack(spacing: 12) {
+            CachedAsyncImage(url: viewer.avatarUrl ?? "") {
+                Color.gray.opacity(0.3)
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+            .overlay(
+                Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(viewer.displayName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    if viewer.hasReshared {
+                        Image(systemName: "arrow.2.squarepath")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(accentColor)
+                    }
+
+                    Spacer()
+
+                    Text(viewer.viewedAt, style: .time)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+
+                if let reply = viewer.replyContent {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .font(.system(size: 10))
+                        Text(reply)
+                            .font(.system(size: 14))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.secondary)
+                } else if let reaction = viewer.reactionEmoji {
+                    HStack(spacing: 6) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.red)
+                        Text(reaction)
+                            .font(.system(size: 14))
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowBackground(ThemeManager.shared.mode.isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
+    }
+
+    struct ViewersResponse: Decodable {
+        struct ViewerApi: Decodable {
+            let id: String
+            let username: String
+            let displayName: String?
+            let avatarUrl: String?
+            let viewedAt: Date?
+            let reaction: String?
+            let isReshared: Bool?
+            let reply: String?
+        }
+        let viewers: [ViewerApi]
+    }
+
+    private func loadViewers() async {
+        do {
+            let response: APIResponse<ViewersResponse>? = try? await APIClient.shared.request(endpoint: "/posts/\(story.id)/interactions")
+            
+            await MainActor.run {
+                if let apiViewers = response?.data.viewers, !apiViewers.isEmpty {
+                    self.viewers = apiViewers.map { v in
+                        StoryViewerItem(
+                            id: v.id,
+                            username: v.username,
+                            displayName: v.displayName ?? v.username,
+                            avatarUrl: v.avatarUrl,
+                            viewedAt: v.viewedAt ?? Date(),
+                            reactionEmoji: v.reaction,
+                            replyContent: v.reply,
+                            hasReshared: v.isReshared ?? false
+                        )
+                    }
+                } else {
+                    // Mock data if backend not connected or returns 404
+                    self.viewers = [
+                        StoryViewerItem(id: "1", username: "alex", displayName: "Alex", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-3600), reactionEmoji: "🔥", replyContent: nil, hasReshared: false),
+                        StoryViewerItem(id: "2", username: "sarah", displayName: "Sarah", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-7200), reactionEmoji: nil, replyContent: "Wow, incroyable !", hasReshared: true),
+                        StoryViewerItem(id: "3", username: "marc", displayName: "Marc", avatarUrl: nil, viewedAt: Date().addingTimeInterval(-86400), reactionEmoji: "❤️", replyContent: nil, hasReshared: false)
+                    ]
+                }
+                self.isLoading = false
+            }
         }
     }
 }

@@ -42,7 +42,6 @@ const authorSelect = {
   username: true,
   displayName: true,
   avatar: true,
-  avatarUrl: true,
 };
 
 // Select fields for post media

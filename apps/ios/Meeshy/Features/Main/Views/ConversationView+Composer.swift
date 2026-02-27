@@ -3,227 +3,164 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Composer, Attachments & Recording
 extension ConversationView {
 
-    // MARK: - Themed Composer
+    // MARK: - Themed Composer (powered by UniversalComposerBar)
     var themedComposer: some View {
-        VStack(spacing: 8) {
-            // Edit mode banner
-            if editingMessageId != nil {
-                composerEditBanner
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Reply preview banner
-            if let reply = pendingReplyReference, editingMessageId == nil {
-                composerReplyBanner(reply)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Pending attachments preview
-            if !pendingAttachments.isEmpty || isLoadingMedia {
-                HStack(spacing: 0) {
-                    pendingAttachmentsPreview
-                    if isLoadingMedia {
-                        ProgressView()
-                            .tint(.white)
-                            .padding(.horizontal, 12)
-                    }
+        UniversalComposerBar(
+            style: .light,
+            mode: .message,
+            accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : accentColor,
+            secondaryColor: secondaryColor,
+            onFocusChange: { focused in
+                isTyping = focused
+                if focused {
+                    withAnimation { showOptions = false }
                 }
-                .transition(.scale.combined(with: .opacity))
-            }
-
-            HStack(alignment: .bottom, spacing: 12) {
-                // Plus/Mic button (hidden only when recording)
-                if !audioRecorder.isRecording {
-                    ThemedComposerButton(
-                        icon: showAttachOptions ? "mic.fill" : "plus",
-                        colors: showAttachOptions ? ["FF6B6B", "E74C3C"] : [accentColor, secondaryColor],
-                        isActive: showAttachOptions
-                    ) {
-                        if showAttachOptions {
-                            // Start recording when mic is clicked
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showAttachOptions = false
-                                startRecording()
-                            }
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showAttachOptions = true
-                            }
-                        }
-                    }
+            },
+            onLocationRequest: { showLocationPicker = true },
+            textBinding: $messageText,
+            editBanner: editingMessageId != nil
+                ? AnyView(composerEditBanner)
+                : nil,
+            replyBanner: pendingReplyReference != nil && editingMessageId == nil
+                ? AnyView(composerReplyBanner(pendingReplyReference!))
+                : nil,
+            customAttachmentsPreview: (!pendingAttachments.isEmpty || isLoadingMedia)
+                ? AnyView(pendingAttachmentsRow)
+                : nil,
+            isEditMode: editingMessageId != nil,
+            onCustomSend: {
+                if editingMessageId != nil {
+                    submitEdit()
+                } else if audioRecorder.isRecording {
+                    stopAndSendRecording()
+                } else {
+                    sendMessageWithAttachments()
                 }
-
-                // Input field with mic/stop button inside
-                HStack(spacing: 0) {
-                    if audioRecorder.isRecording {
-                        // Stop button inside input (replaces mic)
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                stopAndPreviewRecording()
-                            }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "FF6B6B"), Color(hex: "E74C3C")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 32, height: 32)
-
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .frame(width: 44, height: 44)
-                        }
-
-                        // Recording interface
-                        voiceRecordingView
-                    } else if !showAttachOptions {
-                        // Smart Context Zone / Mic button
-                        let hasText = !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        let textLen = messageText.count
-
-                        if hasText {
-                            SmartContextZone(
-                                analyzer: textAnalyzer,
-                                accentColor: accentColor,
-                                isCompact: false,
-                                showFlag: textLen > 20
-                            )
-                            .transition(.scale.combined(with: .opacity))
-                        } else {
-                            // Mic button - starts recording immediately
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    startRecording()
-                                }
-                            } label: {
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 44, height: 44)
-                            }
-                            .transition(.scale.combined(with: .opacity))
-                        }
-
-                        // Text input
-                        ZStack(alignment: .leading) {
-                            if messageText.isEmpty {
-                                Text("Message...")
-                                    .foregroundColor(theme.textMuted)
-                            }
-
-                            TextField("", text: $messageText, axis: .vertical)
-                                .focused($isTyping)
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1...5)
-                        }
-                        .padding(.trailing, 12)
-                        .padding(.vertical, 12)
-                    } else {
-                        // When attach options shown, just show text input (mic is now the left button)
-                        ZStack(alignment: .leading) {
-                            if messageText.isEmpty {
-                                Text("Message...")
-                                    .foregroundColor(theme.textMuted)
-                            }
-
-                            TextField("", text: $messageText, axis: .vertical)
-                                .focused($isTyping)
-                                .foregroundColor(theme.textPrimary)
-                                .lineLimit(1...5)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
+            },
+            onTextChange: { viewModel.onTextChanged($0) },
+            onStartRecording: { startRecording() },
+            onStopRecording: { stopAndPreviewRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showPhotoPicker = true },
+            onCamera: { showCamera = true },
+            onFilePicker: { showFilePicker = true },
+            onRequestTextEmoji: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showTextEmojiPicker.toggle()
                 }
-                .frame(minHeight: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(theme.surfaceGradient(tint: audioRecorder.isRecording ? "FF6B6B" : accentColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .stroke(
-                                    (isTyping || audioRecorder.isRecording) ?
-                                    LinearGradient(colors: [Color(hex: audioRecorder.isRecording ? "FF6B6B" : accentColor), Color(hex: audioRecorder.isRecording ? "E74C3C" : secondaryColor)], startPoint: .leading, endPoint: .trailing) :
-                                    theme.border(tint: accentColor, intensity: 0.3),
-                                    lineWidth: (isTyping || audioRecorder.isRecording) ? 2 : 1
-                                )
-                        )
-                )
-                .scaleEffect(typingBounce ? 1.02 : 1.0)
-
-                // Send button - show when recording, has pending attachments, or has text
-                if audioRecorder.isRecording || !pendingAttachments.isEmpty || !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ThemedComposerButton(
-                        icon: editingMessageId != nil ? "checkmark" : "paperplane.fill",
-                        colors: editingMessageId != nil ? ["F8B500", "E67E22"] : ["FF6B6B", "4ECDC4"],
-                        isActive: true,
-                        rotateIcon: editingMessageId == nil
-                    ) {
-                        if editingMessageId != nil {
-                            submitEdit()
-                        } else if audioRecorder.isRecording {
-                            stopAndSendRecording()
-                        } else {
-                            sendMessageWithAttachments()
-                        }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: messageText.isEmpty)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: audioRecorder.isRecording)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: pendingAttachments.count)
+            },
+            injectedEmoji: $emojiToInject,
+            ephemeralDuration: $viewModel.ephemeralDuration,
+            hideEphemeral: editingMessageId != nil,
+            isBlurEnabled: $viewModel.isBlurEnabled,
+            hideBlur: editingMessageId != nil
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPickerView { image in
-                handleCameraCapture(image)
+            CameraView { result in
+                switch result {
+                case .photo(let image):
+                    imageToPreview = image
+                case .video(let url):
+                    videoToPreview = url
+                }
             }
             .ignoresSafeArea()
         }
-        .onChange(of: selectedPhotoItems) { items in
-            handlePhotoSelection(items)
-        }
-        .onChange(of: messageText) { newText in
-            textAnalyzer.analyze(text: newText)
-            viewModel.onTextChanged(newText)
-        }
-        .onChange(of: isTyping) { focused in
-            // Bounce animation on focus
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                typingBounce = focused
-            }
-            // Close attach menu when composer gets focus
-            if focused && showAttachOptions {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = false
+        .fullScreenCover(isPresented: Binding(
+            get: { imageToPreview != nil },
+            set: { if !$0 { imageToPreview = nil } }
+        )) {
+            if let image = imageToPreview {
+                ImageEditView(image: image) { editedImage in
+                    handleCameraCapture(editedImage)
                 }
             }
         }
-        .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
+        .fullScreenCover(isPresented: Binding(
+            get: { videoToPreview != nil },
+            set: { if !$0 { videoToPreview = nil } }
+        )) {
+            if let url = videoToPreview {
+                VideoPreviewView(url: url) {
+                    handleCameraVideo(url)
+                }
+            }
         }
+        .sheet(isPresented: $showLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { coordinate, address in
+                handleLocationSelection(coordinate: coordinate, address: address)
+            }
+        }
+        .sheet(isPresented: $showContactPicker) {
+            ContactPickerView(
+                onSelect: { contact in
+                    handleContactSelection(contact)
+                    showContactPicker = false
+                },
+                onCancel: { showContactPicker = false }
+            )
+        }
+        .onChange(of: selectedPhotoItems) { _, items in
+            handlePhotoSelection(items)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { previewingPendingImage != nil },
+            set: { if !$0 { previewingPendingImage = nil } }
+        )) {
+            if let image = previewingPendingImage {
+                PendingImagePreview(image: image) {
+                    previewingPendingImage = nil
+                }
+            }
+        }
+    }
+
+    // MARK: - Contact Selection Handler
+
+    func handleContactSelection(_ contact: SharedContact) {
+        // For now, send the contact info as a text message
+        var parts: [String] = [contact.fullName]
+        for phone in contact.phoneNumbers { parts.append(phone) }
+        for email in contact.emails { parts.append(email) }
+        let contactText = parts.joined(separator: "\n")
+
+        messageText = contactText
+        HapticFeedback.success()
+    }
+
+    // MARK: - Pending Attachments Row (custom preview for UCB)
+    private var pendingAttachmentsRow: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                pendingAttachmentsPreview
+                if isLoadingMedia {
+                    ProgressView()
+                        .tint(Color(hex: accentColor))
+                        .padding(.horizontal, 12)
+                }
+            }
+            if isUploading, let progress = uploadProgress {
+                UploadProgressBar(progress: progress, accentColor: accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isUploading)
     }
 
     // MARK: - Composer Reply Banner
@@ -253,14 +190,9 @@ extension ConversationView {
 
             Spacer()
 
-            // Attachment thumbnail in composer reply banner
-            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: reply.authorColor).opacity(0.3)
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            // Rich attachment preview in composer reply banner
+            if let attType = reply.attachmentType {
+                composerReplyAttachmentPreview(type: attType, reply: reply)
             }
 
             Button {
@@ -274,6 +206,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
+            .accessibilityLabel("Annuler la reponse")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -285,6 +218,8 @@ extension ConversationView {
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)")
     }
 
     // MARK: - Edit Banner
@@ -320,6 +255,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
+            .accessibilityLabel("Annuler la modification")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -331,6 +267,8 @@ extension ConversationView {
                         .stroke(theme.border(tint: "F8B500", intensity: 0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Modification du message en cours")
     }
 
     func submitEdit() {
@@ -370,6 +308,117 @@ extension ConversationView {
         }
     }
 
+    // MARK: - Rich Attachment Preview for Reply Banner
+    @ViewBuilder
+    func composerReplyAttachmentPreview(type: String, reply: ReplyReference) -> some View {
+        let accent = Color(hex: reply.isMe ? accentColor : reply.authorColor)
+
+        switch type {
+        case "image":
+            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                CachedAsyncImage(url: thumbUrl) {
+                    accent.opacity(0.3)
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+        case "video":
+            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                ZStack {
+                    CachedAsyncImage(url: thumbUrl) {
+                        accent.opacity(0.3)
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white, .black.opacity(0.4))
+                }
+            } else {
+                replyAttachmentFallbackBadge(icon: "video.fill", color: accent)
+            }
+
+        case "audio":
+            HStack(spacing: 4) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(accent.opacity(0.6))
+
+                HStack(spacing: 1.5) {
+                    ForEach(0..<8, id: \.self) { i in
+                        let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(accent.opacity(0.35))
+                            .frame(width: 2, height: 4 + 16 * h)
+                    }
+                }
+                .frame(height: 22)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(accent.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(accent.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+
+        case "location":
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "2ECC71").opacity(0.15), Color(hex: "27AE60").opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(hex: "2ECC71").opacity(0.2), lineWidth: 0.5)
+                    )
+
+                VStack(spacing: 1) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color(hex: "2ECC71"), Color(hex: "2ECC71").opacity(0.2))
+                    Circle()
+                        .fill(Color(hex: "2ECC71").opacity(0.3))
+                        .frame(width: 6, height: 3)
+                        .scaleEffect(x: 1.8, y: 1)
+                }
+            }
+
+        case "file":
+            replyAttachmentFallbackBadge(icon: "doc.fill", color: MeeshyColors.infoBlue)
+
+        default:
+            EmptyView()
+        }
+    }
+
+    private func replyAttachmentFallbackBadge(icon: String, color: Color) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(color.opacity(0.1))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(color.opacity(0.2), lineWidth: 0.5)
+                )
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(color.opacity(0.7))
+        }
+    }
+
     // MARK: - Pending Attachments Preview
     var pendingAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -394,54 +443,13 @@ extension ConversationView {
 
     // MARK: - Attachment Preview Tile
     func attachmentPreviewTile(_ attachment: MessageAttachment) -> some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 4) {
-                ZStack {
-                    if let thumb = pendingThumbnails[attachment.id] {
-                        // Real thumbnail preview
-                        Image(uiImage: thumb)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                        // Video play badge
-                        if attachment.type == .video {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white, .black.opacity(0.4))
-                        }
-                    } else {
-                        // Fallback: colored icon
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 56, height: 56)
-
-                        Image(systemName: iconForAttachmentType(attachment.type))
-                            .font(.system(size: 22))
-                            .foregroundColor(.white)
-                    }
-                }
-                .frame(width: 56, height: 56)
-
-                // Info text
-                Text(labelForAttachment(attachment))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 60)
-            }
-
-            // Delete button
+        HStack(spacing: 0) {
+            // Delete button -- left side, prominent
             Button {
+                HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     let id = attachment.id
+                    if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
                     pendingAttachments.removeAll { $0.id == id }
                     if let url = pendingMediaFiles.removeValue(forKey: id) {
                         try? FileManager.default.removeItem(at: url)
@@ -449,12 +457,156 @@ extension ConversationView {
                     pendingThumbnails.removeValue(forKey: id)
                 }
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(Color(hex: "FF6B6B"))
-                    .background(Circle().fill(theme.backgroundPrimary).frame(width: 14, height: 14))
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(MeeshyColors.coral)
+                            .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 4, y: 2)
+                    )
             }
-            .offset(x: 6, y: -6)
+            .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")
+            .padding(.trailing, 8)
+
+            // Tappable preview area
+            Button {
+                HapticFeedback.light()
+                handleAttachmentPreviewTap(attachment)
+            } label: {
+                VStack(spacing: 4) {
+                    ZStack {
+                        if let thumb = pendingThumbnails[attachment.id] {
+                            Image(uiImage: thumb)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                            if attachment.type == .video {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.white, .black.opacity(0.4))
+                            } else if attachment.type == .image {
+                                // Subtle edit hint
+                                Image(systemName: "eye.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(4)
+                                    .background(Circle().fill(.black.opacity(0.4)))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                                    .padding(3)
+                            }
+                        } else if attachment.type == .audio {
+                            audioTileFallback(attachment)
+                        } else if attachment.type == .location {
+                            locationTileFallback()
+                        } else {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: iconForAttachmentType(attachment.type))
+                                .font(.system(size: 22))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 56, height: 56)
+
+                    Text(labelForAttachment(attachment))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                        .frame(width: 60)
+                }
+            }
+        }
+    }
+
+    // MARK: - Attachment Preview Tap Handler
+    func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
+        switch attachment.type {
+        case .audio:
+            if pendingAudioPlayer.isPlaying {
+                pendingAudioPlayer.stop()
+            } else if let url = pendingMediaFiles[attachment.id] ?? pendingAudioURL {
+                pendingAudioPlayer.playLocalFile(url: url)
+            }
+        case .image:
+            if let thumb = pendingThumbnails[attachment.id] {
+                previewingPendingImage = thumb
+            }
+        case .video:
+            if let thumb = pendingThumbnails[attachment.id] {
+                previewingPendingImage = thumb
+            }
+        default:
+            break
+        }
+    }
+
+    // MARK: - Rich Tile Fallbacks
+
+    private func audioTileFallback(_ attachment: MessageAttachment) -> some View {
+        let color = Color(hex: attachment.thumbnailColor)
+        let isPlaying = pendingAudioPlayer.isPlaying
+        return ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+
+            VStack(spacing: 3) {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<7, id: \.self) { i in
+                        let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.white.opacity(isPlaying ? 0.9 : 0.6))
+                            .frame(width: 2, height: 4 + 14 * h)
+                    }
+                }
+                .frame(height: 20)
+
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+    }
+
+    private func locationTileFallback() -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+
+            VStack(spacing: 2) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white, .white.opacity(0.3))
+                Circle()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(width: 8, height: 4)
+                    .scaleEffect(x: 1.8, y: 1)
+            }
         }
     }
 
@@ -471,55 +623,78 @@ extension ConversationView {
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
         case .image: return "Photo"
-        case .video: return "Vidéo"
+        case .video: return "Video"
         case .audio: return attachment.durationFormatted ?? "Audio"
         case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
         case .location: return "Position"
         }
     }
 
-    // MARK: - Voice Recording View
-    var voiceRecordingView: some View {
-        HStack(spacing: 12) {
-            // Recording indicator with animated pulse
-            ZStack {
-                Circle()
-                    .fill(Color(hex: "FF6B6B").opacity(0.3))
-                    .frame(width: 20, height: 20)
-                    .scaleEffect(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.5 : 1.0)
-                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 0 : 0.5)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
-
-                Circle()
-                    .fill(Color(hex: "FF6B6B"))
-                    .frame(width: 12, height: 12)
-                    .opacity(audioRecorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: audioRecorder.isRecording)
-            }
-
-            // Real waveform bars from microphone levels
-            HStack(spacing: 3) {
-                ForEach(0..<15, id: \.self) { i in
-                    AudioLevelBar(
-                        level: i < audioRecorder.audioLevels.count ? audioRecorder.audioLevels[i] : 0,
-                        isRecording: audioRecorder.isRecording
-                    )
-                }
-            }
-
-            Spacer()
-
-            // Timer with subtle scale
-            Text(formatRecordingTime(audioRecorder.duration))
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
-                .padding(.trailing, 8)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3), value: audioRecorder.duration)
-        }
-        .padding(.leading, 16)
-        .padding(.vertical, 12)
-    }
-
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, formatRecordingTime, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, addCurrentLocation, handleCameraCapture, sendMessage
+}
+
+// MARK: - Pending Image Preview (fullscreen)
+struct PendingImagePreview: View {
+    let image: UIImage
+    let onDismiss: () -> Void
+
+    @State private var scale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = value.magnification
+                        }
+                        .onEnded { _ in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                if scale < 1 { scale = 1 }
+                                if scale > 4 { scale = 4 }
+                            }
+                        }
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = value.translation
+                        }
+                        .onEnded { value in
+                            if abs(value.translation.height) > 150 {
+                                onDismiss()
+                            } else {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    offset = .zero
+                                }
+                            }
+                        }
+                )
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(.white.opacity(0.2)))
+                    }
+                    .accessibilityLabel("Fermer l'apercu")
+                    .padding(16)
+                }
+                Spacer()
+            }
+        }
+    }
 }

@@ -69,6 +69,13 @@ public struct MagicLinkRequest: Encodable {
     }
 }
 
+public struct MagicLinkResponse: Decodable {
+    public let success: Bool
+    public let message: String?
+    public let expiresInSeconds: Int?
+    public let error: String?
+}
+
 public struct MagicLinkValidateRequest: Encodable {
     public let token: String
 
@@ -125,8 +132,15 @@ public struct VerifyPhoneResponse: Decodable {
 // MARK: - Availability Check
 
 public struct AvailabilityResponse: Decodable {
-    public let available: Bool
+    public let usernameAvailable: Bool?
+    public let emailAvailable: Bool?
+    public let phoneNumberAvailable: Bool?
+    public let phoneNumberValid: Bool?
     public let suggestions: [String]?
+
+    public var available: Bool {
+        usernameAvailable ?? emailAvailable ?? phoneNumberAvailable ?? false
+    }
 }
 
 // MARK: - Refresh Token
@@ -150,21 +164,60 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let bio: String?
     public let avatar: String?
+    public let banner: String?
     public let role: String?
     public let systemLanguage: String?
     public let regionalLanguage: String?
     public let isOnline: Bool?
     public let lastActiveAt: String?
     public let createdAt: String?
+    public let updatedAt: String?
+    public let blockedUserIds: [String]?
+
+    // Account status
+    public let isActive: Bool?
+    public let deactivatedAt: String?
+    public let isAnonymous: Bool?
+    public let isMeeshyer: Bool?
+    public let phoneNumber: String?
+    public let emailVerifiedAt: String?
+    public let phoneVerifiedAt: String?
+
+    // Translation preferences (from GET /users/:id)
+    public let customDestinationLanguage: String?
+    public let autoTranslateEnabled: Bool?
+    public let translateToSystemLanguage: Bool?
+    public let translateToRegionalLanguage: Bool?
+    public let useCustomDestination: Bool?
+
+    // Profile enrichment
+    public let timezone: String?
+    public let registrationCountry: String?
+    public let profileCompletionRate: Int?
+    public let signalIdentityKeyPublic: String?
 
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
         displayName: String? = nil, bio: String? = nil,
-        avatar: String? = nil, role: String? = nil,
+        avatar: String? = nil, banner: String? = nil, role: String? = nil,
         systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: String? = nil,
-        createdAt: String? = nil
+        createdAt: String? = nil, updatedAt: String? = nil,
+        blockedUserIds: [String]? = nil,
+        isActive: Bool? = nil, deactivatedAt: String? = nil,
+        isAnonymous: Bool? = nil, isMeeshyer: Bool? = nil,
+        phoneNumber: String? = nil,
+        emailVerifiedAt: String? = nil, phoneVerifiedAt: String? = nil,
+        customDestinationLanguage: String? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        translateToSystemLanguage: Bool? = nil,
+        translateToRegionalLanguage: Bool? = nil,
+        useCustomDestination: Bool? = nil,
+        timezone: String? = nil,
+        registrationCountry: String? = nil,
+        profileCompletionRate: Int? = nil,
+        signalIdentityKeyPublic: String? = nil
     ) {
         self.id = id
         self.username = username
@@ -174,12 +227,31 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.displayName = displayName
         self.bio = bio
         self.avatar = avatar
+        self.banner = banner
         self.role = role
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
         self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.blockedUserIds = blockedUserIds
+        self.isActive = isActive
+        self.deactivatedAt = deactivatedAt
+        self.isAnonymous = isAnonymous
+        self.isMeeshyer = isMeeshyer
+        self.phoneNumber = phoneNumber
+        self.emailVerifiedAt = emailVerifiedAt
+        self.phoneVerifiedAt = phoneVerifiedAt
+        self.customDestinationLanguage = customDestinationLanguage
+        self.autoTranslateEnabled = autoTranslateEnabled
+        self.translateToSystemLanguage = translateToSystemLanguage
+        self.translateToRegionalLanguage = translateToRegionalLanguage
+        self.useCustomDestination = useCustomDestination
+        self.timezone = timezone
+        self.registrationCountry = registrationCountry
+        self.profileCompletionRate = profileCompletionRate
+        self.signalIdentityKeyPublic = signalIdentityKeyPublic
     }
 }
 
@@ -187,4 +259,24 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
 
 public struct MeResponseData: Decodable {
     public let user: MeeshyUser
+}
+
+// MARK: - Saved Account (multi-account support)
+
+public struct SavedAccount: Codable, Identifiable, Sendable {
+    public let id: String         // userId
+    public let username: String
+    public let displayName: String?
+    public let avatarURL: String?
+    public let lastActiveAt: Date
+
+    public var shortName: String { displayName ?? username }
+
+    public init(id: String, username: String, displayName: String?, avatarURL: String?, lastActiveAt: Date) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatarURL = avatarURL
+        self.lastActiveAt = lastActiveAt
+    }
 }

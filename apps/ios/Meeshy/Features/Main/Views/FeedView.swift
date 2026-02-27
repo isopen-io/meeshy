@@ -1,5 +1,9 @@
 import SwiftUI
+import PhotosUI
+import CoreLocation
+import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Feed Sample Data (Global access for ThemedFeedOverlay)
 struct FeedSampleData {
@@ -216,18 +220,38 @@ struct FeedSampleData {
 // MARK: - Feed View
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
-    @StateObject private var viewModel = FeedViewModel()
+    @StateObject var viewModel = FeedViewModel()
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     @State private var searchText = ""
-    @State private var showComposer = false
-    @FocusState private var isComposerFocused: Bool
+    @State var showComposer = false
+    @FocusState var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
-    @State private var composerText = ""
+    @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State private var showStoryViewer = false
     @State private var selectedGroupIndex = 0
     @State private var showStatusComposer = false
+
+    // Attachment states
+    @State var pendingAttachments: [MessageAttachment] = []
+    @State var pendingMediaFiles: [String: URL] = [:]
+    @State var pendingThumbnails: [String: UIImage] = [:]
+    @State var pendingAudioURL: URL?
+    @State var showPhotoPicker = false
+    @State var selectedPhotoItems: [PhotosPickerItem] = []
+    @State var showCamera = false
+    @State var showFilePicker = false
+    @State var showLocationPicker = false
+    @State var isUploading = false
+    @State var uploadProgress: UploadQueueProgress?
+    @State var isLoadingMedia = false
+    @StateObject var audioRecorder = AudioRecorderManager()
+    @State private var pendingAttachmentType: String?
+
+    var composerHasContent: Bool {
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+    }
 
     // Computed property -- uses ViewModel data (falls back to sample)
     private var posts: [FeedPost] {
@@ -525,7 +549,7 @@ struct FeedView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -575,13 +599,13 @@ struct FeedView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 40, height: 40)
-                        .shadow(color: Color(hex: "4ECDC4").opacity(0.4), radius: 8, y: 4)
+                        .shadow(color: MeeshyColors.teal.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .bold))
@@ -620,6 +644,20 @@ struct FeedView: View {
                     // Composer placeholder
                     composerPlaceholder
                         .padding(.bottom, 8)
+
+                    // Empty state when no posts
+                    if viewModel.hasLoaded && viewModel.posts.isEmpty && FeedSampleData.posts.isEmpty {
+                        EmptyStateView(
+                            icon: "text.bubble",
+                            title: "Aucune publication",
+                            subtitle: "Soyez le premier a partager quelque chose !",
+                            actionLabel: "Publier",
+                            accentColor: "FF6B6B"
+                        ) {
+                            showComposer = true
+                        }
+                        .frame(height: 300)
+                    }
 
                     // Posts with infinite scroll
                     ForEach(posts) { post in
@@ -663,7 +701,7 @@ struct FeedView: View {
                     // Loading more indicator
                     if viewModel.isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.teal)
                             .padding()
                     }
                 }
@@ -699,12 +737,12 @@ struct FeedView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                        colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: Color(hex: "4ECDC4").opacity(0.5), radius: 12, y: 4)
+                                .shadow(color: MeeshyColors.teal.opacity(0.5), radius: 12, y: 4)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -776,22 +814,19 @@ struct FeedView: View {
                     Spacer()
 
                     Button {
-                        let text = composerText
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showComposer = false
-                            isComposerFocused = false
-                            composerText = ""
-                        }
-                        HapticFeedback.success()
-                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Task { await viewModel.createPost(content: text) }
-                        }
+                        publishPostWithAttachments()
                     } label: {
-                        Text("Publier")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(composerText.isEmpty ? theme.textMuted : Color(hex: "4ECDC4"))
+                        if isUploading {
+                            ProgressView()
+                                .tint(MeeshyColors.teal)
+                                .scaleEffect(0.8)
+                        } else {
+                            Text("Publier")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(composerHasContent ? MeeshyColors.teal : theme.textMuted)
+                        }
                     }
-                    .disabled(composerText.isEmpty)
+                    .disabled(!composerHasContent || isUploading)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
@@ -804,7 +839,7 @@ struct FeedView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                                    colors: [MeeshyColors.coral, MeeshyColors.teal],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -846,33 +881,58 @@ struct FeedView: View {
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
                         .font(.system(size: 17))
-                        .frame(minHeight: 150)
+                        .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
                 }
                 .scaleEffect(composerBounce ? 1.01 : 1.0)
-                .onChange(of: isComposerFocused) { newValue in
+                .onChange(of: isComposerFocused) { _, newValue in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                         composerBounce = newValue
                     }
                 }
 
-                Spacer()
+                // Pending attachments preview
+                if !pendingAttachments.isEmpty || isLoadingMedia {
+                    feedPendingAttachmentsRow
+                }
+
+                // Upload progress
+                if isUploading, let progress = uploadProgress {
+                    UploadProgressBar(progress: progress, accentColor: "4ECDC4")
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 4)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                Spacer(minLength: 0)
 
                 // Toolbar
                 HStack(spacing: 24) {
-                    ForEach([
-                        ("photo.fill", "4ECDC4"),
-                        ("camera.fill", "FF6B6B"),
-                        ("face.smiling.fill", "F8B500"),
-                        ("link", "9B59B6"),
-                        ("location.fill", "2ECC71")
-                    ], id: \.0) { icon, color in
-                        Button {} label: {
-                            Image(systemName: icon)
-                                .font(.system(size: 20))
-                                .foregroundColor(Color(hex: color))
-                        }
+                    Button { showPhotoPicker = true; HapticFeedback.light() } label: {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "4ECDC4"))
+                    }
+                    Button { showCamera = true; HapticFeedback.light() } label: {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "FF6B6B"))
+                    }
+                    Button {} label: {
+                        Image(systemName: "face.smiling.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "F8B500"))
+                    }
+                    Button { showFilePicker = true; HapticFeedback.light() } label: {
+                        Image(systemName: "doc.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "9B59B6"))
+                    }
+                    Button { showLocationPicker = true; HapticFeedback.light() } label: {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "2ECC71"))
                     }
 
                     Spacer()
@@ -888,10 +948,33 @@ struct FeedView: View {
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
-            .shadow(color: Color(hex: "4ECDC4").opacity(0.2), radius: 30, y: 20)
+            .shadow(color: MeeshyColors.teal.opacity(0.2), radius: 30, y: 20)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
         .zIndex(200)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            handleFeedFileImport(result)
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraView { result in
+                switch result {
+                case .photo(let image):
+                    handleFeedCameraCapture(image)
+                case .video(let url):
+                    handleFeedCameraVideo(url)
+                }
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showLocationPicker) {
+            LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
+                handleFeedLocationSelection(coordinate: coordinate, address: address)
+            }
+        }
+        .onChange(of: selectedPhotoItems) { _, items in
+            handleFeedPhotoSelection(items)
+        }
     }
 }
 

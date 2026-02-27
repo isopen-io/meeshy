@@ -1,0 +1,120 @@
+import Foundation
+import CryptoKit
+import Security
+
+@MainActor
+class ConversationLockManager: ObservableObject {
+    static let shared = ConversationLockManager()
+
+    @Published private(set) var lockedConversationIds: Set<String> = []
+
+    private let keychainService = "me.meeshy.app.conversation-locks"
+    private let globalPinKey = "globalConversationPin"
+
+    private init() {
+        loadLockedIds()
+    }
+
+    // MARK: - Conversation Lock
+
+    func isLocked(_ conversationId: String) -> Bool {
+        lockedConversationIds.contains(conversationId)
+    }
+
+    func setLock(conversationId: String) {
+        lockedConversationIds.insert(conversationId)
+        saveLockedIds()
+    }
+
+    func removeLock(conversationId: String) {
+        lockedConversationIds.remove(conversationId)
+        saveLockedIds()
+    }
+
+    // MARK: - Global PIN (4 digits)
+
+    func hasGlobalPin() -> Bool {
+        readFromKeychain(key: globalPinKey) != nil
+    }
+
+    func setGlobalPin(_ pin: String) {
+        saveToKeychain(key: globalPinKey, value: sha256(pin))
+    }
+
+    func verifyGlobalPin(_ pin: String) -> Bool {
+        guard let storedHash = readFromKeychain(key: globalPinKey) else { return false }
+        return sha256(pin) == storedHash
+    }
+
+    func removeGlobalPin() {
+        deleteFromKeychain(key: globalPinKey)
+    }
+
+    // MARK: - Backward-compat shim (context menu uses these)
+
+    func setLock(conversationId: String, password: String) {
+        if !hasGlobalPin() { setGlobalPin(password) }
+        setLock(conversationId: conversationId)
+    }
+
+    func verifyPassword(conversationId: String, password: String) -> Bool {
+        verifyGlobalPin(password)
+    }
+
+    // MARK: - Hashing
+
+    private func sha256(_ input: String) -> String {
+        let data = Data(input.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Keychain
+
+    private func saveToKeychain(key: String, value: String) {
+        let data = Data(value.utf8)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    private func readFromKeychain(key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func deleteFromKeychain(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+    // MARK: - Persistence
+
+    private func saveLockedIds() {
+        UserDefaults.standard.set(Array(lockedConversationIds), forKey: "meeshy.lockedConversationIds")
+    }
+
+    private func loadLockedIds() {
+        let ids = UserDefaults.standard.stringArray(forKey: "meeshy.lockedConversationIds") ?? []
+        lockedConversationIds = Set(ids)
+    }
+}

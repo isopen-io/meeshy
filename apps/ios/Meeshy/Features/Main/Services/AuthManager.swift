@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import SwiftUI
 
 @MainActor
@@ -16,6 +17,8 @@ final class AuthManager: ObservableObject {
 
     private let tokenKey = "meeshy_auth_token"
     private let userKey = "meeshy_current_user"
+    private let sessionTokenKey = "meeshy_session_token"
+    private let keychain = KeychainManager.shared
     private var refreshTimer: Timer?
 
     private init() {}
@@ -37,8 +40,9 @@ final class AuthManager: ObservableObject {
             APIClient.shared.authToken = data.token
             APIClient.shared.sessionToken = data.sessionToken
 
-            if let encoded = try? JSONEncoder().encode(data.user) {
-                UserDefaults.standard.set(encoded, forKey: userKey)
+            if let encoded = try? JSONEncoder().encode(data.user),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                try? keychain.save(jsonString, forKey: userKey)
             }
 
             currentUser = data.user
@@ -68,7 +72,7 @@ final class AuthManager: ObservableObject {
 
         APIClient.shared.authToken = nil
         APIClient.shared.sessionToken = nil
-        UserDefaults.standard.removeObject(forKey: userKey)
+        keychain.delete(forKey: userKey)
         currentUser = nil
         isAuthenticated = false
     }
@@ -76,9 +80,12 @@ final class AuthManager: ObservableObject {
     // MARK: - Check Existing Session
 
     func checkExistingSession() async {
+        keychain.migrateFromUserDefaults(keys: [tokenKey, userKey, sessionTokenKey])
+
         guard APIClient.shared.authToken != nil else { return }
 
-        if let userData = UserDefaults.standard.data(forKey: userKey),
+        if let userJSON = keychain.load(forKey: userKey),
+           let userData = userJSON.data(using: .utf8),
            let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
             currentUser = user
         }
@@ -88,14 +95,15 @@ final class AuthManager: ObservableObject {
                 endpoint: "/auth/me"
             )
             currentUser = response.data.user
-            if let encoded = try? JSONEncoder().encode(response.data.user) {
-                UserDefaults.standard.set(encoded, forKey: userKey)
+            if let encoded = try? JSONEncoder().encode(response.data.user),
+               let jsonString = String(data: encoded, encoding: .utf8) {
+                try? keychain.save(jsonString, forKey: userKey)
             }
             isAuthenticated = true
             scheduleTokenRefresh()
         } catch {
             APIClient.shared.authToken = nil
-            UserDefaults.standard.removeObject(forKey: userKey)
+            keychain.delete(forKey: userKey)
             currentUser = nil
             isAuthenticated = false
         }
@@ -108,7 +116,7 @@ final class AuthManager: ObservableObject {
         refreshTimer = nil
         APIClient.shared.authToken = nil
         APIClient.shared.sessionToken = nil
-        UserDefaults.standard.removeObject(forKey: userKey)
+        keychain.delete(forKey: userKey)
         currentUser = nil
         isAuthenticated = false
     }
@@ -138,9 +146,7 @@ final class AuthManager: ObservableObject {
             let response = try await APIClient.shared.refreshAuthToken(currentToken: currentToken)
             APIClient.shared.authToken = response.token
             scheduleTokenRefresh()
-        } catch {
-            print("[Auth] Proactive refresh failed, session token will be used as fallback")
-        }
+        } catch { }
     }
 
     // MARK: - JWT Decode

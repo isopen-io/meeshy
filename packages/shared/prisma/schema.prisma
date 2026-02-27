@@ -198,6 +198,7 @@ model User {
   magicLinkTokens          MagicLinkToken[]
   passwordHistory          PasswordHistory[]
   securityEvents           SecurityEvent[]
+  accountDeletionRequests  AccountDeletionRequest[]
   sessions                 UserSession[]
   pushTokens               PushToken[]
 
@@ -228,6 +229,9 @@ model User {
   postComments      PostComment[]    @relation("UserPostComments")
   postViews         PostView[]       @relation("UserPostViews")
   postBookmarks     PostBookmark[]   @relation("UserPostBookmarks")
+
+  // Story audio library
+  storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -474,12 +478,16 @@ model Message {
   isDeleted                   Boolean   @default(false)
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
+  /// ID of the story/post being replied to
+  storyReplyToId              String?   @db.ObjectId
   /// ID of the original message if this is a forwarded message
   forwardedFromId             String?   @db.ObjectId
   /// ID of the original conversation (for cross-conversation/community forwarding)
   forwardedFromConversationId String?   @db.ObjectId
   /// Expiration timestamp for self-destructing messages
   expiresAt                   DateTime?
+  /// Ephemeral duration in seconds (e.g., 30, 60, 300, 3600, 86400 for 30s, 1m, 5m, 1h, 1d)
+  ephemeralDuration           Int?
 
   // ============================================
   // SECRET / VIEW-ONCE / BLUR FIELDS
@@ -2657,6 +2665,22 @@ model Post {
   @@index([type, createdAt])
 }
 
+/// Bibliothèque de sons d'arrière-plan pour les stories
+model StoryBackgroundAudio {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  uploaderId  String   @db.ObjectId
+  uploader    User     @relation("StoryAudioUploads", fields: [uploaderId], references: [id])
+  fileUrl     String
+  title       String
+  duration    Int
+  usageCount  Int      @default(0)
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([usageCount])
+  @@index([uploaderId])
+}
+
 /// Media attaché à un post (images, vidéos, audio, documents)
 model PostMedia {
   id           String @id @default(auto()) @map("_id") @db.ObjectId
@@ -2764,4 +2788,35 @@ model PostBookmark {
 
   @@unique([postId, userId])
   @@index([userId, createdAt])
+}
+
+/// Statut d'une demande de suppression de compte
+enum DeletionRequestStatus {
+  PENDING_EMAIL_CONFIRMATION
+  CONFIRMED
+  GRACE_PERIOD_EXPIRED
+  CANCELLED
+  COMPLETED
+}
+
+/// Demande de suppression de compte avec flow email + période de grâce
+model AccountDeletionRequest {
+  id                String                @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String                @db.ObjectId
+  user              User                  @relation(fields: [userId], references: [id])
+  status            DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
+  confirmTokenHash  String                @unique
+  cancelTokenHash   String                @unique
+  confirmedAt       DateTime?
+  cancelledAt       DateTime?
+  gracePeriodEndsAt DateTime?
+  lastReminderAt    DateTime?
+  reminderCount     Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([gracePeriodEndsAt])
+  @@map("account_deletion_requests")
 }

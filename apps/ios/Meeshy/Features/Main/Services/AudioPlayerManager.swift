@@ -1,9 +1,11 @@
 import Foundation
 import AVFoundation
 import SwiftUI
+import MeeshySDK
+import MeeshyUI
 
 @MainActor
-class AudioPlayerManager: ObservableObject {
+class AudioPlayerManager: ObservableObject, StoppablePlayer {
     @Published var isPlaying = false
     @Published var progress: Double = 0 // 0-1
     @Published var duration: TimeInterval = 0
@@ -11,6 +13,7 @@ class AudioPlayerManager: ObservableObject {
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var loadTask: Task<Void, Never>?
+    private var isRegistered = false
 
     // MARK: - Play from URL string
 
@@ -19,24 +22,40 @@ class AudioPlayerManager: ObservableObject {
 
         guard !urlString.isEmpty else { return }
 
-        // Configure audio session
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Silent failure
-        }
+        registerIfNeeded()
+        PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Download via cache and play
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
+
         loadTask = Task {
             do {
                 let data = try await MediaCacheManager.shared.data(for: urlString)
                 guard !Task.isCancelled else { return }
                 playData(data)
-            } catch {
-                // Silent failure
-            }
+            } catch {}
         }
+    }
+
+    // MARK: - Play from local file URL
+
+    func playLocalFile(url: URL) {
+        stop()
+
+        registerIfNeeded()
+        PlaybackCoordinator.shared.willStartPlaying(external: self)
+
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
+
+        do {
+            let data = try Data(contentsOf: url)
+            playData(data)
+        } catch {}
     }
 
     private func playData(_ data: Data) {
@@ -47,9 +66,7 @@ class AudioPlayerManager: ObservableObject {
             player?.play()
             isPlaying = true
             startProgressTimer()
-        } catch {
-            // Silent failure
-        }
+        } catch {}
     }
 
     // MARK: - Controls
@@ -72,10 +89,24 @@ class AudioPlayerManager: ObservableObject {
             isPlaying = false
             timer?.invalidate()
         } else {
+            registerIfNeeded()
+            PlaybackCoordinator.shared.willStartPlaying(external: self)
             player.play()
             isPlaying = true
             startProgressTimer()
         }
+    }
+
+    // MARK: - Coordinator Registration
+
+    private func registerIfNeeded() {
+        guard !isRegistered else { return }
+        PlaybackCoordinator.shared.registerExternal(self)
+        isRegistered = true
+    }
+
+    deinit {
+        // Cleanup handled by weak references in coordinator
     }
 
     // MARK: - Progress Timer

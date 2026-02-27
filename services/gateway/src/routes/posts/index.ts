@@ -4,6 +4,7 @@ import { registerCoreRoutes } from './core';
 import { registerFeedRoutes } from './feed';
 import { registerCommentRoutes } from './comments';
 import { registerInteractionRoutes } from './interactions';
+import { registerStoryAudioRoutes } from './audio';
 
 /**
  * Point d'entree principal pour toutes les routes de posts/feed
@@ -25,4 +26,5 @@ export async function postRoutes(fastify: FastifyInstance) {
   registerFeedRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerCommentRoutes(fastify, prisma, requiredAuth);
   registerInteractionRoutes(fastify, prisma, requiredAuth);
+  registerStoryAudioRoutes(fastify, prisma, requiredAuth);
 }

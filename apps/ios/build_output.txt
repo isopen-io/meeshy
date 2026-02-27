@@ -1,0 +1,366 @@
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:242:38: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+
+                Task { @MainActor in self?.setupSession() }
+                                     ^
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:265:19: main actor-isolated property 'session' cannot be accessed from outside of the actor; this is an error in the Swift 6 language mode
+
+            self?.session.startRunning()
+            ~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:321:19: main actor-isolated property 'session' cannot be accessed from outside of the actor; this is an error in the Swift 6 language mode
+
+            self?.session.stopRunning()
+            ~~~~~~^~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift:315:18: main actor-isolated property 'isGeocoding' can not be mutated from a Sendable closure
+
+            self.isGeocoding = false
+                 ^
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift:322:22: main actor-isolated property 'addressString' can not be mutated from a Sendable closure
+
+                self.addressString = unique.joined(separator: ", ")
+                   ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:241:37: cannot find 'selectedFilter' in scope
+
+                        isSelected: selectedFilter == filter
+                   ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:244:29: cannot find 'selectedFilter' in scope
+
+                            selectedFilter = filter
+                                    ^~~~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:255:34: cannot find 'isSearching' in scope
+
+    private var isActive: Bool { isSearching || showSearchOverlay }
+                            ^~~~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:265:25: cannot find 'isSearching' in scope
+
+                        isSearching = true
+                                 ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:282:101: cannot find '$searchText' in scope
+
+            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $searchText)
+                        ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:283:26: cannot find '$isSearching' in scope
+
+                .focused($isSearching)
+                                                                                                    ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:288:17: cannot find 'searchText' in scope
+
+            if !searchText.isEmpty {
+                         ^~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:290:83: cannot find 'searchText' in scope
+
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchText = "" }
+                ^~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:353:73: cannot find 'searchText' in scope
+
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
+                                                                                  ^~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:354:23: cannot find 'isSearching' in scope
+
+        .onChange(of: isSearching) { _, newValue in
+                                                                        ^~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of 'moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                      ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '$moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '_moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:545:73: cannot find 'selectedFilter' in scope
+
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:406:9: the compiler is unable to type-check this expression in reasonable time; try breaking up the expression into distinct sub-expressions
+
+        ZStack(alignment: .bottom) {
+                                                                        ^~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:182:27: variable 'self' was written to, but never read
+
+            .sink { [weak self] _ in
+        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:917:24: immutable value 'story' was never used; consider replacing with '_' or removing it
+
+                if let story = currentStory, let group = currentGroup {
+                          ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of 'moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                   ~~~~^~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '$moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '_moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of 'moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '$moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '_moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:182:27: variable 'self' was written to, but never read
+
+            .sink { [weak self] _ in
+                       ^
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:917:24: immutable value 'story' was never used; consider replacing with '_' or removing it
+
+                if let story = currentStory, let group = currentGroup {
+                          ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:241:37: cannot find 'selectedFilter' in scope
+
+                        isSelected: selectedFilter == filter
+                   ~~~~^~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:244:29: cannot find 'selectedFilter' in scope
+
+                            selectedFilter = filter
+                                    ^~~~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:255:34: cannot find 'isSearching' in scope
+
+    private var isActive: Bool { isSearching || showSearchOverlay }
+                            ^~~~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:265:25: cannot find 'isSearching' in scope
+
+                        isSearching = true
+                                 ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:282:101: cannot find '$searchText' in scope
+
+            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $searchText)
+                        ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:283:26: cannot find '$isSearching' in scope
+
+                .focused($isSearching)
+                                                                                                    ^~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:288:17: cannot find 'searchText' in scope
+
+            if !searchText.isEmpty {
+                         ^~~~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:290:83: cannot find 'searchText' in scope
+
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchText = "" }
+                ^~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:353:73: cannot find 'searchText' in scope
+
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchText.isEmpty)
+                                                                                  ^~~~~~~~~~
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView+Overlays.swift:354:23: cannot find 'isSearching' in scope
+
+        .onChange(of: isSearching) { _, newValue in
+                                                                        ^~~~~~~~~~
+
+
+
+❌  error: lstat(/Users/smpceo/Library/Developer/Xcode/DerivedData/Meeshy-awedxkqiwrbtmvaxsmkenghszeck/Build/Intermediates.noindex/Meeshy.build/Debug-iphonesimulator/Meeshy.build/Objects-normal/x86_64/Meeshy.swiftmodule): No such file or directory (2) (in target 'Meeshy' from project 'Meeshy')
+
+
+
+❌  error: lstat(/Users/smpceo/Library/Developer/Xcode/DerivedData/Meeshy-awedxkqiwrbtmvaxsmkenghszeck/Build/Intermediates.noindex/Meeshy.build/Debug-iphonesimulator/Meeshy.build/Objects-normal/x86_64/Meeshy.swiftdoc): No such file or directory (2) (in target 'Meeshy' from project 'Meeshy')
+
+
+
+❌  error: lstat(/Users/smpceo/Library/Developer/Xcode/DerivedData/Meeshy-awedxkqiwrbtmvaxsmkenghszeck/Build/Intermediates.noindex/Meeshy.build/Debug-iphonesimulator/Meeshy.build/Objects-normal/x86_64/Meeshy.abi.json): No such file or directory (2) (in target 'Meeshy' from project 'Meeshy')
+
+
+
+❌  error: lstat(/Users/smpceo/Library/Developer/Xcode/DerivedData/Meeshy-awedxkqiwrbtmvaxsmkenghszeck/Build/Intermediates.noindex/Meeshy.build/Debug-iphonesimulator/Meeshy.build/Objects-normal/x86_64/Meeshy.swiftsourceinfo): No such file or directory (2) (in target 'Meeshy' from project 'Meeshy')
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:242:38: reference to captured var 'self' in concurrently-executing code; this is an error in the Swift 6 language mode
+
+                Task { @MainActor in self?.setupSession() }
+                      ^~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:265:19: main actor-isolated property 'session' cannot be accessed from outside of the actor; this is an error in the Swift 6 language mode
+
+            self?.session.startRunning()
+                                     ^
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/CameraView.swift:321:19: main actor-isolated property 'session' cannot be accessed from outside of the actor; this is an error in the Swift 6 language mode
+
+            self?.session.stopRunning()
+            ~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift:315:18: main actor-isolated property 'isGeocoding' can not be mutated from a Sendable closure
+
+            self.isGeocoding = false
+            ~~~~~~^~~~~~~~~~~~~~~~~~~~~
+
+
+
+⚠️  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift:322:22: main actor-isolated property 'addressString' can not be mutated from a Sendable closure
+
+                self.addressString = unique.joined(separator: ", ")
+                   ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of 'moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                   ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '$moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:71:24: invalid redeclaration of synthesized property '_moodBadgeAnchor'
+
+    @State private var moodBadgeAnchor: CGPoint = .zero
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:545:73: cannot find 'selectedFilter' in scope
+
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFilter)
+                       ^
+
+
+
+❌  /Users/smpceo/Documents/v2_meeshy/apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:406:9: the compiler is unable to type-check this expression in reasonable time; try breaking up the expression into distinct sub-expressions
+
+        ZStack(alignment: .bottom) {
+                                                                        ^~~~~~~~~~~~~~
+
+

@@ -233,9 +233,38 @@ export class ReactionService {
     // Convertir en tableau
     const aggregations = Array.from(aggregationMap.values());
 
+    // Collect all unique userIds for user detail lookup
+    const allUserIds = new Set<string>();
+    aggregations.forEach(a => a.userIds.forEach((uid: string) => allUserIds.add(uid)));
+
+    // Fetch user details in one query
+    const users = allUserIds.size > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: Array.from(allUserIds) } },
+          select: { id: true, username: true, displayName: true, avatar: true }
+        })
+      : [];
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    // Build enriched reactions with user details
+    const enrichedReactions = aggregations.map(agg => ({
+      ...agg,
+      users: agg.userIds.map((uid: string) => {
+        const user = userMap.get(uid);
+        const reaction = reactions.find(r => r.emoji === agg.emoji && r.userId === uid);
+        return {
+          userId: uid,
+          username: user?.displayName ?? user?.username ?? 'Anonymous',
+          avatar: user?.avatar ?? null,
+          createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()
+        };
+      })
+    }));
+
     // Trouver les emojis utilisés par l'utilisateur actuel
     const userReactions = reactions
-      .filter(r => 
+      .filter(r =>
         (currentUserId && r.userId === currentUserId) ||
         (currentAnonymousUserId && r.anonymousId === currentAnonymousUserId)
       )
@@ -243,7 +272,7 @@ export class ReactionService {
 
     return {
       messageId,
-      reactions: aggregations,
+      reactions: enrichedReactions,
       totalCount: reactions.length,
       userReactions: Array.from(new Set(userReactions)) // Dédupliquer
     };

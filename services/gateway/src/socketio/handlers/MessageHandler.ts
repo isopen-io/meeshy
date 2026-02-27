@@ -92,6 +92,27 @@ export class MessageHandler {
         return;
       }
 
+      // Vérifier si l'expéditeur est bloqué par un membre de la conversation (DM uniquement)
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: data.conversationId },
+        select: { type: true, members: { select: { userId: true } } }
+      });
+      if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
+        const otherMemberIds = conversation.members
+          .map(m => m.userId)
+          .filter(id => id !== userId);
+        if (otherMemberIds.length > 0) {
+          const blockers = await this.prisma.user.findMany({
+            where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
+            select: { id: true }
+          });
+          if (blockers.length > 0) {
+            this._sendError(callback, 'You are blocked by this user', socket);
+            return;
+          }
+        }
+      }
+
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, isAnonymous);
 
@@ -132,6 +153,75 @@ export class MessageHandler {
 
       // Répondre au client
       this._sendResponse(callback, response);
+
+      // Copier les attachments si c'est un transfert
+      if (response.success && response.data?.id && data.forwardedFromId) {
+        try {
+          const originalAttachments = await this.prisma.messageAttachment.findMany({
+            where: { messageId: data.forwardedFromId }
+          });
+
+          if (originalAttachments.length > 0) {
+            const createdAtts = await Promise.all(
+              originalAttachments.map(att =>
+                this.prisma.messageAttachment.create({
+                  data: {
+                    messageId: response.data!.id,
+                    fileName: att.fileName,
+                    originalName: att.originalName,
+                    mimeType: att.mimeType,
+                    fileSize: att.fileSize,
+                    filePath: att.filePath,
+                    fileUrl: att.fileUrl,
+                    title: att.title,
+                    alt: att.alt,
+                    caption: att.caption,
+                    forwardedFromAttachmentId: att.id,
+                    isForwarded: true,
+                    width: att.width,
+                    height: att.height,
+                    thumbnailPath: att.thumbnailPath,
+                    thumbnailUrl: att.thumbnailUrl,
+                    duration: att.duration,
+                    bitrate: att.bitrate,
+                    sampleRate: att.sampleRate,
+                    codec: att.codec,
+                    channels: att.channels,
+                    fps: att.fps,
+                    videoCodec: att.videoCodec,
+                    pageCount: att.pageCount,
+                    lineCount: att.lineCount,
+                    uploadedBy: userId,
+                    isAnonymous: false,
+                    transcription: att.transcription ?? undefined,
+                    translations: att.translations ?? undefined,
+                    metadata: att.metadata ?? undefined,
+                  }
+                })
+              )
+            );
+
+            // Mettre à jour le messageType
+            const firstMime = createdAtts[0].mimeType;
+            let detectedType = 'text';
+            if (firstMime.startsWith('image/')) detectedType = 'image';
+            else if (firstMime.startsWith('audio/')) detectedType = 'audio';
+            else if (firstMime.startsWith('video/')) detectedType = 'video';
+            else if (firstMime.startsWith('application/')) detectedType = 'file';
+
+            if (detectedType !== 'text') {
+              await this.prisma.message.update({
+                where: { id: response.data!.id },
+                data: { messageType: detectedType }
+              });
+            }
+
+            console.log(`[MESSAGE_SEND] 📎 Copied ${createdAtts.length} attachment(s) for forward`);
+          }
+        } catch (fwdErr) {
+          console.error('[MESSAGE_SEND] Error copying forward attachments:', fwdErr);
+        }
+      }
 
       // Broadcaster le message si succès
       if (response.success && response.data?.id) {

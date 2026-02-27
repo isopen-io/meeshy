@@ -125,6 +125,49 @@ MediaCacheManager.shared    // Disk caching
 - Animations: `.spring(response: 0.4-0.7, dampingFraction: 0.6-0.8)`
 - Staggered delays: 0.04-0.05s per list item index
 
+## Prisme Linguistique — Implementation iOS
+
+Le Prisme Linguistique garantit que l'utilisateur consomme le contenu dans sa langue preferee, de maniere transparente.
+
+### Architecture cote iOS
+```
+ConversationViewModel
+  ├── messageTranslations: [String: [MessageTranslation]]  → Cache des traductions par message
+  ├── preferredTranslation(for:) → Resolution auto (miroir de resolveUserLanguage gateway)
+  └── activeTranslationOverrides: [String: MessageTranslation?] → Override manuelle utilisateur
+
+ThemedMessageBubble
+  ├── effectiveContent → Affiche toujours la traduction preferee (ou original si aucune)
+  ├── isDisplayingTranslation → true quand preferredTranslation existe
+  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom, max 3)
+  ├── flagButton → Drapeau cliquable avec underline colore et animation
+  ├── secondaryLanguageCode → Code langue du contenu secondaire affiche (nil = rien)
+  ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
+  └── secondaryContentView → Panneau inline (fond pastel, separateur colore, texte)
+
+MessageDetailSheet (onglet Language)
+  ├── Listing des langues avec preview de chaque traduction
+  ├── Indicateurs de disponibilite (checkmark / bouton Traduire)
+  ├── Selection d'une langue → callback vers ViewModel → mise a jour bulle
+  └── Bouton retraduire (arrow.clockwise)
+```
+
+### UX Translation Flow
+- **Affichage par defaut** : `effectiveContent` retourne toujours `preferredTranslation.translatedContent` si disponible, sinon `message.content`
+- **Indicateur discret** : Icone `translate` dans le meta row quand des traductions existent
+- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom, max 3, dedupliques)
+- **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
+- **Tap meme drapeau** : Masque le contenu secondaire avec animation
+- **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
+- **Tap icone translate** : Ouvre directement l'onglet Language
+- **Selection langue** : Met a jour la bulle via `activeTranslationOverrides` dans le ViewModel
+
+### Regles
+- Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
+- Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
+- La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
+- L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
+
 ## App Extensions
 - MeeshyNotificationExtension (rich push)
 - MeeshyShareExtension (share to Meeshy)

@@ -26,13 +26,21 @@ struct MessageComposer: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(composerBackground)
-        .onChange(of: text) { newText in
+        .onChange(of: text) { _, newText in
             textAnalyzer.analyze(text: newText)
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
-            LanguagePickerSheet(analyzer: textAnalyzer)
+            LanguagePickerSheet(
+                style: .dark,
+                onSelect: { lang in
+                    let detected = DetectedLanguage.find(code: lang.id) ??
+                        DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
+                    textAnalyzer.setLanguageOverride(detected)
+                },
+                onDismiss: { textAnalyzer.showLanguagePicker = false }
+            )
         }
-        .onChange(of: isFocused) { newValue in
+        .onChange(of: isFocused) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = newValue
             }

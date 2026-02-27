@@ -684,6 +684,7 @@ export function registerMessagesRoutes(
 
           // Reply/Forward
           replyToId: message.replyToId,
+          storyReplyToId: message.storyReplyToId,
           forwardedFromId: message.forwardedFromId,
           forwardedFromConversationId: message.forwardedFromConversationId,
 
@@ -1025,6 +1026,7 @@ export function registerMessagesRoutes(
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
+          storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
           forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
           encryptedContent: { type: 'string', description: 'Encrypted message content' },
@@ -1073,13 +1075,16 @@ export function registerMessagesRoutes(
         originalLanguage = 'fr',
         messageType = 'text',
         replyToId,
+        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
         encryptedContent,
         encryptionMode,
         encryptionMetadata,
         isEncrypted,
-        attachmentIds
+        attachmentIds,
+        isBlurred,
+        expiresAt
       } = request.body;
       const userId = authRequest.authContext.userId;
 
@@ -1146,8 +1151,9 @@ export function registerMessagesRoutes(
           });
         }
       } else {
-        // For plaintext messages, validate content
-        if (!content || content.trim().length === 0) {
+        // For plaintext messages, validate content (allow empty content when attachments present)
+        const hasAttachments = attachmentIds && attachmentIds.length > 0;
+        if ((!content || content.trim().length === 0) && !hasAttachments) {
           return reply.status(400).send({
             success: false,
             error: 'Message content cannot be empty'
@@ -1156,12 +1162,12 @@ export function registerMessagesRoutes(
       }
 
       // ÉTAPE 1: Traiter les liens dans le message AVANT la sauvegarde (skip for E2EE)
-      let processedContent = content;
+      let processedContent = content || '';
       let trackingLinks: any[] = [];
 
-      if (!isEncrypted || encryptionMode !== 'e2ee') {
+      if (processedContent.trim() && (!isEncrypted || encryptionMode !== 'e2ee')) {
         const linkResult = await trackingLinkService.processMessageLinks({
-          content: content.trim(),
+          content: processedContent.trim(),
           conversationId,
           createdBy: userId
         });
@@ -1177,9 +1183,31 @@ export function registerMessagesRoutes(
         originalLanguage,
         messageType,
         replyToId,
+        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId
       };
+
+      // Add blur flag if specified
+      if (isBlurred === true) {
+        messageData.isBlurred = true;
+      }
+
+      // Add expiration if specified
+      if (expiresAt) {
+        const expiryDate = new Date(expiresAt);
+        if (isNaN(expiryDate.getTime())) {
+          return reply.status(400).send({ success: false, error: 'Invalid expiresAt date format' });
+        }
+        if (expiryDate <= new Date()) {
+          return reply.status(400).send({ success: false, error: 'expiresAt must be in the future' });
+        }
+        const maxFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+        if (expiryDate > maxFuture) {
+          return reply.status(400).send({ success: false, error: 'expiresAt cannot exceed 1 year' });
+        }
+        messageData.expiresAt = expiryDate;
+      }
 
       // Add encryption fields if message is encrypted
       if (isEncrypted) {
@@ -1279,6 +1307,110 @@ export function registerMessagesRoutes(
         } catch (audioError) {
           logger.error('⚠️ [REST] Erreur traitement attachments/audio', audioError);
           // Ne pas bloquer l'envoi du message si le traitement audio échoue
+        }
+      }
+
+      // ÉTAPE 2c: Copier les attachments du message original si transfert
+      let forwardedAttachmentIds: string[] = [];
+      if (forwardedFromId && (!attachmentIds || attachmentIds.length === 0)) {
+        try {
+          const originalAttachments = await prisma.messageAttachment.findMany({
+            where: { messageId: forwardedFromId },
+            select: {
+              id: true,
+              fileName: true,
+              originalName: true,
+              mimeType: true,
+              fileSize: true,
+              filePath: true,
+              fileUrl: true,
+              title: true,
+              alt: true,
+              caption: true,
+              width: true,
+              height: true,
+              thumbnailPath: true,
+              thumbnailUrl: true,
+              duration: true,
+              bitrate: true,
+              sampleRate: true,
+              codec: true,
+              channels: true,
+              fps: true,
+              videoCodec: true,
+              pageCount: true,
+              lineCount: true,
+              uploadedBy: true,
+              isAnonymous: true,
+              transcription: true,
+              translations: true,
+              metadata: true,
+            }
+          });
+
+          if (originalAttachments.length > 0) {
+            const createdAttachments = await Promise.all(
+              originalAttachments.map(att =>
+                prisma.messageAttachment.create({
+                  data: {
+                    messageId: message.id,
+                    fileName: att.fileName,
+                    originalName: att.originalName,
+                    mimeType: att.mimeType,
+                    fileSize: att.fileSize,
+                    filePath: att.filePath,
+                    fileUrl: att.fileUrl,
+                    title: att.title,
+                    alt: att.alt,
+                    caption: att.caption,
+                    forwardedFromAttachmentId: att.id,
+                    isForwarded: true,
+                    width: att.width,
+                    height: att.height,
+                    thumbnailPath: att.thumbnailPath,
+                    thumbnailUrl: att.thumbnailUrl,
+                    duration: att.duration,
+                    bitrate: att.bitrate,
+                    sampleRate: att.sampleRate,
+                    codec: att.codec,
+                    channels: att.channels,
+                    fps: att.fps,
+                    videoCodec: att.videoCodec,
+                    pageCount: att.pageCount,
+                    lineCount: att.lineCount,
+                    uploadedBy: userId,
+                    isAnonymous: false,
+                    transcription: att.transcription ?? undefined,
+                    translations: att.translations ?? undefined,
+                    metadata: att.metadata ?? undefined,
+                  }
+                })
+              )
+            );
+
+            forwardedAttachmentIds = createdAttachments.map(a => a.id);
+
+            // Mettre à jour le messageType si nécessaire
+            if (createdAttachments.length > 0) {
+              const firstMime = createdAttachments[0].mimeType;
+              let detectedType = 'text';
+              if (firstMime.startsWith('image/')) detectedType = 'image';
+              else if (firstMime.startsWith('audio/')) detectedType = 'audio';
+              else if (firstMime.startsWith('video/')) detectedType = 'video';
+              else if (firstMime.startsWith('application/')) detectedType = 'file';
+
+              if (detectedType !== 'text') {
+                await prisma.message.update({
+                  where: { id: message.id },
+                  data: { messageType: detectedType }
+                });
+              }
+            }
+
+            logger.info(`📎 [FORWARD] Copied ${createdAttachments.length} attachment(s) from message ${forwardedFromId}`);
+          }
+        } catch (fwdError) {
+          logger.error('⚠️ [FORWARD] Error copying attachments:', fwdError);
         }
       }
 
@@ -1821,6 +1953,117 @@ export function registerMessagesRoutes(
     }
   });
 
+  // ============================================================================
+  // CONSUME VIEW-ONCE MESSAGE
+  // ============================================================================
+
+  fastify.post<{
+    Params: { id: string; messageId: string };
+  }>('/conversations/:id/messages/:messageId/consume', {
+    schema: {
+      description: 'Consume a view-once message (increment view count)',
+      tags: ['conversations', 'messages'],
+      summary: 'Consume view-once message',
+      params: {
+        type: 'object',
+        required: ['id', 'messageId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          messageId: { type: 'string', description: 'Message ID to consume' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                messageId: { type: 'string' },
+                viewOnceCount: { type: 'number' },
+                maxViewOnceCount: { type: 'number' },
+                isFullyConsumed: { type: 'boolean' }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+      const { id, messageId } = request.params;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return reply.status(404).send({ success: false, error: 'Conversation not found' });
+      }
+
+      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!hasAccess) {
+        return reply.status(403).send({ success: false, error: 'Access denied' });
+      }
+
+      const message = await prisma.message.findFirst({
+        where: { id: messageId, conversationId }
+      });
+      if (!message) {
+        return reply.status(404).send({ success: false, error: 'Message not found' });
+      }
+
+      if (!message.isViewOnce) {
+        return reply.status(400).send({ success: false, error: 'Message is not view-once' });
+      }
+
+      const now = new Date();
+
+      const updated = await prisma.message.update({
+        where: { id: messageId },
+        data: { viewOnceCount: { increment: 1 } }
+      });
+
+      const maxViewOnceCount = (message as any).maxViewOnceCount ?? 1;
+      const newViewOnceCount = updated.viewOnceCount ?? 1;
+      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
+
+      // Update status entry for this user
+      await prisma.messageStatusEntry.updateMany({
+        where: { messageId, userId },
+        data: { viewedOnceAt: now, revealedAt: now }
+      });
+
+      logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
+
+      // Broadcast consume event via Socket.IO
+      if (socketIOHandler) {
+        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:consumed', {
+          messageId,
+          conversationId,
+          userId,
+          viewOnceCount: newViewOnceCount,
+          maxViewOnceCount,
+          isFullyConsumed
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed }
+      });
+    } catch (error) {
+      logger.error('Error consuming view-once message', error);
+      reply.status(500).send({ success: false, error: 'Error consuming view-once message' });
+    }
+  });
+
   // ===== SEARCH MESSAGES IN CONVERSATION =====
 
   fastify.get<{
@@ -1907,30 +2150,29 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Search in content (Prisma text search)
-      const contentMatches = await prisma.message.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          conversationId: true,
-          content: true,
-          originalLanguage: true,
-          messageType: true,
-          translations: true,
-          createdAt: true,
-          senderId: true,
-          sender: {
-            select: { id: true, username: true, displayName: true, avatar: true }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: searchLimit + 1 // +1 to check hasMore
-      });
+      const messageSelect = {
+        id: true,
+        conversationId: true,
+        content: true,
+        originalLanguage: true,
+        messageType: true,
+        translations: true,
+        createdAt: true,
+        senderId: true,
+        sender: {
+          select: { id: true, username: true, displayName: true, avatar: true }
+        }
+      };
 
-      // Also search in translations (Json field - in-memory filter)
-      let translationMatches: any[] = [];
-      if (contentMatches.length < searchLimit) {
-        const translationCandidates = await prisma.message.findMany({
+      // Search content AND translations in parallel
+      const [contentMatches, translationCandidates] = await Promise.all([
+        prisma.message.findMany({
+          where: whereClause,
+          select: messageSelect,
+          orderBy: { createdAt: 'desc' },
+          take: searchLimit + 1
+        }),
+        prisma.message.findMany({
           where: {
             conversationId,
             isDeleted: false,
@@ -1938,31 +2180,19 @@ export function registerMessagesRoutes(
             translations: { not: null },
             ...(cursor ? { createdAt: whereClause.createdAt } : {})
           },
-          select: {
-            id: true,
-            conversationId: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            translations: true,
-            createdAt: true,
-            senderId: true,
-            sender: {
-              select: { id: true, username: true, displayName: true, avatar: true }
-            }
-          },
+          select: messageSelect,
           orderBy: { createdAt: 'desc' },
-          take: 200 // Scan a batch for translation matches
-        });
+          take: 200
+        })
+      ]);
 
-        translationMatches = translationCandidates.filter((msg: any) => {
-          if (!msg.translations || typeof msg.translations !== 'object') return false;
-          return Object.values(msg.translations).some((t: any) => {
-            const text = typeof t === 'string' ? t : t?.text || t?.content || '';
-            return text.toLowerCase().includes(queryLower);
-          });
+      const translationMatches = translationCandidates.filter((msg: any) => {
+        if (!msg.translations || typeof msg.translations !== 'object') return false;
+        return Object.values(msg.translations).some((t: any) => {
+          const text = typeof t === 'string' ? t : t?.text || t?.content || '';
+          return text.toLowerCase().includes(queryLower);
         });
-      }
+      });
 
       // Merge and deduplicate results
       const seenIds = new Set(contentMatches.map(m => m.id));
@@ -1981,9 +2211,17 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
+      // Transform translations JSON → array format for SDK compatibility
+      const mappedResults = results.map((msg: any) => ({
+        ...msg,
+        translations: msg.translations
+          ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
+          : undefined
+      }));
+
       reply.send({
         success: true,
-        data: results,
+        data: mappedResults,
         cursorPagination: {
           hasMore,
           nextCursor: hasMore ? lastId : null,

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from RootView.swift
 
@@ -65,12 +66,12 @@ struct ThemedFloatingButton: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")],
+                                        colors: [MeeshyColors.coral, MeeshyColors.pink],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: Color(hex: "FF6B6B").opacity(0.5), radius: 4)
+                                .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 4)
                         )
                         .offset(x: 16, y: -16)
                 }
@@ -156,6 +157,8 @@ struct ThemedFeedOverlay: View {
     @State private var showStoryViewer = false
     @State private var selectedGroupIndex = 0
     @State private var showStatusComposer = false
+    @State private var showFullComposer = false
+    @State private var pendingAttachmentType: String?
 
     var body: some View {
         ZStack {
@@ -171,7 +174,7 @@ struct ThemedFeedOverlay: View {
                     .floating(range: 20, duration: 5.0)
 
                 Circle()
-                    .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.coral.opacity(theme.mode.isDark ? 0.1 : 0.06))
                     .frame(width: 250, height: 250)
                     .blur(radius: 70)
                     .offset(x: 100, y: 200)
@@ -195,7 +198,14 @@ struct ThemedFeedOverlay: View {
                     })
 
                     // Composer (padding is included in the component)
-                    ThemedFeedComposer(text: $composerText, isFocused: _isComposerFocused)
+                    ThemedFeedComposer(
+                        text: $composerText,
+                        isFocused: _isComposerFocused,
+                        onOpenComposerWithAttachment: { type in
+                            pendingAttachmentType = type
+                            showFullComposer = true
+                        }
+                    )
 
                     // Feed posts with infinite scroll
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
@@ -243,6 +253,18 @@ struct ThemedFeedOverlay: View {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
         }
+        .fullScreenCover(isPresented: $showFullComposer) {
+            FeedComposerSheet(
+                viewModel: viewModel,
+                initialText: composerText,
+                pendingAttachmentType: pendingAttachmentType,
+                onDismiss: {
+                    showFullComposer = false
+                    pendingAttachmentType = nil
+                    composerText = ""
+                }
+            )
+        }
     }
 }
 
@@ -250,17 +272,18 @@ struct ThemedFeedOverlay: View {
 struct ThemedFeedComposer: View {
     @Binding var text: String
     @FocusState var isFocused: Bool
+    var onOpenComposerWithAttachment: ((String) -> Void)?
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
     @State private var showAttachmentMenu = false
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     // Attachment options (without mic - mic is the toggle button when expanded)
-    private let attachmentOptions: [(icon: String, color: String)] = [
-        ("photo.on.rectangle.angled", "9B59B6"),
-        ("camera.fill", "FF6B6B"),
-        ("doc.fill", "3498DB"),
-        ("location.fill", "2ECC71")
+    private let attachmentOptions: [(icon: String, color: String, type: String)] = [
+        ("photo.on.rectangle.angled", "9B59B6", "photo"),
+        ("camera.fill", "FF6B6B", "camera"),
+        ("doc.fill", "3498DB", "file"),
+        ("location.fill", "2ECC71", "location")
     ]
 
     private var hasTextToPublish: Bool {
@@ -277,10 +300,16 @@ struct ThemedFeedComposer: View {
                     mode: .custom(40),
                     accentColor: "FF6B6B",
                     secondaryColor: "4ECDC4",
-                    onViewProfile: { showProfileAlert = true },
+                    onViewProfile: {
+                        if let user = authManager.currentUser {
+                            selectedProfileUser = .from(user: user)
+                        }
+                    },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Mon profil", icon: "person.fill") {
-                            showProfileAlert = true
+                            if let user = authManager.currentUser {
+                                selectedProfileUser = .from(user: user)
+                            }
                         }
                     ]
                 )
@@ -327,8 +356,10 @@ struct ThemedFeedComposer: View {
                     Button {
                         HapticFeedback.light()
                         if showAttachmentMenu {
-                            // Mic action when menu is open
-                            // TODO: Start voice recording
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showAttachmentMenu = false
+                            }
+                            onOpenComposerWithAttachment?("voice")
                         } else {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showAttachmentMenu = true
@@ -367,13 +398,13 @@ struct ThemedFeedComposer: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: "FF6B6B"), Color(hex: "E91E63")],
+                                            colors: [MeeshyColors.coral, MeeshyColors.pink],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .frame(width: 32, height: 32)
-                                    .shadow(color: Color(hex: "FF6B6B").opacity(0.5), radius: 6, y: 3)
+                                    .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 6, y: 3)
 
                                 Image(systemName: "paperplane.fill")
                                     .font(.system(size: 13, weight: .semibold))
@@ -402,10 +433,10 @@ struct ThemedFeedComposer: View {
                     ForEach(attachmentOptions, id: \.icon) { option in
                         Button {
                             HapticFeedback.light()
-                            // TODO: Handle attachment selection
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 showAttachmentMenu = false
                             }
+                            onOpenComposerWithAttachment?(option.type)
                         } label: {
                             Image(systemName: option.icon)
                                 .font(.system(size: 18, weight: .medium))
@@ -419,7 +450,7 @@ struct ThemedFeedComposer: View {
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(theme.mode.isDark ? Color(hex: "1E1E2E").opacity(0.92) : Color.white.opacity(0.92))
+                        .fill(theme.backgroundPrimary.opacity(0.92))
                         .shadow(color: Color.black.opacity(0.2), radius: 12, y: 6)
                 )
                 .offset(x: -8, y: -50)
@@ -431,18 +462,17 @@ struct ThemedFeedComposer: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: text.isEmpty)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
-        .onChange(of: isFocused) { focused in
-            // Hide attachment menu when focusing on text
+        .onChange(of: isFocused) { _, focused in
             if focused && showAttachmentMenu {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachmentMenu = false
                 }
             }
         }
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers mon profil")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user, isCurrentUser: true)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 }
@@ -631,3 +661,4 @@ struct FeedAction: View {
     let count: Int
     var body: some View { FeedActionButton(icon: icon, color: "4ECDC4", count: count) }
 }
+

@@ -1,13 +1,24 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 @main
 struct MeeshyApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var pushManager = PushNotificationManager.shared
+    @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @ObservedObject private var theme = ThemeManager.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = true
     @State private var hasCheckedSession = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var shouldShowOnboarding: Bool {
+        !hasCompletedOnboarding && !authManager.isAuthenticated
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -32,12 +43,134 @@ struct MeeshyApp: App {
                         .zIndex(1)
                     }
                 }
+                .fullScreenCover(isPresented: .init(
+                    get: { shouldShowOnboarding && !showSplash },
+                    set: { _ in }
+                )) {
+                    OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                }
+                .overlay(alignment: .top) {
+                    if let toast = toastManager.currentToast {
+                        ToastView(toast: toast)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .padding(.top, MeeshySpacing.xxl)
+                            .onTapGesture {
+                                toastManager.dismiss()
+                            }
+                            .zIndex(999)
+                    }
+                }
+                .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
                 .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
+                .onOpenURL { url in
+                    handleAppLevelDeepLink(url)
+                }
                 .task {
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
+                    if authManager.isAuthenticated {
+                        await requestPushPermissionIfNeeded()
+                    }
                 }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        Task { await pushManager.resetBadge() }
+                    }
+                }
+                .onChange(of: authManager.isAuthenticated) { _, isAuth in
+                    if isAuth {
+                        Task { await requestPushPermissionIfNeeded() }
+                        pushManager.reRegisterTokenIfNeeded()
+                    }
+                }
+                .onReceive(pushManager.$pendingNotificationPayload) { payload in
+                    guard let payload else { return }
+                    handlePushNavigation(payload: payload)
+                }
+                .onOpenURL { url in
+                    let _ = deepLinkRouter.handle(url: url)
+                }
+            }
+        }
+    }
+
+    // MARK: - Push Notifications
+
+    private func requestPushPermissionIfNeeded() async {
+        await pushManager.checkAuthorizationStatus()
+        if !pushManager.isAuthorized {
+            _ = await pushManager.requestPermission()
+        } else {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+    }
+
+    private func handlePushNavigation(payload: NotificationPayload) {
+        guard authManager.isAuthenticated else { return }
+
+        let notifType = MeeshyNotificationType(rawValue: payload.type ?? "")
+
+        switch notifType {
+        case .friendRequest, .friendAccepted, .statusUpdate:
+            if let senderId = payload.senderId {
+                NotificationCenter.default.post(
+                    name: Notification.Name("openProfileSheet"),
+                    object: ["userId": senderId, "username": payload.senderUsername ?? senderId]
+                )
+            }
+            pushManager.clearPendingNotification()
+
+        case .achievementUnlocked:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "userStats"
+            )
+            pushManager.clearPendingNotification()
+
+        case .affiliateSignup:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "affiliate"
+            )
+            pushManager.clearPendingNotification()
+
+        default:
+            guard let conversationId = payload.conversationId else {
+                pushManager.clearPendingNotification()
+                return
+            }
+            Task {
+                do {
+                    let userId = AuthManager.shared.currentUser?.id ?? ""
+                    let apiConversation = try await ConversationService.shared.getById(conversationId)
+                    let conversation = apiConversation.toConversation(currentUserId: userId)
+                    NotificationCenter.default.post(
+                        name: .navigateToConversation,
+                        object: conversation
+                    )
+                } catch {
+                    toastManager.showError("Impossible d'ouvrir la conversation")
+                }
+                pushManager.clearPendingNotification()
+            }
+        }
+    }
+
+    // MARK: - App-Level Deep Link (handles magic link when not authenticated)
+
+    private func handleAppLevelDeepLink(_ url: URL) {
+        let destination = DeepLinkParser.parse(url)
+        guard case .magicLink(let token) = destination else { return }
+
+        Task {
+            await authManager.validateMagicLink(token: token)
+
+            if authManager.isAuthenticated {
+                toastManager.showSuccess("Connexion reussie !")
+            } else {
+                toastManager.showError(authManager.errorMessage ?? "Lien invalide ou expire")
             }
         }
     }

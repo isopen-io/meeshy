@@ -6,7 +6,6 @@ const authorSelect = {
   username: true,
   displayName: true,
   avatar: true,
-  avatarUrl: true,
 };
 
 const mediaSelect = {
@@ -155,19 +154,24 @@ export class PostFeedService {
 
   async getStories(userId: string) {
     const now = new Date();
-    const friendIds = await this.getFriendIds(userId);
-    const viewerIds = [userId, ...friendIds];
+    const [friendIds, dmContactIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
+
+    const where: any = {
+      isDeleted: false,
+      type: 'STORY',
+      AND: [
+        visibilityFilter,
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      ],
+    };
 
     const stories = await this.prisma.post.findMany({
-      where: {
-        isDeleted: false,
-        type: 'STORY',
-        authorId: { in: viewerIds },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: now } },
-        ],
-      },
+      where,
       include: feedPostInclude,
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -179,8 +183,12 @@ export class PostFeedService {
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
-    const friendIds = await this.getFriendIds(userId);
-    const visibilityFilter = this.buildVisibilityFilter(userId, friendIds);
+    const [friendIds, dmContactIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const whereClause: any = {
       isDeleted: false,
@@ -378,6 +386,29 @@ export class PostFeedService {
         { visibility: 'ONLY', visibilityUserIds: { has: viewerId } },
       ],
     };
+  }
+
+  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
+    try {
+      const myMemberships = await this.prisma.conversationMember.findMany({
+        where: { userId, isActive: true, conversation: { type: 'direct' } },
+        select: { conversationId: true },
+      });
+      const conversationIds = myMemberships.map((m) => m.conversationId);
+      if (conversationIds.length === 0) return [];
+
+      const otherMembers = await this.prisma.conversationMember.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          userId: { not: userId },
+          isActive: true,
+        },
+        select: { userId: true },
+      });
+      return [...new Set(otherMembers.map((m) => m.userId))];
+    } catch {
+      return [];
+    }
   }
 
   private async getFriendIds(userId: string): Promise<string[]> {

@@ -9,8 +9,8 @@ public final class PostService {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
     }
 
-    public func create(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji)
+    public func create(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
@@ -50,5 +50,23 @@ public final class PostService {
 
     public func share(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
+    }
+
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC") async throws -> APIPost {
+        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility)
+        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
+        return response.data
+    }
+
+    public func createWithType(_ type: PostType, content: String, visibility: String = "PUBLIC",
+                                moodEmoji: String? = nil, storyEffects: StoryEffects? = nil) async throws -> APIPost {
+        switch type {
+        case .story:
+            return try await createStory(content: content, storyEffects: storyEffects, visibility: visibility)
+        case .status:
+            return try await create(content: content, type: "STATUS", visibility: visibility, moodEmoji: moodEmoji)
+        case .post:
+            return try await create(content: content, type: "POST", visibility: visibility)
+        }
     }
 }

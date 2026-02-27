@@ -1,5 +1,7 @@
 import SwiftUI
 import MeeshySDK
+import os
+import MeeshyUI
 
 // MARK: - Participant Model
 
@@ -48,6 +50,15 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
+    @State private var showParticipantsView = false
+    @State private var showBlockConfirm = false
+    @State private var isBlocking = false
+    @State private var isCreatingShareLink = false
+    @State private var createdShareLinkId: String?
+    @State private var showShareSheet = false
+    @State private var showLeaveConfirmation = false
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
     enum InfoTab: String, CaseIterable {
         case members = "Membres"
@@ -56,6 +67,8 @@ struct ConversationInfoSheet: View {
     }
 
     private var accent: Color { Color(hex: accentColor) }
+    private var isDirect: Bool { conversation.type == .direct }
+    private var otherUserId: String? { conversation.participantUserId }
 
     private var pinnedMessages: [Message] {
         messages.filter { $0.pinnedAt != nil }
@@ -81,16 +94,43 @@ struct ConversationInfoSheet: View {
         VStack(spacing: 0) {
             headerBar
             conversationHeader
+            if isDirect, otherUserId != nil {
+                blockUserButton
+            }
+            actionButtons
             tabSelector
             tabContent
         }
         .background(sheetBackground)
         .presentationDragIndicator(.visible)
         .task { await loadParticipants() }
+        .fullScreenCover(isPresented: $showParticipantsView) {
+            ParticipantsView(
+                conversationId: conversation.id,
+                accentColor: accentColor,
+                currentUserRole: conversation.currentUserRole
+            )
+        }
+        .alert("Bloquer cet utilisateur", isPresented: $showBlockConfirm) {
+            Button("Annuler", role: .cancel) { }
+            Button("Bloquer", role: .destructive) {
+                blockOtherUser()
+            }
+        } message: {
+            Text("Vous ne recevrez plus de messages de \(conversation.name). Vous pourrez le debloquer dans les reglages.")
+        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 appearAnimation = true
             }
+        }
+        .alert("Quitter la conversation", isPresented: $showLeaveConfirmation) {
+            Button("Annuler", role: .cancel) {}
+            Button("Quitter", role: .destructive) {
+                Task { await leaveConversation() }
+            }
+        } message: {
+            Text("Vous ne recevrez plus de messages de cette conversation.")
         }
     }
 
@@ -279,6 +319,10 @@ struct ConversationInfoSheet: View {
 
     private var membersSection: some View {
         VStack(spacing: 0) {
+            if conversation.type != .direct {
+                manageMembersButton
+            }
+
             if isLoadingParticipants {
                 VStack(spacing: 12) {
                     ForEach(0..<3, id: \.self) { _ in
@@ -299,6 +343,34 @@ struct ConversationInfoSheet: View {
             }
         }
         .padding(.bottom, 32)
+    }
+
+    private var manageMembersButton: some View {
+        Button {
+            HapticFeedback.light()
+            showParticipantsView = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.2.badge.gearshape")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Gerer les membres")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .foregroundColor(accent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .accessibilityLabel("Gerer les membres du groupe")
     }
 
     private func memberRow(_ participant: ConversationParticipant) -> some View {
@@ -524,6 +596,111 @@ struct ConversationInfoSheet: View {
         .padding(.top, 60)
     }
 
+    // MARK: - Action Buttons
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            actionButton(
+                icon: "link.badge.plus",
+                label: "Partager",
+                color: "4ECDC4",
+                isLoading: isCreatingShareLink
+            ) {
+                Task { await createShareLink() }
+            }
+
+            actionButton(
+                icon: "rectangle.portrait.and.arrow.right",
+                label: "Quitter",
+                color: "FF6B6B"
+            ) {
+                showLeaveConfirmation = true
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .opacity(appearAnimation ? 1 : 0)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.03), value: appearAnimation)
+    }
+
+    private func actionButton(
+        icon: String,
+        label: String,
+        color: String,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(Color(hex: color))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(Color(hex: color))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: color).opacity(theme.mode.isDark ? 0.12 : 0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color(hex: color).opacity(0.2), lineWidth: 1)
+            )
+        }
+        .disabled(isLoading)
+    }
+
+    // MARK: - Share Link Actions
+
+    private func createShareLink() async {
+        isCreatingShareLink = true
+        defer { isCreatingShareLink = false }
+
+        do {
+            let request = CreateShareLinkRequest(
+                conversationId: conversation.id,
+                name: conversation.name,
+                allowAnonymousMessages: true
+            )
+            let result = try await ShareLinkService.shared.createShareLink(request: request)
+            createdShareLinkId = result.linkId
+
+            let shareURL = "https://meeshy.me/join/\(result.linkId)"
+            await MainActor.run {
+                let activityVC = UIActivityViewController(
+                    activityItems: [shareURL],
+                    applicationActivities: nil
+                )
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first?.rootViewController {
+                    var topVC = rootVC
+                    while let presented = topVC.presentedViewController { topVC = presented }
+                    activityVC.popoverPresentationController?.sourceView = topVC.view
+                    topVC.present(activityVC, animated: true)
+                }
+            }
+        } catch {
+            // Silently fail
+        }
+    }
+
+    private func leaveConversation() async {
+        do {
+            try await ConversationService.shared.delete(conversationId: conversation.id)
+            dismiss()
+        } catch {
+            // Silently fail
+        }
+    }
+
     // MARK: - Helpers
 
     private var conversationTypeIcon: String {
@@ -610,6 +787,63 @@ struct ConversationInfoSheet: View {
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM yyyy"
         return formatter
+    }
+
+    // MARK: - Block Button
+
+    private var blockUserButton: some View {
+        Button {
+            HapticFeedback.medium()
+            showBlockConfirm = true
+        } label: {
+            HStack(spacing: 8) {
+                if isBlocking {
+                    ProgressView()
+                        .tint(Color(hex: "EF4444"))
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "exclamationmark.shield")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                Text("Bloquer cet utilisateur")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(Color(hex: "EF4444"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(hex: "EF4444").opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(hex: "EF4444").opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(isBlocking)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .accessibilityLabel("Bloquer \(conversation.name)")
+    }
+
+    // MARK: - Block Action
+
+    private func blockOtherUser() {
+        guard let userId = otherUserId else { return }
+        isBlocking = true
+        Task { [weak blockService = BlockService.shared] in
+            do {
+                try await blockService?.blockUser(userId: userId)
+                HapticFeedback.success()
+                ToastManager.shared.showSuccess("Utilisateur bloque")
+                dismiss()
+            } catch {
+                HapticFeedback.error()
+                ToastManager.shared.showError("Erreur lors du blocage")
+                Self.logger.error("Failed to block user: \(error.localizedDescription)")
+            }
+            isBlocking = false
+        }
     }
 
     // MARK: - API

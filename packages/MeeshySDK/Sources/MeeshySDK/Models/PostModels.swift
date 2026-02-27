@@ -81,6 +81,7 @@ public struct APIPost: Decodable {
     public let moodEmoji: String?
     public let audioUrl: String?
     public let audioDuration: Int?
+    public let storyEffects: StoryEffects?
 }
 
 // MARK: - Conversion helpers
@@ -111,17 +112,23 @@ extension APIPost {
         }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
-            FeedComment(id: c.id, author: c.author.name, content: c.content,
+            FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorAvatarURL: c.author.avatar ?? c.author.avatarUrl,
+                        content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0)
         }
 
         var repost: RepostContent?
         if let r = repostOf {
-            repost = RepostContent(id: r.id, author: r.author.name, content: r.content ?? "",
+            repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
+                                   authorAvatarURL: r.author.avatar ?? r.author.avatarUrl,
+                                   content: r.content ?? "",
                                    timestamp: r.createdAt, likes: r.likeCount ?? 0)
         }
 
-        return FeedPost(id: id, author: author.name, content: content ?? "",
+        return FeedPost(id: id, author: author.name, authorId: author.id,
+                        authorAvatarURL: author.avatar ?? author.avatarUrl,
+                        content: content ?? "",
                         timestamp: createdAt, likes: likeCount ?? 0,
                         comments: feedComments, commentCount: commentCount ?? feedComments.count,
                         repost: repost, repostAuthor: repostOf != nil ? author.name : nil,

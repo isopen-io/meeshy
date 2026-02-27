@@ -7,8 +7,12 @@ import MeeshySDK
 class StoryViewModel: ObservableObject {
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
+    @Published var isPublishing = false
+    @Published var publishError: String?
+    @Published var showStoryComposer = false
 
     private let api = APIClient.shared
+    private let postService = PostService.shared
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket = SocialSocketManager.shared
 
@@ -93,6 +97,85 @@ class StoryViewModel: ObservableObject {
         storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
     }
 
+    // MARK: - Publish Story
+
+    func publishStory(effects: StoryEffects, content: String?, image: UIImage?) async {
+        guard !isPublishing else { return }
+        isPublishing = true
+        publishError = nil
+
+        do {
+            let post = try await postService.createStory(
+                content: content,
+                storyEffects: effects,
+                visibility: "PUBLIC"
+            )
+
+            let media: [FeedMedia] = (post.media ?? []).map { m in
+                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+            }
+            let newItem = StoryItem(id: post.id, content: post.content, media: media,
+                                     storyEffects: effects, createdAt: post.createdAt, isViewed: true)
+
+            if let idx = storyGroups.firstIndex(where: { $0.id == post.author.id }) {
+                var updated = storyGroups[idx].stories
+                updated.append(newItem)
+                storyGroups[idx] = StoryGroup(
+                    id: storyGroups[idx].id,
+                    username: storyGroups[idx].username,
+                    avatarColor: storyGroups[idx].avatarColor,
+                    avatarURL: storyGroups[idx].avatarURL,
+                    stories: updated
+                )
+            } else {
+                let newGroup = StoryGroup(
+                    id: post.author.id,
+                    username: post.author.name,
+                    avatarColor: DynamicColorGenerator.colorForName(post.author.name),
+                    avatarURL: post.author.avatar ?? post.author.avatarUrl,
+                    stories: [newItem]
+                )
+                storyGroups.insert(newGroup, at: 0)
+            }
+
+            showStoryComposer = false
+        } catch {
+            publishError = "Failed to publish story"
+        }
+
+        isPublishing = false
+    }
+    // MARK: - Delete Story
+
+    func deleteStory(storyId: String) async -> Bool {
+        do {
+            let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
+            
+            // Remove from local state
+            for i in storyGroups.indices {
+                if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
+                    var updated = storyGroups[i].stories
+                    updated.remove(at: j)
+                    if updated.isEmpty {
+                        storyGroups.remove(at: i)
+                    } else {
+                        storyGroups[i] = StoryGroup(
+                            id: storyGroups[i].id,
+                            username: storyGroups[i].username,
+                            avatarColor: storyGroups[i].avatarColor,
+                            avatarURL: storyGroups[i].avatarURL,
+                            stories: updated
+                        )
+                    }
+                    break
+                }
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {

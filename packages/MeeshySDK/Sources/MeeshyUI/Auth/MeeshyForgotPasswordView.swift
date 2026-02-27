@@ -4,6 +4,7 @@ import MeeshySDK
 public struct MeeshyForgotPasswordView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var mode: RecoveryMode = .email
     @State private var email = ""
@@ -49,7 +50,7 @@ public struct MeeshyForgotPasswordView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "1E1E2E").ignoresSafeArea()
+                theme.backgroundPrimary.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 24) {
@@ -96,7 +97,7 @@ public struct MeeshyForgotPasswordView: View {
 
                 Text("Email envoye !")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
 
                 Text("Si un compte existe avec \(email), un lien de reinitialisation a ete envoye.")
                     .multilineTextAlignment(.center)
@@ -160,7 +161,7 @@ public struct MeeshyForgotPasswordView: View {
                     VStack(spacing: 8) {
                         Text("Compte trouve")
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.textPrimary)
                         Text(info.displayName)
                             .foregroundStyle(.secondary)
                         Text(info.username)
@@ -170,7 +171,7 @@ public struct MeeshyForgotPasswordView: View {
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color(hex: "2D2D40").opacity(0.6))
+                    .background(theme.inputBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .padding(.horizontal, 24)
                 }
@@ -219,7 +220,7 @@ public struct MeeshyForgotPasswordView: View {
     private var resetPasswordSheet: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "1E1E2E").ignoresSafeArea()
+                theme.backgroundPrimary.ignoresSafeArea()
 
                 VStack(spacing: 20) {
                     if resetSuccess {
@@ -229,7 +230,7 @@ public struct MeeshyForgotPasswordView: View {
 
                         Text("Mot de passe reinitialise !")
                             .font(.title3.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.textPrimary)
 
                         Button("Se connecter") {
                             showResetPassword = false

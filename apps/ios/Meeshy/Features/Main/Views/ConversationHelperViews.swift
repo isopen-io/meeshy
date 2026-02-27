@@ -2,6 +2,7 @@
 import SwiftUI
 import CoreLocation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Themed Back Button
 struct ThemedBackButton: View {
@@ -27,7 +28,7 @@ struct ThemedBackButton: View {
                         Circle()
                             .stroke(
                                 LinearGradient(
-                                    colors: [Color(hex: color).opacity(0.5), Color(hex: "4ECDC4").opacity(0.5)],
+                                    colors: [Color(hex: color).opacity(0.5), MeeshyColors.teal.opacity(0.5)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
@@ -43,7 +44,7 @@ struct ThemedBackButton: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: color), Color(hex: "4ECDC4")],
+                            colors: [Color(hex: color), MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -163,50 +164,3 @@ struct ColorfulMessageBubble: View {
     var body: some View { ThemedMessageBubble(message: message, contactColor: contactColor) }
 }
 
-// MARK: - Location Manager
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    private var completion: ((CLLocation?) -> Void)?
-
-    @Published var lastLocation: CLLocation?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-
-    override init() {
-        super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-    }
-
-    func requestLocation(completion: @escaping (CLLocation?) -> Void) {
-        self.completion = completion
-
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-        case .authorizedWhenInUse, .authorizedAlways:
-            manager.requestLocation()
-        default:
-            completion(nil)
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        lastLocation = location
-        completion?(location)
-        completion = nil
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location error: \(error.localizedDescription)")
-        completion?(nil)
-        completion = nil
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
-        if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
-            manager.requestLocation()
-        }
-    }
-}

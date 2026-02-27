@@ -95,7 +95,6 @@ extension UniversalComposerBar {
             attachLadderButton(icon: "location.fill", color: "2ECC71", delay: 0.08) {
                 closeAttachMenu()
                 HapticFeedback.light()
-                locationHelper.requestLocation()
                 onLocationRequest?()
             }
             // Camera
@@ -146,15 +145,18 @@ extension UniversalComposerBar {
     // MARK: - Attach Button
 
     var attachButton: some View {
-        Button(action: {
+        let accent = Color(hex: accentColor)
+        let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
+        let bgFill = style == .dark ? Color.white.opacity(0.1) : accent.opacity(0.1)
+        let borderColor = style == .dark ? Color.white.opacity(0.2) : accent.opacity(0.2)
+
+        return Button(action: {
             onAnyInteraction?()
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             if showAttachOptions {
-                // xmark showing -> close menu
                 closeAttachMenu()
             } else {
-                // (+) showing -> open menu
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                     attachRotation += 90
                 }
@@ -165,15 +167,15 @@ extension UniversalComposerBar {
         }) {
             Image(systemName: showAttachOptions ? "xmark" : "plus")
                 .font(.system(size: showAttachOptions ? 16 : 20, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(0.1))
+                        .fill(bgFill)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                .stroke(borderColor, lineWidth: 1)
                         )
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)

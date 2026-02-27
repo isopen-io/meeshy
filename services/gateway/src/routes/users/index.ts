@@ -5,10 +5,14 @@ import {
   getUserTest,
   updateUserProfile,
   updateUserAvatar,
+  updateUserBanner,
   updateUserPassword,
   updateUsername,
   getUserByUsername,
-  getUserById
+  getUserById,
+  getUserByEmail,
+  getUserByIdDedicated,
+  getUserByPhone
 } from './profile';
 
 // Contact change routes (email/phone with verification)
@@ -38,6 +42,13 @@ import {
   deleteUserById
 } from './devices';
 
+// Blocking routes
+import {
+  blockUser,
+  unblockUser,
+  getBlockedUsers
+} from './blocking';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -50,10 +61,14 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserTest(fastify);
   await updateUserProfile(fastify);
   await updateUserAvatar(fastify);
+  await updateUserBanner(fastify);
   await updateUserPassword(fastify);
   await updateUsername(fastify);
   await getUserByUsername(fastify);
   await getUserById(fastify);
+  await getUserByEmail(fastify);
+  await getUserByIdDedicated(fastify);
+  await getUserByPhone(fastify);
 
   // Contact change routes (email/phone with verification)
   await initiateEmailChange(fastify);
@@ -72,6 +87,11 @@ export async function userRoutes(fastify: FastifyInstance) {
   await sendFriendRequest(fastify);
   await respondToFriendRequest(fastify);
   await getAffiliateToken(fastify);
+
+  // Blocking routes
+  await blockUser(fastify);
+  await unblockUser(fastify);
+  await getBlockedUsers(fastify);
 
   // Stub routes
   await getAllUsers(fastify);

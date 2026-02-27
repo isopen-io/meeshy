@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from FeedView.swift
 
@@ -16,7 +17,7 @@ struct CommentsSheetView: View {
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
     @State private var commentBounce: Bool = false
-    @State private var profileAlertName: String?
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         NavigationStack {
@@ -78,13 +79,10 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
-        .alert("Navigation", isPresented: Binding(
-            get: { profileAlertName != nil },
-            set: { if !$0 { profileAlertName = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(profileAlertName ?? "")")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -97,10 +95,10 @@ struct CommentsSheetView: View {
                     name: post.author,
                     mode: .custom(40),
                     accentColor: post.authorColor,
-                    onViewProfile: { profileAlertName = post.author },
+                    onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            profileAlertName = post.author
+                            selectedProfileUser = .from(feedPost: post)
                         }
                     ]
                 )
@@ -130,7 +128,7 @@ struct CommentsSheetView: View {
                     Text("\(post.likes)")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.coral)
 
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
@@ -194,7 +192,7 @@ struct CommentsSheetView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "4ECDC4")],
+                            colors: [MeeshyColors.coral, MeeshyColors.teal],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -238,7 +236,7 @@ struct CommentsSheetView: View {
                         )
                 )
                 .scaleEffect(commentBounce ? 1.02 : 1.0)
-                .onChange(of: isComposerFocused) { newValue in
+                .onChange(of: isComposerFocused) { _, newValue in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                         commentBounce = newValue
                     }
@@ -310,7 +308,7 @@ struct CommentRowView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
-    @State private var showProfileAlert = false
+    @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -319,10 +317,10 @@ struct CommentRowView: View {
                 name: comment.author,
                 mode: .custom(36),
                 accentColor: comment.authorColor,
-                onViewProfile: { showProfileAlert = true },
+                onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                        showProfileAlert = true
+                        selectedProfileUser = .from(feedComment: comment)
                     }
                 ]
             )
@@ -335,7 +333,7 @@ struct CommentRowView: View {
                         .foregroundColor(Color(hex: comment.authorColor))
                         .onTapGesture {
                             HapticFeedback.light()
-                            showProfileAlert = true
+                            selectedProfileUser = .from(feedComment: comment)
                         }
 
                     Text("·")
@@ -364,12 +362,12 @@ struct CommentRowView: View {
                         HStack(spacing: 4) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
                                 .font(.system(size: 14))
-                                .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(comment.likes + (isLiked ? 1 : 0))")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(isLiked ? Color(hex: "FF6B6B") : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
                         }
                     }
 
@@ -406,10 +404,10 @@ struct CommentRowView: View {
                 .frame(height: 1),
             alignment: .bottom
         )
-        .alert("Navigation", isPresented: $showProfileAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Naviguer vers le profil de \(comment.author)")
+        .sheet(item: $selectedProfileUser) { user in
+            UserProfileSheet(user: user)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

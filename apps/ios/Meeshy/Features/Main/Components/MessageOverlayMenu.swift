@@ -1,69 +1,90 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - MessageOverlayMenu
 
 struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
+    let conversationId: String
     let messageBubbleFrame: CGRect
     @Binding var isPresented: Bool
+    var canDelete: Bool = false
     var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
-    var onForward: (() -> Void)?
-    var onDelete: (() -> Void)?
     var onPin: (() -> Void)?
+    var textTranslations: [MessageTranslation] = []
+    var transcription: MessageTranscription? = nil
+    var translatedAudios: [MessageTranslatedAudio] = []
+    var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
+    var onSelectAudioLanguage: ((String?) -> Void)? = nil
+    var onRequestTranslation: ((String, String) -> Void)? = nil
     var onReact: ((String) -> Void)?
-    var onShowInfo: (() -> Void)?
-    var onAddReaction: (() -> Void)?
+    var onReport: ((String, String?) -> Void)?
+    var onDelete: (() -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isVisible = false
-    @State private var menuDragOffset: CGFloat = 0
-    @State private var menuDragStartOffset: CGFloat = 0
-    @State private var menuExpanded = false
+    @State private var dragOffset: CGFloat = 0
+    @State private var forceTab: DetailTab? = nil
+    @State private var isEmojiPickerOpen = false
 
-    @State private var quickViewHeight: CGFloat = 200
-    @State private var quickViewDragOffset: CGFloat = 0
+    private let previewCharLimit = 500
+    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
 
-    private let quickViewMinHeight: CGFloat = 50
-    private let quickViewDefaultHeight: CGFloat = 200
-    private let quickViewMaxHeight: CGFloat = 350
-
-    private let compactMenuHeight: CGFloat = 180
-    private let expandedMenuHeight: CGFloat = 280
-
-    private let allQuickEmojis = [
-        "\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F525}",
-        "\u{1F62E}", "\u{1F622}", "\u{1F64F}", "\u{1F389}",
-        "\u{1F60D}", "\u{1F921}", "\u{1F4AF}", "\u{1F44F}",
-        "\u{1F62D}", "\u{1F913}", "\u{1F60E}", "\u{1F973}"
-    ]
+    // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
+    private let gridVisibleHeight: CGFloat = 175
 
     var body: some View {
         GeometryReader { geometry in
+            let safeTop = geometry.safeAreaInsets.top
+            let safeBottom = geometry.safeAreaInsets.bottom
+            let screenH = geometry.size.height
+            let panelBaseHeight = gridVisibleHeight + safeBottom + 60
+
+            // Drag range: 0 = collapsed (normal), negative = expanded (pull up)
+            let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
+            let clampedDrag = min(0, max(maxExpandUp, dragOffset))
+            let panelHeight = panelBaseHeight - clampedDrag
+
             ZStack {
                 dismissBackground
 
                 VStack(spacing: 0) {
-                    quickViewArea(in: geometry)
-                        .opacity(isVisible ? 1 : 0)
-                        .offset(y: isVisible ? 0 : -100)
+                    // Tappable area above content — fills remaining space, dismisses on tap
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismiss() }
 
-                    Spacer(minLength: 12)
+                    // Message preview tight above emoji bar
+                    HStack {
+                        if message.isMe { Spacer(minLength: 16) }
+                        messagePreview
+                        if !message.isMe { Spacer(minLength: 16) }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 4)
+                    .opacity(isVisible ? 1 : 0)
 
-                    messagePreview
-                        .opacity(isVisible ? 1 : 0)
-                        .scaleEffect(isVisible ? 0.95 : 0.5)
+                    // Emoji quick bar
+                    HStack {
+                        if message.isMe { Spacer() }
+                        emojiQuickBar
+                        if !message.isMe { Spacer() }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 2)
+                    .opacity(isVisible ? 1 : 0)
 
-                    Spacer(minLength: 12)
-
-                    compactActionMenu(in: geometry)
-                        .offset(y: isVisible ? 0 : 300)
+                    // Detail panel with drag handle
+                    detailPanel(safeBottom: safeBottom)
+                        .frame(height: panelHeight)
+                        .offset(y: isVisible ? 0 : panelBaseHeight)
                 }
-                .padding(.top, geometry.safeAreaInsets.top + 8)
-                .padding(.bottom, geometry.safeAreaInsets.bottom)
             }
         }
         .ignoresSafeArea()
@@ -71,167 +92,100 @@ struct MessageOverlayMenu: View {
             HapticFeedback.medium()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 isVisible = true
+                dragOffset = -400
             }
         }
     }
 
-    // MARK: - Dismiss Background
+    // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
+
+    private var emojiQuickBar: some View {
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+        let isDark = theme.mode.isDark
+        return EmojiReactionPicker(
+            quickEmojis: topEmojis,
+            style: isDark ? .dark : .light,
+            onReact: { emoji in
+                EmojiUsageTracker.recordUsage(emoji: emoji)
+                onReact?(emoji)
+                dismiss()
+            },
+            onExpandFullPicker: {
+                HapticFeedback.light()
+                isEmojiPickerOpen.toggle()
+                forceTab = isEmojiPickerOpen ? .react : .language
+            }
+        )
+    }
+
+    // MARK: - Dismiss Background (vibrant with bubble form distinction)
 
     private var dismissBackground: some View {
-        Color.black
-            .opacity(isVisible ? 0.5 : 0)
-            .background(.ultraThinMaterial.opacity(isVisible ? 1 : 0))
-            .animation(.easeOut(duration: 0.25), value: isVisible)
-            .onTapGesture { dismiss() }
-    }
-
-    // MARK: - Quick View Area (TOP)
-
-    @ViewBuilder
-    private func quickViewArea(in geometry: GeometryProxy) -> some View {
-        let effectiveHeight = max(quickViewMinHeight, quickViewHeight + quickViewDragOffset)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 6)
-
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(allQuickEmojis, id: \.self) { emoji in
-                        Button {
-                            dismissThen { onReact?(emoji) }
-                        } label: {
-                            Text(emoji)
-                                .font(.system(size: 28))
-                                .frame(maxWidth: .infinity, minHeight: 42)
-                        }
-                        .buttonStyle(EmojiButtonStyle())
-                    }
-
-                    Button {
-                        dismissThen { onAddReaction?() }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(theme.mode.isDark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(theme.mode.isDark ? .white.opacity(0.7) : .gray)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                    }
-                    .buttonStyle(EmojiButtonStyle())
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-            }
-
-            quickViewDragHandle
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(isVisible ? 1 : 0)
+            Color.black
+                .opacity(isVisible ? 0.35 : 0)
         }
-        .frame(height: effectiveHeight)
-        .frame(maxWidth: .infinity)
-        .background(quickViewBackground)
-        .padding(.horizontal, 12)
+        .animation(.easeOut(duration: 0.25), value: isVisible)
+        .onTapGesture { dismiss() }
     }
 
-    private var quickViewDragHandle: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(theme.textMuted.opacity(0.4))
-                .frame(width: 36, height: 4)
-                .padding(.vertical, 8)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 28)
-        .contentShape(Rectangle())
-        .gesture(quickViewDragGesture)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                if quickViewHeight <= quickViewMinHeight {
-                    quickViewHeight = quickViewDefaultHeight
-                } else if quickViewHeight < quickViewMaxHeight {
-                    quickViewHeight = quickViewMaxHeight
-                } else {
-                    quickViewHeight = quickViewDefaultHeight
-                }
-            }
-            HapticFeedback.light()
-        }
-    }
-
-    private var quickViewDragGesture: some Gesture {
-        DragGesture(minimumDistance: 5)
-            .onChanged { value in
-                quickViewDragOffset = value.translation.height
-            }
-            .onEnded { value in
-                let projected = quickViewHeight + value.predictedEndTranslation.height
-                let midLow = (quickViewMinHeight + quickViewDefaultHeight) / 2
-                let midHigh = (quickViewDefaultHeight + quickViewMaxHeight) / 2
-                let target: CGFloat
-                if projected < midLow {
-                    target = quickViewMinHeight
-                } else if projected < midHigh {
-                    target = quickViewDefaultHeight
-                } else {
-                    target = quickViewMaxHeight
-                }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    quickViewHeight = target
-                    quickViewDragOffset = 0
-                }
-                HapticFeedback.light()
-            }
-    }
-
-    private var quickViewBackground: some View {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: 20,
-            bottomTrailingRadius: 20,
-            topTrailingRadius: 0
-        )
-        .fill(.ultraThinMaterial)
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20,
-                topTrailingRadius: 0
-            )
-            .fill(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
-        )
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20,
-                topTrailingRadius: 0
-            )
-            .stroke(
-                theme.mode.isDark
-                    ? Color.white.opacity(0.15)
-                    : Color.black.opacity(0.06),
-                lineWidth: 0.5
-            )
-        )
-        .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-    }
-
-    // MARK: - Message Preview (CENTER)
+    // MARK: - Message Preview (aligned left/right)
 
     private var messagePreview: some View {
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
-            if !message.isMe, let name = message.senderName {
-                Text(name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(hex: message.senderColor ?? contactColor))
-            }
+            previewSenderHeader
 
             previewContent
         }
         .frame(maxWidth: UIScreen.main.bounds.width * 0.85)
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+        .padding(.horizontal, 8)
+        .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+    }
+
+    private var previewSenderHeader: some View {
+        let isMe = message.isMe
+        let name = isMe ? "Moi" : (message.senderName ?? "?")
+        let color = isMe ? contactColor : (message.senderColor ?? contactColor)
+
+        return HStack(spacing: 6) {
+            if !isMe {
+                MeeshyAvatar(
+                    name: name,
+                    mode: .custom(22),
+                    accentColor: color,
+                    avatarURL: message.senderAvatarURL
+                )
+            }
+
+            Text(name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(hex: color))
+
+            Text("·")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textMuted)
+
+            Text(formatExactDate(message.createdAt))
+                .font(.system(size: 12))
+                .foregroundColor(theme.textMuted)
+        }
+    }
+
+    private func formatExactDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            formatter.dateFormat = "HH:mm"
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "'Hier' HH:mm"
+        } else {
+            formatter.dateFormat = "dd MMM yyyy HH:mm"
+        }
+        return formatter.string(from: date)
     }
 
     @ViewBuilder
@@ -252,7 +206,9 @@ struct MessageOverlayMenu: View {
             }
 
             if !videos.isEmpty {
-                previewVideoThumbnails(videos)
+                ForEach(videos) { video in
+                    PreviewVideoPlayer(attachment: video, contactColor: contactColor)
+                }
             }
 
             if hasText {
@@ -261,7 +217,7 @@ struct MessageOverlayMenu: View {
 
             if !audios.isEmpty {
                 ForEach(audios) { audio in
-                    previewAudioRow(audio)
+                    PreviewAudioPlayer(attachment: audio, contactColor: contactColor)
                 }
             }
 
@@ -273,16 +229,19 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    // MARK: - Preview Text Bubble
+    // MARK: - Preview Text Bubble (~500 chars)
 
     private var previewTextBubble: some View {
         let accent = Color(hex: contactColor)
         let isDark = theme.mode.isDark
+        let truncated = message.content.count > previewCharLimit
+            ? String(message.content.prefix(previewCharLimit)) + "..."
+            : message.content
 
-        return Text(message.content)
+        return Text(truncated)
             .font(.system(size: 15))
             .foregroundColor(message.isMe ? .white : theme.textPrimary)
-            .lineLimit(8)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -352,70 +311,6 @@ struct MessageOverlayMenu: View {
         .clipped()
     }
 
-    // MARK: - Preview Video Thumbnails
-
-    @ViewBuilder
-    private func previewVideoThumbnails(_ videos: [MessageAttachment]) -> some View {
-        ForEach(videos) { video in
-            let thumbUrl = video.thumbnailUrl ?? video.fileUrl
-            ZStack {
-                CachedAsyncImage(url: thumbUrl) {
-                    Color(hex: contactColor).opacity(0.2)
-                }
-                .aspectRatio(16/9, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: 180)
-                .clipped()
-
-                Circle()
-                    .fill(.black.opacity(0.5))
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white)
-                            .offset(x: 2)
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-        }
-    }
-
-    // MARK: - Preview Audio Row
-
-    private func previewAudioRow(_ attachment: MessageAttachment) -> some View {
-        let accent = Color(hex: contactColor)
-        let duration = attachment.duration.map { formatDuration($0) } ?? "--:--"
-
-        return HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.2))
-                    .frame(width: 36, height: 36)
-                Image(systemName: "waveform")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                Text(duration)
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-        )
-    }
-
     // MARK: - Preview File Row
 
     private func previewFileRow(_ attachment: MessageAttachment) -> some View {
@@ -451,29 +346,38 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Compact Action Menu (BOTTOM)
+    // MARK: - Detail Panel (scrollable grid, 2.5 rows visible)
 
-    @ViewBuilder
-    private func compactActionMenu(in geometry: GeometryProxy) -> some View {
-        let actions = availableActions
-        let currentHeight = menuExpanded ? expandedMenuHeight : compactMenuHeight
-
+    private func detailPanel(safeBottom: CGFloat) -> some View {
         VStack(spacing: 0) {
-            dragHandle
-                .gesture(menuDragGesture)
+            panelDragHandle
 
-            ScrollView(showsIndicators: false) {
-                actionGrid(actions: actions)
-                    .padding(.horizontal, 16)
+            // Scrollable grid showing ~2.5 rows
+            ScrollView(.vertical, showsIndicators: false) {
+                MessageDetailSheet(
+                    message: message,
+                    contactColor: contactColor,
+                    conversationId: conversationId,
+                    initialTab: .language,
+                    canDelete: canDelete,
+                    actions: overlayActions,
+                    textTranslations: textTranslations,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios,
+                    onSelectTranslation: onSelectTranslation,
+                    onSelectAudioLanguage: onSelectAudioLanguage,
+                    onRequestTranslation: onRequestTranslation,
+                    onDismissAction: { dismiss() },
+                    onReact: { emoji in onReact?(emoji) },
+                    onReport: { type, reason in onReport?(type, reason) },
+                    onDelete: { onDelete?() },
+                    externalTabSelection: $forceTab
+                )
             }
-            .frame(maxHeight: currentHeight - 44)
 
-            cancelButton
-
-            Spacer(minLength: 0)
+            Spacer(minLength: safeBottom)
         }
-        .frame(height: currentHeight + 56)
-        .background(menuBackground)
+        .background(panelBackground)
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 20,
@@ -482,81 +386,46 @@ struct MessageOverlayMenu: View {
                 topTrailingRadius: 20
             )
         )
-        .padding(.horizontal, 0)
+        .gesture(panelDragGesture)
     }
 
-    private var dragHandle: some View {
+    private var panelDragHandle: some View {
         VStack(spacing: 0) {
             Capsule()
                 .fill(theme.textMuted.opacity(0.4))
                 .frame(width: 36, height: 4)
-                .padding(.vertical, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                menuExpanded.toggle()
-            }
-            HapticFeedback.light()
-        }
     }
 
-    private func actionGrid(actions: [OverlayAction]) -> some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ]
-
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(actions) { action in
-                actionButton(action)
-            }
-        }
-        .padding(.bottom, 8)
-    }
-
-    private func actionButton(_ action: OverlayAction) -> some View {
-        Button {
-            dismissThen { action.handler() }
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: action.color).opacity(theme.mode.isDark ? 0.2 : 0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: action.icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(Color(hex: action.color))
+    private var panelDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                withAnimation(.interactiveSpring()) {
+                    dragOffset = value.translation.height
                 }
-                Text(action.label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, minHeight: 72)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(ActionButtonStyle())
+            .onEnded { value in
+                let velocity = value.predictedEndTranslation.height - value.translation.height
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    if value.translation.height < -80 || velocity < -200 {
+                        // Expanded: pull up to max
+                        dragOffset = -400
+                    } else if value.translation.height > 80 || velocity > 200 {
+                        // Collapsed: push down to normal
+                        dragOffset = 0
+                    } else {
+                        // Snap back
+                        dragOffset = dragOffset < -100 ? -400 : 0
+                    }
+                }
+            }
     }
 
-    private var cancelButton: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .padding(.horizontal, 16)
-
-            Button { dismiss() } label: {
-                Text("Annuler")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-        }
-    }
-
-    private var menuBackground: some View {
+    private var panelBackground: some View {
         UnevenRoundedRectangle(
             topLeadingRadius: 20,
             bottomLeadingRadius: 0,
@@ -590,93 +459,39 @@ struct MessageOverlayMenu: View {
         .shadow(color: .black.opacity(0.2), radius: 20, y: -4)
     }
 
-    // MARK: - Drag Gesture
+    // MARK: - Quick Actions for Grid
 
-    private var menuDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                let translation = value.translation.height
-                if translation < -30 && !menuExpanded {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        menuExpanded = true
-                    }
-                    HapticFeedback.light()
-                } else if translation > 30 && menuExpanded {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        menuExpanded = false
-                    }
-                    HapticFeedback.light()
-                } else if translation > 60 && !menuExpanded {
-                    dismiss()
-                }
-            }
-    }
+    private var overlayActions: [MessageAction] {
+        var actions: [MessageAction] = []
+        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-    // MARK: - Available Actions
-
-    private var availableActions: [OverlayAction] {
-        var actions: [OverlayAction] = []
-
-        actions.append(OverlayAction(
-            id: "reply",
-            icon: "arrowshape.turn.up.left.fill",
-            label: "Repondre",
-            color: "4ECDC4",
-            handler: { onReply?() }
+        actions.append(MessageAction(
+            id: "reply", icon: "arrowshape.turn.up.left.fill",
+            label: "Repondre", color: "4ECDC4",
+            handler: { dismissThen { onReply?() } }
         ))
 
-        let hasTextContent = !message.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty
-        if hasTextContent {
-            actions.append(OverlayAction(
-                id: "copy",
-                icon: "doc.on.doc.fill",
-                label: "Copier",
-                color: "9B59B6",
-                handler: { onCopy?() }
+        if hasText {
+            actions.append(MessageAction(
+                id: "copy", icon: "doc.on.doc.fill",
+                label: "Copier", color: "9B59B6",
+                handler: { dismissThen { onCopy?() } }
             ))
         }
 
-        actions.append(OverlayAction(
-            id: "forward",
-            icon: "arrowshape.turn.up.forward.fill",
-            label: "Transferer",
-            color: "F8B500",
-            handler: { onForward?() }
-        ))
-
-        actions.append(OverlayAction(
+        actions.append(MessageAction(
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
             label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
             color: "3498DB",
-            handler: { onPin?() }
+            handler: { dismissThen { onPin?() } }
         ))
 
-        actions.append(OverlayAction(
-            id: "info",
-            icon: "info.circle.fill",
-            label: "Infos",
-            color: "45B7D1",
-            handler: { onShowInfo?() }
-        ))
-
-        if message.isMe {
-            if hasTextContent {
-                actions.append(OverlayAction(
-                    id: "edit",
-                    icon: "pencil",
-                    label: "Modifier",
-                    color: "F8B500",
-                    handler: { onEdit?() }
-                ))
-            }
-
-            actions.append(OverlayAction(
-                id: "delete",
-                icon: "trash.fill",
-                label: "Supprimer",
-                color: "FF6B6B",
-                handler: { onDelete?() }
+        if message.isMe && hasText {
+            actions.append(MessageAction(
+                id: "edit", icon: "pencil",
+                label: "Modifier", color: "F8B500",
+                handler: { dismissThen { onEdit?() } }
             ))
         }
 
@@ -684,12 +499,6 @@ struct MessageOverlayMenu: View {
     }
 
     // MARK: - Helpers
-
-    private func formatDuration(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
 
     private func formatFileSize(_ bytes: Int) -> String {
         if bytes < 1024 { return "\(bytes) B" }
@@ -725,33 +534,436 @@ struct MessageOverlayMenu: View {
     }
 }
 
-// MARK: - Overlay Action Model
+// MARK: - Preview Audio Player (interactive)
 
-private struct OverlayAction: Identifiable {
-    let id: String
-    let icon: String
-    let label: String
-    let color: String
-    let handler: () -> Void
-}
+private struct PreviewAudioPlayer: View {
+    let attachment: MessageAttachment
+    let contactColor: String
 
-// MARK: - Emoji Button Style
+    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var player = OverlayAudioPlayer()
 
-private struct EmojiButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 1.35 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: configuration.isPressed)
+    private var accent: Color { Color(hex: contactColor) }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Button { player.toggle(url: attachment.fileUrl) } label: {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                        if player.isLoading {
+                            ProgressView()
+                                .tint(accent)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(accent)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+
+                    Text(player.timeLabel(totalDuration: attachment.duration))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .monospacedDigit()
+                }
+
+                Spacer()
+
+                Menu {
+                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                        Button {
+                            player.setRate(Float(rate))
+                        } label: {
+                            HStack {
+                                Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
+                                if abs(Double(player.playbackRate) - rate) < 0.01 {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Text("\(String(format: "%.2g", player.playbackRate))x")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(accent.opacity(0.12)))
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button { player.skip(seconds: -5) } label: {
+                    Image(systemName: "gobackward.5")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+
+                Slider(
+                    value: Binding(
+                        get: { player.progress },
+                        set: { player.seek(to: $0) }
+                    ),
+                    in: 0...1
+                )
+                .tint(accent)
+
+                // Pourcentage d'avancement
+                Text("\(player.percentInt)%")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
+                    .frame(minWidth: 36)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
+
+                Button { player.skip(seconds: 5) } label: {
+                    Image(systemName: "goforward.5")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+        )
+        .onDisappear { player.stop() }
     }
 }
 
-// MARK: - Action Button Style
+// MARK: - Preview Video Player (interactive)
 
-private struct ActionButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+private struct PreviewVideoPlayer: View {
+    let attachment: MessageAttachment
+    let contactColor: String
+
+    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var player = OverlayAudioPlayer()
+    @State private var showThumbnail = true
+
+    private var accent: Color { Color(hex: contactColor) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                let thumbUrl = attachment.thumbnailUrl ?? attachment.fileUrl
+                CachedAsyncImage(url: thumbUrl) {
+                    Color(hex: contactColor).opacity(0.2)
+                }
+                .aspectRatio(16/9, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: 200)
+                .clipped()
+
+                if showThumbnail {
+                    Button {
+                        showThumbnail = false
+                        player.toggle(url: attachment.fileUrl)
+                    } label: {
+                        Circle()
+                            .fill(.black.opacity(0.5))
+                            .frame(width: 52, height: 52)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.white)
+                                    .offset(x: 2)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
+
+            if !showThumbnail {
+                videoControls
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onDisappear { player.stop() }
+    }
+
+    private var videoControls: some View {
+        VStack(spacing: 4) {
+            Slider(
+                value: Binding(
+                    get: { player.progress },
+                    set: { player.seek(to: $0) }
+                ),
+                in: 0...1
+            )
+            .tint(accent)
+
+            HStack(spacing: 8) {
+                Button { player.toggle(url: attachment.fileUrl) } label: {
+                    if player.isLoading {
+                        ProgressView()
+                            .tint(accent)
+                            .scaleEffect(0.5)
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(accent)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Button { player.skip(seconds: -5) } label: {
+                    Image(systemName: "gobackward.5")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+
+                Text("\(player.percentInt)%")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
+                    .frame(minWidth: 32)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
+
+                Button { player.skip(seconds: 5) } label: {
+                    Image(systemName: "goforward.5")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(player.timeLabel(totalDuration: attachment.duration))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .monospacedDigit()
+
+                speedMenu
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+        )
+    }
+
+    private var speedMenu: some View {
+        Menu {
+            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                Button {
+                    player.setRate(Float(rate))
+                } label: {
+                    HStack {
+                        Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
+                        if abs(Double(player.playbackRate) - rate) < 0.01 {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text("\(String(format: "%.2g", player.playbackRate))x")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(accent)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(accent.opacity(0.12)))
+        }
+    }
+}
+
+// MARK: - Overlay Audio Player (AVPlayer wrapper with PlaybackCoordinator integration)
+
+@MainActor
+private class OverlayAudioPlayer: ObservableObject {
+    @Published var isPlaying = false
+    @Published var progress: Double = 0
+    @Published var currentTime: TimeInterval = 0
+    @Published var duration: TimeInterval = 0
+    @Published var playbackRate: Float = 1.0
+    @Published var isLoading = false
+
+    private var avPlayer: AVPlayer?
+    private var timeObserver: Any?
+    private var statusObservation: NSKeyValueObservation?
+    private var currentURL: String?
+
+    var percentInt: Int { Int(progress * 100) }
+
+    func toggle(url: String) {
+        if isPlaying {
+            avPlayer?.pause()
+            isPlaying = false
+            return
+        }
+
+        if currentURL != url {
+            stop()
+            currentURL = url
+            guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
+            isLoading = true
+            let item = AVPlayerItem(url: resolved)
+            avPlayer = AVPlayer(playerItem: item)
+
+            statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if item.status == .readyToPlay {
+                        self.isLoading = false
+                        self.avPlayer?.rate = self.playbackRate
+                        self.isPlaying = true
+                    } else if item.status == .failed {
+                        self.isLoading = false
+                    }
+                }
+            }
+
+            setupTimeObserver()
+            observeEnd(item: item)
+            return
+        }
+
+        avPlayer?.rate = playbackRate
+        isPlaying = true
+    }
+
+    func stop() {
+        avPlayer?.pause()
+        if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
+        timeObserver = nil
+        statusObservation?.invalidate()
+        statusObservation = nil
+        avPlayer = nil
+        currentURL = nil
+        isPlaying = false
+        isLoading = false
+        progress = 0
+        currentTime = 0
+        duration = 0
+    }
+
+    func seek(to fraction: Double) {
+        guard let player = avPlayer, let item = player.currentItem else { return }
+        let total = item.duration.seconds
+        guard total.isFinite && total > 0 else { return }
+        let target = CMTime(seconds: fraction * total, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        progress = fraction
+        currentTime = fraction * total
+    }
+
+    func skip(seconds: Double) {
+        guard let player = avPlayer else { return }
+        let current = player.currentTime().seconds
+        let total = player.currentItem?.duration.seconds ?? 0
+        guard total.isFinite && total > 0 else { return }
+        let newTime = max(0, min(total, current + seconds))
+        player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTime = newTime
+        progress = newTime / total
+    }
+
+    func setRate(_ rate: Float) {
+        playbackRate = rate
+        if isPlaying {
+            avPlayer?.rate = rate
+        }
+    }
+
+    func timeLabel(totalDuration: Int?) -> String {
+        let current = formatTime(currentTime)
+        let total = formatTime(duration > 0 ? duration : Double(totalDuration ?? 0))
+        return "\(current) / \(total)"
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
+
+    private func setupTimeObserver() {
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserver = avPlayer?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            Task { @MainActor [weak self] in
+                guard let self, let item = self.avPlayer?.currentItem else { return }
+                let total = item.duration.seconds
+                guard total.isFinite && total > 0 else { return }
+                self.duration = total
+                self.currentTime = time.seconds
+                self.progress = time.seconds / total
+            }
+        }
+    }
+
+    private func observeEnd(item: AVPlayerItem) {
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.isPlaying = false
+                self?.progress = 0
+                self?.currentTime = 0
+                self?.avPlayer?.seek(to: .zero)
+            }
+        }
+    }
+
+    deinit {
+        if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+
+// MARK: - Emoji Usage Tracker
+
+struct EmojiUsageTracker {
+    private static let key = "com.meeshy.emojiUsageCount"
+
+    static func recordUsage(emoji: String) {
+        var counts = getCounts()
+        counts[emoji, default: 0] += 1
+        UserDefaults.standard.set(counts, forKey: key)
+    }
+
+    static func sortedEmojis(from emojis: [String]) -> [String] {
+        let counts = getCounts()
+        if counts.isEmpty { return emojis }
+        return emojis.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
+    }
+
+    static func topEmojis(count: Int, defaults: [String]) -> [String] {
+        let counts = getCounts()
+        let trackedSorted = counts.sorted { $0.value > $1.value }.map(\.key)
+
+        var result: [String] = []
+        for emoji in trackedSorted where result.count < count {
+            result.append(emoji)
+        }
+        for emoji in defaults where result.count < count && !result.contains(emoji) {
+            result.append(emoji)
+        }
+        return result
+    }
+
+    private static func getCounts() -> [String: Int] {
+        UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
     }
 }

@@ -20,37 +20,34 @@ extension ConversationView {
         let isActiveSwipe = swipedMessageId == msg.id
 
         ZStack {
-            // Reply icon revealed behind the bubble
-            if isActiveSwipe && abs(swipeOffset) > 20 {
+            // Icône répondre/transférer révélée élastiquement derrière la bulle
+            if isActiveSwipe {
+                let progress = min(abs(swipeOffset) / 72.0, 1.0)
+                let isReplyDir = swipeOffset * replyDirection > 0
+                let iconColor = isReplyDir ? "4ECDC4" : "F8B500"
                 HStack {
-                    if !msg.isMe {
-                        Spacer()
-                    }
-                    Image(systemName: swipeOffset * replyDirection > 0 ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
+                    // L'icône se place du côté révélé (opposé au déplacement de la bulle)
+                    if swipeOffset <= 0 { Spacer() }
+                    Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500"))
+                        .foregroundStyle(Color(hex: iconColor))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(hex: swipeOffset * replyDirection > 0 ? "4ECDC4" : "F8B500").opacity(0.15)))
-                        .scaleEffect(min(abs(swipeOffset) / 60.0, 1.0))
-                        .opacity(min(abs(swipeOffset) / 40.0, 1.0))
-                    if msg.isMe {
-                        Spacer()
-                    }
+                        .background(Circle().fill(Color(hex: iconColor).opacity(0.15)))
+                        .scaleEffect(0.4 + 0.6 * progress)
+                        .opacity(min(progress * 2.5, 1.0))
+                    if swipeOffset > 0 { Spacer() }
                 }
                 .padding(.horizontal, 16)
             }
 
             VStack(spacing: 0) {
-                // Quick reaction bar + action menu (above the bubble)
-                if quickReactionMessageId == msg.id {
-                    quickReactionBar(for: msg.id)
-                        .transition(.scale(scale: 0.8, anchor: msg.isMe ? .bottomTrailing : .bottomLeading).combined(with: .opacity))
-                        .padding(.bottom, 6)
-                }
-
                 ThemedMessageBubble(
                     message: msg,
                     contactColor: accentColor,
+                    transcription: viewModel.messageTranscriptions[msg.id],
+                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
+                    preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
                     onAddReaction: { messageId in
@@ -58,32 +55,90 @@ extension ConversationView {
                             emojiOnlyMode = true
                             quickReactionMessageId = messageId
                         }
-                        HapticFeedback.medium()
+                        HapticFeedback.light()
+                    },
+                    onToggleReaction: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                    },
+                    onOpenReactPicker: { messageId in
+                        let target = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetMessage = target
+                        detailSheetInitialTab = .react
+                        showMessageDetailSheet = true
                     },
                     onShowInfo: {
-                        infoSheetMessage = msg
-                        showMessageInfoSheet = true
+                        detailSheetMessage = msg
+                        detailSheetInitialTab = .views
+                        showMessageDetailSheet = true
+                    },
+                    onShowReactions: { messageId in
+                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetInitialTab = .reactions
+                        showMessageDetailSheet = true
                     },
                     onReplyTap: { messageId in
                         scrollToMessageId = messageId
-                    }
-                )
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: MessageFrameKey.self,
-                            value: [msg.id: geo.frame(in: .global)]
-                        )
-                    }
+                    },
+                    onMediaTap: { attachment in
+                        // User explicitly tapped media -> always cache (not conditional)
+                        if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                            Task { await MediaCacheManager.shared.prefetch(resolved) }
+                        }
+                        galleryStartAttachment = attachment
+                    },
+                    onConsumeViewOnce: { messageId, completion in
+                        Task {
+                            let success = await viewModel.consumeViewOnce(messageId: messageId)
+                            completion(success)
+                        }
+                    },
+                    onRequestTranslation: { messageId, targetLang in
+                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
+                    },
+                    onShowTranslationDetail: { messageId in
+                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
+                        detailSheetInitialTab = .language
+                        showMessageDetailSheet = true
+                    },
+                    allAudioItems: viewModel.allAudioItems,
+                    onScrollToMessage: { messageId in
+                        scrollToMessageId = messageId
+                    },
+                    activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil
                 )
                 .onLongPressGesture(minimumDuration: 0.5) {
                     guard longPressEnabled else { return }
-                    overlayMessageFrame = messageFrames[msg.id] ?? .zero
+                    // Removed overlayMessageFrame (GeometryReader dependency)
+                    // We will center the overlay menu in screen if needed, 
+                    // or rely on native Menu in future iterations. 
+                    overlayMessageFrame = .zero
                     overlayMessage = msg
                     showOverlayMenu = true
                     HapticFeedback.medium()
                 }
                 .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
+
+                // Reply count pill
+                if let replyCount = replyCountFor(messageId: msg.id), replyCount > 0 {
+                    HStack {
+                        if msg.isMe { Spacer() }
+                        replyCountPill(count: replyCount, isMe: msg.isMe, parentMessageId: msg.id)
+                        if !msg.isMe { Spacer() }
+                    }
+                    .padding(.top, 2)
+                }
+
+                // Quick reaction bar (below message)
+                if quickReactionMessageId == msg.id {
+                    HStack {
+                        if msg.isMe { Spacer() }
+                        quickReactionBar(for: msg.id)
+                        if !msg.isMe { Spacer() }
+                    }
+                    .transition(.scale(scale: 0.85, anchor: msg.isMe ? .topTrailing : .topLeading).combined(with: .opacity))
+                    .padding(.top, 4)
+                    .zIndex(100)
+                }
 
                 // Failed message retry bar
                 if msg.deliveryStatus == .failed && msg.isMe {
@@ -92,26 +147,37 @@ extension ConversationView {
             }
             .offset(x: isActiveSwipe ? swipeOffset : 0)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 20)
+                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 15)
                     .onChanged { value in
-                        // Only allow horizontal swipes
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        let h = value.translation.width
+                        let v = abs(value.translation.height)
+                        // Geste clairement horizontal (ratio 2:1)
+                        guard abs(h) > v * 2 else { return }
+                        guard abs(h) > 12 else { return }
                         swipedMessageId = msg.id
-                        // Elastic resistance after threshold
-                        let raw = value.translation.width
-                        let clamped = raw > 0 ? min(raw, 80) : max(raw, -80)
-                        swipeOffset = clamped
+                        // Rubber-band : libre jusqu'à 72 pt, résistance 15 % au-delà
+                        let zone: CGFloat = 72
+                        let absH = abs(h)
+                        let sign: CGFloat = h > 0 ? 1 : -1
+                        if absH > zone {
+                            swipeOffset = sign * (zone + (absH - zone) * 0.15)
+                        } else {
+                            swipeOffset = h
+                        }
                     }
                     .onEnded { value in
-                        let threshold: CGFloat = 60
-                        if swipeOffset * replyDirection > threshold {
-                            // Reply action
+                        let directed = swipeOffset * replyDirection
+                        // Déclenchement à ≥ 92 % de la zone (≈ 66 pt sur 72 pt)
+                        if directed >= 66 {
                             triggerReply(for: msg)
-                        } else if swipeOffset * replyDirection < -threshold {
-                            // Forward action (opposite direction)
+                            HapticFeedback.success()
+                        } else if directed <= -66 {
                             forwardMessage = msg
+                            HapticFeedback.success()
+                        } else if abs(swipeOffset) > 15 {
+                            HapticFeedback.light()
                         }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.62, blendDuration: 0.04)) {
                             swipeOffset = 0
                             swipedMessageId = nil
                         }
@@ -121,7 +187,11 @@ extension ConversationView {
         .id(msg.id)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(hex: accentColor).opacity(highlightedMessageId == msg.id ? 0.2 : 0))
+                .fill(Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.25 : 0))
+                .shadow(
+                    color: Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.4 : 0),
+                    radius: highlightedMessageId == msg.id ? 12 : 0
+                )
                 .animation(.easeInOut(duration: 0.3), value: highlightedMessageId)
                 .allowsHitTesting(false)
         )
@@ -132,6 +202,42 @@ extension ConversationView {
             )
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
+        .onTapGesture {
+            if quickReactionMessageId != nil && quickReactionMessageId != msg.id {
+                closeReactionBar()
+            }
+        }
+        .onAppear {
+            prefetchNearbyMedia(index: index)
+        }
+    }
+
+    // MARK: - Media Prefetch
+
+    func prefetchNearbyMedia(index: Int) {
+        guard index >= 0 && index < viewModel.messages.count else { return }
+        
+        // Optimize: Only prefetch the media for the CURRENT message appearing,
+        // rather than scanning 11 nearby messages every time a cell appears (O(N) overhead).
+        let msg = viewModel.messages[index]
+        
+        for attachment in msg.attachments {
+            let urls = [
+                attachment.thumbnailUrl,
+                attachment.type == .image ? attachment.fileUrl : nil,
+            ].compactMap { $0 }.filter { !$0.isEmpty }
+
+            for urlStr in urls {
+                guard let resolved = MeeshyConfig.resolveMediaURL(urlStr) else { continue }
+                Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+            }
+        }
+
+        if let avatarURL = msg.senderAvatarURL, !avatarURL.isEmpty {
+            if let resolved = MeeshyConfig.resolveMediaURL(avatarURL) {
+                Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+            }
+        }
     }
 
     func triggerReply(for msg: Message) {
@@ -155,16 +261,21 @@ extension ConversationView {
     }
 
     func scrollToAndHighlight(_ targetId: String, proxy: ScrollViewProxy) {
+        let messageExists = viewModel.messages.contains { $0.id == targetId }
+        guard messageExists else {
+            ToastManager.shared.show("Message non disponible", type: .error)
+            return
+        }
         viewModel.markProgrammaticScroll()
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             proxy.scrollTo(targetId, anchor: .center)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeIn(duration: 0.15)) {
+            withAnimation(.easeIn(duration: 0.2)) {
                 highlightedMessageId = targetId
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                withAnimation(.easeOut(duration: 0.4)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeOut(duration: 0.5)) {
                     highlightedMessageId = nil
                 }
             }
@@ -190,7 +301,7 @@ extension ConversationView {
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
                     .onSubmit { triggerBackendSearch() }
-                    .onChange(of: searchQuery) { _ in debounceSearch() }
+                    .onChange(of: searchQuery) { _, _ in debounceSearch() }
 
                 if !searchQuery.isEmpty {
                     Button {
@@ -201,6 +312,7 @@ extension ConversationView {
                             .font(.system(size: 16))
                             .foregroundColor(theme.textMuted)
                     }
+                    .accessibilityLabel("Effacer la recherche")
                 }
             }
             .padding(.horizontal, 10)
@@ -223,6 +335,7 @@ extension ConversationView {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel("Fermer la recherche")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -458,6 +571,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
+                    .accessibilityLabel("Retourner aux messages recents")
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -471,92 +585,114 @@ extension ConversationView {
     // MARK: - Quick Reaction Bar + Actions
 
     func quickReactionBar(for messageId: String) -> some View {
-        VStack(spacing: 8) {
-            // Emoji strip
-            HStack(spacing: 6) {
-                ForEach(quickEmojis, id: \.self) { emoji in
-                    Button {
-                        viewModel.toggleReaction(messageId: messageId, emoji: emoji)
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            quickReactionMessageId = nil
-                        }
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 24))
-                            .frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(EmojiScaleButtonStyle())
-                }
+        let topReactions = EmojiUsageTracker.topEmojis(count: 15, defaults: defaultReactionEmojis)
 
-                // (+) button for full picker
-                Button {
-                    showEmojiPickerSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Color(hex: accentColor))
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(Color(hex: accentColor).opacity(0.15))
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
-                                )
-                        )
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 12, y: 4)
-            )
+        return VStack(spacing: 6) {
+            quickReactionEmojiStrip(messageId: messageId, emojis: topReactions)
 
-            // Action buttons row (hidden in emoji-only mode)
             if !emojiOnlyMode {
-                HStack(spacing: 8) {
-                    messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
-                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
-                            triggerReply(for: msg)
-                        }
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
-                        if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
-                            UIPasteboard.general.string = msg.content
-                        }
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                        forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
-                        closeReactionBar()
-                    }
-                    messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
-                        deleteConfirmMessageId = messageId
-                        closeReactionBar()
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule()
-                                .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
-                        )
-                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-                )
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                quickReactionActionsRow(messageId: messageId)
             }
         }
+    }
+
+    private func quickReactionEmojiStrip(messageId: String, emojis: [String]) -> some View {
+        let accent = Color(hex: accentColor)
+        return HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(emojis, id: \.self) { emoji in
+                        Button {
+                            viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                            EmojiUsageTracker.recordUsage(emoji: emoji)
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                quickReactionMessageId = nil
+                            }
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 18))
+                                .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(EmojiScaleButtonStyle())
+                    }
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, 2)
+            }
+            .frame(maxWidth: 166) // ~5 emojis visible (5*28 + 4*4 + 10)
+
+            Capsule()
+                .fill(accent.opacity(0.2))
+                .frame(width: 1, height: 18)
+                .padding(.horizontal, 3)
+
+            quickReactionPlusButton(messageId: messageId, accent: accent)
+                .padding(.trailing, 8)
+        }
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(accent.opacity(0.2), lineWidth: 0.5))
+                .shadow(color: accent.opacity(0.15), radius: 8, y: 3)
+        )
+    }
+
+    private func quickReactionPlusButton(messageId: String, accent: Color) -> some View {
+        Button {
+            let msg = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
+            closeReactionBar()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                detailSheetMessage = msg
+                detailSheetInitialTab = .react
+                showMessageDetailSheet = true
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(accent)
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .fill(accent.opacity(0.15))
+                        .overlay(Circle().stroke(accent.opacity(0.3), lineWidth: 0.5))
+                )
+        }
+    }
+
+    private func quickReactionActionsRow(messageId: String) -> some View {
+        HStack(spacing: 8) {
+            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
+                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                    triggerReply(for: msg)
+                }
+                closeReactionBar()
+            }
+            messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
+                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                    UIPasteboard.general.string = msg.content
+                }
+                closeReactionBar()
+            }
+            messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
+                forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
+                closeReactionBar()
+            }
+            messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
+                deleteConfirmMessageId = messageId
+                closeReactionBar()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        )
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
     func messageActionButton(icon: String, label: String, color: String, action: @escaping () -> Void) -> some View {
@@ -585,6 +721,7 @@ extension ConversationView {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
                 .foregroundColor(Color(hex: "FF6B6B"))
+                .accessibilityHidden(true)
 
             Text("Échec de l'envoi")
                 .font(.system(size: 11, weight: .medium))
@@ -592,6 +729,7 @@ extension ConversationView {
 
             Text("·")
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             Button {
                 HapticFeedback.light()
@@ -601,6 +739,7 @@ extension ConversationView {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel("Reessayer l'envoi du message")
 
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -611,10 +750,49 @@ extension ConversationView {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel("Supprimer le message en echec")
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, 16)
         .padding(.top, 2)
         .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    // MARK: - Reply Count
+
+    func replyCountFor(messageId: String) -> Int? {
+        let count = viewModel.messages.filter { $0.replyToId == messageId }.count
+        return count > 0 ? count : nil
+    }
+
+    func replyCountPill(count: Int, isMe: Bool, parentMessageId: String) -> some View {
+        let accent = Color(hex: accentColor)
+        let label = count == 1 ? "1 reponse" : "\(count) reponses"
+        return Button {
+            HapticFeedback.light()
+            if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
+                scrollToMessageId = firstReply.id
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrowshape.turn.up.left.2.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(accent.opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(accent.opacity(theme.mode.isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(label)
+        .accessibilityHint("Aller a la premiere reponse de ce message")
     }
 }

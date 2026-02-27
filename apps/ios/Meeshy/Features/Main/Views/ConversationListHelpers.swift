@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
@@ -116,19 +117,17 @@ struct ConversationPreviewView: View {
     private var secondaryColor: String { conversation.colorPalette.secondary }
 
     private func loadRecentMessages() async {
-        let limit = min(max(conversation.unreadCount, 8), 20)
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversation.id)/messages",
-                queryItems: [
-                    URLQueryItem(name: "limit", value: "\(limit)"),
-                    URLQueryItem(name: "offset", value: "0"),
-                ]
+            let response = try await MessageService.shared.list(
+                conversationId: conversation.id,
+                offset: 0,
+                limit: 4,
+                includeReplies: false
             )
             let userId = AuthManager.shared.currentUser?.id ?? ""
             messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
         } catch {
-            // Silent fail — preview is best-effort
+            // Silent fail -- preview is best-effort
         }
         isLoading = false
     }
@@ -165,7 +164,7 @@ struct ConversationPreviewView: View {
                         if conversation.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(Color(hex: "FF6B6B"))
+                                .foregroundColor(MeeshyColors.coral)
                         }
 
                         if conversation.isMuted {
@@ -180,7 +179,7 @@ struct ConversationPreviewView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                     .font(.system(size: 9))
-                                Text("\(conversation.memberCount) membres")
+                                Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
                                     .font(.system(size: 11, weight: .medium))
                             }
                             .foregroundColor(Color(hex: accentColor))
@@ -188,7 +187,7 @@ struct ConversationPreviewView: View {
                             Circle()
                                 .fill(Color(hex: "2ECC71"))
                                 .frame(width: 8, height: 8)
-                            Text("En ligne")
+                            Text(String(localized: "status.online", defaultValue: "En ligne"))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(Color(hex: "2ECC71"))
                         }
@@ -230,41 +229,53 @@ struct ConversationPreviewView: View {
                     )
             )
 
-            // Messages preview using ThemedMessageBubble style
-            ScrollView(showsIndicators: false) {
+            // Recent messages preview (up to 4 most recent, real bubbles)
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
                 if isLoading {
-                    VStack(spacing: 12) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(theme.textMuted.opacity(0.15))
-                                .frame(height: 36)
-                                .padding(.horizontal, 20)
+                    VStack(spacing: 6) {
+                        ForEach(0..<4, id: \.self) { i in
+                            HStack {
+                                if i % 2 == 0 { Spacer(minLength: 40) }
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(theme.textMuted.opacity(0.1))
+                                    .frame(width: CGFloat.random(in: 100...180), height: 28)
+                                if i % 2 != 0 { Spacer(minLength: 40) }
+                            }
+                            .padding(.horizontal, 8)
                         }
                     }
-                    .padding(.vertical, 10)
+                    .padding(.bottom, 8)
                 } else if messages.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 28))
-                            .foregroundColor(theme.textMuted.opacity(0.4))
-                        Text("Aucun message")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 22))
+                            .foregroundColor(theme.textMuted.opacity(0.3))
+                        Text(String(localized: "preview.no_messages", defaultValue: "Aucun message"))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 10)
                 } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(messages) { message in
-                            ThemedMessageBubble(message: message, contactColor: accentColor)
-                                .scaleEffect(0.9)
-                                .padding(.horizontal, 4)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            ForEach(messages) { msg in
+                                ThemedMessageBubble(
+                                    message: msg,
+                                    contactColor: accentColor,
+                                    showAvatar: !msg.isMe
+                                )
+                                .allowsHitTesting(false)
+                            }
                         }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 8)
                 }
             }
-            .frame(height: 300)
+            .frame(minHeight: 100, maxHeight: 260)
             .background(previewBackground)
         }
         .frame(width: 320)
@@ -309,24 +320,27 @@ struct ConversationPreviewView: View {
 // MARK: - Themed Community Card
 struct ThemedCommunityCard: View {
     let community: Community
+    var action: (() -> Void)? = nil
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
+    @State private var displayColor: String = "4ECDC4"
+    @State private var displayEmoji: String = ""
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             // Gradient background
             LinearGradient(
                 colors: [
-                    Color(hex: community.color),
-                    Color(hex: community.color).opacity(0.85)
+                    Color(hex: displayColor),
+                    Color(hex: displayColor).opacity(0.85)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
             // Banner emoji
-            Text(community.emoji)
-                .font(.system(size: 36))
+            Text(displayEmoji.isEmpty ? community.name.prefix(1).uppercased() : displayEmoji)
+                .font(.system(size: displayEmoji.isEmpty ? 28 : 36))
                 .offset(x: 70, y: -20)
                 .opacity(1.0)
                 .rotationEffect(.degrees(isPressed ? -10 : 0))
@@ -368,7 +382,11 @@ struct ThemedCommunityCard: View {
         }
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .scaleEffect(isPressed ? 0.95 : 1)
+        .onAppear {
+            displayColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color
+            displayEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? community.emoji
+        }
+        .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                 isPressed = true
@@ -377,6 +395,7 @@ struct ThemedCommunityCard: View {
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
                     isPressed = false
                 }
+                action?()
             }
             HapticFeedback.light()
         }

@@ -250,14 +250,14 @@ struct CheckNotificationsIntent: AppIntent {
     }
 
     private func getUnreadCount() -> Int {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app") else {
             return 0
         }
         return sharedDefaults.integer(forKey: "unread_count")
     }
 
     private func getRecentUnreadMessages() -> [String] {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let messages = sharedDefaults.stringArray(forKey: "recent_unread_messages") else {
             return []
         }
@@ -322,7 +322,7 @@ struct ContactEntity: AppEntity {
 struct ContactQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [ContactEntity] {
         // Load contacts from shared container
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let data = sharedDefaults.data(forKey: "contacts"),
               let contacts = try? JSONDecoder().decode([ContactData].self, from: data) else {
             return []
@@ -335,7 +335,7 @@ struct ContactQuery: EntityQuery {
 
     func suggestedEntities() async throws -> [ContactEntity] {
         // Return favorite/recent contacts
-        guard let sharedDefaults = UserDefaults(suiteName: "group.com.meeshy.app"),
+        guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.app"),
               let data = sharedDefaults.data(forKey: "favorite_contacts"),
               let contacts = try? JSONDecoder().decode([ContactData].self, from: data) else {
             return []

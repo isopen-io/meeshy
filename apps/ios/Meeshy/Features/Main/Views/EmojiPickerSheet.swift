@@ -144,13 +144,12 @@ final class EmojiDataManager: @unchecked Sendable {
     }
 }
 
-// MARK: - Emoji Picker Sheet
+// MARK: - Emoji Picker View (Embeddable)
 
-struct EmojiPickerSheet: View {
-    let quickReactions: [String]
+struct EmojiPickerView: View {
+    let recentEmojis: [String]
     let onSelect: (String) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var selectedCategory: EmojiGridCategory = .smileys
     @AppStorage("frequentEmojis") private var frequentEmojisData: Data = Data()
@@ -158,7 +157,7 @@ struct EmojiPickerSheet: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 8)
 
     private var frequentEmojis: [String] {
-        (try? JSONDecoder().decode([String].self, from: frequentEmojisData)) ?? quickReactions
+        (try? JSONDecoder().decode([String].self, from: frequentEmojisData)) ?? recentEmojis
     }
 
     private var emojisToDisplay: [String] {
@@ -172,111 +171,102 @@ struct EmojiPickerSheet: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Search bar
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
+        VStack(spacing: 0) {
+            // Search bar
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
 
-                    TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
-                        .font(.system(size: 14))
-                        .autocorrectionDisabled()
+                TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
+                    .font(.system(size: 14))
+                    .autocorrectionDisabled()
 
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(Color(UIColor.systemGray6))
-                .cornerRadius(10)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.systemGray6))
+            .cornerRadius(10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
 
-                // Category tabs (hidden during search)
-                if searchText.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 4) {
-                            ForEach(EmojiGridCategory.allCases.filter { $0 != .recent || !frequentEmojis.isEmpty }) { category in
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        selectedCategory = category
-                                    }
-                                } label: {
-                                    Image(systemName: category.icon)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(selectedCategory == category ? .white : .primary)
-                                        .frame(width: 36, height: 28)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(selectedCategory == category ? Color.accentColor : Color(.systemGray6))
-                                        )
+            // Category tabs (hidden during search)
+            if searchText.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(EmojiGridCategory.allCases.filter { $0 != .recent || !frequentEmojis.isEmpty }) { category in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedCategory = category
                                 }
-                                .buttonStyle(.plain)
+                            } label: {
+                                Image(systemName: category.icon)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(selectedCategory == category ? .white : .primary)
+                                    .frame(width: 36, height: 28)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(selectedCategory == category ? Color.accentColor : Color(.systemGray6))
+                                    )
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 12)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12)
                 }
+                .padding(.vertical, 4)
+            }
 
-                Divider()
+            Divider()
 
-                // Content
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        // Quick reactions (only when on recent tab and not searching)
-                        if searchText.isEmpty && selectedCategory == .recent {
-                            VStack(alignment: .leading, spacing: 8) {
-                                sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Reactions rapides"))
+            // Content
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    // Quick reactions (only when on recent tab and not searching)
+                    if searchText.isEmpty && selectedCategory == .recent {
+                        VStack(alignment: .leading, spacing: 8) {
+                            sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Reactions rapides"))
 
-                                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
-                                    ForEach(quickReactions.prefix(9), id: \.self) { emoji in
-                                        emojiButton(emoji, size: 44)
-                                    }
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                                ForEach(recentEmojis.prefix(9), id: \.self) { emoji in
+                                    emojiButton(emoji, size: 44)
                                 }
-                                .padding(.horizontal, 32)
                             }
+                            .padding(.horizontal, 32)
+                        }
 
-                            Divider().padding(.vertical, 4)
+                        Divider().padding(.vertical, 4)
 
-                            VStack(alignment: .leading, spacing: 8) {
-                                sectionHeader(icon: "clock", title: String(localized: "emoji.recent", defaultValue: "Utilises recemment"))
+                        VStack(alignment: .leading, spacing: 8) {
+                            sectionHeader(icon: "clock", title: String(localized: "emoji.recent", defaultValue: "Utilises recemment"))
 
-                                LazyVGrid(columns: columns, spacing: 8) {
-                                    ForEach(frequentEmojis.prefix(24), id: \.self) { emoji in
-                                        emojiButton(emoji)
-                                    }
-                                }
-                                .padding(.horizontal, 12)
-                            }
-                        } else {
-                            // Category emojis or search results
-                            LazyVGrid(columns: columns, spacing: 4) {
-                                ForEach(emojisToDisplay, id: \.self) { emoji in
+                            LazyVGrid(columns: columns, spacing: 8) {
+                                ForEach(frequentEmojis.prefix(24), id: \.self) { emoji in
                                     emojiButton(emoji)
                                 }
                             }
                             .padding(.horizontal, 12)
                         }
+                    } else {
+                        // Category emojis or search results
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(emojisToDisplay, id: \.self) { emoji in
+                                emojiButton(emoji)
+                            }
+                        }
+                        .padding(.horizontal, 12)
                     }
-                    .padding(.vertical, 8)
                 }
-            }
-            .navigationTitle(String(localized: "emoji.title", defaultValue: "Reactions"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "emoji.close", defaultValue: "Fermer")) { dismiss() }
-                }
+                .padding(.vertical, 8)
             }
         }
     }
@@ -318,6 +308,28 @@ struct EmojiPickerSheet: View {
         }
         frequentEmojisData = (try? JSONEncoder().encode(frequent)) ?? Data()
         onSelect(emoji)
+    }
+}
+
+// MARK: - Emoji Picker Sheet
+
+struct EmojiPickerSheet: View {
+    let quickReactions: [String]
+    let onSelect: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            EmojiPickerView(recentEmojis: quickReactions, onSelect: onSelect)
+                .navigationTitle(String(localized: "emoji.title", defaultValue: "Reactions"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(String(localized: "emoji.close", defaultValue: "Fermer")) { dismiss() }
+                    }
+                }
+        }
     }
 }
 

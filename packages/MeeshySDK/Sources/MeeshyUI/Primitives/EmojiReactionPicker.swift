@@ -58,8 +58,11 @@ public struct EmojiReactionPicker: View {
     public var quickEmojis: [String]
     public enum Style { case dark, light }
     public var style: Style
+    /// Scale factor applied to all sizes (default 1.0). Use < 1.0 for compact contexts.
+    public var scale: CGFloat
     public var onReact: ((String) -> Void)?
     public var onDismiss: (() -> Void)?
+    /// When nil, the "+" expand button is hidden.
     public var onExpandFullPicker: (() -> Void)?
 
     @State private var reactedEmoji: String?
@@ -67,11 +70,12 @@ public struct EmojiReactionPicker: View {
     public init(
         quickEmojis: [String] = ["❤️", "😂", "😮", "🔥", "😢", "👏"],
         style: Style = .dark,
+        scale: CGFloat = 1.0,
         onReact: ((String) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onExpandFullPicker: (() -> Void)? = nil
     ) {
-        self.quickEmojis = quickEmojis; self.style = style
+        self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.onReact = onReact; self.onDismiss = onDismiss
         self.onExpandFullPicker = onExpandFullPicker
     }
@@ -81,33 +85,35 @@ public struct EmojiReactionPicker: View {
     }
 
     private var quickEmojiStrip: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6 * scale) {
             ForEach(quickEmojis, id: \.self) { emoji in
                 Button {
                     reactToEmoji(emoji)
                 } label: {
                     Text(emoji)
-                        .font(.system(size: reactedEmoji == emoji ? 28 : 22))
+                        .font(.system(size: (reactedEmoji == emoji ? 28 : 22) * scale))
                         .scaleEffect(reactedEmoji == emoji ? 1.3 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
                 }
             }
-            Button {
-                HapticFeedback.light()
-                onExpandFullPicker?()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
+            if let onExpandFullPicker {
+                Button {
+                    HapticFeedback.light()
+                    onExpandFullPicker()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+                            .frame(width: 32 * scale, height: 32 * scale)
+                        Image(systemName: "plus")
+                            .font(.system(size: 14 * scale, weight: .bold))
+                            .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10 * scale)
+        .padding(.vertical, 6 * scale)
         .background(stripBackground)
     }
 

@@ -1,6 +1,7 @@
 import Foundation
 import SocketIO
 import Combine
+import os
 
 // MARK: - Message Socket Event Data
 
@@ -83,6 +84,27 @@ public struct TranscriptionSegment: Decodable {
     public let endTime: Double?
     public let speakerId: String?
     public let voiceSimilarityScore: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case text, startMs, endMs, startTime, endTime, speakerId, voiceSimilarityScore
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        speakerId = try c.decodeIfPresent(String.self, forKey: .speakerId)
+        voiceSimilarityScore = try c.decodeIfPresent(Double.self, forKey: .voiceSimilarityScore)
+        if let ms = try c.decodeIfPresent(Double.self, forKey: .startMs) {
+            startTime = ms / 1000.0
+        } else {
+            startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        }
+        if let ms = try c.decodeIfPresent(Double.self, forKey: .endMs) {
+            endTime = ms / 1000.0
+        } else {
+            endTime = try c.decodeIfPresent(Double.self, forKey: .endTime)
+        }
+    }
 }
 
 public struct TranscriptionData: Decodable {
@@ -134,6 +156,24 @@ public struct ReadStatusUpdateEvent: Decodable {
     public let updatedAt: Date
 }
 
+public struct MessageConsumedEvent: Decodable {
+    public let messageId: String
+    public let conversationId: String
+    public let userId: String
+    public let viewOnceCount: Int
+    public let maxViewOnceCount: Int
+    public let isFullyConsumed: Bool
+}
+
+// MARK: - Connection State
+
+public enum ConnectionState: Equatable {
+    case connected
+    case connecting
+    case reconnecting(attempt: Int)
+    case disconnected
+}
+
 // MARK: - Message Socket Manager
 
 public final class MessageSocketManager: ObservableObject {
@@ -159,6 +199,15 @@ public final class MessageSocketManager: ObservableObject {
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
 
+    // Combine publishers — view-once
+    public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
+
+    // Combine publishers — location sharing
+    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
+    public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
+    public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
+    public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
+
     // Combine publishers — translation
     public let translationReceived = PassthroughSubject<TranslationEvent, Never>()
 
@@ -168,12 +217,21 @@ public final class MessageSocketManager: ObservableObject {
     public let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     public let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
 
+    // Combine publisher — reconnection (fires after successful reconnect)
+    public let didReconnect = PassthroughSubject<Void, Never>()
+
     @Published public var isConnected = false
+    @Published public var connectionState: ConnectionState = .disconnected
+
+    // The currently active (foreground) conversation for priority re-join
+    public var activeConversationId: String?
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
     private var joinedConversations: Set<String> = []
+    private var reconnectAttempt: Int = 0
+    private var hadPreviousConnection = false
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -194,11 +252,13 @@ public final class MessageSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[MessageSocket] No auth token, skipping connect")
+            Logger.socket.warning("No auth token, skipping connect")
             return
         }
 
         guard let url = SocketConfig.baseURL else { return }
+
+        DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
@@ -206,8 +266,9 @@ public final class MessageSocketManager: ObservableObject {
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
             .reconnects(true),
-            .reconnectWait(3),
-            .reconnectWaitMax(30),
+            .reconnectWait(1),
+            .reconnectWaitMax(16),
+            .reconnectAttempts(-1),
         ])
 
         socket = manager?.defaultSocket
@@ -217,10 +278,14 @@ public final class MessageSocketManager: ObservableObject {
 
     public func disconnect() {
         joinedConversations.removeAll()
+        activeConversationId = nil
         socket?.disconnect()
         socket = nil
         manager = nil
         isConnected = false
+        connectionState = .disconnected
+        reconnectAttempt = 0
+        hadPreviousConnection = false
     }
 
     // MARK: - Room Management
@@ -229,14 +294,14 @@ public final class MessageSocketManager: ObservableObject {
         guard !joinedConversations.contains(conversationId) else { return }
         socket?.emit("conversation:join", ["conversationId": conversationId])
         joinedConversations.insert(conversationId)
-        print("[MessageSocket] Joined conversation:\(conversationId)")
+        Logger.socket.info("Joined conversation: \(conversationId)")
     }
 
     public func leaveConversation(_ conversationId: String) {
         guard joinedConversations.contains(conversationId) else { return }
         socket?.emit("conversation:leave", ["conversationId": conversationId])
         joinedConversations.remove(conversationId)
-        print("[MessageSocket] Left conversation:\(conversationId)")
+        Logger.socket.info("Left conversation: \(conversationId)")
     }
 
     // MARK: - Typing Emission
@@ -249,6 +314,37 @@ public final class MessageSocketManager: ObservableObject {
         socket?.emit("typing:stop", ["conversationId": conversationId])
     }
 
+    // MARK: - Translation Request
+
+    public func requestTranslation(messageId: String, targetLanguage: String) {
+        socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
+        Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+    }
+
+    // MARK: - Location Emission
+
+    public func emitLocationShare(payload: LocationSharePayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:share", dict)
+    }
+
+    public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:live-start", dict)
+    }
+
+    public func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {
+        guard let data = try? JSONEncoder().encode(payload),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        socket?.emit("location:live-update", dict)
+    }
+
+    public func emitLiveLocationStop(conversationId: String) {
+        socket?.emit("location:live-stop", ["conversationId": conversationId])
+    }
+
     // MARK: - Event Handlers
 
     private func setupEventHandlers() {
@@ -256,21 +352,56 @@ public final class MessageSocketManager: ObservableObject {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
-            DispatchQueue.main.async { self.isConnected = true }
-            // Re-join conversations on reconnect
-            for convId in self.joinedConversations {
+            let wasReconnect = self.hadPreviousConnection
+            self.hadPreviousConnection = true
+            self.reconnectAttempt = 0
+
+            DispatchQueue.main.async {
+                self.isConnected = true
+                self.connectionState = .connected
+            }
+
+            // Re-join all tracked conversations
+            // Priority: active conversation first for fastest UX
+            if let activeId = self.activeConversationId, self.joinedConversations.contains(activeId) {
+                self.socket?.emit("conversation:join", ["conversationId": activeId])
+            }
+            for convId in self.joinedConversations where convId != self.activeConversationId {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
-            print("[MessageSocket] Connected")
+
+            if wasReconnect {
+                Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
+                DispatchQueue.main.async { self.didReconnect.send(()) }
+            } else {
+                Logger.socket.info("MessageSocket connected")
+            }
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.isConnected = false }
-            print("[MessageSocket] Disconnected")
+            DispatchQueue.main.async {
+                self?.isConnected = false
+                if self?.hadPreviousConnection == true {
+                    self?.connectionState = .reconnecting(attempt: 0)
+                } else {
+                    self?.connectionState = .disconnected
+                }
+            }
+            Logger.socket.info("MessageSocket disconnected")
+        }
+
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            guard let self else { return }
+            self.reconnectAttempt += 1
+            let attempt = self.reconnectAttempt
+            DispatchQueue.main.async {
+                self.connectionState = .reconnecting(attempt: attempt)
+            }
+            Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
         socket.on(clientEvent: .error) { _, args in
-            print("[MessageSocket] Error: \(args)")
+            Logger.socket.error("MessageSocket error: \(args)")
         }
 
         // --- Message events ---
@@ -386,6 +517,38 @@ public final class MessageSocketManager: ObservableObject {
                 self?.readStatusUpdated.send(event)
             }
         }
+
+        socket.on("message:consumed") { [weak self] data, _ in
+            self?.decode(MessageConsumedEvent.self, from: data) { event in
+                self?.messageConsumed.send(event)
+            }
+        }
+
+        // --- Location events ---
+
+        socket.on("location:shared") { [weak self] data, _ in
+            self?.decode(LocationSharedEvent.self, from: data) { event in
+                self?.locationShared.send(event)
+            }
+        }
+
+        socket.on("location:live-started") { [weak self] data, _ in
+            self?.decode(LiveLocationStartedEvent.self, from: data) { event in
+                self?.liveLocationStarted.send(event)
+            }
+        }
+
+        socket.on("location:live-updated") { [weak self] data, _ in
+            self?.decode(LiveLocationUpdatedEvent.self, from: data) { event in
+                self?.liveLocationUpdated.send(event)
+            }
+        }
+
+        socket.on("location:live-stopped") { [weak self] data, _ in
+            self?.decode(LiveLocationStoppedEvent.self, from: data) { event in
+                self?.liveLocationStopped.send(event)
+            }
+        }
     }
 
     // MARK: - Decode Helper
@@ -408,7 +571,7 @@ public final class MessageSocketManager: ObservableObject {
                 handler(decoded)
             }
         } catch {
-            print("[MessageSocket] Decode error for \(type): \(error)")
+            Logger.socket.error("Decode error for \(String(describing: type)): \(error)")
         }
     }
 }

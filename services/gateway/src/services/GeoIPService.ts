@@ -216,7 +216,68 @@ export async function getRequestContext(request: FastifyRequest): Promise<Reques
   const geoData = await lookupGeoIp(ip);
   const deviceInfo = parseUserAgent(userAgent);
 
-  return { ip, userAgent, geoData, deviceInfo };
+  const { deviceInfo: enrichedDevice, geoData: enrichedGeo } =
+    mergeClientHeaders(deviceInfo, geoData, request.headers);
+
+  return { ip, userAgent, geoData: enrichedGeo, deviceInfo: enrichedDevice };
+}
+
+/**
+ * Enrichit deviceInfo et geoData depuis les headers X-Meeshy-* envoyés par le client iOS.
+ * Les valeurs client ont priorité sur la déduction UA/IP (plus précises).
+ */
+export function mergeClientHeaders(
+  deviceInfo: DeviceInfo | null,
+  geoData: GeoIpData | null,
+  headers: Record<string, string | string[] | undefined>
+): { deviceInfo: DeviceInfo | null; geoData: GeoIpData | null } {
+  const get = (key: string): string | null => {
+    const val = headers[key.toLowerCase()];
+    return typeof val === 'string' ? val : Array.isArray(val) ? val[0] : null;
+  };
+
+  const platform  = get('x-meeshy-platform');
+  const device    = get('x-meeshy-device');
+  const osVersion = get('x-meeshy-os');
+  const country   = get('x-meeshy-country');
+  const city      = get('x-meeshy-city');
+  const timezone  = get('x-meeshy-timezone');
+  const region    = get('x-meeshy-region');
+
+  // Enrichir deviceInfo si headers présents
+  let enrichedDevice = deviceInfo;
+  if (platform || device || osVersion) {
+    const isIos = platform === 'ios';
+    enrichedDevice = {
+      ...(deviceInfo ?? {
+        type: 'mobile', vendor: null, model: null,
+        os: null, osVersion: null, browser: null, browserVersion: null,
+        isMobile: true, isTablet: false, rawUserAgent: '',
+      }),
+      ...(device    ? { model: device }        : {}),
+      ...(osVersion ? { osVersion }             : {}),
+      ...(isIos     ? { os: 'iOS', vendor: 'Apple', type: 'mobile', isMobile: true } : {}),
+    };
+  }
+
+  // Enrichir geoData si headers présents
+  let enrichedGeo = geoData;
+  if (country || city || timezone || region) {
+    enrichedGeo = {
+      ...(geoData ?? {
+        ip: '', country: null, countryName: null,
+        city: null, region: null, timezone: null, location: null,
+        latitude: null, longitude: null,
+      }),
+      ...(country  ? { country }  : {}),
+      ...(city     ? { city }     : {}),
+      ...(timezone ? { timezone } : {}),
+      ...(region   ? { region }   : {}),
+      location: city && country ? `${city}, ${country}` : (geoData?.location ?? null),
+    };
+  }
+
+  return { deviceInfo: enrichedDevice, geoData: enrichedGeo };
 }
 
 /**

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
@@ -86,7 +87,7 @@ struct NewConversationView: View {
         HStack(spacing: 10) {
             Image(systemName: "person.3.fill")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: "9B59B6"))
+                .foregroundColor(MeeshyColors.purple)
 
             TextField("Nom du groupe", text: $groupTitle)
                 .font(.system(size: 15, weight: .medium))

@@ -687,7 +687,20 @@ async def _extract_speaker_audio(
         temp_wav_path = None
         cache_used = False
 
-        if source_audio_path.lower().endswith(('.m4a', '.aac', '.mp4')):
+        def _is_real_wav(p):
+            try:
+                with open(p, 'rb') as fh:
+                    hdr = fh.read(12)
+                return hdr[:4] == b'RIFF' and hdr[8:12] == b'WAVE'
+            except (OSError, IOError):
+                return False
+
+        needs_convert = source_audio_path.lower().endswith(('.m4a', '.aac', '.mp4', '.ogg', '.webm', '.mp3'))
+        if not needs_convert and source_audio_path.lower().endswith('.wav') and not _is_real_wav(source_audio_path):
+            logger.info(f"[MULTI_SPEAKER] Fichier .wav détecté comme non-PCM, conversion nécessaire")
+            needs_convert = True
+
+        if needs_convert:
             with open(source_audio_path, 'rb') as f:
                 file_hash = hashlib.md5(f.read()).hexdigest()[:16]
 

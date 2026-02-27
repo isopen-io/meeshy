@@ -57,6 +57,7 @@ final class MessageSocketManager: ObservableObject {
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
+    private var callEmitCancellables = Set<AnyCancellable>()
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -69,6 +70,7 @@ final class MessageSocketManager: ObservableObject {
             if let date = iso.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
+        setupCallEmitListeners()
     }
 
     // MARK: - Connection
@@ -77,7 +79,6 @@ final class MessageSocketManager: ObservableObject {
         guard socket == nil || socket?.status != .connected else { return }
 
         guard let token = APIClient.shared.authToken else {
-            print("[MessageSocket] No auth token, skipping connect")
             return
         }
 
@@ -112,16 +113,13 @@ final class MessageSocketManager: ObservableObject {
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = true }
-            print("[MessageSocket] Connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             DispatchQueue.main.async { self?.isConnected = false }
-            print("[MessageSocket] Disconnected")
         }
 
-        socket.on(clientEvent: .error) { _, args in
-            print("[MessageSocket] Error: \(args)")
+        socket.on(clientEvent: .error) { _, _ in
         }
 
         // --- Message events ---
@@ -187,6 +185,109 @@ final class MessageSocketManager: ObservableObject {
                 self?.userStatusChanged.send(event)
             }
         }
+
+        // --- Call signaling events ---
+
+        socket.on("call:offer") { data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let callId = dict["callId"] as? String,
+                  let fromUserId = dict["fromUserId"] as? String,
+                  let fromUsername = dict["fromUsername"] as? String,
+                  let isVideo = dict["isVideo"] as? Bool,
+                  let sdp = dict["sdp"] as? [String: Any] else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .callOfferReceived,
+                    object: nil,
+                    userInfo: [
+                        "callId": callId, "fromUserId": fromUserId,
+                        "fromUsername": fromUsername, "isVideo": isVideo, "sdp": sdp
+                    ]
+                )
+            }
+        }
+
+        socket.on("call:answer") { data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let callId = dict["callId"] as? String,
+                  let sdp = dict["sdp"] as? [String: Any] else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .callAnswerReceived,
+                    object: nil,
+                    userInfo: ["callId": callId, "sdp": sdp]
+                )
+            }
+        }
+
+        socket.on("call:ice-candidate") { data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let callId = dict["callId"] as? String,
+                  let candidate = dict["candidate"] as? [String: Any] else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .callICECandidateReceived,
+                    object: nil,
+                    userInfo: ["callId": callId, "candidate": candidate]
+                )
+            }
+        }
+
+        socket.on("call:reject") { data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let callId = dict["callId"] as? String else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .callRejectReceived,
+                    object: nil,
+                    userInfo: ["callId": callId]
+                )
+            }
+        }
+
+        socket.on("call:end") { data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let callId = dict["callId"] as? String else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .callEndReceived,
+                    object: nil,
+                    userInfo: ["callId": callId]
+                )
+            }
+        }
+    }
+
+    // MARK: - Call Emit Listeners (outgoing signaling)
+
+    private func setupCallEmitListeners() {
+        NotificationCenter.default.publisher(for: .callEmitOffer)
+            .sink { [weak self] notification in
+                guard let data = notification.userInfo else { return }
+                self?.socket?.emit("call:offer", data)
+            }
+            .store(in: &callEmitCancellables)
+
+        NotificationCenter.default.publisher(for: .callEmitAnswer)
+            .sink { [weak self] notification in
+                guard let data = notification.userInfo else { return }
+                self?.socket?.emit("call:answer", data)
+            }
+            .store(in: &callEmitCancellables)
+
+        NotificationCenter.default.publisher(for: .callEmitReject)
+            .sink { [weak self] notification in
+                guard let data = notification.userInfo else { return }
+                self?.socket?.emit("call:reject", data)
+            }
+            .store(in: &callEmitCancellables)
+
+        NotificationCenter.default.publisher(for: .callEmitEnd)
+            .sink { [weak self] notification in
+                guard let data = notification.userInfo else { return }
+                self?.socket?.emit("call:end", data)
+            }
+            .store(in: &callEmitCancellables)
     }
 
     // MARK: - Decode Helper
@@ -208,8 +309,6 @@ final class MessageSocketManager: ObservableObject {
             DispatchQueue.main.async {
                 handler(decoded)
             }
-        } catch {
-            print("[MessageSocket] Decode error for \(type): \(error)")
-        }
+        } catch { }
     }
 }

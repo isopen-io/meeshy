@@ -27,12 +27,13 @@ public final class MessageService {
         )
     }
 
-    public func listAround(conversationId: String, around: String, limit: Int = 30) async throws -> MessagesAPIResponse {
+    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "around", value: around),
                 URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
             ]
         )
     }
@@ -61,6 +62,14 @@ public final class MessageService {
 
     public func unpin(conversationId: String, messageId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin")
+    }
+
+    public func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse {
+        struct Empty: Encodable {}
+        let response: APIResponse<ConsumeViewOnceResponse> = try await api.post(
+            endpoint: "/conversations/\(conversationId)/messages/\(messageId)/consume", body: Empty()
+        )
+        return response.data
     }
 
     public func search(conversationId: String, query: String, limit: Int = 20) async throws -> MessagesAPIResponse {

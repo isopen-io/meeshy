@@ -17,11 +17,24 @@ public struct APIConversationUser: Decodable {
     public var resolvedAvatar: String? { avatar ?? avatarUrl }
 }
 
+public struct APIMessageCount: Decodable {
+    public let attachments: Int?
+}
+
 public struct APIConversationLastMessage: Decodable {
     public let id: String
     public let content: String?
     public let senderId: String?
     public let createdAt: Date
+    public let messageType: String?
+    public let sender: APIConversationUser?
+    public let attachments: [APIMessageAttachment]?
+    public let _count: APIMessageCount?
+
+    enum CodingKeys: String, CodingKey {
+        case id, content, senderId, createdAt, messageType, sender, attachments
+        case _count
+    }
 }
 
 public struct APIConversationMember: Decodable {
@@ -54,6 +67,7 @@ public struct APIConversation: Decodable {
     public let lastMessageAt: Date?
     public let members: [APIConversationMember]?
     public let lastMessage: APIConversationLastMessage?
+    public let recentMessages: [APIConversationLastMessage]?
     public let userPreferences: [APIConversationPreferences]?
     public let unreadCount: Int?
     public let updatedAt: Date?
@@ -85,10 +99,42 @@ extension APIConversation {
         }()
 
         let participantAvatar: String? = otherUser?.resolvedAvatar
+        let currentRole = members?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
         let tags: [MeeshyConversationTag] = (prefs?.tags ?? []).enumerated().map { index, tagName in
             MeeshyConversationTag(name: tagName, color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count])
+        }
+
+        let lastMsgAttachments: [MeeshyMessageAttachment] = (lastMessage?.attachments ?? []).map { apiAtt in
+            MeeshyMessageAttachment(
+                id: apiAtt.id,
+                originalName: apiAtt.originalName ?? "",
+                mimeType: apiAtt.mimeType ?? "application/octet-stream",
+                fileSize: apiAtt.fileSize ?? 0,
+                fileUrl: apiAtt.fileUrl ?? "",
+                width: apiAtt.width,
+                height: apiAtt.height,
+                thumbnailUrl: apiAtt.thumbnailUrl,
+                duration: apiAtt.duration
+            )
+        }
+        let lastMsgAttCount = lastMessage?._count?.attachments ?? lastMsgAttachments.count
+        let lastMsgSenderName = lastMessage?.sender?.name
+
+        let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in
+            let sName = msg.sender?.name ?? "?"
+            let attMime = msg.attachments?.first?.mimeType
+            let attCount = msg._count?.attachments ?? msg.attachments?.count ?? 0
+            return RecentMessagePreview(
+                id: msg.id,
+                content: msg.content ?? "",
+                senderName: sName,
+                messageType: msg.messageType ?? "text",
+                createdAt: msg.createdAt,
+                attachmentMimeType: attMime,
+                attachmentCount: attCount
+            )
         }
 
         return MeeshyConversation(
@@ -100,11 +146,18 @@ extension APIConversation {
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content,
+            lastMessageAttachments: lastMsgAttachments,
+            lastMessageAttachmentCount: lastMsgAttCount,
+            lastMessageId: lastMessage?.id,
+            lastMessageSenderName: lastMsgSenderName,
+            recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
             isPinned: prefs?.isPinned ?? false,
+            sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,
             participantUserId: otherMember?.userId,
-            participantAvatarURL: participantAvatar
+            participantAvatarURL: participantAvatar,
+            currentUserRole: currentRole
         )
     }
 }

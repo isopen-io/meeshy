@@ -9,6 +9,30 @@ public struct APIMessageSender: Decodable {
     public let avatar: String?
 }
 
+public struct APIAttachmentTranscription: Decodable {
+    public let text: String?
+    public let transcribedText: String?
+    public let language: String?
+    public let confidence: Double?
+    public let durationMs: Int?
+    public let segments: [TranscriptionSegment]?
+    public let speakerCount: Int?
+
+    public var resolvedText: String { text ?? transcribedText ?? "" }
+}
+
+public struct APIAttachmentTranslation: Decodable {
+    public let type: String?
+    public let transcription: String?
+    public let url: String?
+    public let durationMs: Int?
+    public let format: String?
+    public let cloned: Bool?
+    public let quality: Double?
+    public let ttsModel: String?
+    public let segments: [TranscriptionSegment]?
+}
+
 public struct APIMessageAttachment: Decodable {
     public let id: String
     public let fileName: String?
@@ -22,6 +46,8 @@ public struct APIMessageAttachment: Decodable {
     public let duration: Int?
     public let latitude: Double?
     public let longitude: Double?
+    public let transcription: APIAttachmentTranscription?
+    public let translations: [String: APIAttachmentTranslation]?
 }
 
 public struct APIMessageReplyTo: Decodable {
@@ -49,6 +75,16 @@ public struct APIForwardedFromConversation: Decodable {
     public let avatar: String?
 }
 
+public struct APITextTranslation: Decodable, Identifiable {
+    public let id: String
+    public let messageId: String
+    public let targetLanguage: String
+    public let translatedContent: String
+    public let translationModel: String
+    public let confidenceScore: Double?
+    public let sourceLanguage: String?
+}
+
 public struct APIMessage: Decodable {
     public let id: String
     public let conversationId: String
@@ -61,12 +97,14 @@ public struct APIMessage: Decodable {
     public let isEdited: Bool?
     public let isDeleted: Bool?
     public let replyToId: String?
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let pinnedAt: String?
     public let pinnedBy: String?
     public let isViewOnce: Bool?
     public let isBlurred: Bool?
+    public let expiresAt: Date?
     public let isEncrypted: Bool?
     public let encryptionMode: String?
     public let createdAt: Date
@@ -79,6 +117,11 @@ public struct APIMessage: Decodable {
     public let reactionSummary: [String: Int]?
     public let reactionCount: Int?
     public let currentUserReactions: [String]?
+    public let deliveredToAllAt: Date?
+    public let readByAllAt: Date?
+    public let deliveredCount: Int?
+    public let readCount: Int?
+    public let translations: [APITextTranslation]?
 }
 
 public struct MessagesAPIResponse: Decodable {
@@ -86,20 +129,30 @@ public struct MessagesAPIResponse: Decodable {
     public let data: [APIMessage]
     public let pagination: OffsetPagination?
     public let cursorPagination: CursorPagination?
+    public let hasNewer: Bool?
 }
 
 public struct SendMessageRequest: Encodable {
     public let content: String?
     public let originalLanguage: String?
     public let replyToId: String?
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
+    public var expiresAt: Date?
+    public var ephemeralDuration: Int?
+    public var isViewOnce: Bool?
+    public var maxViewOnceCount: Int?
+    public var isBlurred: Bool?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
-        self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
+        self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
+        self.expiresAt = expiresAt; self.ephemeralDuration = ephemeralDuration
+        self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
+        self.isBlurred = isBlurred
     }
 }
 
@@ -110,6 +163,13 @@ public struct SendMessageResponseData: Decodable {
     public let content: String?
     public let messageType: String?
     public let createdAt: Date
+}
+
+public struct ConsumeViewOnceResponse: Decodable {
+    public let messageId: String
+    public let viewOnceCount: Int
+    public let maxViewOnceCount: Int
+    public let isFullyConsumed: Bool
 }
 
 // MARK: - APIMessage -> MeeshyMessage Conversion
@@ -149,10 +209,18 @@ extension APIMessage {
             )
         }
 
+        let userReactionSet = Set(currentUserReactions ?? [])
         let uiReactions: [MeeshyReaction] = {
             guard let summary = reactionSummary else { return [] }
             return summary.flatMap { emoji, count in
-                (0..<count).map { _ in MeeshyReaction(messageId: id, emoji: emoji) }
+                let meReacted = userReactionSet.contains(emoji)
+                return (0..<count).map { index in
+                    MeeshyReaction(
+                        messageId: id,
+                        userId: (meReacted && index == 0) ? currentUserId : nil,
+                        emoji: emoji
+                    )
+                }
             }
         }()
 

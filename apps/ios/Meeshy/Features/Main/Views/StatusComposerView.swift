@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 enum StatusVisibility: String, CaseIterable {
     case `public` = "PUBLIC"
@@ -113,7 +114,7 @@ struct StatusComposerView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(
                             selectedEmoji == emoji ?
-                                Color(hex: "FF2E63").opacity(0.15) :
+                                MeeshyColors.pink.opacity(0.15) :
                                 Color.clear
                         )
                 )
@@ -145,7 +146,7 @@ struct StatusComposerView: View {
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
-            .onChange(of: statusText) { newValue in
+            .onChange(of: statusText) { _, newValue in
                 if newValue.count > 140 {
                     statusText = String(newValue.prefix(140))
                 }
@@ -156,7 +157,7 @@ struct StatusComposerView: View {
                 if !statusText.isEmpty {
                     Text("\(statusText.count)/140")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(statusText.count > 120 ? Color(hex: "FF6B6B") : theme.textMuted)
+                        .foregroundColor(statusText.count > 120 ? MeeshyColors.coral : theme.textMuted)
                         .padding(.trailing, 14)
                         .padding(.bottom, -18)
                 }

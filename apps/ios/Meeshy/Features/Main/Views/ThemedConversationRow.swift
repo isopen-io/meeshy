@@ -10,6 +10,7 @@ struct ThemedConversationRow: View {
     var isDragging: Bool = false
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
+    var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -20,6 +21,41 @@ struct ThemedConversationRow: View {
     @State private var showLastSeenTooltip = false
 
     private var accentColor: String { conversation.accentColor }
+
+    // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
+    private var conversationHeat: CGFloat {
+        guard !conversation.isMuted else { return 0.05 }
+
+        let seconds = Date().timeIntervalSince(conversation.lastMessageAt)
+        let recency: CGFloat
+        if seconds < 300 { recency = 1.0 }
+        else if seconds < 3_600 { recency = 0.8 }
+        else if seconds < 86_400 { recency = 0.5 }
+        else if seconds < 604_800 { recency = 0.2 }
+        else { recency = 0.0 }
+
+        let unread  = min(CGFloat(conversation.unreadCount) / 10.0, 1.0)
+        let members = min(CGFloat(conversation.memberCount) / 50.0, 1.0)
+        let pinned: CGFloat = conversation.isPinned ? 1.0 : 0.0
+
+        return 0.40 * recency + 0.35 * unread + 0.15 * members + 0.10 * pinned
+    }
+
+    /// Gradient de fond calibré sur l'activité : pastel (faible) → vibrant (forte)
+    private var heatBackground: LinearGradient {
+        let heat = conversationHeat
+        let isDark = theme.mode.isDark
+        let topOpacity = isDark ? (0.05 + heat * 0.23) : (0.03 + heat * 0.16)
+        let botOpacity = topOpacity * 0.30
+        return LinearGradient(
+            colors: [
+                Color(hex: accentColor).opacity(topOpacity),
+                Color(hex: conversation.colorPalette.secondary).opacity(botOpacity)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     // Calculate visible tags based on available width
     private var visibleTagsInfo: (tags: [ConversationTag], remaining: Int) {
@@ -78,6 +114,7 @@ struct ThemedConversationRow: View {
                         // Type badge
                         if conversation.type != .direct {
                             typeBadge
+                                .accessibilityHidden(true)
                         }
                     }
 
@@ -89,36 +126,60 @@ struct ThemedConversationRow: View {
                         .foregroundColor(Color(hex: accentColor))
                 }
 
-                // Last message
-                Text(conversation.lastMessagePreview ?? "")
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
+                // Last message with attachment indicators
+                lastMessagePreviewView
             }
 
             // Unread badge
             if conversation.unreadCount > 0 {
                 unreadBadge
+                    .accessibilityHidden(true)
             }
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(theme.surfaceGradient(tint: accentColor))
+                // Base opaque : empêche les couleurs des actions de swipe de transpa­raître
+                .fill(theme.backgroundSecondary)
+                .overlay(RoundedRectangle(cornerRadius: 18).fill(heatBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(
                             isDragging ?
                             LinearGradient(colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            theme.border(tint: accentColor),
+                            theme.border(tint: accentColor, intensity: 0.18 + Double(conversationHeat) * 0.44),
                             lineWidth: isDragging ? 2 : 1
                         )
                 )
-                .shadow(color: Color(hex: accentColor).opacity(isDragging ? 0.4 : (theme.mode.isDark ? 0.15 : 0.1)), radius: isDragging ? 16 : 8, y: isDragging ? 8 : 4)
+                .shadow(
+                    color: Color(hex: accentColor).opacity(isDragging ? 0.4 : (0.04 + Double(conversationHeat) * (theme.mode.isDark ? 0.20 : 0.14))),
+                    radius: isDragging ? 16 : (6 + conversationHeat * 6),
+                    y: isDragging ? 8 : (3 + conversationHeat * 3)
+                )
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(conversationAccessibilityLabel)
+        .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
+        .accessibilityHint("Ouvre la conversation")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var conversationAccessibilityLabel: String {
+        var parts: [String] = []
+        parts.append("Conversation avec \(conversation.name)")
+        if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("dernier message: \(preview)")
+        }
+        parts.append(timeAgo(conversation.lastMessageAt))
+        if conversation.unreadCount > 0 {
+            parts.append("\(conversation.unreadCount) non lus")
+        }
+        if conversation.isMuted { parts.append("en silence") }
+        if conversation.isPinned { parts.append("epingle") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Tags Row
@@ -170,19 +231,24 @@ struct ThemedConversationRow: View {
 
     private var avatarContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
+
+        // Story en premier si disponible
         if hasStoryRing {
             items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                 onViewStory?()
             })
         }
+
+        // Profil utilisateur (toujours disponible)
         items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
             onViewProfile?()
         })
-        if conversation.type == .direct {
-            items.append(AvatarContextMenuItem(label: "Infos utilisateur", icon: "info.circle.fill") {
-                onViewProfile?()
-            })
-        }
+
+        // Infos conversation (toujours disponible)
+        items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
+            onViewConversationInfo?()
+        })
+
         return items
     }
 
@@ -197,7 +263,7 @@ struct ThemedConversationRow: View {
                 storyState: avatarStoryState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceManager.presenceState(for: conversation.participantUserId ?? "") : .offline,
-                onViewProfile: onViewProfile,
+                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
                 onViewStory: onViewStory,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {
@@ -226,6 +292,7 @@ struct ThemedConversationRow: View {
                     )
                     .offset(x: 0, y: -34)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -287,5 +354,107 @@ struct ThemedConversationRow: View {
         if seconds < 3600 { return "\(seconds / 60)m" }
         if seconds < 86400 { return "\(seconds / 3600)h" }
         return "\(seconds / 86400)d"
+    }
+
+    // MARK: - Last Message Preview
+
+    @ViewBuilder
+    private var lastMessagePreviewView: some View {
+        let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let attachments = conversation.lastMessageAttachments
+        let totalCount = conversation.lastMessageAttachmentCount
+
+        if !hasText && !attachments.isEmpty {
+            HStack(spacing: 4) {
+                senderLabel
+                let att = attachments[0]
+                attachmentIcon(for: att.mimeType)
+                attachmentMeta(for: att)
+                if totalCount > 1 {
+                    Text("+\(totalCount - 1)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            }
+        } else if hasText {
+            HStack(spacing: 4) {
+                senderLabel
+                if !attachments.isEmpty {
+                    attachmentIcon(for: attachments[0].mimeType)
+                        .font(.system(size: 11))
+                }
+                Text(conversation.lastMessagePreview ?? "")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+        } else {
+            Text("")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var senderLabel: some View {
+        if let name = conversation.lastMessageSenderName, !name.isEmpty {
+            Text(name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .lineLimit(1)
+                .layoutPriority(1)
+        }
+    }
+
+    // MARK: - Attachment Helpers
+
+    private func attachmentIcon(for mimeType: String) -> some View {
+        let (icon, color) = attachmentIconInfo(mimeType)
+        return Image(systemName: icon)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(color)
+    }
+
+    private func attachmentIconInfo(_ mimeType: String) -> (String, Color) {
+        if mimeType.hasPrefix("image/") { return ("camera.fill", .blue) }
+        if mimeType.hasPrefix("video/") { return ("video.fill", .red) }
+        if mimeType.hasPrefix("audio/") { return ("waveform", .purple) }
+        if mimeType == "application/pdf" { return ("doc.fill", .orange) }
+        return ("paperclip", .gray)
+    }
+
+    private func attachmentMeta(for attachment: MessageAttachment) -> some View {
+        let mimeType = attachment.mimeType
+        var meta = ""
+
+        if mimeType.hasPrefix("image/") {
+            if let w = attachment.width, let h = attachment.height {
+                meta = "\(w)x\(h)"
+            } else { meta = "Photo" }
+        } else if mimeType.hasPrefix("video/") {
+            if let d = attachment.duration {
+                meta = formatDurationMs(d)
+            } else { meta = "Video" }
+        } else if mimeType.hasPrefix("audio/") {
+            if let d = attachment.duration {
+                meta = formatDurationMs(d)
+            } else { meta = "Audio" }
+        } else if mimeType == "application/pdf" {
+            meta = "PDF"
+        } else {
+            meta = attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
+        }
+
+        return Text(meta)
+            .font(.system(size: 13))
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+    }
+
+    private func formatDurationMs(_ ms: Int) -> String {
+        let totalSec = ms / 1000
+        let mins = totalSec / 60
+        let secs = totalSec % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }

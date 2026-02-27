@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import WidgetKit
 import MeeshySDK
 
 // MARK: - API Category Model
@@ -22,14 +23,114 @@ class ConversationListViewModel: ObservableObject {
     @Published var isLoadingMore = false
     @Published var hasMore = true
 
+    // MARK: - Reactive Filters & Prepared Data
+    @Published var searchText: String = ""
+    @Published var selectedFilter: ConversationFilter = .all
+    @Published var filteredConversations: [Conversation] = []
+    @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+
+    var totalUnreadCount: Int {
+        conversations.reduce(0) { $0 + $1.unreadCount }
+    }
+
     private let api = APIClient.shared
     private let limit = 30
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
 
+    private var lastFetchedAt: Date? = nil
+    private let cacheTTL: TimeInterval = 30
+
+    private var isCacheValid: Bool {
+        guard let ts = lastFetchedAt else { return false }
+        return Date().timeIntervalSince(ts) < cacheTTL
+    }
+
+    func invalidateCache() {
+        lastFetchedAt = nil
+    }
+
     init() {
         observeSocketReconnect()
         subscribeToSocketEvents()
+        syncBadgeOnUnreadChange()
+        setupBackgroundProcessing()
+    }
+
+    // MARK: - Background Processing
+    private func setupBackgroundProcessing() {
+        // Offload filtering and grouping to a background queue to prevent Main Thread freezes
+        Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            // Only debounce if there is text to avoid delay on initial load or simple filter taps
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
+            .map { [weak self] (convs, text, filter) -> [Conversation] in
+                guard self != nil else { return [] }
+                return convs.filter { c in
+                    let filterMatch: Bool
+                    switch filter {
+                    case .all: filterMatch = c.isActive
+                    case .unread: filterMatch = c.unreadCount > 0
+                    case .personnel: filterMatch = c.type == .direct && c.isActive
+                    case .privee: filterMatch = c.type == .group && c.isActive
+                    case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
+                    case .globales: filterMatch = c.type == .global && c.isActive
+                    case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
+                    case .archived: filterMatch = !c.isActive
+                    }
+                    let searchMatch = text.isEmpty || c.name.localizedCaseInsensitiveContains(text)
+                    return filterMatch && searchMatch
+                }
+            }
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$filteredConversations)
+
+        Publishers.CombineLatest($filteredConversations, $userCategories)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
+                var result: [(section: ConversationSection, conversations: [Conversation])] = []
+
+                // Pinned section
+                let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
+                if !pinnedOnly.isEmpty {
+                    result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                // User categories
+                let categoryIds = Set(categories.map(\.id))
+                for category in categories {
+                    let sectionConvs = filtered.filter { $0.sectionId == category.id }
+                    if !sectionConvs.isEmpty {
+                        let sorted = sectionConvs.sorted { a, b in
+                            if a.isPinned != b.isPinned { return a.isPinned }
+                            return a.lastMessageAt > b.lastMessageAt
+                        }
+                        result.append((category, sorted))
+                    }
+                }
+
+                // Orphaned and uncategorized
+                let orphaned = filtered.filter { conv in
+                    guard let sid = conv.sectionId else { return false }
+                    return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
+                }
+                let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
+                let allUncategorized = uncategorized + orphaned
+                if !allUncategorized.isEmpty {
+                    result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                return result
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newGroups in
+                // Wraps the background-calculated grouping in a smooth animation
+                // This will dynamically animate the lists and sorting natively!
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    self?.groupedConversations = newGroups
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // Re-seed presence when Socket.IO reconnects (online → offline → online)
@@ -57,6 +158,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                invalidateCache()
                 if let idx = self.conversations.firstIndex(where: { $0.id == event.conversationId }) {
                     self.conversations[idx].unreadCount = event.unreadCount
                 }
@@ -68,10 +170,12 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
+                invalidateCache()
                 let convId = apiMsg.conversationId
                 guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
 
                 self.conversations[idx].lastMessagePreview = apiMsg.content
+                self.conversations[idx].lastMessageSenderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
                 self.conversations[idx].lastMessageAt = apiMsg.createdAt
 
                 // Move conversation to top if not already
@@ -79,6 +183,24 @@ class ConversationListViewModel: ObservableObject {
                     let conv = self.conversations.remove(at: idx)
                     self.conversations.insert(conv, at: 0)
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Badge Sync
+
+    private func syncBadgeOnUnreadChange() {
+        $conversations
+            .removeDuplicates { $0.map(\.id) == $1.map(\.id) && $0.map(\.unreadCount) == $1.map(\.unreadCount) }
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] conversations in
+                guard self != nil else { return }
+                let total = conversations.reduce(0) { $0 + $1.unreadCount }
+                Task {
+                    await PushNotificationManager.shared.updateBadge(totalUnread: total)
+                }
+                WidgetDataManager.shared.updateConversations(conversations)
+                WidgetDataManager.shared.updateFavoriteContacts(conversations)
             }
             .store(in: &cancellables)
     }
@@ -111,9 +233,21 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Load Conversations
 
     func loadConversations() async {
+        if isCacheValid && !conversations.isEmpty {
+            return
+        }
+
         guard !isLoading else { return }
         isLoading = true
         currentOffset = 0
+
+        // Show cached conversations immediately while fetching from API
+        if conversations.isEmpty {
+            let cached = await LocalStore.shared.loadConversations()
+            if !cached.isEmpty {
+                conversations = cached
+            }
+        }
 
         async let categoriesTask: () = loadCategories()
 
@@ -130,14 +264,30 @@ class ConversationListViewModel: ObservableObject {
                 conversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset = conversations.count
+                lastFetchedAt = Date()
+
+                // Update cache in background
+                Task.detached(priority: .utility) { [conversations] in
+                    await LocalStore.shared.saveConversations(conversations)
+                    await LocalStore.shared.cleanupStaleMessageCaches()
+                }
+
+                prefetchMessages(for: response.data, userId: userId)
             }
-        } catch {
-            // Keep existing data or empty
-            print("[ConversationListVM] Load error: \(error)")
-        }
+        } catch { }
 
         await categoriesTask
         isLoading = false
+    }
+
+    // MARK: - Force Refresh (pull-to-refresh)
+
+    func forceRefresh() async {
+        isLoading = false
+        hasMore = true
+        currentOffset = 0
+        invalidateCache()
+        await loadConversations()
     }
 
     // MARK: - Load More
@@ -163,9 +313,7 @@ class ConversationListViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset += deduplicated.count
             }
-        } catch {
-            print("[ConversationListVM] Load more error: \(error)")
-        }
+        } catch { }
 
         isLoadingMore = false
     }
@@ -176,6 +324,17 @@ class ConversationListViewModel: ObservableObject {
         currentOffset = 0
         hasMore = true
         await loadConversations()
+    }
+
+    // MARK: - Persist Category Expansion
+
+    func persistCategoryExpansion(id: String, isExpanded: Bool) {
+        Task {
+            let _: APIResponse<AnyCodable>? = try? await api.patch(
+                endpoint: "/me/preferences/categories/\(id)",
+                body: ["isExpanded": isExpanded]
+            )
+        }
     }
 
     // MARK: - Toggle Pin
@@ -193,9 +352,7 @@ class ConversationListViewModel: ObservableObject {
                 body: ["isPinned": newValue]
             )
         } catch {
-            // Revert on failure
             conversations[index].isPinned = !newValue
-            print("[ConversationListVM] Toggle pin error: \(error)")
         }
     }
 
@@ -214,7 +371,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].isMuted = !newValue
-            print("[ConversationListVM] Toggle mute error: \(error)")
         }
     }
 
@@ -233,7 +389,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].unreadCount = previousCount
-            print("[ConversationListVM] Mark as read error: \(error)")
         }
     }
 
@@ -255,7 +410,6 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].unreadCount = previousCount
-            print("[ConversationListVM] Mark as unread error: \(error)")
         }
     }
 
@@ -274,7 +428,24 @@ class ConversationListViewModel: ObservableObject {
             )
         } catch {
             conversations[index].isActive = wasActive
-            print("[ConversationListVM] Archive error: \(error)")
+        }
+    }
+
+    // MARK: - Unarchive Conversation
+
+    func unarchiveConversation(conversationId: String) async {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        let wasActive = conversations[index].isActive
+
+        conversations[index].isActive = true
+
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.put(
+                endpoint: "/user-preferences/conversations/\(conversationId)",
+                body: ["isArchived": false]
+            )
+        } catch {
+            conversations[index].isActive = wasActive
         }
     }
 
@@ -285,10 +456,11 @@ class ConversationListViewModel: ObservableObject {
         let removed = conversations.remove(at: index)
 
         do {
-            let _ = try await api.delete(endpoint: "/conversations/\(conversationId)")
+            let _ = try await api.delete(
+                endpoint: "/conversations/\(conversationId)/delete-for-me"
+            )
         } catch {
             conversations.insert(removed, at: min(index, conversations.count))
-            print("[ConversationListVM] Delete error: \(error)")
         }
     }
 
@@ -303,12 +475,54 @@ class ConversationListViewModel: ObservableObject {
         Task {
             do {
                 let body: [String: String?] = ["categoryId": newSectionId]
-                let _: APIResponse<[String: String]> = try await api.put(
+                let _: APIResponse<[String: AnyCodable]> = try await api.put(
                     endpoint: "/user-preferences/conversations/\(conversationId)",
                     body: body
                 )
             } catch {
                 conversations[index].sectionId = previousSectionId
+            }
+        }
+    }
+
+    // MARK: - React to Last Message
+
+    func reactToLastMessage(conversationId: String, messageId: String, emoji: String) async {
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.post(
+                endpoint: "/conversations/\(conversationId)/messages/\(messageId)/reactions",
+                body: ["emoji": emoji]
+            )
+        } catch { }
+    }
+
+    // MARK: - Message Prefetch
+
+    private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
+        let toFetch = Array(apiConversations.prefix(20))
+
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                for apiConversation in toFetch {
+                    let conversationId = apiConversation.id
+                    let cached = await LocalStore.shared.loadMessages(for: conversationId)
+                    if !cached.isEmpty { continue }
+
+                    group.addTask {
+                        do {
+                            let response = try await MessageService.shared.list(
+                                conversationId: conversationId,
+                                limit: 20
+                            )
+                            if response.success {
+                                let messages = response.data.reversed().map {
+                                    $0.toMessage(currentUserId: userId)
+                                }
+                                await LocalStore.shared.saveMessages(Array(messages), for: conversationId)
+                            }
+                        } catch { }
+                    }
+                }
             }
         }
     }

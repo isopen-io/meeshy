@@ -1,16 +1,33 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var router: Router
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var prefs = UserPreferencesManager.shared
     @Environment(\.colorScheme) private var systemColorScheme
 
     @State private var showLogoutConfirm = false
-    @State private var notificationsEnabled = true
-    @State private var soundEnabled = true
-    @State private var vibrationEnabled = true
+    @State private var showPrivacySettings = false
+    @State private var showNotificationSettings = false
+    @State private var showSecurity = false
+    @State private var showBlockedUsers = false
+    @State private var showAbout = false
+    @State private var showPrivacyPolicy = false
+    @State private var showTerms = false
+    @State private var showLicenses = false
+    @State private var showSupport = false
+    @State private var showDataStorage = false
+    @State private var showDataExport = false
+    @State private var showDeleteAccount = false
+    @State private var showStats = false
+    @State private var showAffiliate = false
+    @State private var showVoiceProfileWizard = false
+    @State private var showVoiceProfileManage = false
+    @State private var autoTranscriptionEnabled = false
 
     @AppStorage("preferredLanguage") private var preferredLanguage = "fr"
 
@@ -25,6 +42,9 @@ struct SettingsView: View {
                 scrollContent
             }
         }
+        .sheet(isPresented: $showStats) { UserStatsView() }
+        .sheet(isPresented: $showAffiliate) { AffiliateView() }
+        .sheet(isPresented: $showDataExport) { DataExportView() }
         .alert("Déconnexion", isPresented: $showLogoutConfirm) {
             Button("Annuler", role: .cancel) { }
             Button("Déconnexion", role: .destructive) {
@@ -34,6 +54,26 @@ struct SettingsView: View {
         } message: {
             Text("Voulez-vous vraiment vous déconnecter ?")
         }
+        .sheet(isPresented: $showPrivacySettings) {
+            PrivacySettingsView()
+        }
+        .sheet(isPresented: $showNotificationSettings) {
+            NotificationSettingsView()
+        }
+        .sheet(isPresented: $showSecurity) {
+            SecurityView()
+        }
+        .sheet(isPresented: $showBlockedUsers) {
+            BlockedUsersView()
+        }
+        .sheet(isPresented: $showAbout) { AboutView() }
+        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
+        .sheet(isPresented: $showTerms) { TermsOfServiceView() }
+        .sheet(isPresented: $showLicenses) { LicensesView() }
+        .sheet(isPresented: $showSupport) { SupportView() }
+        .sheet(isPresented: $showDataStorage) { DataStorageView() }
+        .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
+        .task { await prefs.fetchFromBackend() }
     }
 
     // MARK: - Header
@@ -47,17 +87,21 @@ struct SettingsView: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
+                    .frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel("Retour")
 
             Spacer()
 
             Text("Réglages")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
-            Color.clear.frame(width: 24, height: 24)
+            Color.clear.frame(width: 44, height: 44)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -70,8 +114,13 @@ struct SettingsView: View {
             VStack(spacing: 20) {
                 accountSection
                 appearanceSection
+                voiceProfileSection
+                transcriptionSection
                 notificationsSection
                 languageSection
+                dataSection
+                meeshyToolsSection
+                supportSection
                 aboutSection
                 logoutSection
 
@@ -86,23 +135,70 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         settingsSection(title: "Compte", icon: "person.circle.fill", color: "9B59B6") {
-            settingsRow(icon: "person.fill", title: "Profil", color: "9B59B6") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                router.push(.profile)
+            } label: {
+                settingsRow(icon: "person.fill", title: "Profil", color: "9B59B6") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("Profil")
+            .accessibilityHint("Ouvre les reglages du profil")
 
-            settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showPrivacySettings = true
+            } label: {
+                settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("Confidentialite")
+            .accessibilityHint("Ouvre les reglages de confidentialite")
 
-            settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showSecurity = true
+            } label: {
+                settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("Securite")
+            .accessibilityHint("Ouvre les reglages de securite")
+
+            Button {
+                HapticFeedback.light()
+                showBlockedUsers = true
+            } label: {
+                settingsRow(icon: "lock.shield", title: "Utilisateurs bloques", color: "EF4444") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Utilisateurs bloques")
+            .accessibilityHint("Ouvre la liste des utilisateurs bloques")
+
+            Button {
+                HapticFeedback.heavy()
+                showDeleteAccount = true
+            } label: {
+                settingsRow(icon: "person.crop.circle.badge.minus", title: "Supprimer le compte", color: "EF4444") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "EF4444").opacity(0.6))
+                }
+            }
+            .accessibilityLabel("Supprimer le compte")
+            .accessibilityHint("Ouvre la page de suppression de compte")
         }
     }
 
@@ -119,6 +215,7 @@ struct SettingsView: View {
                                 theme.preference = pref
                                 theme.syncWithSystem(systemColorScheme)
                             }
+                            syncThemeToPrefs(pref)
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: pref.icon)
@@ -134,6 +231,9 @@ struct SettingsView: View {
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
+                        .accessibilityLabel("Theme \(pref.label)")
+                        .accessibilityValue(theme.preference == pref ? "selectionne" : "")
+                        .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
                 }
             }
@@ -145,22 +245,50 @@ struct SettingsView: View {
     private var notificationsSection: some View {
         settingsSection(title: "Notifications", icon: "bell.fill", color: "FF6B6B") {
             settingsRow(icon: "bell.badge.fill", title: "Notifications", color: "FF6B6B") {
-                Toggle("", isOn: $notificationsEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.pushEnabled },
+                    set: { val in prefs.updateNotification { $0.pushEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
+                .accessibilityLabel("Notifications push")
+                .accessibilityValue(prefs.notification.pushEnabled ? "active" : "desactive")
             }
 
             settingsRow(icon: "speaker.wave.2.fill", title: "Sons", color: "4ECDC4") {
-                Toggle("", isOn: $soundEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.soundEnabled },
+                    set: { val in prefs.updateNotification { $0.soundEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
+                .accessibilityLabel("Sons de notification")
+                .accessibilityValue(prefs.notification.soundEnabled ? "active" : "desactive")
             }
 
             settingsRow(icon: "iphone.radiowaves.left.and.right", title: "Vibrations", color: "9B59B6") {
-                Toggle("", isOn: $vibrationEnabled)
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
+                Toggle("", isOn: Binding(
+                    get: { prefs.notification.vibrationEnabled },
+                    set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
+                .accessibilityLabel("Vibrations")
+                .accessibilityValue(prefs.notification.vibrationEnabled ? "active" : "desactive")
             }
+
+            Button {
+                HapticFeedback.light()
+                showNotificationSettings = true
+            } label: {
+                settingsRow(icon: "slider.horizontal.3", title: "Plus d'options", color: "FF6B6B") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Plus d'options de notifications")
+            .accessibilityHint("Ouvre les reglages avances de notifications")
         }
     }
 
@@ -172,38 +300,210 @@ struct SettingsView: View {
             ForEach(languages, id: \.0) { code, name in
                 Button {
                     HapticFeedback.light()
-                    preferredLanguage = code
+                    prefs.updateApplication { $0.interfaceLanguage = code }
                 } label: {
-                    settingsRow(icon: "flag.fill", title: name, color: preferredLanguage == code ? accentColor : "6B7280") {
-                        if preferredLanguage == code {
+                    settingsRow(icon: "flag.fill", title: name, color: prefs.application.interfaceLanguage == code ? accentColor : "6B7280") {
+                        if prefs.application.interfaceLanguage == code {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 18))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
                 }
+                .accessibilityLabel("Langue \(name)")
+                .accessibilityValue(prefs.application.interfaceLanguage == code ? "selectionnee" : "")
+                .accessibilityAddTraits(prefs.application.interfaceLanguage == code ? .isSelected : [])
             }
+        }
+    }
+
+    // MARK: - Data Section
+
+    private var dataSection: some View {
+        settingsSection(title: "Donnees", icon: "externaldrive.fill", color: "E67E22") {
+            Button {
+                HapticFeedback.light()
+                showDataStorage = true
+            } label: {
+                settingsRow(icon: "internaldrive.fill", title: "Stockage", color: "E67E22") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Stockage")
+            .accessibilityHint("Ouvre les parametres de stockage")
+
+            Button {
+                HapticFeedback.light()
+                showDataExport = true
+            } label: {
+                settingsRow(icon: "square.and.arrow.up.fill", title: "Exporter mes donnees", color: "E67E22") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Exporter mes donnees")
+            .accessibilityHint("Ouvre la page d'export de donnees")
+        }
+    }
+
+    // MARK: - Voice Profile Section
+
+    private var voiceProfileSection: some View {
+        settingsSection(title: "Profil vocal", icon: "waveform.and.mic", color: "A855F7") {
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileManage = true
+            } label: {
+                settingsRow(icon: "waveform.circle.fill", title: "Gerer le profil vocal", color: "A855F7") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showVoiceProfileWizard = true
+            } label: {
+                settingsRow(icon: "plus.circle.fill", title: "Creer un profil vocal", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+        .sheet(isPresented: $showVoiceProfileWizard) {
+            VoiceProfileWizardView(accentColor: "A855F7")
+        }
+        .sheet(isPresented: $showVoiceProfileManage) {
+            VoiceProfileManageView(accentColor: "A855F7")
+        }
+    }
+
+    // MARK: - Transcription Section
+
+    private var transcriptionSection: some View {
+        settingsSection(title: "Transcription", icon: "text.quote", color: "4ECDC4") {
+            settingsRow(icon: "waveform", title: "Transcription automatique", color: "4ECDC4") {
+                Toggle("", isOn: $autoTranscriptionEnabled)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+            }
+
+            settingsRow(icon: "info.circle", title: "Apple Speech (on-device)", color: "6B7280") {
+                EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Meeshy Tools Section
+
+    private var meeshyToolsSection: some View {
+        settingsSection(title: "Outils", icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
+            Button {
+                HapticFeedback.light()
+                showStats = true
+            } label: {
+                settingsRow(icon: "chart.bar.fill", title: "Statistiques", color: "4ECDC4") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+
+            Button {
+                HapticFeedback.light()
+                showAffiliate = true
+            } label: {
+                settingsRow(icon: "link.badge.plus", title: "Parrainage", color: "2ECC71") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+    }
+
+    // MARK: - Support Section
+
+    private var supportSection: some View {
+        settingsSection(title: "Aide", icon: "questionmark.circle.fill", color: "27AE60") {
+            Button {
+                HapticFeedback.light()
+                showSupport = true
+            } label: {
+                settingsRow(icon: "lifepreserver.fill", title: "Centre d'aide", color: "27AE60") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Centre d'aide")
+            .accessibilityHint("Ouvre le centre d'aide et support")
         }
     }
 
     // MARK: - About Section
 
     private var aboutSection: some View {
-        settingsSection(title: "À propos", icon: "info.circle.fill", color: "45B7D1") {
-            settingsRow(icon: "doc.text.fill", title: "Conditions d'utilisation", color: "45B7D1") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+        settingsSection(title: "A propos", icon: "info.circle.fill", color: "45B7D1") {
+            Button {
+                HapticFeedback.light()
+                showAbout = true
+            } label: {
+                settingsRow(icon: "info.circle.fill", title: "A propos de Meeshy", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("A propos de Meeshy")
+            .accessibilityHint("Ouvre la page a propos")
 
-            settingsRow(icon: "hand.raised.fill", title: "Politique de confidentialité", color: "45B7D1") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                showTerms = true
+            } label: {
+                settingsRow(icon: "doc.text.fill", title: "Conditions d'utilisation", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .accessibilityLabel("Conditions d'utilisation")
+            .accessibilityHint("Ouvre les conditions d'utilisation")
+
+            Button {
+                HapticFeedback.light()
+                showPrivacyPolicy = true
+            } label: {
+                settingsRow(icon: "hand.raised.fill", title: "Politique de confidentialite", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Politique de confidentialite")
+            .accessibilityHint("Ouvre la politique de confidentialite")
+
+            Button {
+                HapticFeedback.light()
+                showLicenses = true
+            } label: {
+                settingsRow(icon: "checkmark.seal.fill", title: "Licences open source", color: "45B7D1") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel("Licences open source")
+            .accessibilityHint("Ouvre la liste des licences open source")
 
             settingsRow(icon: "sparkles", title: "Version", color: "F8B500") {
-                Text("1.0.0")
+                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
@@ -235,6 +535,19 @@ struct SettingsView: View {
                     )
             )
         }
+        .accessibilityLabel("Deconnexion")
+        .accessibilityHint("Vous deconnecte de votre compte Meeshy")
+    }
+
+    // MARK: - Theme Sync
+
+    private func syncThemeToPrefs(_ pref: ThemePreference) {
+        let appTheme: AppThemeMode = switch pref {
+        case .system: .auto
+        case .light: .light
+        case .dark: .dark
+        }
+        prefs.updateApplication { $0.theme = appTheme }
     }
 
     // MARK: - Reusable Components
@@ -286,6 +599,7 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(.system(size: 14, weight: .medium))

@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME="Meeshy"
-BUNDLE_ID="com.meeshy.app"
+BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
 DERIVED_DATA="build"
@@ -40,6 +40,143 @@ COVERAGE=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
+ENTITLEMENTS_FILE="Meeshy/Meeshy.entitlements"
+PHYSICAL_DEVICE_ID=""
+PHYSICAL_DEVICE_NAME=""
+
+# ─── Physical Device Detection ──────────────────────────────────────────────
+detect_physical_device() {
+    # devicectl output columns: FriendlyName  NetworkName  UUID  Status  Model
+    local devices
+    devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" || true)
+    if [ -z "$devices" ]; then
+        err "No physical iPhone found. Connect via USB or WiFi."
+        exit 1
+    fi
+
+    # Prefer "Services CEO" device if available
+    local chosen
+    chosen=$(echo "$devices" | grep -i "Services CEO" | head -n 1)
+    [ -z "$chosen" ] && chosen=$(echo "$devices" | head -n 1)
+
+    # First column is the friendly name (before the .coredevice.local hostname)
+    PHYSICAL_DEVICE_NAME=$(echo "$chosen" | awk -F'  +' '{print $1}' | xargs)
+    PHYSICAL_DEVICE_ID=$(echo "$chosen" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+
+    if [ -z "$PHYSICAL_DEVICE_ID" ] || [ -z "$PHYSICAL_DEVICE_NAME" ]; then
+        err "Could not parse physical device from: $chosen"
+        exit 1
+    fi
+
+    ok "Physical device: ${BOLD}$PHYSICAL_DEVICE_NAME${NC} ($PHYSICAL_DEVICE_ID)"
+}
+
+# ─── Device Deploy (with provisioning fallback) ────────────────────────────
+strip_entitlements() {
+    log "Stripping Associated Domains & Push Notifications from entitlements..."
+    cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.bak"
+    /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+    ok "Entitlements stripped (backup at ${ENTITLEMENTS_FILE}.bak)"
+}
+
+restore_entitlements() {
+    if [ -f "${ENTITLEMENTS_FILE}.bak" ]; then
+        mv "${ENTITLEMENTS_FILE}.bak" "$ENTITLEMENTS_FILE"
+        ok "Entitlements restored"
+    fi
+}
+
+do_device_deploy() {
+    detect_physical_device
+
+    local device_app_path="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
+    local build_log="/tmp/meeshy_device_build_$$.log"
+
+    # ── Attempt 1: Build with full entitlements ──
+    log "Attempt 1: Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC} (full entitlements)..."
+
+    set +e
+    xcodebuild \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -configuration "$CONFIGURATION" \
+        -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
+        -derivedDataPath "$DERIVED_DATA" \
+        -allowProvisioningUpdates \
+        build >"$build_log" 2>&1
+    local build_rc=$?
+    set -e
+
+    if [ "$build_rc" -eq 0 ]; then
+        ok "Build succeeded with full entitlements"
+        rm -f "$build_log"
+    elif grep -qiE "provisioning|Associated Domains|Push Notifications|aps-environment" "$build_log"; then
+        warn "Provisioning error detected. Stripping capabilities and retrying..."
+        grep -iE "(error:.*provisioning|error:.*Associated|error:.*Push|error:.*aps-)" "$build_log" | head -3 || true
+
+        # ── Attempt 2: Strip capabilities and rebuild ──
+        strip_entitlements
+        trap restore_entitlements EXIT
+
+        log "Attempt 2: Building without restricted capabilities..."
+
+        set +e
+        xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -allowProvisioningUpdates \
+            build >"$build_log" 2>&1
+        build_rc=$?
+        set -e
+
+        # Restore entitlements IMMEDIATELY after build
+        restore_entitlements
+        trap - EXIT
+
+        if [ "$build_rc" -ne 0 ]; then
+            err "Build FAILED even after stripping capabilities"
+            tail -10 "$build_log"
+            rm -f "$build_log"
+            exit 1
+        fi
+        ok "Build succeeded (restricted capabilities stripped)"
+        rm -f "$build_log"
+    else
+        err "Build FAILED (not a provisioning issue)"
+        tail -10 "$build_log"
+        rm -f "$build_log"
+        exit 1
+    fi
+
+    # ── Install on device ──
+    if [ ! -d "$device_app_path" ]; then
+        err "App bundle not found at: $device_app_path"
+        exit 1
+    fi
+
+    log "Installing on ${BOLD}$PHYSICAL_DEVICE_NAME${NC}..."
+    set +e
+    xcrun devicectl device install app --device "$PHYSICAL_DEVICE_ID" "$device_app_path" 2>&1
+    local install_rc=$?
+    set -e
+
+    if [ "$install_rc" -ne 0 ]; then
+        err "Install failed"
+        exit 1
+    fi
+    ok "Installed on device"
+
+    # ── Launch on device ──
+    log "Launching ${BOLD}$APP_NAME${NC}..."
+    set +e
+    xcrun devicectl device process launch --device "$PHYSICAL_DEVICE_ID" "$BUNDLE_ID" 2>&1
+    set -e
+    ok "Done! App deployed to ${BOLD}$PHYSICAL_DEVICE_NAME${NC}"
+}
 
 # ─── Simulator Detection ────────────────────────────────────────────────────
 detect_simulator() {
@@ -451,6 +588,7 @@ usage() {
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
+    echo -e "    ${GREEN}device${NC}       Build + deploy to physical iPhone ${DIM}(auto-strips capabilities if needed)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Flags:${NC}"
@@ -479,7 +617,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|test|setup|screenshot|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|test|setup|screenshot|device|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -606,5 +744,12 @@ case "$COMMAND" in
 
     screenshot)
         do_screenshot "$1"
+        ;;
+
+    device)
+        echo ""
+        echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
+        echo ""
+        do_device_deploy
         ;;
 esac
