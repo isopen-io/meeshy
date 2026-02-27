@@ -10,7 +10,7 @@ public enum StoryComposerPanel: Equatable {
     case stickers
     case drawing
     case filter
-    case music
+    case audio
     case background
 }
 
@@ -84,8 +84,10 @@ public struct StoryComposerView: View {
                         slideManager.addSlide()
                     }
                 }
-                toolBar
-                activeToolPanel
+                if !isDrawingActive {
+                    toolBar
+                    activeToolPanel
+                }
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem,
@@ -190,7 +192,7 @@ public struct StoryComposerView: View {
             toolButton(icon: "face.smiling", label: "Stickers", panel: .stickers)
             toolButton(icon: "pencil.tip", label: "Draw", panel: .drawing)
             toolButton(icon: "camera.filters", label: "Filter", panel: .filter)
-            toolButton(icon: "music.note", label: "Music", panel: .music)
+            toolButton(icon: "music.note", label: "Audio", panel: .audio)
             toolButton(icon: "paintpalette", label: "BG", panel: .background)
         }
         .padding(.vertical, 8)
@@ -259,9 +261,13 @@ public struct StoryComposerView: View {
                 .padding(.vertical, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
 
-        case .music:
-            // TODO Phase 2c: remplacer par StoryAudioPanel(...)
-            EmptyView()
+        case .audio:
+            StoryAudioPanel(
+                selectedAudioId: $selectedAudioId,
+                selectedAudioTitle: $selectedAudioTitle,
+                audioVolume: $audioVolume
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .background:
             backgroundPicker
