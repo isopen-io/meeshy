@@ -13,6 +13,7 @@ struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var participants: [ConversationParticipant] = []
     @State private var isLoading = false
@@ -137,6 +138,7 @@ struct ParticipantsView: View {
                 Text("Vous ne pourrez plus voir les messages de ce groupe.")
             }
         }
+        .withStatusBubble()
     }
 
     // MARK: - Member Count Header
@@ -195,27 +197,20 @@ struct ParticipantsView: View {
     // MARK: - Participant Row
 
     private func participantRow(_ participant: ConversationParticipant) -> some View {
-        let isOnline = presenceManager.presenceState(for: participant.id) == .online
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
+        let presence = presenceManager.presenceState(for: participant.id)
 
         return HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                MeeshyAvatar(
-                    name: participant.name,
-                    size: .small,
-                    accentColor: color,
-                    avatarURL: participant.avatar
-                )
-
-                if isOnline {
-                    Circle()
-                        .fill(Color(hex: "4ECDC4"))
-                        .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
-                        .offset(x: 2, y: 2)
-                }
-            }
+            MeeshyAvatar(
+                name: participant.name,
+                mode: .messageBubble,
+                accentColor: color,
+                avatarURL: participant.avatar,
+                moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
+                presenceState: presence,
+                onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -239,7 +234,7 @@ struct ParticipantsView: View {
 
             Spacer()
 
-            if isOnline {
+            if presence == .online {
                 Text("En ligne")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "4ECDC4"))
