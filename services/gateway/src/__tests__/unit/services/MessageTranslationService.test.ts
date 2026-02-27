@@ -905,7 +905,10 @@ describe('MessageTranslationService - Types and Interfaces', () => {
       pool_full_rejections: 0,
       avg_processing_time: 150,
       uptime_seconds: 3600,
-      memory_usage_mb: 128
+      memory_usage_mb: 128,
+      cache_hits: 5,
+      cache_misses: 2,
+      cache_hit_rate: 71.4,
     };
 
     expect(stats.messages_saved).toBe(10);
@@ -916,6 +919,9 @@ describe('MessageTranslationService - Types and Interfaces', () => {
     expect(stats.avg_processing_time).toBe(150);
     expect(stats.uptime_seconds).toBe(3600);
     expect(stats.memory_usage_mb).toBe(128);
+    expect(stats.cache_hits).toBe(5);
+    expect(stats.cache_misses).toBe(2);
+    expect(stats.cache_hit_rate).toBe(71.4);
   });
 });
 
