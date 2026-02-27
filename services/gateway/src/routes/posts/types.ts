@@ -42,7 +42,7 @@ export const MobileTranscriptionSchema = z.object({
     start: z.number().optional(),
     end: z.number().optional(),
     speaker_id: z.string().optional(),
-  })).optional().default([]),
+  })).optional(),
 });
 
 export type MobileTranscription = z.infer<typeof MobileTranscriptionSchema>;

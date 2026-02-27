@@ -145,6 +145,7 @@ export class PostService {
         if (audioMedia) {
           const transcriptionPayload: Prisma.InputJsonValue = {
             ...data.mobileTranscription,
+            segments: data.mobileTranscription.segments ?? [],
             source: 'mobile',
           };
           await this.prisma.postMedia.update({
