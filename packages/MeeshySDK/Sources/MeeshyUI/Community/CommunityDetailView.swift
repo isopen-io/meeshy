@@ -485,25 +485,6 @@ public struct CommunityDetailView: View {
     private var postsSection: some View {
         // Placeholder for Community Posts / Stories
         VStack(spacing: 8) {
-            // Community Story Tray Header Placeholder
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    VStack(spacing: 4) {
-                        ZStack {
-                            Circle().fill(theme.backgroundSecondary).frame(width: 60, height: 60)
-                            Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(Color(hex: "A855F7"))
-                        }
-                        Text("Story")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-            }
-
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
                 title: "No Posts Yet",

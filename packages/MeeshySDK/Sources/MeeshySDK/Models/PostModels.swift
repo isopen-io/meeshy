@@ -81,6 +81,7 @@ public struct APIPost: Decodable {
     public let moodEmoji: String?
     public let audioUrl: String?
     public let audioDuration: Int?
+    public let storyEffects: StoryEffects?
 }
 
 // MARK: - Conversion helpers

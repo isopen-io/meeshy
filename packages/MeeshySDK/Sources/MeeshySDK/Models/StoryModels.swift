@@ -421,6 +421,7 @@ extension Array where Element == APIPost {
                           width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
             }
             let item = StoryItem(id: post.id, content: post.content, media: media,
+                                 storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: post.updatedAt,
                                  repostOfId: post.repostOf?.id, isViewed: false)
             if var existing = grouped[authorId] {

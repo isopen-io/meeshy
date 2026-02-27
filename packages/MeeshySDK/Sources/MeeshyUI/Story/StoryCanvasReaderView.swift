@@ -33,14 +33,21 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var backgroundLayer: some View {
         if let bg = story.storyEffects?.background {
-            Color(hex: bg)
-                .ignoresSafeArea()
+            if bg.hasPrefix("gradient:") {
+                let colors = bg.replacingOccurrences(of: "gradient:", with: "")
+                    .split(separator: ",").map { Color(hex: String($0)) }
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Color(hex: bg)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         } else {
             LinearGradient(
                 colors: [Color(hex: "1A1A2E"), Color(hex: "0F3460")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
-            .ignoresSafeArea()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -74,7 +81,7 @@ public struct StoryCanvasReaderView: View {
     private var filterOverlay: some View {
         if let filter = story.storyEffects?.parsedFilter {
             filterView(filter)
-                .ignoresSafeArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
         }
     }
@@ -113,25 +120,25 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private func textLayer(size: CGSize) -> some View {
         let resolvedContent = story.resolvedContent(preferredLanguage: preferredLanguage)
-        if let content = resolvedContent, !content.isEmpty,
-           let effects = story.storyEffects {
-            let pos = effects.resolvedTextPosition
+        if let content = resolvedContent, !content.isEmpty {
+            let effects = story.storyEffects
+            let pos = effects?.resolvedTextPosition ?? .center
             styledText(content: content, effects: effects)
                 .position(x: pos.x * size.width, y: pos.y * size.height)
         }
     }
 
-    private func styledText(content: String, effects: StoryEffects) -> some View {
-        let fontSize = effects.textSize ?? 28
-        let colorHex = effects.textColor ?? "FFFFFF"
+    private func styledText(content: String, effects: StoryEffects?) -> some View {
+        let fontSize = effects?.textSize ?? 28
+        let colorHex = effects?.textColor ?? "FFFFFF"
         let alignment: TextAlignment = {
-            switch effects.textAlign {
+            switch effects?.textAlign {
             case "left":  return .leading
             case "right": return .trailing
             default:      return .center
             }
         }()
-        let textStyle = effects.parsedTextStyle
+        let textStyle = effects?.parsedTextStyle
 
         return Text(content)
             .font(storyFont(for: textStyle, size: fontSize))
@@ -141,7 +148,7 @@ public struct StoryCanvasReaderView: View {
             .padding(.vertical, 8)
             .background(
                 Group {
-                    if effects.textBg != nil {
+                    if effects?.textBg != nil {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color.black.opacity(0.5))
                     }
@@ -166,6 +173,15 @@ public struct StoryCanvasReaderView: View {
                     )
                     .allowsHitTesting(false)
             }
+        } else if let emojiStrings = story.storyEffects?.stickers, !emojiStrings.isEmpty {
+            // Fallback: stickers stockés en tableau de strings (format legacy)
+            HStack(spacing: 12) {
+                ForEach(Array(emojiStrings.enumerated()), id: \.offset) { _, emoji in
+                    Text(emoji).font(.system(size: 44))
+                }
+            }
+            .position(x: size.width / 2, y: size.height * 0.75)
+            .allowsHitTesting(false)
         }
     }
 }
