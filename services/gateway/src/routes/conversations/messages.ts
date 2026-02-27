@@ -684,6 +684,7 @@ export function registerMessagesRoutes(
 
           // Reply/Forward
           replyToId: message.replyToId,
+          storyReplyToId: message.storyReplyToId,
           forwardedFromId: message.forwardedFromId,
           forwardedFromConversationId: message.forwardedFromConversationId,
 
@@ -1025,6 +1026,7 @@ export function registerMessagesRoutes(
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
+          storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
           forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
           encryptedContent: { type: 'string', description: 'Encrypted message content' },
@@ -1073,6 +1075,7 @@ export function registerMessagesRoutes(
         originalLanguage = 'fr',
         messageType = 'text',
         replyToId,
+        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
         encryptedContent,
@@ -1180,6 +1183,7 @@ export function registerMessagesRoutes(
         originalLanguage,
         messageType,
         replyToId,
+        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId
       };

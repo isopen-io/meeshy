@@ -478,6 +478,8 @@ model Message {
   isDeleted                   Boolean   @default(false)
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
+  /// ID of the story/post being replied to
+  storyReplyToId              String?   @db.ObjectId
   /// ID of the original message if this is a forwarded message
   forwardedFromId             String?   @db.ObjectId
   /// ID of the original conversation (for cross-conversation/community forwarding)

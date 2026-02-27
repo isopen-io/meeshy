@@ -97,6 +97,7 @@ public struct APIMessage: Decodable {
     public let isEdited: Bool?
     public let isDeleted: Bool?
     public let replyToId: String?
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let pinnedAt: String?
@@ -135,6 +136,7 @@ public struct SendMessageRequest: Encodable {
     public let content: String?
     public let originalLanguage: String?
     public let replyToId: String?
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
@@ -144,9 +146,9 @@ public struct SendMessageRequest: Encodable {
     public var maxViewOnceCount: Int?
     public var isBlurred: Bool?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
-        self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
+        self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
         self.expiresAt = expiresAt; self.ephemeralDuration = ephemeralDuration
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount

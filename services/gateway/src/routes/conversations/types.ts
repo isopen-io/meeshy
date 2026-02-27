@@ -25,6 +25,7 @@ export interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  storyReplyToId?: string;
   // Forwarding fields
   forwardedFromId?: string;
   forwardedFromConversationId?: string;
