@@ -213,7 +213,7 @@ struct ConversationLockSheet: View {
             }
 
         case .verifyPassword:
-            if lockManager.verifyGlobalPin(pin) {
+            if lockManager.verifyMasterPin(pin) {
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
@@ -222,7 +222,7 @@ struct ConversationLockSheet: View {
             }
 
         case .removePassword:
-            if lockManager.verifyGlobalPin(pin) {
+            if lockManager.verifyMasterPin(pin) {
                 if let id = conversationId { lockManager.removeLock(conversationId: id) }
                 HapticFeedback.success()
                 onSuccess()
@@ -232,8 +232,8 @@ struct ConversationLockSheet: View {
             }
 
         case .removeGlobalPin:
-            if lockManager.verifyGlobalPin(pin) {
-                lockManager.removeGlobalPin()
+            if lockManager.verifyMasterPin(pin) {
+                lockManager.forceRemoveMasterPin()
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
@@ -248,8 +248,8 @@ struct ConversationLockSheet: View {
             shakeAndReset("Les PIN ne correspondent pas")
             return
         }
-        lockManager.setGlobalPin(pin)
-        if let id = conversationId { lockManager.setLock(conversationId: id) }
+        lockManager.setMasterPin(pin)
+        if let id = conversationId { lockManager.setLock(conversationId: id, pin: pin) }
         HapticFeedback.success()
         onSuccess()
         dismiss()

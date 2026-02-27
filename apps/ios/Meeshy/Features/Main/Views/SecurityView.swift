@@ -517,7 +517,7 @@ struct SecurityView: View {
     // MARK: - Conversation Lock PIN Section
 
     private var conversationLockSection: some View {
-        let hasPIN = lockManager.hasGlobalPin()
+        let hasPIN = lockManager.hasMasterPin()
         let lockColor = "FF6B6B"
         return VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)

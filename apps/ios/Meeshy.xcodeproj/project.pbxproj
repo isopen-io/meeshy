@@ -140,6 +140,7 @@
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
 
 		FRRL002A002A002A002A0002 /* FriendRequestListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FRRL001A001A001A001A0001 /* FriendRequestListView.swift */; };
+		TSTS0001000100010001001 /* ConversationLockManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTS0001000100010001000 /* ConversationLockManagerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -156,6 +157,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 8A674925D2BFEF47943F3058;
 			remoteInfo = MeeshyNotificationExtension;
+		};
+		TSTS0013001300130013001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 520FF232375591D2444919CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9999AD8C50CACBF85DF613CF;
+			remoteInfo = Meeshy;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -315,6 +323,8 @@
 
 		DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		FRRL001A001A001A001A0001 /* FriendRequestListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestListView.swift; sourceTree = "<group>"; };
+		TSTS0001000100010001000 /* ConversationLockManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockManagerTests.swift; sourceTree = "<group>"; };
+		TSTS000A000A000A000A001 /* MeeshyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeeshyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -432,6 +442,7 @@
 				A5D9030481B84BD57234817A /* Frameworks */,
 				245C54709501F298A6CFBE07 /* MeeshyWidgets */,
 				57C35E7A96F3D9CD910C9ABD /* MeeshyNotificationExtension */,
+				TSTS000B000B000B000B001 /* MeeshyTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -609,6 +620,7 @@
 				5832205F0A09E149C8B976A8 /* Meeshy.app */,
 				F712AE637B0876483E53AA3C /* MeeshyWidgets.appex */,
 				D476AE3A97B7291A27F716AD /* MeeshyNotificationExtension.appex */,
+				TSTS000A000A000A000A001 /* MeeshyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -623,9 +635,50 @@
 			path = Navigation;
 			sourceTree = "<group>";
 		};
+		TSTS000B000B000B000B001 /* MeeshyTests */ = {
+			isa = PBXGroup;
+			children = (
+				TSTS000C000C000C000C001 /* Unit */,
+			);
+			path = MeeshyTests;
+			sourceTree = "<group>";
+		};
+		TSTS000C000C000C000C001 /* Unit */ = {
+			isa = PBXGroup;
+			children = (
+				TSTS000D000D000D000D001 /* Services */,
+			);
+			path = Unit;
+			sourceTree = "<group>";
+		};
+		TSTS000D000D000D000D001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				TSTS0001000100010001000 /* ConversationLockManagerTests.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		TSTS000E000E000E000E001 /* MeeshyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = TSTS000F000F000F000F001 /* Build configuration list for PBXNativeTarget "MeeshyTests" */;
+			buildPhases = (
+				TSTS0010001000100010001 /* Sources */,
+				TSTS0011001100110011001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				TSTS0012001200120012001 /* PBXTargetDependency */,
+			);
+			name = MeeshyTests;
+			productName = MeeshyTests;
+			productReference = TSTS000A000A000A000A001 /* MeeshyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		2F5DDA19451F9475CB1A6262 /* MeeshyWidgets */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 828CBF7F3B3E43857E84F3C4 /* Build configuration list for PBXNativeTarget "MeeshyWidgets" */;
@@ -696,6 +749,10 @@
 					9999AD8C50CACBF85DF613CF = {
 						ProvisioningStyle = Automatic;
 					};
+					TSTS000E000E000E000E001 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 9999AD8C50CACBF85DF613CF;
+					};
 				};
 			};
 			buildConfigurationList = 147F4A57130170E66816D782 /* Build configuration list for PBXProject "Meeshy" */;
@@ -719,6 +776,7 @@
 				9999AD8C50CACBF85DF613CF /* Meeshy */,
 				2F5DDA19451F9475CB1A6262 /* MeeshyWidgets */,
 				8A674925D2BFEF47943F3058 /* MeeshyNotificationExtension */,
+				TSTS000E000E000E000E001 /* MeeshyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -898,6 +956,27 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXFrameworksBuildPhase section (tests) */
+		TSTS0011001100110011001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section (tests) */
+
+/* Begin PBXSourcesBuildPhase section (tests) */
+		TSTS0010001000100010001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TSTS0001000100010001001 /* ConversationLockManagerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section (tests) */
+
 /* Begin PBXTargetDependency section */
 		4422352619A2236FD62A66EB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -910,6 +989,12 @@
 			name = MeeshyWidgets;
 			target = 2F5DDA19451F9475CB1A6262 /* MeeshyWidgets */;
 			targetProxy = 0292505F5372BE6DA17507CF /* PBXContainerItemProxy */;
+		};
+		TSTS0012001200120012001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Meeshy;
+			target = 9999AD8C50CACBF85DF613CF /* Meeshy */;
+			targetProxy = TSTS0013001300130013001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1213,6 +1298,44 @@
 			};
 			name = Release;
 		};
+		TSTS0014001400140014001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J2LP6UE7JQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy";
+			};
+			name = Debug;
+		};
+		TSTS0015001500150015001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = J2LP6UE7JQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1251,6 +1374,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		TSTS000F000F000F000F001 /* Build configuration list for PBXNativeTarget "MeeshyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TSTS0014001400140014001 /* Debug */,
+				TSTS0015001500150015001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 

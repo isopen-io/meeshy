@@ -9,59 +9,75 @@ class ConversationLockManager: ObservableObject {
     @Published private(set) var lockedConversationIds: Set<String> = []
 
     private let keychainService = "me.meeshy.app.conversation-locks"
-    private let globalPinKey = "globalConversationPin"
+    private let masterPinKey = "meeshy_master_pin"
+    private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
 
     private init() {
         loadLockedIds()
     }
 
-    // MARK: - Conversation Lock
+    // MARK: - Master PIN (6 digits)
+
+    func hasMasterPin() -> Bool {
+        readFromKeychain(key: masterPinKey) != nil
+    }
+
+    func setMasterPin(_ pin: String) {
+        saveToKeychain(key: masterPinKey, value: sha256(pin))
+    }
+
+    func verifyMasterPin(_ pin: String) -> Bool {
+        guard let stored = readFromKeychain(key: masterPinKey) else { return false }
+        return sha256(pin) == stored
+    }
+
+    /// Supprime le master PIN. Ne pas appeler si des conversations sont verrouillées.
+    func removeMasterPin() {
+        guard lockedConversationIds.isEmpty else { return }
+        deleteFromKeychain(key: masterPinKey)
+    }
+
+    /// Force la suppression du master PIN (pour tests / unlock all).
+    func forceRemoveMasterPin() {
+        deleteFromKeychain(key: masterPinKey)
+    }
+
+    // MARK: - Per-conversation PIN (4 digits)
 
     func isLocked(_ conversationId: String) -> Bool {
         lockedConversationIds.contains(conversationId)
     }
 
-    func setLock(conversationId: String) {
+    func setLock(conversationId: String, pin: String) {
+        saveToKeychain(key: lockKey(conversationId), value: sha256(pin))
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
     }
 
+    func verifyLock(conversationId: String, pin: String) -> Bool {
+        guard let stored = readFromKeychain(key: lockKey(conversationId)) else { return false }
+        return sha256(pin) == stored
+    }
+
     func removeLock(conversationId: String) {
+        deleteFromKeychain(key: lockKey(conversationId))
         lockedConversationIds.remove(conversationId)
         saveLockedIds()
     }
 
-    // MARK: - Global PIN (4 digits)
-
-    func hasGlobalPin() -> Bool {
-        readFromKeychain(key: globalPinKey) != nil
+    func removeAllLocks() {
+        for id in lockedConversationIds {
+            deleteFromKeychain(key: lockKey(id))
+        }
+        lockedConversationIds.removeAll()
+        saveLockedIds()
     }
 
-    func setGlobalPin(_ pin: String) {
-        saveToKeychain(key: globalPinKey, value: sha256(pin))
+    // MARK: - Private helpers
+
+    private func lockKey(_ conversationId: String) -> String {
+        "meeshy_lock_\(conversationId)"
     }
-
-    func verifyGlobalPin(_ pin: String) -> Bool {
-        guard let storedHash = readFromKeychain(key: globalPinKey) else { return false }
-        return sha256(pin) == storedHash
-    }
-
-    func removeGlobalPin() {
-        deleteFromKeychain(key: globalPinKey)
-    }
-
-    // MARK: - Backward-compat shim (context menu uses these)
-
-    func setLock(conversationId: String, password: String) {
-        if !hasGlobalPin() { setGlobalPin(password) }
-        setLock(conversationId: conversationId)
-    }
-
-    func verifyPassword(conversationId: String, password: String) -> Bool {
-        verifyGlobalPin(password)
-    }
-
-    // MARK: - Hashing
 
     private func sha256(_ input: String) -> String {
         let data = Data(input.utf8)
@@ -110,11 +126,11 @@ class ConversationLockManager: ObservableObject {
     // MARK: - Persistence
 
     private func saveLockedIds() {
-        UserDefaults.standard.set(Array(lockedConversationIds), forKey: "meeshy.lockedConversationIds")
+        UserDefaults.standard.set(Array(lockedConversationIds), forKey: lockedIdsDefaultsKey)
     }
 
     private func loadLockedIds() {
-        let ids = UserDefaults.standard.stringArray(forKey: "meeshy.lockedConversationIds") ?? []
+        let ids = UserDefaults.standard.stringArray(forKey: lockedIdsDefaultsKey) ?? []
         lockedConversationIds = Set(ids)
     }
 }

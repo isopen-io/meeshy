@@ -284,9 +284,9 @@ struct ConversationListView: View {
                 if isLocked {
                     lockSheetMode = .removePassword
                     lockSheetConversation = conversation
-                } else if lockManager.hasGlobalPin() {
-                    lockManager.setLock(conversationId: conversation.id)
-                    HapticFeedback.success()
+                } else if lockManager.hasMasterPin() {
+                    lockSheetMode = .setPassword
+                    lockSheetConversation = conversation
                 } else {
                     lockSheetMode = .setPassword
                     lockSheetConversation = conversation
