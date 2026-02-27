@@ -150,7 +150,7 @@ class StoryViewModel: ObservableObject {
 
     func deleteStory(storyId: String) async -> Bool {
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.delete(endpoint: "/posts/\(storyId)")
+            let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
             
             // Remove from local state
             for i in storyGroups.indices {

@@ -15,30 +15,24 @@ public actor ClientInfoProvider {
     public func buildHeaders() async -> [String: String] {
         var headers: [String: String] = [:]
 
-        // App identity
-        headers["X-Meeshy-Version"] = appVersion()
-        headers["X-Meeshy-Build"]   = appBuild()
-        headers["X-Meeshy-Platform"] = "ios"
-
-        // Device & OS
-        headers["X-Meeshy-Device"] = deviceModel()
-        headers["X-Meeshy-OS"]     = osVersion()
-
-        // Locale & time
-        headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
-        headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
-        if let country = Locale.current.region?.identifier {
-            headers["X-Meeshy-Country"] = country
-        }
-
-        // User-Agent
         let version = appVersion()
         let build   = appBuild()
         let os      = osVersion()
         let model   = deviceModel()
-        headers["User-Agent"] = "Meeshy-iOS/\(version) (\(build)) iOS/\(os) \(model)"
 
-        // Geo (only if permission already granted — never request)
+        headers["X-Meeshy-Version"]  = version
+        headers["X-Meeshy-Build"]    = build
+        headers["X-Meeshy-Platform"] = "ios"
+        headers["X-Meeshy-Device"]   = model
+        headers["X-Meeshy-OS"]       = os
+        headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
+        headers["User-Agent"]        = "Meeshy-iOS/\(version) (\(build)) iOS/\(os) \(model)"
+
+        if let country = Locale.current.region?.identifier {
+            headers["X-Meeshy-Country"] = country
+        }
+
         await enrichWithLocation(&headers)
 
         return headers
@@ -65,14 +59,15 @@ public actor ClientInfoProvider {
         let machineMirror = Mirror(reflecting: systemInfo.machine)
         let identifier = machineMirror.children.reduce("") { id, element in
             guard let value = element.value as? Int8, value != 0 else { return id }
-            return id + String(UnicodeScalar(UInt8(value)))
+            return id + String(UnicodeScalar(UInt8(bitPattern: value)))
         }
         return identifier.isEmpty ? "unknown" : identifier
     }
 
     private func enrichWithLocation(_ headers: inout [String: String]) async {
-        // Check permission passively — never trigger a request dialog
-        let status = CLLocationManager.authorizationStatus()
+        // Check permission passively via instance property (iOS 14+) — never request
+        let manager = await MainActor.run { CLLocationManager() }
+        let status  = await MainActor.run { manager.authorizationStatus }
         guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
 
         // Return cached result if still fresh (1h TTL)
@@ -82,7 +77,7 @@ public actor ClientInfoProvider {
             return
         }
 
-        guard let location = CLLocationManager().location else { return }
+        guard let location = await MainActor.run(body: { manager.location }) else { return }
 
         do {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
