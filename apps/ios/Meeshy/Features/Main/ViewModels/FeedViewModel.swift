@@ -15,6 +15,7 @@ class FeedViewModel: ObservableObject {
     /// Number of new posts received via Socket.IO while the user is scrolled down.
     /// Reset to 0 when the user taps the "New posts" banner or pulls to refresh.
     @Published var newPostsCount: Int = 0
+    @Published var publishError: String?
 
     private var nextCursor: String?
     private let api = APIClient.shared
@@ -147,9 +148,10 @@ class FeedViewModel: ObservableObject {
     }
 
     func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
+        publishError = nil
         do {
             let apiPost = try await PostService.shared.create(
-                content: content ?? "",
+                content: content,
                 type: type,
                 visibility: visibility,
                 mediaIds: mediaIds,
@@ -160,7 +162,7 @@ class FeedViewModel: ObservableObject {
             let feedPost = apiPost.toFeedPost()
             posts.insert(feedPost, at: 0)
         } catch {
-            // Silent failure
+            publishError = error.localizedDescription
         }
     }
 

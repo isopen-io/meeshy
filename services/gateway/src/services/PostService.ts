@@ -52,6 +52,8 @@ const mediaSelect = {
   order: true,
   caption: true,
   alt: true,
+  transcription: true,
+  translations: true,
 };
 
 // Base post include
@@ -176,7 +178,12 @@ export class PostService {
       this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
     }
 
-    return post;
+    // Refetch pour inclure transcription et translations après toutes les opérations media
+    const refreshed = await this.prisma.post.findUnique({
+      where: { id: post.id },
+      include: postInclude,
+    });
+    return refreshed ?? post;
   }
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string): Promise<void> {

@@ -5,18 +5,10 @@ struct StatusBubbleOverlay: View {
     let status: StatusEntry
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
-    var onReply: (() -> Void)? = nil
-    var onShare: (() -> Void)? = nil
-    var onReaction: ((String) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var audioPlayer = AudioPlayerManager()
-    @State private var translatedText: String?
-    @State private var isTranslating = false
     @State private var appearAnimation = false
-    @State private var reactedEmoji: String?
-
-    private let quickEmojis = ["❤️", "😂", "🔥", "😮", "😢", "👏"]
 
     private var screenHeight: CGFloat { UIScreen.main.bounds.height }
     private var screenWidth: CGFloat { UIScreen.main.bounds.width }
@@ -30,16 +22,21 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 32, 280)
+            let bubbleW: CGFloat = min(screenWidth - 48, 210)
             let bubbleX = min(max(anchor.x, bubbleW / 2 + 16), bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
             let dx = bubbleX - anchor.x
 
             ZStack {
-                // Tap-to-dismiss
-                Color.black.opacity(appearAnimation ? 0.06 : 0)
+                // Tap-to-dismiss — transparent, laisse passer les scrolls
+                Color.clear
+                    .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .onTapGesture { dismiss() }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 3)
+                            .onChanged { _ in dismiss() }
+                    )
                     .allowsHitTesting(appearAnimation)
 
                 // Thought trail circles
@@ -88,71 +85,33 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Top bar: translate, reply, share, close
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                // Translate
-                if status.content != nil || status.audioUrl != nil {
-                    bubbleActionButton(
-                        icon: translatedText != nil ? "character.book.closed.fill" : "globe",
-                        color: "4ECDC4",
-                        isLoading: isTranslating
-                    ) {
-                        translateContent()
-                    }
-                }
-
-                // Reply
-                bubbleActionButton(icon: "arrowshape.turn.up.left.fill", color: "FF6B6B") {
-                    HapticFeedback.light()
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onReply?() }
-                }
-
-                // Share
-                bubbleActionButton(icon: "paperplane.fill", color: status.avatarColor) {
-                    HapticFeedback.light()
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onShare?() }
-                }
-
+                Text(status.moodEmoji)
+                    .font(.system(size: 18))
                 Spacer()
-
-                // Time ago
                 Text(status.timeAgo)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
-
-                // Close
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(theme.textMuted)
-                        .frame(width: 22, height: 22)
-                        .background(Circle().fill(theme.textMuted.opacity(0.12)))
-                }
             }
 
-            // Content (text or audio) — directly visible
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
                 audioPlayerView(urlString: audioUrl)
             } else if let content = status.content, !content.isEmpty {
-                Text(translatedText ?? content)
+                Text(content)
                     .font(.system(size: 13))
                     .foregroundColor(theme.textPrimary)
-                    .lineLimit(4)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            // Quick reaction strip
-            quickReactionStrip
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
                             LinearGradient(
                                 colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
@@ -162,49 +121,8 @@ struct StatusBubbleOverlay: View {
                             lineWidth: 0.5
                         )
                 )
-                .shadow(color: Color.black.opacity(0.12), radius: 14, y: 5)
+                .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
         )
-    }
-
-    // MARK: - Bubble Action Button
-
-    private func bubbleActionButton(icon: String, color: String, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Group {
-                if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .tint(Color(hex: color))
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: color))
-                }
-            }
-            .frame(width: 26, height: 26)
-            .background(
-                Circle().fill(Color(hex: color).opacity(theme.mode.isDark ? 0.18 : 0.1))
-            )
-        }
-    }
-
-    // MARK: - Quick Reactions Strip
-
-    private var quickReactionStrip: some View {
-        HStack(spacing: 0) {
-            ForEach(quickEmojis, id: \.self) { emoji in
-                Button {
-                    triggerReaction(emoji)
-                } label: {
-                    Text(emoji)
-                        .font(.system(size: reactedEmoji == emoji ? 22 : 18))
-                        .scaleEffect(reactedEmoji == emoji ? 1.3 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding(.vertical, 2)
     }
 
     // MARK: - Audio Player
@@ -238,58 +156,6 @@ struct StatusBubbleOverlay: View {
                 }
             }
             .frame(height: 3)
-        }
-    }
-
-    // MARK: - Reactions
-
-    private func triggerReaction(_ emoji: String) {
-        HapticFeedback.light()
-
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-            reactedEmoji = emoji
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation { reactedEmoji = nil }
-        }
-
-        onReaction?(emoji)
-
-        // Auto-dismiss after reaction
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            dismiss()
-        }
-    }
-
-    // MARK: - Translate
-
-    private func translateContent() {
-        if translatedText != nil {
-            translatedText = nil
-            return
-        }
-
-        guard let content = status.content, !content.isEmpty else { return }
-        isTranslating = true
-
-        Task {
-            do {
-                let body: [String: String] = [
-                    "text": content,
-                    "source_language": "auto",
-                    "target_language": "fr"
-                ]
-                let response: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-                    endpoint: "/translate",
-                    body: body
-                )
-                if response.success, let data = response.data["translatedText"]?.value as? String {
-                    translatedText = data
-                }
-            } catch {
-                // Silent failure
-            }
-            isTranslating = false
         }
     }
 

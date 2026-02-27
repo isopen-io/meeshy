@@ -70,7 +70,7 @@ public struct MobileTranscriptionPayload: Encodable {
 // MARK: - Post Requests
 
 public struct CreatePostRequest: Encodable {
-    public let content: String
+    public let content: String?
     public let type: String
     public let visibility: String
     public let moodEmoji: String?
@@ -80,7 +80,7 @@ public struct CreatePostRequest: Encodable {
     public let audioDuration: Int?
     public let mobileTranscription: MobileTranscriptionPayload?
 
-    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
