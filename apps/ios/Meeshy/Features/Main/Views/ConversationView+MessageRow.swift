@@ -50,6 +50,7 @@ extension ConversationView {
                     preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
+                    senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId ?? "")?.moodEmoji,
                     onAddReaction: { messageId in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             emojiOnlyMode = true

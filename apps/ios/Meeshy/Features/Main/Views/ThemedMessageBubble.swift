@@ -16,6 +16,7 @@ struct ThemedMessageBubble: View {
     var preferredTranslation: MessageTranslation? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
+    var senderMoodEmoji: String? = nil
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
     var onOpenReactPicker: ((String) -> Void)? = nil
@@ -338,6 +339,7 @@ struct ThemedMessageBubble: View {
                         mode: .messageBubble,
                         accentColor: message.senderColor ?? contactColor,
                         avatarURL: message.senderAvatarURL,
+                        moodEmoji: senderMoodEmoji,
                         presenceState: presenceState,
                         onViewProfile: { selectedProfileUser = .from(message: message) },
                         contextMenuItems: [
