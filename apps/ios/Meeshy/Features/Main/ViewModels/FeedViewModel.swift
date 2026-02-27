@@ -146,15 +146,16 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func createPost(content: String, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) async {
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         do {
             let apiPost = try await PostService.shared.create(
-                content: content,
+                content: content ?? "",
                 type: type,
                 visibility: visibility,
                 mediaIds: mediaIds,
                 audioUrl: audioUrl,
-                audioDuration: audioDuration
+                audioDuration: audioDuration,
+                mobileTranscription: mobileTranscription
             )
             let feedPost = apiPost.toFeedPost()
             posts.insert(feedPost, at: 0)

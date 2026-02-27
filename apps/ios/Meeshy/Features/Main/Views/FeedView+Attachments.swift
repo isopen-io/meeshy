@@ -58,8 +58,8 @@ extension FeedView {
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "photo_\(UUID().uuidString).\(result.fileExtension)"
+                        let result = await MediaCompressor.shared.compressImageData(imageData)
+                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                         try? result.data.write(to: tempURL)
 
@@ -288,6 +288,36 @@ extension FeedView {
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
                 }
+            }
+        }
+    }
+
+    // MARK: - Audio Post
+    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+        guard let token = APIClient.shared.authToken,
+              let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
+
+        await MainActor.run { isUploading = true }
+
+        do {
+            let uploader = TusUploadManager(baseURL: baseURL)
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token)
+            try? FileManager.default.removeItem(at: audioURL)
+
+            await viewModel.createPost(
+                mediaIds: [result.id],
+                mobileTranscription: transcription
+            )
+
+            await MainActor.run {
+                isUploading = false
+                HapticFeedback.success()
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: audioURL)
+            await MainActor.run {
+                isUploading = false
+                HapticFeedback.error()
             }
         }
     }
@@ -835,8 +865,8 @@ struct FeedComposerSheet: View {
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "photo_\(UUID().uuidString).\(result.fileExtension)"
+                        let result = await MediaCompressor.shared.compressImageData(imageData)
+                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                         try? result.data.write(to: tempURL)
                         let attachmentId = UUID().uuidString

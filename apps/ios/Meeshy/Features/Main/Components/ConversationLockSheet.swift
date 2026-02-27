@@ -3,27 +3,47 @@ import MeeshySDK
 
 struct ConversationLockSheet: View {
     enum Mode {
-        case setPassword       // Set global PIN + optionally lock conversationId
-        case verifyPassword    // Verify global PIN (opens conversation)
-        case removePassword    // Verify global PIN + remove conversation lock
-        case removeGlobalPin   // Verify global PIN + delete global PIN (Security settings)
+        case setupMasterPin           // Settings: entrer 6ch → confirmer 6ch → setMasterPin
+        case changeMasterPin          // Settings: vérifier 6ch → entrer nouveau 6ch → confirmer
+        case removeMasterPin          // Settings: vérifier 6ch → forceRemoveMasterPin
+        case lockConversation         // Menu: vérifier master 6ch → entrer 4ch → confirmer 4ch
+        case unlockConversation       // Menu: entrer 4ch → removeLock
+        case openConversation         // Tap: entrer 4ch → onSuccess()
+        case unlockAll                // Settings: vérifier master 6ch → removeAllLocks
     }
 
     let mode: Mode
     let conversationId: String?
     let conversationName: String
     let onSuccess: () -> Void
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var theme: ThemeManager
 
     @State private var pin: String = ""
     @State private var confirmPin: String = ""
-    @State private var isConfirming: Bool = false
+    @State private var step: Int = 0
     @State private var errorMessage: String?
     @State private var shakeOffset: CGFloat = 0
 
     private let lockManager = ConversationLockManager.shared
-    private let pinLength = 4
+
+    // MARK: - Computed PIN length
+
+    private var pinLength: Int {
+        switch mode {
+        case .setupMasterPin, .removeMasterPin, .unlockAll:
+            return 6
+        case .changeMasterPin:
+            return 6
+        case .lockConversation:
+            return step == 0 ? 6 : 4
+        case .unlockConversation, .openConversation:
+            return 4
+        }
+    }
+
+    private var currentPin: String { step == 2 ? confirmPin : pin }
 
     // MARK: - Body
 
@@ -43,6 +63,7 @@ struct ConversationLockSheet: View {
         .presentationDetents([.height(500)])
         .presentationDragIndicator(.visible)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: errorMessage)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: step)
     }
 
     // MARK: - Header
@@ -144,115 +165,172 @@ struct ConversationLockSheet: View {
         .disabled(currentPin.count >= pinLength)
     }
 
-    // MARK: - Computed
-
-    private var currentPin: String { isConfirming ? confirmPin : pin }
+    // MARK: - Titles
 
     private var iconName: String {
         switch mode {
-        case .setPassword:       return isConfirming ? "lock.shield.fill" : "lock.fill"
-        case .verifyPassword:    return "lock.fill"
-        case .removePassword:    return "lock.open.fill"
-        case .removeGlobalPin:   return "lock.open.fill"
+        case .setupMasterPin:
+            return step == 2 ? "lock.shield.fill" : "lock.fill"
+        case .changeMasterPin:
+            return step == 0 ? "lock.fill" : (step == 2 ? "lock.shield.fill" : "lock.rotation")
+        case .removeMasterPin:
+            return "lock.open.fill"
+        case .lockConversation:
+            return step == 2 ? "lock.shield.fill" : "lock.fill"
+        case .unlockConversation:
+            return "lock.open.fill"
+        case .openConversation:
+            return "lock.fill"
+        case .unlockAll:
+            return "lock.open.fill"
         }
     }
 
     private var titleText: String {
         switch mode {
-        case .setPassword:     return isConfirming ? "Confirmer le PIN" : "Choisir un PIN"
-        case .verifyPassword:  return "Conversation verrouillée"
-        case .removePassword:  return "Déverrouiller"
-        case .removeGlobalPin: return "Supprimer le PIN"
+        case .setupMasterPin:
+            return step == 0 ? "Créer le master PIN" : "Confirmer le master PIN"
+        case .changeMasterPin:
+            if step == 0 { return "Vérifier le master PIN" }
+            if step == 1 { return "Nouveau master PIN" }
+            return "Confirmer le nouveau PIN"
+        case .removeMasterPin:
+            return "Supprimer le master PIN"
+        case .lockConversation:
+            if step == 0 { return "Vérifier le master PIN" }
+            if step == 1 { return "Code de la conversation" }
+            return "Confirmer le code"
+        case .unlockConversation:
+            return "Déverrouiller"
+        case .openConversation:
+            return "Conversation verrouillée"
+        case .unlockAll:
+            return "Déverrouiller tout"
         }
     }
 
     private var subtitleText: String {
         switch mode {
-        case .setPassword:
-            if isConfirming { return "Saisissez à nouveau votre PIN pour confirmer" }
-            if conversationId != nil {
-                return "PIN à 4 chiffres pour verrouiller \(conversationName)"
-            }
-            return "Choisissez un PIN à 4 chiffres pour sécuriser vos conversations"
-        case .verifyPassword:
-            return "Saisissez votre PIN pour accéder à \(conversationName)"
-        case .removePassword:
-            return "Saisissez votre PIN pour déverrouiller \(conversationName)"
-        case .removeGlobalPin:
-            return "Saisissez votre PIN pour confirmer la suppression"
+        case .setupMasterPin:
+            if step == 0 { return "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous" }
+            return "Saisissez à nouveau votre master PIN pour confirmer"
+        case .changeMasterPin:
+            if step == 0 { return "Saisissez votre master PIN actuel" }
+            if step == 1 { return "Choisissez un nouveau master PIN à 6 chiffres" }
+            return "Confirmez votre nouveau master PIN"
+        case .removeMasterPin:
+            return "Saisissez votre master PIN pour confirmer la suppression"
+        case .lockConversation:
+            if step == 0 { return "Saisissez votre master PIN pour autoriser le verrouillage" }
+            if step == 1 { return "Choisissez un code à 4 chiffres pour \(conversationName)" }
+            return "Confirmez le code pour \(conversationName)"
+        case .unlockConversation:
+            return "Saisissez le code de \(conversationName) pour le déverrouiller"
+        case .openConversation:
+            return "Saisissez le code pour accéder à \(conversationName)"
+        case .unlockAll:
+            return "Saisissez votre master PIN pour déverrouiller toutes les conversations"
         }
     }
 
-    // MARK: - Logic
+    // MARK: - Input logic
 
     private func appendDigit(_ digit: Int) {
         guard currentPin.count < pinLength else { return }
         errorMessage = nil
-        if isConfirming {
+        if step == 2 {
             confirmPin += "\(digit)"
-            if confirmPin.count == pinLength { handleConfirmComplete() }
+            if confirmPin.count == pinLength { handleComplete() }
         } else {
             pin += "\(digit)"
-            if pin.count == pinLength { handlePinComplete() }
+            if pin.count == pinLength { handleComplete() }
         }
     }
 
     private func deleteLastDigit() {
-        if isConfirming {
+        if step == 2 {
             if !confirmPin.isEmpty { confirmPin.removeLast() }
         } else {
             if !pin.isEmpty { pin.removeLast() }
         }
     }
 
-    private func handlePinComplete() {
+    private func handleComplete() {
         switch mode {
-        case .setPassword:
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isConfirming = true
-            }
 
-        case .verifyPassword:
-            if lockManager.verifyGlobalPin(pin) {
+        case .setupMasterPin:
+            if step == 0 {
+                withAnimation { step = 2 }
+            } else {
+                guard pin == confirmPin else { return shakeAndReset("Les PIN ne correspondent pas") }
+                lockManager.setMasterPin(pin)
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
-            } else {
-                shakeAndReset("PIN incorrect")
             }
 
-        case .removePassword:
-            if lockManager.verifyGlobalPin(pin) {
-                if let id = conversationId { lockManager.removeLock(conversationId: id) }
+        case .changeMasterPin:
+            if step == 0 {
+                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+                withAnimation { step = 1; pin = "" }
+            } else if step == 1 {
+                withAnimation { step = 2 }
+            } else {
+                guard pin == confirmPin else { return shakeAndReset("Les PIN ne correspondent pas") }
+                lockManager.setMasterPin(pin)
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
-            } else {
-                shakeAndReset("PIN incorrect")
             }
 
-        case .removeGlobalPin:
-            if lockManager.verifyGlobalPin(pin) {
-                lockManager.removeGlobalPin()
+        case .removeMasterPin:
+            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+            lockManager.forceRemoveMasterPin()
+            HapticFeedback.success()
+            onSuccess()
+            dismiss()
+
+        case .lockConversation:
+            if step == 0 {
+                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+                withAnimation { step = 1; pin = "" }
+            } else if step == 1 {
+                withAnimation { step = 2 }
+            } else {
+                guard pin == confirmPin else { return shakeAndReset("Les codes ne correspondent pas") }
+                guard let id = conversationId else { return }
+                lockManager.setLock(conversationId: id, pin: pin)
                 HapticFeedback.success()
                 onSuccess()
                 dismiss()
-            } else {
-                shakeAndReset("PIN incorrect")
             }
+
+        case .unlockConversation:
+            guard let id = conversationId else { return }
+            guard lockManager.verifyLock(conversationId: id, pin: pin) else {
+                return shakeAndReset("Code incorrect")
+            }
+            lockManager.removeLock(conversationId: id)
+            HapticFeedback.success()
+            onSuccess()
+            dismiss()
+
+        case .openConversation:
+            guard let id = conversationId else { return }
+            guard lockManager.verifyLock(conversationId: id, pin: pin) else {
+                return shakeAndReset("Code incorrect")
+            }
+            HapticFeedback.success()
+            onSuccess()
+            dismiss()
+
+        case .unlockAll:
+            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+            lockManager.removeAllLocks()
+            HapticFeedback.success()
+            onSuccess()
+            dismiss()
         }
-    }
-
-    private func handleConfirmComplete() {
-        guard pin == confirmPin else {
-            shakeAndReset("Les PIN ne correspondent pas")
-            return
-        }
-        lockManager.setGlobalPin(pin)
-        if let id = conversationId { lockManager.setLock(conversationId: id) }
-        HapticFeedback.success()
-        onSuccess()
-        dismiss()
     }
 
     private func shakeAndReset(_ message: String) {
@@ -261,11 +339,12 @@ struct ConversationLockSheet: View {
         withAnimation(.default.repeatCount(4, autoreverses: true).speed(8)) {
             shakeOffset = 8
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
             shakeOffset = 0
             pin = ""
             confirmPin = ""
-            isConfirming = false
+            if step == 2 { step = 1 }
         }
     }
 }

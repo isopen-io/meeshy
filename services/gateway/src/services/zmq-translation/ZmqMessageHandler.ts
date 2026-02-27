@@ -522,7 +522,9 @@ export class ZmqMessageHandler extends EventEmitter {
       messageId: event.messageId,
       attachmentId: event.attachmentId,
       transcription: event.transcription,
-      processingTimeMs: event.processingTimeMs
+      processingTimeMs: event.processingTimeMs,
+      postId: event.postId,
+      postMediaId: event.postMediaId,
     });
   }
 

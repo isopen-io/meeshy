@@ -2711,6 +2711,39 @@ model PostMedia {
   caption      String?
   alt          String?  // Accessibilité
 
+  // Transcription audio (même structure que Attachment.transcription)
+  /// Structure: {
+  ///   text: string,
+  ///   language: string,
+  ///   confidence: number,
+  ///   source: "mobile" | "whisper" | "voice_api",
+  ///   model?: string,
+  ///   segments?: Array<{ text: string, start: number, end: number, speaker_id?: string, confidence?: number }>,
+  ///   speakerCount?: number,
+  ///   primarySpeakerId?: string,
+  ///   durationMs: number
+  /// }
+  transcription Json?
+
+  // Traductions audio par langue (même structure que Attachment.translations)
+  /// Structure: {
+  ///   "fr": {
+  ///     type: "audio" | "video" | "text",
+  ///     transcription: string,
+  ///     path?: string,
+  ///     url?: string,
+  ///     durationMs?: number,
+  ///     format?: string,
+  ///     cloned?: boolean,
+  ///     quality?: number,
+  ///     voiceModelId?: string,
+  ///     ttsModel?: string,
+  ///     createdAt: Date,
+  ///     updatedAt?: Date
+  ///   }
+  /// }
+  translations Json?
+
   createdAt    DateTime @default(now())
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)

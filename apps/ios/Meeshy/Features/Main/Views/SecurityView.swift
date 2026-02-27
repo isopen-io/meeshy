@@ -13,9 +13,9 @@ struct SecurityView: View {
     // Conversation lock PIN
     @ObservedObject private var lockManager = ConversationLockManager.shared
     @State private var showPinSetupSheet = false
-    @State private var showPinVerifyForChange = false
-    @State private var showPinChangeSetup = false
+    @State private var showPinChangeSheet = false
     @State private var showPinRemoveSheet = false
+    @State private var showUnlockAllSheet = false
 
     // Email change
     @State private var isEditingEmail = false
@@ -53,42 +53,37 @@ struct SecurityView: View {
         // PIN setup (no existing PIN)
         .sheet(isPresented: $showPinSetupSheet) {
             ConversationLockSheet(
-                mode: .setPassword,
+                mode: .setupMasterPin,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
             )
             .environmentObject(theme)
         }
-        // Verify current PIN before changing
-        .sheet(isPresented: $showPinVerifyForChange) {
+        // Change PIN (verify current + set new — single multi-step sheet)
+        .sheet(isPresented: $showPinChangeSheet) {
             ConversationLockSheet(
-                mode: .verifyPassword,
-                conversationId: nil,
-                conversationName: "changement de PIN",
-                onSuccess: {
-                    showPinVerifyForChange = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showPinChangeSetup = true
-                    }
-                }
-            )
-            .environmentObject(theme)
-        }
-        // Set new PIN after verification
-        .sheet(isPresented: $showPinChangeSetup) {
-            ConversationLockSheet(
-                mode: .setPassword,
+                mode: .changeMasterPin,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
             )
             .environmentObject(theme)
         }
-        // Remove global PIN
+        // Remove master PIN
         .sheet(isPresented: $showPinRemoveSheet) {
             ConversationLockSheet(
-                mode: .removeGlobalPin,
+                mode: .removeMasterPin,
+                conversationId: nil,
+                conversationName: "toutes les conversations",
+                onSuccess: {}
+            )
+            .environmentObject(theme)
+        }
+        // Unlock all conversations
+        .sheet(isPresented: $showUnlockAllSheet) {
+            ConversationLockSheet(
+                mode: .unlockAll,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
@@ -517,7 +512,8 @@ struct SecurityView: View {
     // MARK: - Conversation Lock PIN Section
 
     private var conversationLockSection: some View {
-        let hasPIN = lockManager.hasGlobalPin()
+        let hasMasterPIN = lockManager.masterPinConfigured
+        let lockedCount = lockManager.lockedConversationIds.count
         let lockColor = "FF6B6B"
         return VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)
@@ -528,20 +524,30 @@ struct SecurityView: View {
                     fieldIcon("lock.shield.fill", color: lockColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Code PIN")
+                        Text("Master PIN")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
-                        Text(hasPIN ? "Configuré" : "Non configuré")
+                        Text(hasMasterPIN ? "Configuré" : "Non configuré")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(hasPIN ? Color(hex: "4ADE80") : theme.textMuted)
+                            .foregroundColor(hasMasterPIN ? Color(hex: "4ADE80") : theme.textMuted)
                     }
 
                     Spacer()
 
-                    if hasPIN {
-                        Image(systemName: "checkmark.shield.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color(hex: "4ADE80"))
+                    if hasMasterPIN {
+                        HStack(spacing: 8) {
+                            if lockedCount > 0 {
+                                Text("\(lockedCount) verrou(s)")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: lockColor))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(Color(hex: lockColor).opacity(0.15)))
+                            }
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(Color(hex: "4ADE80"))
+                        }
                     }
                 }
                 .padding(.horizontal, 14)
@@ -549,7 +555,7 @@ struct SecurityView: View {
 
                 // Actions
                 HStack(spacing: 10) {
-                    if !hasPIN {
+                    if !hasMasterPIN {
                         Button {
                             HapticFeedback.medium()
                             showPinSetupSheet = true
@@ -570,7 +576,7 @@ struct SecurityView: View {
                     } else {
                         Button {
                             HapticFeedback.light()
-                            showPinVerifyForChange = true
+                            showPinChangeSheet = true
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
@@ -584,20 +590,40 @@ struct SecurityView: View {
                             .background(Capsule().fill(Color(hex: lockColor).opacity(0.12)))
                         }
 
-                        Button {
-                            HapticFeedback.medium()
-                            showPinRemoveSheet = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "trash.circle.fill")
-                                    .font(.system(size: 12))
-                                Text("Supprimer")
-                                    .font(.system(size: 13, weight: .semibold))
+                        if lockedCount > 0 {
+                            Button {
+                                HapticFeedback.medium()
+                                showUnlockAllSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "lock.open.fill")
+                                        .font(.system(size: 12))
+                                    Text("Déverrouiller tout (\(lockedCount))")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Color(hex: "F97316")))
                             }
-                            .foregroundColor(Color(hex: "EF4444"))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(Color(hex: "EF4444").opacity(0.10)))
+                        }
+
+                        if lockedCount == 0 {
+                            Button {
+                                HapticFeedback.medium()
+                                showPinRemoveSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "trash.circle.fill")
+                                        .font(.system(size: 12))
+                                    Text("Supprimer")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(Color(hex: "EF4444"))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Color(hex: "EF4444").opacity(0.10)))
+                            }
                         }
                     }
                 }

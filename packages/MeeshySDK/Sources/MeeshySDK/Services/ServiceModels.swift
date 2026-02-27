@@ -30,6 +30,43 @@ public struct AddReactionRequest: Encodable {
     }
 }
 
+// MARK: - Mobile Transcription
+
+public struct MobileTranscriptionSegment: Encodable {
+    public let text: String
+    public let start: Double?
+    public let end: Double?
+    public let speakerId: String?
+
+    public init(text: String, start: Double? = nil, end: Double? = nil, speakerId: String? = nil) {
+        self.text = text; self.start = start; self.end = end; self.speakerId = speakerId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text, start, end
+        case speakerId = "speaker_id"
+    }
+}
+
+public struct MobileTranscriptionPayload: Encodable {
+    public let text: String
+    public let language: String
+    public let confidence: Double?
+    public let durationMs: Int?
+    public let segments: [MobileTranscriptionSegment]
+
+    public init(text: String, language: String, confidence: Double? = nil,
+                durationMs: Int? = nil, segments: [MobileTranscriptionSegment] = []) {
+        self.text = text; self.language = language
+        self.confidence = confidence; self.durationMs = durationMs; self.segments = segments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text, language, confidence, segments
+        case durationMs = "duration_ms"
+    }
+}
+
 // MARK: - Post Requests
 
 public struct CreatePostRequest: Encodable {
@@ -41,11 +78,13 @@ public struct CreatePostRequest: Encodable {
     public let mediaIds: [String]?
     public let audioUrl: String?
     public let audioDuration: Int?
+    public let mobileTranscription: MobileTranscriptionPayload?
 
-    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil) {
+    public init(content: String, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
+        self.mobileTranscription = mobileTranscription
     }
 }
 

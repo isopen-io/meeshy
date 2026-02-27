@@ -123,39 +123,78 @@ extension ConversationListView {
         }
 
         // Lock/Unlock
+        let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
         Button {
             HapticFeedback.medium()
-            let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
-            lockSheetMode = isLocked ? .removePassword : .setPassword
-            lockSheetConversation = conversation
+            if isLockedCtx {
+                lockSheetMode = .unlockConversation
+                lockSheetConversation = conversation
+            } else if ConversationLockManager.shared.masterPinConfigured {
+                lockSheetMode = .lockConversation
+                lockSheetConversation = conversation
+            } else {
+                showNoMasterPinAlert = true
+            }
         } label: {
-            let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
             Label(
-                isLocked
-                    ? String(localized: "context.unlock", defaultValue: "D\u{00e9}verrouiller")
+                isLockedCtx
+                    ? String(localized: "context.unlock", defaultValue: "Déverrouiller")
                     : String(localized: "context.lock", defaultValue: "Verrouiller"),
-                systemImage: isLocked ? "lock.open.fill" : "lock.fill"
+                systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
             )
         }
 
-        // Archive
-        Button {
-            HapticFeedback.medium()
-            Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
-        } label: {
-            Label(String(localized: "context.archive", defaultValue: "Archiver"), systemImage: "archivebox.fill")
+        // Archive / Unarchive (masqué si bloqué et archivé)
+        let isBlockedConv = conversation.type == .direct
+            && (conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false)
+        let isArchivedConv = !conversation.isActive
+        if !(isArchivedConv && isBlockedConv) {
+            Button {
+                HapticFeedback.medium()
+                if isArchivedConv {
+                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                }
+            } label: {
+                Label(
+                    isArchivedConv
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
+                        : String(localized: "context.archive", defaultValue: "Archiver"),
+                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
+                )
+            }
         }
 
         Divider()
 
-        // Block (DM only)
-        if conversation.type == .direct, conversation.participantUserId != nil {
-            Button(role: .destructive) {
-                HapticFeedback.heavy()
-                blockTargetConversation = conversation
-                showBlockConfirmation = true
-            } label: {
-                Label(String(localized: "context.block", defaultValue: "Bloquer"), systemImage: "hand.raised.fill")
+        // Block / Unblock (DM only)
+        if conversation.type == .direct, let userId = conversation.participantUserId {
+            let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
+            if isBlockedCtx {
+                Button {
+                    HapticFeedback.heavy()
+                    Task {
+                        try? await BlockService.shared.unblockUser(userId: userId)
+                        await MainActor.run { HapticFeedback.success() }
+                    }
+                } label: {
+                    Label(
+                        String(localized: "context.unblock", defaultValue: "Débloquer"),
+                        systemImage: "hand.raised.slash.fill"
+                    )
+                }
+            } else {
+                Button(role: .destructive) {
+                    HapticFeedback.heavy()
+                    blockTargetConversation = conversation
+                    showBlockConfirmation = true
+                } label: {
+                    Label(
+                        String(localized: "context.block", defaultValue: "Bloquer"),
+                        systemImage: "hand.raised.fill"
+                    )
+                }
             }
         }
 
