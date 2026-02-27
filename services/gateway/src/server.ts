@@ -601,6 +601,34 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     await registerGlobalRateLimiter(this.server);
     logger.info('✅ Global rate limiter configured (300 req/min per IP)');
 
+    // Client identification logging — enrichit le logger Pino avec version/device/geo client
+    this.server.addHook('onRequest', (request, _reply, done) => {
+      const get = (key: string): string | undefined => {
+        const val = request.headers[key];
+        return typeof val === 'string' ? val : undefined;
+      };
+      const clientContext = {
+        appVersion : get('x-meeshy-version'),
+        appBuild   : get('x-meeshy-build'),
+        platform   : get('x-meeshy-platform'),
+        device     : get('x-meeshy-device'),
+        osVersion  : get('x-meeshy-os'),
+        locale     : get('x-meeshy-locale'),
+        timezone   : get('x-meeshy-timezone'),
+        country    : get('x-meeshy-country'),
+        city       : get('x-meeshy-city'),
+        region     : get('x-meeshy-region'),
+      };
+      const client = Object.fromEntries(
+        Object.entries(clientContext).filter(([, v]) => v !== undefined)
+      );
+      if (Object.keys(client).length > 0) {
+        (request as any).log = request.log.child({ client });
+      }
+      done();
+    });
+    logger.info('✅ Client identification hook registered');
+
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
 
