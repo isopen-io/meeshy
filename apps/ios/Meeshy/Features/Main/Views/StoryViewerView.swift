@@ -169,64 +169,62 @@ struct StoryViewerView: View {
             // Color/gradient fallback (always present)
             storyBackground(geometry: geometry)
 
-            // === Outgoing Layers (cross-dissolve: old content fades out behind new) ===
+            // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
-                // Outgoing media
-                if let media = outgoing.media.first, media.type == .image || media.type == .video {
-                    mediaOverlay(media: media, geometry: geometry)
-                        .opacity(outgoingOpacity)
-                }
-                // Outgoing text + stickers
-                VStack(spacing: 8) {
-                    if let content = outgoing.content, !content.isEmpty {
-                        storyTextContent(content, storyEffects: outgoing.storyEffects)
-                    }
-                    if let stickers = outgoing.storyEffects?.stickers, !stickers.isEmpty {
-                        HStack(spacing: 8) {
-                            ForEach(stickers, id: \.self) { sticker in
-                                Text(sticker)
-                                    .font(.system(size: 40))
-                            }
-                        }
-                    }
-                }
-                .opacity(outgoingOpacity)
-                .padding(.top, max(geometry.safeAreaInsets.top, 59) + 80)
-                .padding(.bottom, 120)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityHidden(true)
+                StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage)
+                    .opacity(outgoingOpacity)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
 
-            // === Layer 2: Media image/video (fills as background) ===
-            if let media = currentStory?.media.first, media.type == .image || media.type == .video {
-                mediaOverlay(media: media, geometry: geometry)
+            // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
+            if let story = currentStory {
+                StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage)
                     .opacity(contentOpacity)
+                    .offset(y: textSlideOffset)
             }
 
-            // === Layer 3: Filter overlay (tint on top of image) ===
-            filterOverlay
-
-            // === Layer 4: Text content + stickers (with parallax slide on transition) ===
-            VStack(spacing: 8) {
-                if let content = currentStory?.content, !content.isEmpty {
-                    storyTextContent(content)
+            // === Voice caption overlay (transcription voix) ===
+            if let transcription = currentVoiceCaption {
+                VStack {
+                    Spacer()
+                    Text(transcription)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black.opacity(0.55))
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, max(geometry.safeAreaInsets.top, 59) + 130)
                 }
-
-                if let stickers = currentStory?.storyEffects?.stickers, !stickers.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(stickers, id: \.self) { sticker in
-                            Text(sticker)
-                                .font(.system(size: 40))
-                                .accessibilityLabel("Sticker \(sticker)")
-                        }
-                    }
-                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
             }
-            .opacity(contentOpacity)
-            .offset(y: textSlideOffset)
-            .padding(.top, max(geometry.safeAreaInsets.top, 59) + 80)
-            .padding(.bottom, 120)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // === Background audio badge ===
+            if let audio = currentStory?.backgroundAudio {
+                VStack {
+                    Spacer()
+                    backgroundAudioBadge(audio: audio)
+                        .padding(.bottom, max(geometry.safeAreaInsets.top, 59) + 165)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .allowsHitTesting(false)
+            }
+
+            // === Translation indicator (Prisme Linguistique — discret) ===
+            if isContentTranslated {
+                translationBadge
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, max(geometry.safeAreaInsets.top, 59) + 175)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
 
             // === Layer 5: Gradient scrims for readability over photos ===
             VStack {
@@ -751,6 +749,18 @@ struct StoryViewerView: View {
         return group.stories[currentStoryIndex]
     }
 
+    private var resolvedViewerLanguage: String? {
+        AuthManager.shared.currentUser?.systemLanguage
+    }
+
+    var isContentTranslated: Bool { // internal for cross-file extension access
+        guard let story = currentStory,
+              let viewerLang = resolvedViewerLanguage,
+              let translations = story.translations,
+              !translations.isEmpty else { return false }
+        return translations.contains { $0.language == viewerLang }
+    }
+
     // MARK: - Story Background
 
     private func storyBackground(geometry: GeometryProxy) -> some View {
@@ -776,6 +786,66 @@ struct StoryViewerView: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+
+    // MARK: - Background Audio Badge
+
+    private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .font(.system(size: 11, weight: .semibold))
+            Text(audio.title)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let uploader = audio.uploaderName {
+                Text("· \(uploader)")
+                    .font(.system(size: 11))
+                    .opacity(0.7)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+        )
+    }
+
+    // MARK: - Voice Caption
+
+    var currentVoiceCaption: String? { // internal for cross-file extension access
+        guard let effects = currentStory?.storyEffects,
+              effects.voiceAttachmentId != nil,
+              let transcriptions = effects.voiceTranscriptions,
+              !transcriptions.isEmpty else { return nil }
+        let lang = resolvedViewerLanguage ?? "en"
+        return transcriptions.first { $0.language == lang }?.content
+            ?? transcriptions.first?.content
+    }
+
+    // MARK: - Translation Badge
+
+    private var translationBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "translate")
+                .font(.system(size: 10, weight: .semibold))
+            if let lang = resolvedViewerLanguage {
+                Text(lang.uppercased())
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+            }
+        }
+        .foregroundColor(.white.opacity(0.8))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.3)))
+        )
     }
 
     // MARK: - Progress Bars
