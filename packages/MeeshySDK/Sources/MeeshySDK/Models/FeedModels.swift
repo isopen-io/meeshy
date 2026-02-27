@@ -20,15 +20,18 @@ public struct FeedMedia: Identifiable {
     public var locationName: String?
     public var latitude: Double?
     public var longitude: Double?
+    public var transcription: MessageTranscription?
 
     public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil, thumbnailColor: String = "4ECDC4",
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
-                locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil) {
+                locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
+                transcription: MessageTranscription? = nil) {
         self.id = id; self.type = type; self.url = url; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.locationName = locationName; self.latitude = latitude; self.longitude = longitude
+        self.transcription = transcription
     }
 
     public static func image(color: String = "4ECDC4") -> FeedMedia {

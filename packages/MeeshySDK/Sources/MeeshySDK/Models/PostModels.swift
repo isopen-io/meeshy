@@ -105,12 +105,34 @@ private func formatFileSize(_ bytes: Int) -> String {
 extension APIPost {
     public func toFeedPost() -> FeedPost {
         let feedMedia: [FeedMedia] = (media ?? []).map { m in
-            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl,
-                      thumbnailColor: thumbnailColorForMime(m.mimeType),
-                      width: m.width, height: m.height,
-                      duration: m.duration.map { $0 / 1000 },
-                      fileName: m.originalName ?? m.fileName,
-                      fileSize: m.fileSize.map { formatFileSize($0) })
+            let transcription: MessageTranscription? = m.transcription.map { t in
+                let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
+                    MessageTranscriptionSegment(
+                        text: seg.text,
+                        startTime: seg.startTime,
+                        endTime: seg.endTime,
+                        speakerId: seg.speakerId
+                    )
+                }
+                return MessageTranscription(
+                    attachmentId: m.id,
+                    text: t.resolvedText,
+                    language: t.language ?? "und",
+                    confidence: t.confidence,
+                    durationMs: t.durationMs,
+                    segments: segments,
+                    speakerCount: t.speakerCount
+                )
+            }
+            return FeedMedia(
+                id: m.id, type: m.mediaType, url: m.fileUrl,
+                thumbnailColor: thumbnailColorForMime(m.mimeType),
+                width: m.width, height: m.height,
+                duration: m.duration.map { $0 / 1000 },
+                fileName: m.originalName ?? m.fileName,
+                fileSize: m.fileSize.map { formatFileSize($0) },
+                transcription: transcription
+            )
         }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
