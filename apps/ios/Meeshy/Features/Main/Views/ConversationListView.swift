@@ -608,28 +608,7 @@ struct ConversationListView: View {
                 StatusBubbleOverlay(
                     status: status,
                     anchorPoint: moodBadgeAnchor,
-                    isPresented: $showStatusBubble,
-                    onReply: {
-                        // Find conversation for this user and navigate
-                        if let conv = conversationViewModel.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
-                            onSelect(conv)
-                        }
-                    },
-                    onShare: {
-                        // Find conversation for this user and navigate (share context)
-                        if let conv = conversationViewModel.conversations.first(where: { $0.participantUserId == status.userId && $0.type == .direct }) {
-                            onSelect(conv)
-                        }
-                    },
-                    onReaction: { emoji in
-                        // Fire & forget reaction to status
-                        Task {
-                            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                                endpoint: "/posts/\(status.id)/like",
-                                body: ["emoji": emoji]
-                            )
-                        }
-                    }
+                    isPresented: $showStatusBubble
                 )
                 .zIndex(200)
             }
