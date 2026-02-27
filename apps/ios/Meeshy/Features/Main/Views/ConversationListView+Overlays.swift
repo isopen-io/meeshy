@@ -126,7 +126,7 @@ extension ConversationListView {
         Button {
             HapticFeedback.medium()
             let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
-            lockSheetMode = isLocked ? .removePassword : .setPassword
+            lockSheetMode = isLocked ? .unlockConversation : .lockConversation
             lockSheetConversation = conversation
         } label: {
             let isLocked = ConversationLockManager.shared.isLocked(conversation.id)

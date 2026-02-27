@@ -95,7 +95,7 @@ struct ConversationListView: View {
 
     // Lock & Block state
     @State var lockSheetConversation: Conversation? = nil
-    @State var lockSheetMode: ConversationLockSheet.Mode = .setPassword
+    @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
     @State var showBlockConfirmation = false
     @State var blockTargetConversation: Conversation? = nil
 
@@ -195,7 +195,7 @@ struct ConversationListView: View {
             .onTapGesture {
                 HapticFeedback.light()
                 if ConversationLockManager.shared.isLocked(conversation.id) {
-                    lockSheetMode = .verifyPassword
+                    lockSheetMode = .openConversation
                     lockSheetConversation = conversation
                 } else {
                     onSelect(conversation)
@@ -282,13 +282,10 @@ struct ConversationListView: View {
                 color: Color(hex: "F59E0B")
             ) {
                 if isLocked {
-                    lockSheetMode = .removePassword
-                    lockSheetConversation = conversation
-                } else if lockManager.hasMasterPin() {
-                    lockSheetMode = .setPassword
+                    lockSheetMode = .unlockConversation
                     lockSheetConversation = conversation
                 } else {
-                    lockSheetMode = .setPassword
+                    lockSheetMode = .lockConversation
                     lockSheetConversation = conversation
                 }
             }
@@ -622,7 +619,7 @@ struct ConversationListView: View {
                 conversationId: conversation.id,
                 conversationName: conversation.name,
                 onSuccess: {
-                    if lockSheetMode == .verifyPassword {
+                    if case .openConversation = lockSheetMode {
                         onSelect(conversation)
                     }
                 }

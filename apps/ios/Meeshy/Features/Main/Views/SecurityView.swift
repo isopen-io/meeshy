@@ -13,8 +13,7 @@ struct SecurityView: View {
     // Conversation lock PIN
     @ObservedObject private var lockManager = ConversationLockManager.shared
     @State private var showPinSetupSheet = false
-    @State private var showPinVerifyForChange = false
-    @State private var showPinChangeSetup = false
+    @State private var showPinChangeSheet = false
     @State private var showPinRemoveSheet = false
 
     // Email change
@@ -53,42 +52,27 @@ struct SecurityView: View {
         // PIN setup (no existing PIN)
         .sheet(isPresented: $showPinSetupSheet) {
             ConversationLockSheet(
-                mode: .setPassword,
+                mode: .setupMasterPin,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
             )
             .environmentObject(theme)
         }
-        // Verify current PIN before changing
-        .sheet(isPresented: $showPinVerifyForChange) {
+        // Change PIN (verify current + set new — single multi-step sheet)
+        .sheet(isPresented: $showPinChangeSheet) {
             ConversationLockSheet(
-                mode: .verifyPassword,
-                conversationId: nil,
-                conversationName: "changement de PIN",
-                onSuccess: {
-                    showPinVerifyForChange = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showPinChangeSetup = true
-                    }
-                }
-            )
-            .environmentObject(theme)
-        }
-        // Set new PIN after verification
-        .sheet(isPresented: $showPinChangeSetup) {
-            ConversationLockSheet(
-                mode: .setPassword,
+                mode: .changeMasterPin,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
             )
             .environmentObject(theme)
         }
-        // Remove global PIN
+        // Remove master PIN
         .sheet(isPresented: $showPinRemoveSheet) {
             ConversationLockSheet(
-                mode: .removeGlobalPin,
+                mode: .removeMasterPin,
                 conversationId: nil,
                 conversationName: "toutes les conversations",
                 onSuccess: {}
@@ -570,7 +554,7 @@ struct SecurityView: View {
                     } else {
                         Button {
                             HapticFeedback.light()
-                            showPinVerifyForChange = true
+                            showPinChangeSheet = true
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
