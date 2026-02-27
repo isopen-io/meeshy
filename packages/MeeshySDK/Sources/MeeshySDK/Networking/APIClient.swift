@@ -119,6 +119,12 @@ public final class APIClient {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
 
+        // Client identification headers (version, device, locale, geo)
+        let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
+        for (key, value) in clientHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+
         if let token = authToken {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
