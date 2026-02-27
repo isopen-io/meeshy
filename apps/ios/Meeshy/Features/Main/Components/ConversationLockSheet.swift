@@ -339,7 +339,8 @@ struct ConversationLockSheet: View {
         withAnimation(.default.repeatCount(4, autoreverses: true).speed(8)) {
             shakeOffset = 8
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
             shakeOffset = 0
             pin = ""
             confirmPin = ""

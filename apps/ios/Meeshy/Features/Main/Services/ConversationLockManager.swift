@@ -87,7 +87,8 @@ class ConversationLockManager: ObservableObject {
 
     // MARK: - Keychain
 
-    private func saveToKeychain(key: String, value: String) {
+    @discardableResult
+    private func saveToKeychain(key: String, value: String) -> Bool {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -97,7 +98,7 @@ class ConversationLockManager: ObservableObject {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 
     private func readFromKeychain(key: String) -> String? {
