@@ -1284,6 +1284,7 @@ model AffiliateToken {
   createdBy   String    @db.ObjectId
   maxUses     Int? // Limite d'utilisation (null = illimité)
   currentUses Int       @default(0)
+  clickCount  Int       @default(0) // Nombre de clics sur le lien d'affiliation
   expiresAt   DateTime? // Date d'expiration (null = pas d'expiration)
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
