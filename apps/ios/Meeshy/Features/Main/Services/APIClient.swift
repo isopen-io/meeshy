@@ -177,10 +177,14 @@ final class APIClient {
                             throw APIError.unauthorized
                         }
                         guard (200...299).contains(retryHttp.statusCode) else {
-                            let errorMsg = try? decoder.decode(APIResponse<String>.self, from: retryData).error
+                            let errorMsg = try await Task.detached(priority: .userInitiated) { [decoder] in 
+                                try? decoder.decode(APIResponse<String>.self, from: retryData).error
+                            }.value
                             throw APIError.serverError(retryHttp.statusCode, errorMsg)
                         }
-                        return try decoder.decode(T.self, from: retryData)
+                        return try await Task.detached(priority: .userInitiated) { [decoder] in
+                            try decoder.decode(T.self, from: retryData)
+                        }.value
                     } catch {
                         Task { @MainActor in AuthManager.shared.handleUnauthorized() }
                         throw APIError.unauthorized
@@ -191,11 +195,15 @@ final class APIClient {
             }
 
             guard (200...299).contains(httpResponse.statusCode) else {
-                let errorMsg = try? decoder.decode(APIResponse<String>.self, from: data).error
+                let errorMsg = try await Task.detached(priority: .userInitiated) { [decoder] in
+                    try? decoder.decode(APIResponse<String>.self, from: data).error
+                }.value
                 throw APIError.serverError(httpResponse.statusCode, errorMsg)
             }
 
-            return try decoder.decode(T.self, from: data)
+            return try await Task.detached(priority: .userInitiated) { [decoder] in
+                try decoder.decode(T.self, from: data)
+            }.value
         } catch let error as APIError {
             throw error
         } catch let error as DecodingError {

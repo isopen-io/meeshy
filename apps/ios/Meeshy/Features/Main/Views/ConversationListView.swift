@@ -485,31 +485,26 @@ struct ConversationListView: View {
                             }
                         }
                 }
-                // Background view to track scroll changes cleanly without fighting ScrollView gestures
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.onChange(of: proxy.frame(in: .named("scroll")).minY) { oldVal, newVal in
-                            let delta = newVal - oldVal
-                            // The delta is calculated per frame (e.g. 1/60th or 1/120th of a sec)
-                            // Therefore, values strictly > 2 or < -2 are ample to detect user intent avoiding jitters.
-                            
-                            // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
-                            if delta < -2 && !hideSearchBar && newVal < -20 {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    hideSearchBar = true
-                                    isScrollingDown = true
-                                }
-                            } else if (delta > 4 || newVal > -5) && hideSearchBar {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    hideSearchBar = false
-                                    isScrollingDown = false
-                                }
+            }
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { value in
+                        let translation = value.translation.height
+                        
+                        // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
+                        if translation < -20 && !hideSearchBar {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                hideSearchBar = true
+                                isScrollingDown = true
+                            }
+                        } else if translation > 20 && hideSearchBar {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                hideSearchBar = false
+                                isScrollingDown = false
                             }
                         }
                     }
-                )
-            }
-            .coordinateSpace(name: "scroll")
+            )
             .refreshable {
                 HapticFeedback.medium()
                 await conversationViewModel.forceRefresh()

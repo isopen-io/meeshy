@@ -523,7 +523,8 @@ struct ConversationView: View {
                         .transition(.opacity)
                     }
 
-                    ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, msg in
+                    ForEach(viewModel.messages) { msg in
+                        let index = viewModel.messages.firstIndex(where: { $0.id == msg.id }) ?? 0
                         if shouldShowDateSection(at: index) { dateSectionView(for: msg.createdAt) }
                         if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
                         messageRow(index: index, msg: msg)
