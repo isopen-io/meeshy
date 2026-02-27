@@ -2711,6 +2711,14 @@ model PostMedia {
   caption      String?
   alt          String?  // Accessibilité
 
+  // Transcription audio (même structure que Attachment.transcription)
+  /// { text, segments[{text, start, end, speaker_id, confidence}], speakerCount, durationMs }
+  transcription Json?
+
+  // Traductions audio par langue (même structure que Attachment.translations)
+  /// { "fr": { type, transcription, url, durationMs, format, cloned, quality, ttsModel, segments } }
+  translations Json?
+
   createdAt    DateTime @default(now())
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
