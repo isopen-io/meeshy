@@ -62,9 +62,11 @@ public struct CreateStoryRequest: Encodable {
     public let content: String?
     public let storyEffects: StoryEffects?
     public let visibility: String
+    public let mediaIds: [String]?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC") {
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", mediaIds: [String]? = nil) {
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
+        self.mediaIds = mediaIds
     }
 }
 
