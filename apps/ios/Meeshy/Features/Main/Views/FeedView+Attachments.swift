@@ -58,8 +58,8 @@ extension FeedView {
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "photo_\(UUID().uuidString).\(result.fileExtension)"
+                        let result = await MediaCompressor.shared.compressImageData(imageData)
+                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                         try? result.data.write(to: tempURL)
 
@@ -835,8 +835,8 @@ struct FeedComposerSheet: View {
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImage(uiImage)
-                        let fileName = "photo_\(UUID().uuidString).\(result.fileExtension)"
+                        let result = await MediaCompressor.shared.compressImageData(imageData)
+                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
                         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                         try? result.data.write(to: tempURL)
                         let attachmentId = UUID().uuidString

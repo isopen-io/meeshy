@@ -52,8 +52,8 @@ public final class PostService {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
     }
 
-    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC") async throws -> APIPost {
-        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility)
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", mediaIds: [String]? = nil) async throws -> APIPost {
+        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, mediaIds: mediaIds)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
