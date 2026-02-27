@@ -318,8 +318,6 @@ struct StoryViewerView: View {
                         .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                } else {
-                    ownStoryFooter
                 }
             }
             .padding(.bottom, composerBottomPadding(geometry: geometry))
@@ -437,6 +435,14 @@ struct StoryViewerView: View {
                     label: "Partager"
                 ) {
                     reshareStory()
+                }
+            } else {
+                storyActionButton(
+                    icon: "eye.fill",
+                    label: "Vues"
+                ) {
+                    HapticFeedback.light()
+                    // TODO: Show viewers list
                 }
             }
 
@@ -695,30 +701,6 @@ struct StoryViewerView: View {
                 hasComposerContent = hasContent
             }
         )
-    }
-
-    private var ownStoryFooter: some View {
-        HStack {
-            Spacer()
-            VStack(spacing: 4) {
-                Image(systemName: "eye.fill")
-                    .font(.system(size: 18))
-                Text("Vu par...")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundColor(.white.opacity(0.9))
-            .padding(.vertical, 10)
-            .padding(.horizontal, 24)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-            )
-            .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-            Spacer()
-        }
-        .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Computed Bottom Padding
