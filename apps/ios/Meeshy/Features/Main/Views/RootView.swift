@@ -158,6 +158,15 @@ struct RootView: View {
                     case .affiliate:
                         AffiliateView()
                             .navigationBarHidden(true)
+                    case .trackingLinks:
+                        TrackingLinksView()
+                            .navigationBarHidden(true)
+                    case .shareLinks:
+                        ShareLinksView()
+                            .navigationBarHidden(true)
+                    case .communityLinks:
+                        CommunityLinksView()
+                            .navigationBarHidden(true)
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)

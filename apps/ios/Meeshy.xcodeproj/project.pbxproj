@@ -25,6 +25,14 @@
 		771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */; };
 		8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */; };
 		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
+		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
+		SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SL6002A002A002A002A00002 /* ShareLinksView.swift */; };
+		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
+		CS6001A001A001A001A00001 /* CreateShareLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CS6002A002A002A002A00002 /* CreateShareLinkView.swift */; };
+		SD6001A001A001A001A00001 /* ShareLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SD6002A002A002A002A00002 /* ShareLinkDetailView.swift */; };
+		TD6001A001A001A001A00001 /* TrackingLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */; };
+		CT6001A001A001A001A00001 /* CreateTrackingLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CT6002A002A002A002A00002 /* CreateTrackingLinkView.swift */; };
+		CDL6001A001A001A001A0001 /* CommunityLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
 		2A52D4F1D5A9C383AC4E2CFB /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AD7697AD569462191E395F /* DataExportView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
@@ -215,6 +223,14 @@
 		8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementBadgeView.swift; sourceTree = "<group>"; };
 		B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateView.swift; sourceTree = "<group>"; };
 		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
+		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
+		SL6002A002A002A002A00002 /* ShareLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinksView.swift; sourceTree = "<group>"; };
+		CL6002A002A002A002A00002 /* CommunityLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinksView.swift; sourceTree = "<group>"; };
+		CS6002A002A002A002A00002 /* CreateShareLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateShareLinkView.swift; sourceTree = "<group>"; };
+		SD6002A002A002A002A00002 /* ShareLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkDetailView.swift; sourceTree = "<group>"; };
+		TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinkDetailView.swift; sourceTree = "<group>"; };
+		CT6002A002A002A002A00002 /* CreateTrackingLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateTrackingLinkView.swift; sourceTree = "<group>"; };
+		CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinkDetailView.swift; sourceTree = "<group>"; };
 		F71C9C50ECED369B628670C7 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		25AD7697AD569462191E395F /* DataExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportView.swift; sourceTree = "<group>"; };
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
@@ -531,6 +547,14 @@
 				8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */,
 				B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */,
 				0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */,
+				TL6002A002A002A002A00002 /* TrackingLinksView.swift */,
+				SL6002A002A002A002A00002 /* ShareLinksView.swift */,
+				CL6002A002A002A002A00002 /* CommunityLinksView.swift */,
+				CS6002A002A002A002A00002 /* CreateShareLinkView.swift */,
+				SD6002A002A002A002A00002 /* ShareLinkDetailView.swift */,
+				TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */,
+				CT6002A002A002A002A00002 /* CreateTrackingLinkView.swift */,
+				CDL6002A002A002A002A0002 /* CommunityLinkDetailView.swift */,
 				F71C9C50ECED369B628670C7 /* ThreadView.swift */,
 				25AD7697AD569462191E395F /* DataExportView.swift */,
 			);
@@ -957,6 +981,14 @@
 				771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */,
 				8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */,
 				E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */,
+				TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */,
+				SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */,
+				CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */,
+				CS6001A001A001A001A00001 /* CreateShareLinkView.swift in Sources */,
+				SD6001A001A001A001A00001 /* ShareLinkDetailView.swift in Sources */,
+				TD6001A001A001A001A00001 /* TrackingLinkDetailView.swift in Sources */,
+				CT6001A001A001A001A00001 /* CreateTrackingLinkView.swift in Sources */,
+				CDL6001A001A001A001A0001 /* CommunityLinkDetailView.swift in Sources */,
 				044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */,
 				2A52D4F1D5A9C383AC4E2CFB /* DataExportView.swift in Sources */,
 			);
