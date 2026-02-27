@@ -71,6 +71,7 @@ struct StoryViewerView: View {
     // Horizontal swipe (group ↔ group)
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
+    @State var showViewersSheet = false
 
     private var screenH: CGFloat { UIScreen.main.bounds.height }
 
@@ -130,6 +131,13 @@ struct StoryViewerView: View {
         }
         .onDisappear {
             timerCancellable?.cancel()
+        }
+        .sheet(isPresented: $showViewersSheet, onDismiss: {
+            resumeTimer()
+        }) {
+            if let story = currentStory {
+                StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
+            }
         }
     }
 
@@ -442,7 +450,8 @@ struct StoryViewerView: View {
                     label: "Vues"
                 ) {
                     HapticFeedback.light()
-                    // TODO: Show viewers list
+                    pauseTimer()
+                    showViewersSheet = true
                 }
             }
 

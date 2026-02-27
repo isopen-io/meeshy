@@ -459,15 +459,15 @@ extension APIPost {
 
 // MARK: - Reply Context
 public enum ReplyContext {
-    case story(storyId: String, authorName: String, preview: String)
-    case status(statusId: String, authorName: String, emoji: String, content: String?)
+    case story(storyId: String, authorId: String, authorName: String, preview: String)
+    case status(statusId: String, authorId: String, authorName: String, emoji: String, content: String?)
 
     public var toReplyReference: ReplyReference {
         switch self {
-        case .story(_, let authorName, let preview):
-            return ReplyReference(authorName: authorName, previewText: preview)
-        case .status(_, let authorName, let emoji, let content):
-            return ReplyReference(authorName: authorName, previewText: "\(emoji) \(content ?? "")")
+        case .story(let storyId, let authorId, let authorName, let preview):
+            return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview)
+        case .status(let statusId, let authorId, let authorName, let emoji, let content):
+            return ReplyReference(messageId: statusId, authorName: authorName, previewText: "\(emoji) \(content ?? "")")
         }
     }
 }

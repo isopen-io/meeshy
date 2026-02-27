@@ -398,16 +398,37 @@ struct RootView: View {
 
     // MARK: - Handle Story Reply
     private func handleStoryReply(_ context: ReplyContext) {
-        // Find the conversation for the story author
-        let authorName: String
+        let authId: String
         switch context {
-        case .story(_, let name, _): authorName = name
-        case .status(_, let name, _, _): authorName = name
+        case .story(_, let authorId, _, _): authId = authorId
+        case .status(_, let authorId, _, _, _): authId = authorId
         }
 
-        if let conversation = conversationViewModel.conversations.first(where: { $0.name == authorName && $0.type == .direct }) {
+        if let existingConv = conversationViewModel.conversations.first(where: {
+            $0.type == .direct && $0.participantUserId == authId
+        }) {
             pendingReplyContext = context
-            router.navigateToConversation(conversation)
+            router.navigateToConversation(existingConv)
+            return
+        }
+
+        Task {
+            do {
+                let response = try await ConversationService.shared.create(
+                    type: "direct",
+                    participantIds: [authId]
+                )
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                let apiConv = try await ConversationService.shared.getById(response.id)
+                let conv = apiConv.toConversation(currentUserId: currentUserId)
+
+                await MainActor.run {
+                    pendingReplyContext = context
+                    router.navigateToConversation(conv)
+                }
+            } catch {
+                ToastManager.shared.showError("Impossible de créer la conversation")
+            }
         }
     }
 
