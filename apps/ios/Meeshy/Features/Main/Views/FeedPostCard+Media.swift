@@ -217,10 +217,11 @@ extension FeedPostCard {
                 // Waveform placeholder
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 2) {
+                        let waveHeights: [CGFloat] = [12, 18, 8, 22, 14, 20, 10, 24, 16, 12, 20, 8, 18, 14, 10, 22, 12, 16, 8, 20, 14, 24, 10, 18, 12]
                         ForEach(0..<25, id: \.self) { i in
                             RoundedRectangle(cornerRadius: 1)
                                 .fill(Color(hex: media.thumbnailColor).opacity(0.6))
-                                .frame(width: 3, height: CGFloat.random(in: 8...24))
+                                .frame(width: 3, height: waveHeights[i % waveHeights.count])
                         }
                     }
 

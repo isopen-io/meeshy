@@ -169,49 +169,67 @@ struct ConversationListView: View {
         }
     }
 
+    private func enrichedConversation(_ conversation: Conversation) -> Conversation {
+        guard conversation.type == .community || conversation.communityId != nil,
+              let communityId = conversation.communityId,
+              let community = userCommunities.first(where: { $0.id == communityId })
+        else { return conversation }
+
+        var result = conversation
+        if result.title == nil || result.name == "Conversation" || result.name.isEmpty {
+            result.title = community.name
+        }
+        if result.avatar == nil {
+            result.avatar = community.avatar ?? community.banner
+        }
+        return result
+    }
+
     @ViewBuilder
     private func conversationRow(for conversation: Conversation) -> some View {
         let rowWidth = UIScreen.main.bounds.width - 32 - 52 - 28 - 24
+        let displayConversation = enrichedConversation(conversation)
+
         SwipeableRow(
-            leadingActions: leadingSwipeActions(for: conversation),
-            trailingActions: trailingSwipeActions(for: conversation)
+            leadingActions: leadingSwipeActions(for: displayConversation),
+            trailingActions: trailingSwipeActions(for: displayConversation)
         ) {
             ThemedConversationRow(
-                conversation: conversation,
+                conversation: displayConversation,
                 availableWidth: rowWidth,
-                isDragging: draggingConversation?.id == conversation.id,
+                isDragging: draggingConversation?.id == displayConversation.id,
                 onViewStory: {
-                    handleStoryView(conversation)
+                    handleStoryView(displayConversation)
                 },
                 onViewProfile: {
-                    handleProfileView(conversation)
+                    handleProfileView(displayConversation)
                 },
                 onViewConversationInfo: {
-                    handleConversationInfoView(conversation)
+                    handleConversationInfoView(displayConversation)
                 },
                 onMoodBadgeTap: { anchor in
-                    handleMoodBadgeTap(conversation, at: anchor)
+                    handleMoodBadgeTap(displayConversation, at: anchor)
                 }
             )
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
-                if ConversationLockManager.shared.isLocked(conversation.id) {
+                if ConversationLockManager.shared.isLocked(displayConversation.id) {
                     lockSheetMode = .openConversation
-                    lockSheetConversation = conversation
+                    lockSheetConversation = displayConversation
                 } else {
-                    onSelect(conversation)
+                    onSelect(displayConversation)
                 }
             }
             .onDrag {
-                draggingConversation = conversation
+                draggingConversation = displayConversation
                 HapticFeedback.medium()
-                return NSItemProvider(object: conversation.id as NSString)
+                return NSItemProvider(object: displayConversation.id as NSString)
             }
             .contextMenu {
-                conversationContextMenu(for: conversation)
+                conversationContextMenu(for: displayConversation)
             } preview: {
-                ConversationPreviewView(conversation: conversation)
+                ConversationPreviewView(conversation: displayConversation)
             }
         }
     }
