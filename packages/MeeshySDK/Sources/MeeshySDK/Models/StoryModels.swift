@@ -465,10 +465,10 @@ public enum ReplyContext {
 
     public var toReplyReference: ReplyReference {
         switch self {
-        case .story(let storyId, let authorId, let authorName, let preview):
-            return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview)
-        case .status(let statusId, let authorId, let authorName, let emoji, let content):
-            return ReplyReference(messageId: statusId, authorName: authorName, previewText: "\(emoji) \(content ?? "")")
+        case .story(let storyId, let _, let authorName, let preview):
+            return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview, isStoryReply: true)
+        case .status(let statusId, let _, let authorName, let emoji, let content):
+            return ReplyReference(messageId: statusId, authorName: authorName, previewText: "\(emoji) \(content ?? "")", isStoryReply: true)
         }
     }
 }
