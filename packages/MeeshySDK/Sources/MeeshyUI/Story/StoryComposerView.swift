@@ -84,8 +84,10 @@ public struct StoryComposerView: View {
                         slideManager.addSlide()
                     }
                 }
-                toolBar
-                activeToolPanel
+                if !isDrawingActive {
+                    toolBar
+                    activeToolPanel
+                }
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem,
@@ -302,7 +304,9 @@ public struct StoryComposerView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .frame(minWidth: 0)
             }
+            .frame(maxWidth: .infinity)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -327,8 +331,11 @@ public struct StoryComposerView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .frame(minWidth: 0)
             }
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .background(Color.black.opacity(0.3))
     }

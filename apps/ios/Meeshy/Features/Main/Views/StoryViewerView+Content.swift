@@ -544,6 +544,19 @@ extension StoryViewerView {
         }
     }
 
+    func shareStory() {
+        guard let story = currentStory else { return }
+        let shareURL = "https://meeshy.me/story/\(story.id)"
+        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController { topVC = presented }
+            activityVC.popoverPresentationController?.sourceView = topVC.view
+            topVC.present(activityVC, animated: true)
+        }
+    }
+
     // MARK: - Story Time Remaining
 
     func storyTimeRemaining(_ expiresAt: Date) -> String {
@@ -555,6 +568,25 @@ extension StoryViewerView {
             return "expire dans \(hours)h"
         }
         return "expire dans \(minutes)min"
+    }
+
+    // MARK: - Delete Story
+
+    func deleteCurrentStory() {
+        guard let story = currentStory else { return }
+        HapticFeedback.light()
+        
+        Task {
+            let success = await viewModel.deleteStory(storyId: story.id)
+            DispatchQueue.main.async {
+                if success {
+                    HapticFeedback.success()
+                    dismissViewer()
+                } else {
+                    HapticFeedback.error()
+                }
+            }
+        }
     }
 
     // MARK: - Mark Viewed

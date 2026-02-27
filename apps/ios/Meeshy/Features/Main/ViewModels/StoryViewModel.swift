@@ -146,7 +146,36 @@ class StoryViewModel: ObservableObject {
 
         isPublishing = false
     }
+    // MARK: - Delete Story
 
+    func deleteStory(storyId: String) async -> Bool {
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await api.delete(endpoint: "/posts/\(storyId)")
+            
+            // Remove from local state
+            for i in storyGroups.indices {
+                if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
+                    var updated = storyGroups[i].stories
+                    updated.remove(at: j)
+                    if updated.isEmpty {
+                        storyGroups.remove(at: i)
+                    } else {
+                        storyGroups[i] = StoryGroup(
+                            id: storyGroups[i].id,
+                            username: storyGroups[i].username,
+                            avatarColor: storyGroups[i].avatarColor,
+                            avatarURL: storyGroups[i].avatarURL,
+                            stories: updated
+                        )
+                    }
+                    break
+                }
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {

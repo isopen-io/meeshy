@@ -296,28 +296,32 @@ struct StoryViewerView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                storyComposerBar
-                    .padding(.horizontal, 14)
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                            .onEnded { value in
-                                // Swipe down on composer → dismiss keyboard & disengage
-                                if value.translation.height > 40 && abs(value.translation.width) < value.translation.height {
-                                    dismissComposer()
+                if !isOwnStory {
+                    storyComposerBar
+                        .padding(.horizontal, 14)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                                .onEnded { value in
+                                    // Swipe down on composer → dismiss keyboard & disengage
+                                    if value.translation.height > 40 && abs(value.translation.width) < value.translation.height {
+                                        dismissComposer()
+                                    }
                                 }
-                            }
-                    )
+                        )
 
-                // Inline emoji keyboard panel (replaces system keyboard)
-                if showTextEmojiPicker {
-                    EmojiKeyboardPanel(
-                        style: .dark,
-                        onSelect: { emoji in
-                            emojiToInject = emoji
-                        }
-                    )
-                    .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    // Inline emoji keyboard panel (replaces system keyboard)
+                    if showTextEmojiPicker {
+                        EmojiKeyboardPanel(
+                            style: .dark,
+                            onSelect: { emoji in
+                                emojiToInject = emoji
+                            }
+                        )
+                        .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                } else {
+                    ownStoryFooter
                 }
             }
             .padding(.bottom, composerBottomPadding(geometry: geometry))
@@ -375,47 +379,49 @@ struct StoryViewerView: View {
     private var storyActionSidebar: some View {
         VStack(spacing: 20) {
             // 1. Reaction (heart) — primary action, brand-colored when active
-            storyActionButton(
-                icon: "heart.fill",
-                label: "React",
-                isActive: showEmojiStrip,
-                activeColor: MeeshyColors.pink,
-                activeGlow: MeeshyColors.pink
-            ) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showEmojiStrip.toggle()
+            if !isOwnStory {
+                storyActionButton(
+                    icon: "heart.fill",
+                    label: "React",
+                    isActive: showEmojiStrip,
+                    activeColor: MeeshyColors.pink,
+                    activeGlow: MeeshyColors.pink
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showEmojiStrip.toggle()
+                    }
                 }
-            }
-            .scaleEffect(heartScale)
-            .overlay(alignment: .trailing) {
-                if showEmojiStrip {
-                    EmojiReactionPicker(
-                        quickEmojis: quickEmojis,
-                        style: .dark,
-                        onReact: { emoji in
-                            triggerStoryReaction(emoji)
-                        },
-                        onDismiss: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showEmojiStrip = false
+                .scaleEffect(heartScale)
+                .overlay(alignment: .trailing) {
+                    if showEmojiStrip {
+                        EmojiReactionPicker(
+                            quickEmojis: quickEmojis,
+                            style: .dark,
+                            onReact: { emoji in
+                                triggerStoryReaction(emoji)
+                            },
+                            onDismiss: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showEmojiStrip = false
+                                }
+                            },
+                            onExpandFullPicker: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showEmojiStrip = false
+                                    showFullEmojiPicker = true
+                                }
                             }
-                        },
-                        onExpandFullPicker: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showEmojiStrip = false
-                                showFullEmojiPicker = true
-                            }
-                        }
-                    )
-                    .fixedSize()
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                    .offset(x: -56)
+                        )
+                        .fixedSize()
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .offset(x: -56)
+                    }
                 }
+                .zIndex(10)
             }
-            .zIndex(10)
 
             // 2. Forward (send to someone)
             storyActionButton(
@@ -423,7 +429,7 @@ struct StoryViewerView: View {
                 label: "Envoyer"
             ) {
                 HapticFeedback.light()
-                // TODO: forward to conversation
+                shareStory()
             }
 
             // 3. Reshare (republish to own story) — hidden for own stories
@@ -437,29 +443,31 @@ struct StoryViewerView: View {
             }
 
             // 4. Translate — brand cyan when active
-            storyActionButton(
-                icon: "textformat.abc",
-                label: "Traductions",
-                isActive: showLanguageOptions,
-                activeColor: MeeshyColors.cyan,
-                activeGlow: MeeshyColors.cyan
-            ) {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showLanguageOptions.toggle()
+            if !isOwnStory {
+                storyActionButton(
+                    icon: "textformat.abc",
+                    label: "Traductions",
+                    isActive: showLanguageOptions,
+                    activeColor: MeeshyColors.cyan,
+                    activeGlow: MeeshyColors.cyan
+                ) {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showLanguageOptions.toggle()
+                    }
                 }
-            }
-            .overlay(alignment: .trailing) {
-                if showLanguageOptions {
-                    languageScrollStrip
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                        .offset(x: -56)
+                .overlay(alignment: .trailing) {
+                    if showLanguageOptions {
+                        languageScrollStrip
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                            .offset(x: -56)
+                    }
                 }
+                .zIndex(10)
             }
-            .zIndex(10)
         }
     }
 
@@ -691,6 +699,30 @@ struct StoryViewerView: View {
         )
     }
 
+    private var ownStoryFooter: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 4) {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 18))
+                Text("Vu par...")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.vertical, 10)
+            .padding(.horizontal, 24)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+            )
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+            Spacer()
+        }
+        .padding(.bottom, 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
     // MARK: - Computed Bottom Padding
 
     private func composerBottomPadding(geometry: GeometryProxy) -> CGFloat {
@@ -798,6 +830,7 @@ struct StoryViewerView: View {
 
     @State private var showStoryOptions = false
     @State private var avatarLongPressGlow = false
+    @State private var showReportSheet = false
 
     private var storyHeader: some View {
         HStack(spacing: 10) {
@@ -914,25 +947,33 @@ struct StoryViewerView: View {
 
             // Options menu (three dots)
             Menu {
-                if let story = currentStory, let group = currentGroup {
-                    Button {
-                        selectedProfileUser = .from(storyGroup: group)
-                    } label: {
-                        Label("Voir le profil", systemImage: "person.fill")
-                    }
+                if let _ = currentStory, let group = currentGroup {
+                    if isOwnStory {
+                        Button(role: .destructive) {
+                            deleteCurrentStory()
+                        } label: {
+                            Label("Supprimer", systemImage: "trash")
+                        }
+                    } else {
+                        Button {
+                            selectedProfileUser = .from(storyGroup: group)
+                        } label: {
+                            Label("Voir le profil", systemImage: "person.fill")
+                        }
 
-                    Button {
-                        reshareStory()
-                    } label: {
-                        Label("Republier", systemImage: "arrow.2.squarepath")
-                    }
+                        Button {
+                            reshareStory()
+                        } label: {
+                            Label("Republier", systemImage: "arrow.2.squarepath")
+                        }
 
-                    Divider()
+                        Divider()
 
-                    Button(role: .destructive) {
-                        // TODO: report/mute
-                    } label: {
-                        Label("Signaler", systemImage: "exclamationmark.triangle")
+                        Button(role: .destructive) {
+                            showReportSheet = true
+                        } label: {
+                            Label("Signaler", systemImage: "exclamationmark.triangle")
+                        }
                     }
                 }
             } label: {
@@ -976,6 +1017,27 @@ struct StoryViewerView: View {
             UserProfileSheet(user: user)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showReportSheet) {
+            ReportMessageSheet(accentColor: currentGroup?.avatarColor ?? "FF2D55") { type, reason in
+                guard let storyId = currentStory?.id else { return }
+                Task {
+                    do {
+                        try await ReportService.shared.reportStory(storyId: storyId, reportType: type, reason: reason)
+                        DispatchQueue.main.async {
+                            HapticFeedback.success()
+                            showReportSheet = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            HapticFeedback.error()
+                            showReportSheet = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 

@@ -25,6 +25,16 @@ public final class ReportService {
         let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
     }
 
+    public func reportStory(storyId: String, reportType: String, reason: String? = nil) async throws {
+        let body = CreateReportBody(
+            reportedType: "story",
+            reportedEntityId: storyId,
+            reportType: reportType,
+            reason: reason
+        )
+        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/admin/reports", body: body)
+    }
+
     public func reportConversation(conversationId: String, reportType: String, reason: String? = nil) async throws {
         let body = CreateReportBody(
             reportedType: "conversation",
