@@ -117,7 +117,7 @@ class StoryViewModel: ObservableObject {
                 }
 
                 let compressed = await MediaCompressor.shared.compressImage(image)
-                let fileName = "story_\(UUID().uuidString).\(compressed.fileExtension)"
+                let fileName = "photo_\(UUID().uuidString).\(compressed.fileExtension)"
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                 try compressed.data.write(to: tempURL)
                 defer { try? FileManager.default.removeItem(at: tempURL) }
