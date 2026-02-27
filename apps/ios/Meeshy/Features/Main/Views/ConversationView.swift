@@ -407,6 +407,7 @@ struct ConversationView: View {
                     )
                 }
             }
+            .withStatusBubble()
     }
 
     // MARK: - Body Content (extracted to help type-checker)

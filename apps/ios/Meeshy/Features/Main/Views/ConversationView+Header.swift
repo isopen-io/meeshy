@@ -33,6 +33,7 @@ extension ConversationView {
                     accentColor: accentColor,
                     avatarURL: conversation?.participantAvatarURL,
                     storyState: memberStoryState(for: userId),
+                    moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: presenceManager.presenceState(for: userId),
                     onTap: {
                         HapticFeedback.light()
@@ -46,6 +47,7 @@ extension ConversationView {
                             showStoryViewerFromHeader = true
                         }
                     },
+                    onMoodTap: statusViewModel.moodTapHandler(for: userId),
                     contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
                 )
             } else if !topActiveMembers.isEmpty {
@@ -57,6 +59,7 @@ extension ConversationView {
                             accentColor: member.color,
                             avatarURL: member.avatarURL,
                             storyState: memberStoryState(for: member.id),
+                            moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                             presenceState: presenceManager.presenceState(for: member.id),
                             onTap: {
                                 HapticFeedback.light()
@@ -70,6 +73,7 @@ extension ConversationView {
                                     showStoryViewerFromHeader = true
                                 }
                             },
+                            onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                             contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
                         )
                     }
