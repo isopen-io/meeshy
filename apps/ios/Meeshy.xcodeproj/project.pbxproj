@@ -52,6 +52,7 @@
 		AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */; };
 		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
 		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
+		DD55EE66FF7788990011AA22 /* AudioPostComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */; };
 		AA2000000000002FA2 /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000001FA2 /* LocationPickerView.swift */; };
 		AA3000000000002FA3 /* MediaCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3000000000001FA3 /* MediaCompressor.swift */; };
 		AA5000000000002FA5 /* VideoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5000000000001FA5 /* VideoPreviewView.swift */; };
@@ -248,6 +249,7 @@
 		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Content.swift"; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
+		CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPostComposerView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
 		BB7000000000001FB7 /* ImageEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditView.swift; sourceTree = "<group>"; };
 		BB8000000000001FB8 /* ImageFilterEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageFilterEngine.swift; sourceTree = "<group>"; };
@@ -499,6 +501,7 @@
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
 				BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */,
 				BB22CC33DD44EE55FF660066 /* StatusBarView.swift */,
+				CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */,
 				BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */,
 				750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */,
 				0A8803B4442F5F663F4D5B63 /* ConversationListHelpers.swift */,
@@ -866,6 +869,7 @@
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */,
+				DD55EE66FF7788990011AA22 /* AudioPostComposerView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,

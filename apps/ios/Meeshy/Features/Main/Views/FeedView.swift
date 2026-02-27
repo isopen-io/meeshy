@@ -232,6 +232,7 @@ struct FeedView: View {
     @State private var showStoryViewer = false
     @State private var selectedGroupIndex = 0
     @State private var showStatusComposer = false
+    @State private var showAudioComposer = false
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -774,6 +775,14 @@ struct FeedView: View {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
         }
+        .sheet(isPresented: $showAudioComposer) {
+            AudioPostComposerView { audioURL, mimeType, transcription in
+                showAudioComposer = false
+                Task {
+                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription)
+                }
+            }
+        }
     }
 
     // MARK: - Composer Overlay
@@ -933,6 +942,11 @@ struct FeedView: View {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "2ECC71"))
+                    }
+                    Button { showAudioComposer = true; HapticFeedback.light() } label: {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "FF2E63"))
                     }
 
                     Spacer()
