@@ -8,6 +8,7 @@ struct StoryTrayView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var addButtonGlow = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
@@ -37,6 +38,7 @@ struct StoryTrayView: View {
                 }
             )
         }
+        .withStatusBubble()
     }
 
     // MARK: - Story Scroll View
@@ -126,7 +128,9 @@ struct StoryTrayView: View {
                     accentColor: group.avatarColor,
                     avatarURL: group.avatarURL,
                     storyState: group.hasUnviewed ? .unread : .read,
+                    moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                     presenceState: presenceManager.presenceState(for: group.id),
+                    onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                             onViewStory(index)
