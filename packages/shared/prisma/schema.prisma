@@ -229,6 +229,9 @@ model User {
   postComments      PostComment[]    @relation("UserPostComments")
   postViews         PostView[]       @relation("UserPostViews")
   postBookmarks     PostBookmark[]   @relation("UserPostBookmarks")
+
+  // Story audio library
+  storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -2658,6 +2661,22 @@ model Post {
   @@index([type, visibility, createdAt])
   @@index([expiresAt])
   @@index([type, createdAt])
+}
+
+/// Bibliothèque de sons d'arrière-plan pour les stories
+model StoryBackgroundAudio {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  uploaderId  String   @db.ObjectId
+  uploader    User     @relation("StoryAudioUploads", fields: [uploaderId], references: [id])
+  fileUrl     String
+  title       String
+  duration    Int
+  usageCount  Int      @default(0)
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([usageCount])
+  @@index([uploaderId])
 }
 
 /// Media attaché à un post (images, vidéos, audio, documents)
