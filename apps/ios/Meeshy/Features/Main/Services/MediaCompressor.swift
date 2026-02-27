@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import ImageIO
 
 struct CompressedImageResult {
     let data: Data
@@ -28,14 +29,19 @@ actor MediaCompressor {
         return CompressedImageResult(data: data, mimeType: "image/jpeg")
     }
 
-    // MARK: - From raw Data (preserves format, converts HEIC/HEIF to JPEG)
+    // MARK: - From raw Data (preserves format, compresses HEIC/HEIF if system APIs available)
 
     func compressImageData(_ data: Data, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
         let mime = detectMimeType(data)
 
         switch mime {
-        case "image/heic", "image/heif", "image/gif", "image/webp":
-            return CompressedImageResult(data: data, mimeType: mime)
+        case "image/heic", "image/heif":
+            guard let image = UIImage(data: data) else {
+                return CompressedImageResult(data: data, mimeType: mime)
+            }
+            let resized = resizeIfNeeded(image, maxDimension: maxDimension)
+            let compressed = resized.heicData(compressionQuality: quality) ?? data
+            return CompressedImageResult(data: compressed, mimeType: mime)
 
         case "image/jpeg":
             guard let image = UIImage(data: data) else {
@@ -55,7 +61,6 @@ actor MediaCompressor {
             return CompressedImageResult(data: png, mimeType: "image/png")
 
         case "image/gif", "image/webp":
-            // UIImage cannot re-encode GIF/WebP — keep original data as-is
             return CompressedImageResult(data: data, mimeType: mime)
 
         default:
@@ -143,5 +148,17 @@ enum CompressionError: LocalizedError {
         switch self {
         case .exportSessionFailed: return "Video compression failed"
         }
+    }
+}
+
+private extension UIImage {
+    func heicData(compressionQuality: CGFloat) -> Data? {
+        guard let cgImage else { return nil }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil) else { return nil }
+        let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
+        CGImageDestinationAddImage(dest, cgImage, options as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return data as Data
     }
 }
