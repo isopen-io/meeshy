@@ -2712,11 +2712,36 @@ model PostMedia {
   alt          String?  // Accessibilité
 
   // Transcription audio (même structure que Attachment.transcription)
-  /// { text, segments[{text, start, end, speaker_id, confidence}], speakerCount, durationMs }
+  /// Structure: {
+  ///   text: string,
+  ///   language: string,
+  ///   confidence: number,
+  ///   source: "mobile" | "whisper" | "voice_api",
+  ///   model?: string,
+  ///   segments?: Array<{ text: string, start: number, end: number, speaker_id?: string, confidence?: number }>,
+  ///   speakerCount?: number,
+  ///   primarySpeakerId?: string,
+  ///   durationMs: number
+  /// }
   transcription Json?
 
   // Traductions audio par langue (même structure que Attachment.translations)
-  /// { "fr": { type, transcription, url, durationMs, format, cloned, quality, ttsModel, segments } }
+  /// Structure: {
+  ///   "fr": {
+  ///     type: "audio" | "video" | "text",
+  ///     transcription: string,
+  ///     path?: string,
+  ///     url?: string,
+  ///     durationMs?: number,
+  ///     format?: string,
+  ///     cloned?: boolean,
+  ///     quality?: number,
+  ///     voiceModelId?: string,
+  ///     ttsModel?: string,
+  ///     createdAt: Date,
+  ///     updatedAt?: Date
+  ///   }
+  /// }
   translations Json?
 
   createdAt    DateTime @default(now())
