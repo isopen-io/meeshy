@@ -166,6 +166,18 @@ class StatusViewModel: ObservableObject {
         statuses.first { $0.userId == userId }
     }
 
+    // MARK: - Mood Tap Handler
+
+    func moodTapHandler(for userId: String) -> ((CGPoint) -> Void)? {
+        guard statusForUser(userId: userId) != nil else { return nil }
+        return { [weak self] point in
+            guard let entry = self?.statusForUser(userId: userId) else { return }
+            Task { @MainActor in
+                StatusBubbleController.shared.show(entry: entry, anchor: point)
+            }
+        }
+    }
+
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
