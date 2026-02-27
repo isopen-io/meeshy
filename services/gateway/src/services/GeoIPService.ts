@@ -262,7 +262,7 @@ export function mergeClientHeaders(
 
   // Enrichir geoData si headers présents
   let enrichedGeo = geoData;
-  if (country || city || timezone) {
+  if (country || city || timezone || region) {
     enrichedGeo = {
       ...(geoData ?? {
         ip: '', country: null, countryName: null,

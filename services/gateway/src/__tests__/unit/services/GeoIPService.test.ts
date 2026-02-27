@@ -39,4 +39,12 @@ describe('GeoIPService — mergeClientHeaders', () => {
     expect(result.geoData?.country).toBe('US');
     expect(result.geoData?.city).toBe('New York');
   });
+
+  it('construit location depuis city + country quand les deux headers sont présents', () => {
+    const result = mergeClientHeaders(null, null, {
+      'x-meeshy-city': 'Lyon',
+      'x-meeshy-country': 'FR',
+    });
+    expect(result.geoData?.location).toBe('Lyon, FR');
+  });
 });
