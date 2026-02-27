@@ -5,6 +5,7 @@ import MeeshyUI
 struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject private var router = Router()
 
     @State private var searchQuery = ""
@@ -35,6 +36,7 @@ struct NewConversationView: View {
         .onChange(of: searchQuery) { _, newValue in
             debounceSearch(query: newValue)
         }
+        .withStatusBubble()
     }
 
     // MARK: - Header
@@ -132,7 +134,9 @@ struct NewConversationView: View {
                 name: user.displayName ?? user.username,
                 mode: .custom(24),
                 accentColor: DynamicColorGenerator.colorForName(user.username),
-                secondaryColor: accentColor
+                secondaryColor: accentColor,
+                moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
 
             Text(user.displayName ?? user.username)
@@ -257,7 +261,9 @@ struct NewConversationView: View {
                     name: user.displayName ?? user.username,
                     mode: .custom(42),
                     accentColor: userColor,
-                    secondaryColor: accentColor
+                    secondaryColor: accentColor,
+                    moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                    onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
                 VStack(alignment: .leading, spacing: 2) {

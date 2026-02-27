@@ -9,6 +9,7 @@ struct GlobalSearchView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -36,6 +37,7 @@ struct GlobalSearchView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .withStatusBubble()
     }
 
     // MARK: - Header Bar
@@ -539,7 +541,9 @@ struct GlobalSearchView: View {
                 name: result.displayName ?? result.username,
                 mode: .messageBubble,
                 avatarURL: result.avatar,
-                presenceState: result.isOnline ? .online : .offline
+                moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
+                presenceState: result.isOnline ? .online : .offline,
+                onMoodTap: statusViewModel.moodTapHandler(for: result.id)
             )
 
             VStack(alignment: .leading, spacing: 3) {
