@@ -19,6 +19,7 @@ import { AttachmentService } from '../services/attachments';
 import { EmailService } from '../services/EmailService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
+import { PostAudioService } from '../services/posts/PostAudioService';
 import { validateMessageLength } from '../config/message-limits';
 import jwt from 'jsonwebtoken';
 import type {
@@ -140,6 +141,9 @@ export class MeeshySocketIOManager {
       io: this.io as any,
       prisma: this.prisma,
     });
+
+    // Initialiser le PostAudioService singleton (dépend de socialEventsHandler)
+    PostAudioService.init(this.prisma, this.socialEventsHandler);
 
   }
 
@@ -1653,10 +1657,26 @@ export class MeeshySocketIOManager {
       source?: string;
       segments?: Array<{ text: string; startMs: number; endMs: number; confidence?: number }>;
       durationMs?: number;
+      speakerCount?: number;
+      primarySpeakerId?: string;
+      senderVoiceIdentified?: boolean;
+      senderSpeakerId?: string | null;
     };
     processingTimeMs?: number;
+    postId?: string;
+    postMediaId?: string;
   }) {
     try {
+      // Route post audio transcriptions to PostAudioService — skip message broadcast logic
+      if (data.postId && data.postMediaId) {
+        await PostAudioService.shared.handleTranscriptionReady({
+          postId: data.postId,
+          postMediaId: data.postMediaId,
+          transcription: data.transcription,
+        });
+        return;
+      }
+
       logger.info(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
       logger.info(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
       logger.info(`   📝 Transcription ID: ${data.transcription.id}`);

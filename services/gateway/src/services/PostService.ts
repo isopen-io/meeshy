@@ -1,4 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import type { MobileTranscription } from '../routes/posts/types';
+import { PostAudioService } from './posts/PostAudioService';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const log = enhancedLogger.child({ module: 'PostService' });
 
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
@@ -94,6 +100,7 @@ export class PostService {
     audioUrl?: string;
     audioDuration?: number;
     mediaIds?: string[];
+    mobileTranscription?: MobileTranscription;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -130,6 +137,38 @@ export class PostService {
         where: { id: { in: data.mediaIds } },
         data: { postId: post.id },
       });
+
+      // Locate the first audio PostMedia for transcription processing
+      const audioMedia = await this.prisma.postMedia.findFirst({
+        where: { id: { in: data.mediaIds }, mimeType: { startsWith: 'audio/' } },
+        orderBy: { order: 'asc' },
+        select: { id: true, fileUrl: true },
+      });
+
+      // If a mobileTranscription is provided, persist it in the audio PostMedia
+      if (data.mobileTranscription && audioMedia) {
+        const transcriptionPayload: Prisma.InputJsonValue = {
+          ...data.mobileTranscription,
+          segments: data.mobileTranscription.segments ?? [],
+          source: 'mobile',
+        };
+        await this.prisma.postMedia.update({
+          where: { id: audioMedia.id },
+          data: { transcription: transcriptionPayload },
+        });
+      }
+
+      // Trigger server-side Whisper transcription only when no mobile transcription was provided (fire-and-forget)
+      if (audioMedia && !data.mobileTranscription) {
+        PostAudioService.shared.processPostAudio({
+          postId: post.id,
+          postMediaId: audioMedia.id,
+          fileUrl: audioMedia.fileUrl ?? '',
+          authorId: post.authorId,
+        }).catch((err: unknown) => {
+          log.error('Post audio processing failed', err, { postId: post.id });
+        });
+      }
     }
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
@@ -162,9 +201,9 @@ export class PostService {
 
       // Stocker les langues cibles dans les translations du post (async best-effort)
       // Le translator viendra compléter avec les traductions réelles via ZMQ
-      console.info(`[StoryTranslation] post=${postId} targets=${languages.join(',')}`);
+      log.info('StoryTranslation targets resolved', { postId, targets: languages });
     } catch (error) {
-      console.warn(`[StoryTranslation] Failed for post ${postId}: ${error}`);
+      log.warn('StoryTranslation failed', { err: error, postId });
     }
   }
 

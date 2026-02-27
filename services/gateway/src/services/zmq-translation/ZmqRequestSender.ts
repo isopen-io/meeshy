@@ -178,7 +178,10 @@ export class ZmqRequestSender {
       originalSenderId: request.originalSenderId,
       existingVoiceProfile: voiceProfileMetadata,  // Métadonnées uniquement (sans embedding)
       useOriginalVoice: request.useOriginalVoice,
-      voiceCloneParams: request.voiceCloneParams
+      voiceCloneParams: request.voiceCloneParams,
+      // Champs post audio (présents uniquement pour les requêtes post media)
+      postId: request.postId,
+      postMediaId: request.postMediaId,
     };
 
     const transferMode = `multipart binaire (${(audioData.size / 1024).toFixed(1)}KB, ${audioData.mimeType})`;

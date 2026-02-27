@@ -292,6 +292,36 @@ extension FeedView {
         }
     }
 
+    // MARK: - Audio Post
+    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+        guard let token = APIClient.shared.authToken,
+              let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
+
+        await MainActor.run { isUploading = true }
+
+        do {
+            let uploader = TusUploadManager(baseURL: baseURL)
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token)
+            try? FileManager.default.removeItem(at: audioURL)
+
+            await viewModel.createPost(
+                mediaIds: [result.id],
+                mobileTranscription: transcription
+            )
+
+            await MainActor.run {
+                isUploading = false
+                HapticFeedback.success()
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: audioURL)
+            await MainActor.run {
+                isUploading = false
+                HapticFeedback.error()
+            }
+        }
+    }
+
     // MARK: - Cleanup
     private func feedCleanupAttachments() {
         pendingAttachments.removeAll()

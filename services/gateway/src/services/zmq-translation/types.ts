@@ -98,6 +98,8 @@ export interface AudioProcessRequest {
   attachmentId: string;
   conversationId: string;
   senderId: string;
+  postId?: string;
+  postMediaId?: string;
   audioPath?: string;
   audioUrl?: string;
   audioBase64?: string;
@@ -267,6 +269,8 @@ export interface TranscriptionReadyEvent {
   transcription: TranscriptionData;
   processingTimeMs: number;
   timestamp: number;
+  postId?: string;
+  postMediaId?: string;
 }
 
 export interface TranslationReadyEvent {
