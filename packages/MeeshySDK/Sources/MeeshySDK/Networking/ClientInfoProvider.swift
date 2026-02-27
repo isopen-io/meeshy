@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 import CoreLocation
 
 public actor ClientInfoProvider {
@@ -23,7 +22,7 @@ public actor ClientInfoProvider {
 
         // Device & OS
         headers["X-Meeshy-Device"] = deviceModel()
-        headers["X-Meeshy-OS"]     = await MainActor.run { UIDevice.current.systemVersion }
+        headers["X-Meeshy-OS"]     = osVersion()
 
         // Locale & time
         headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
@@ -35,7 +34,7 @@ public actor ClientInfoProvider {
         // User-Agent
         let version = appVersion()
         let build   = appBuild()
-        let os      = await MainActor.run { UIDevice.current.systemVersion }
+        let os      = osVersion()
         let model   = deviceModel()
         headers["User-Agent"] = "Meeshy-iOS/\(version) (\(build)) iOS/\(os) \(model)"
 
@@ -53,6 +52,11 @@ public actor ClientInfoProvider {
 
     private func appBuild() -> String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+    }
+
+    private func osVersion() -> String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
     private func deviceModel() -> String {
