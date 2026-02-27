@@ -623,7 +623,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         Object.entries(clientContext).filter(([, v]) => v !== undefined)
       );
       if (Object.keys(client).length > 0) {
-        (request as any).log = request.log.child({ client });
+        // FastifyRequest.log is readonly in TS types but mutable at runtime
+        (request as unknown as { log: FastifyRequest['log'] }).log = request.log.child({ client });
       }
       done();
     });
