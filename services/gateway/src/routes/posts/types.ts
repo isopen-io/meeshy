@@ -32,6 +32,21 @@ export function decodeCursor(cursor: string): CursorData | null {
 // ZOD SCHEMAS
 // ============================================
 
+export const MobileTranscriptionSchema = z.object({
+  text: z.string(),
+  language: z.string(),
+  confidence: z.number().optional(),
+  duration_ms: z.number().int().optional(),
+  segments: z.array(z.object({
+    text: z.string(),
+    start: z.number().optional(),
+    end: z.number().optional(),
+    speaker_id: z.string().optional(),
+  })).optional().default([]),
+});
+
+export type MobileTranscription = z.infer<typeof MobileTranscriptionSchema>;
+
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'STORY', 'STATUS']).default('POST'),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).default('PUBLIC'),
@@ -46,6 +61,8 @@ export const CreatePostSchema = z.object({
   audioDuration: z.number().int().positive().optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
+  // Mobile transcription for audio media
+  mobileTranscription: MobileTranscriptionSchema.optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

@@ -1,4 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import type { MobileTranscription } from '../routes/posts/types';
 
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
@@ -94,6 +96,7 @@ export class PostService {
     audioUrl?: string;
     audioDuration?: number;
     mediaIds?: string[];
+    mobileTranscription?: MobileTranscription;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -130,6 +133,28 @@ export class PostService {
         where: { id: { in: data.mediaIds } },
         data: { postId: post.id },
       });
+
+      // If a mobileTranscription is provided, persist it in the first audio PostMedia
+      if (data.mobileTranscription) {
+        const audioMedia = await this.prisma.postMedia.findFirst({
+          where: { id: { in: data.mediaIds }, mimeType: { startsWith: 'audio/' } },
+          orderBy: { order: 'asc' },
+          select: { id: true },
+        });
+
+        if (audioMedia) {
+          const transcriptionPayload: Prisma.InputJsonValue = {
+            ...data.mobileTranscription,
+            source: 'mobile',
+          };
+          await this.prisma.postMedia.update({
+            where: { id: audioMedia.id },
+            data: { transcription: transcriptionPayload },
+          });
+          // TODO(Task 6): PostAudioService fire-and-forget
+          // PostAudioService.shared.processPostAudio({ postId: post.id, postMediaId: audioMedia.id }).catch(() => {});
+        }
+      }
     }
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
