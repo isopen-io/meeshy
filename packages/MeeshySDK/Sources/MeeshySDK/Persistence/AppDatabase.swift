@@ -23,9 +23,7 @@ public final class AppDatabase {
             
             var configuration = Configuration()
             configuration.prepareDatabase { db in
-                db.trace { [logger] message in
-                    // Uncomment for SQL tracing: logger.debug("SQL: \(message)")
-                }
+                db.trace { _ in }
             }
             
             let pool = try DatabasePool(path: databaseURL.path, configuration: configuration)
