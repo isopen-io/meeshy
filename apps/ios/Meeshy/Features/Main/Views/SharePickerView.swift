@@ -10,6 +10,7 @@ enum SharedContentType {
     case url(URL)
     case image(UIImage)
     case message(Message)
+    case story(item: StoryItem, authorName: String)
 }
 
 // MARK: - SharePickerView
@@ -128,6 +129,10 @@ struct SharePickerView: View {
             Image(systemName: "arrowshape.turn.up.forward.fill")
                 .font(.system(size: 16))
                 .foregroundColor(MeeshyColors.orange)
+        case .story:
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 16))
+                .foregroundColor(MeeshyColors.pink)
         }
     }
 
@@ -137,6 +142,7 @@ struct SharePickerView: View {
         case .url: return "Lien"
         case .image: return "Image"
         case .message: return "Message transf\u{00e9}r\u{00e9}"
+        case .story: return "Story partag\u{00e9}e"
         }
     }
 
@@ -150,6 +156,8 @@ struct SharePickerView: View {
             return "Photo a partager"
         case .message(let msg):
             return msg.content.isEmpty ? "[Media]" : String(msg.content.prefix(120))
+        case .story(let item, let authorName):
+            return item.content?.isEmpty == false ? String(item.content!.prefix(120)) : "Story de \(authorName)"
         }
     }
 
@@ -370,6 +378,8 @@ struct SharePickerView: View {
         case .url(let url): return url.absoluteString
         case .image: return nil
         case .message(let msg): return msg.content.isEmpty ? nil : msg.content
+        case .story(let item, let authorName):
+            return "🔗 Story de \(authorName) : https://meeshy.me/story/\(item.id)"
         }
     }
 
