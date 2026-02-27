@@ -12,6 +12,7 @@ struct AudioPostComposerView: View {
     @State private var isTranscribing = false
     @State private var transcriptionError: String?
     @State private var recordedURL: URL?
+    @State private var recordedDuration: TimeInterval = 0
     @State private var phase: ComposerPhase = .idle
     @Environment(\.dismiss) private var dismiss
 
@@ -213,6 +214,7 @@ struct AudioPostComposerView: View {
                         }
                     }
                 }
+                .accessibilityLabel(audioRecorder.isRecording ? "Arrêter l'enregistrement" : "Démarrer l'enregistrement")
                 .disabled(phase == .transcribing)
 
                 Spacer()
@@ -225,7 +227,7 @@ struct AudioPostComposerView: View {
     // MARK: - Helpers
 
     private var formattedDuration: String {
-        let d = audioRecorder.isRecording ? audioRecorder.duration : 0
+        let d = audioRecorder.isRecording ? audioRecorder.duration : recordedDuration
         let minutes = Int(d) / 60
         let seconds = Int(d) % 60
         return String(format: "%d:%02d", minutes, seconds)
@@ -249,6 +251,7 @@ struct AudioPostComposerView: View {
     }
 
     private func stopAndTranscribe() {
+        recordedDuration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else {
             phase = .idle
             return
