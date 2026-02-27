@@ -27,8 +27,6 @@ public actor ClientInfoProvider {
         headers["X-Meeshy-OS"]       = os
         headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
         headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
-        headers["User-Agent"]        = "Meeshy-iOS/\(version) (\(build)) iOS/\(os) \(model)"
-
         if let country = Locale.current.region?.identifier {
             headers["X-Meeshy-Country"] = country
         }
