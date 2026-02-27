@@ -45,6 +45,7 @@ struct ConversationInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var participants: [ConversationParticipant] = []
     @State private var isLoadingParticipants = false
@@ -132,6 +133,7 @@ struct ConversationInfoSheet: View {
         } message: {
             Text("Vous ne recevrez plus de messages de cette conversation.")
         }
+        .withStatusBubble()
     }
 
     // MARK: - Sheet Background
@@ -195,7 +197,9 @@ struct ConversationInfoSheet: View {
                 accentColor: accentColor,
                 avatarURL: conversation.type == .direct
                     ? conversation.participantAvatarURL
-                    : conversation.avatar
+                    : conversation.avatar,
+                moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
             // Name
@@ -383,7 +387,9 @@ struct ConversationInfoSheet: View {
                     name: participant.name,
                     size: .small,
                     accentColor: color,
-                    avatarURL: participant.avatar
+                    avatarURL: participant.avatar,
+                    moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                    onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
                 )
 
                 if isOnline {

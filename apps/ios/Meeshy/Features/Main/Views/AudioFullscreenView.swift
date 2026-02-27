@@ -11,6 +11,7 @@ struct AudioFullscreenView: View {
     var onDismissToMessage: ((String) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var currentPageID: String?
     @State private var currentIndex: Int = 0
     @State private var dragOffset: CGFloat = 0
@@ -65,6 +66,7 @@ struct AudioFullscreenView: View {
                 currentPageID = allAudioItems[idx].id
             }
         }
+        .withStatusBubble()
     }
 
     // MARK: - Vertical Dismiss Gesture
@@ -119,6 +121,7 @@ private struct AudioFullscreenPage: View {
     var onDismiss: () -> Void
     var onDismissToMessage: ((String) -> Void)?
 
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
@@ -316,7 +319,9 @@ private struct AudioFullscreenPage: View {
                     name: message.senderName ?? "?",
                     mode: .custom(34),
                     accentColor: message.senderColor ?? contactColor,
-                    avatarURL: message.senderAvatarURL
+                    avatarURL: message.senderAvatarURL,
+                    moodEmoji: message.senderId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                    onMoodTap: message.senderId.flatMap { statusViewModel.moodTapHandler(for: $0) }
                 )
             }
 

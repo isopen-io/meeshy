@@ -24,6 +24,7 @@ struct SharePickerView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var conversations: [Conversation] = []
     @State private var isLoading = true
@@ -77,6 +78,7 @@ struct SharePickerView: View {
         .task {
             await loadConversations()
         }
+        .withStatusBubble()
     }
 
     // MARK: - Content Preview Banner
@@ -238,7 +240,9 @@ struct SharePickerView: View {
                 name: conv.name,
                 mode: .custom(44),
                 accentColor: conv.accentColor,
-                avatarURL: conv.avatar
+                avatarURL: conv.avatar,
+                moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
             VStack(alignment: .leading, spacing: 3) {
