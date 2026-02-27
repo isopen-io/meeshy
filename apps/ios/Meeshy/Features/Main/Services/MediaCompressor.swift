@@ -14,11 +14,6 @@ actor MediaCompressor {
 
     func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
         let resized = resizeIfNeeded(image, maxDimension: maxDimension)
-
-        if let heicData = resized.heicData(compressionQuality: quality) {
-            return CompressedImageResult(data: heicData, isHEIC: true)
-        }
-
         return CompressedImageResult(data: resized.jpegData(compressionQuality: quality) ?? Data(), isHEIC: false)
     }
 
