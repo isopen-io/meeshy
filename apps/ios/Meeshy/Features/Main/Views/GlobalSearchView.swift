@@ -33,9 +33,13 @@ struct GlobalSearchView: View {
             }
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
     }

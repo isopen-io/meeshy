@@ -275,6 +275,7 @@ struct ThemedFeedComposer: View {
     var onOpenComposerWithAttachment: ((String) -> Void)?
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var authManager = AuthManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var showAttachmentMenu = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
@@ -470,9 +471,14 @@ struct ThemedFeedComposer: View {
             }
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user, isCurrentUser: true)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                isCurrentUser: true,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 }

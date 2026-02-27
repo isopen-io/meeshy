@@ -696,6 +696,7 @@ private struct ProfileFetchingSheet: View {
     @State private var fetchError: String?
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
         Group {
@@ -737,7 +738,9 @@ private struct ProfileFetchingSheet: View {
             isLoading: isLoading,
             fullUser: fullUser,
             onDismiss: { dismiss() },
-            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+            currentUserId: AuthManager.shared.currentUser?.id ?? "",
+            moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+            onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
         )
     }
 
