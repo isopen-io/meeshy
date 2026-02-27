@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from FeedView.swift
 
@@ -199,36 +200,67 @@ extension FeedPostCard {
 
     func audioMediaView(_ media: FeedMedia) -> some View {
         let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
-            // Play button
-            ZStack {
-                Circle()
-                    .fill(Color(hex: media.thumbnailColor))
-                    .frame(width: 48, height: 48)
+        return VStack(alignment: .leading, spacing: 0) {
+            // Player row: play button + waveform
+            HStack(spacing: 14) {
+                // Play button
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: media.thumbnailColor))
+                        .frame(width: 48, height: 48)
 
-                Image(systemName: "play.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white)
-            }
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                }
 
-            // Waveform placeholder
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 2) {
-                    ForEach(0..<25, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color(hex: media.thumbnailColor).opacity(0.6))
-                            .frame(width: 3, height: CGFloat.random(in: 8...24))
+                // Waveform placeholder
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 2) {
+                        ForEach(0..<25, id: \.self) { i in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color(hex: media.thumbnailColor).opacity(0.6))
+                                .frame(width: 3, height: CGFloat.random(in: 8...24))
+                        }
+                    }
+
+                    if let duration = media.durationFormatted {
+                        Text(duration)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textMuted)
                     }
                 }
 
-                if let duration = media.durationFormatted {
-                    Text(duration)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
+                Spacer()
             }
 
-            Spacer()
+            // Transcription display if available
+            if let transcription = media.transcription, !transcription.text.isEmpty {
+                let displaySegments = TranscriptionDisplaySegment.buildFrom(transcription)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    if displaySegments.count > 1 {
+                        // Multi-speaker with colored speaker indicators
+                        ForEach(displaySegments) { seg in
+                            HStack(alignment: .top, spacing: 8) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color(hex: seg.speakerColor))
+                                    .frame(width: 3)
+                                Text(seg.text)
+                                    .font(.caption)
+                                    .foregroundStyle(.primary.opacity(0.85))
+                            }
+                        }
+                    } else {
+                        // Single speaker — plain text
+                        Text(transcription.text)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(4)
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
         .padding(14)
         .background(
