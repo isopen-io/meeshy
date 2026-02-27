@@ -96,6 +96,7 @@ struct ConversationListView: View {
     // Lock & Block state
     @State var lockSheetConversation: Conversation? = nil
     @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
+    @State var showNoMasterPinAlert = false
     @State var showBlockConfirmation = false
     @State var blockTargetConversation: Conversation? = nil
 
@@ -284,9 +285,11 @@ struct ConversationListView: View {
                 if isLocked {
                     lockSheetMode = .unlockConversation
                     lockSheetConversation = conversation
-                } else {
+                } else if lockManager.hasMasterPin() {
                     lockSheetMode = .lockConversation
                     lockSheetConversation = conversation
+                } else {
+                    showNoMasterPinAlert = true
                 }
             }
         ]
@@ -625,6 +628,12 @@ struct ConversationListView: View {
                 }
             )
             .environmentObject(theme)
+        }
+        .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
+            Button("Configurer", role: .none) {}
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
         }
         .sheet(isPresented: $showWidgetPreview) {
             WidgetPreviewView()
