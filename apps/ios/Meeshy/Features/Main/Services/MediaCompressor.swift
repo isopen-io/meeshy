@@ -34,14 +34,8 @@ actor MediaCompressor {
         let mime = detectMimeType(data)
 
         switch mime {
-        case "image/heic", "image/heif":
-            guard let image = UIImage(data: data),
-                  image.size.width > maxDimension || image.size.height > maxDimension else {
-                return CompressedImageResult(data: data, mimeType: mime)
-            }
-            let resized = resizeIfNeeded(image, maxDimension: maxDimension)
-            let reencoded = resized.heicData(compressionQuality: quality) ?? data
-            return CompressedImageResult(data: reencoded, mimeType: mime)
+        case "image/heic", "image/heif", "image/gif", "image/webp":
+            return CompressedImageResult(data: data, mimeType: mime)
 
         case "image/jpeg":
             guard let image = UIImage(data: data) else {
@@ -139,20 +133,6 @@ actor MediaCompressor {
         }
 
         return "image/jpeg"
-    }
-}
-
-// MARK: - UIImage HEIC Extension
-
-private extension UIImage {
-    func heicData(compressionQuality: CGFloat) -> Data? {
-        guard let cgImage else { return nil }
-        let data = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil) else { return nil }
-        let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
-        CGImageDestinationAddImage(dest, cgImage, options as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return data as Data
     }
 }
 
