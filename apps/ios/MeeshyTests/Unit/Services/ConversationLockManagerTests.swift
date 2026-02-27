@@ -102,4 +102,11 @@ final class ConversationLockManagerTests: XCTestCase {
         XCTAssertTrue(manager.verifyLock(conversationId: "conv-2", pin: "2222"))
         XCTAssertFalse(manager.verifyLock(conversationId: "conv-2", pin: "1111"))
     }
+
+    func test_removeMasterPin_whenConversationsLocked_doesNotRemovePin() {
+        manager.setMasterPin("123456")
+        manager.setLock(conversationId: "conv-1", pin: "1111")
+        manager.removeMasterPin()
+        XCTAssertTrue(manager.hasMasterPin())
+    }
 }
