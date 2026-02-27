@@ -129,7 +129,7 @@ extension ConversationListView {
             if isLockedCtx {
                 lockSheetMode = .unlockConversation
                 lockSheetConversation = conversation
-            } else if ConversationLockManager.shared.hasMasterPin() {
+            } else if ConversationLockManager.shared.masterPinConfigured {
                 lockSheetMode = .lockConversation
                 lockSheetConversation = conversation
             } else {
@@ -176,7 +176,7 @@ extension ConversationListView {
                     HapticFeedback.heavy()
                     Task {
                         try? await BlockService.shared.unblockUser(userId: userId)
-                        HapticFeedback.success()
+                        await MainActor.run { HapticFeedback.success() }
                     }
                 } label: {
                     Label(

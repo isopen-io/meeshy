@@ -59,6 +59,7 @@ struct ConversationListView: View {
 
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
+    @ObservedObject var lockManager = ConversationLockManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -95,7 +96,7 @@ struct ConversationListView: View {
 
     // Lock & Block state
     @State var lockSheetConversation: Conversation? = nil
-    @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
+    @State var lockSheetMode: ConversationLockSheet.Mode = .openConversation
     @State var showNoMasterPinAlert = false
     @State var showBlockConfirmation = false
     @State var blockTargetConversation: Conversation? = nil
@@ -254,7 +255,6 @@ struct ConversationListView: View {
     // MARK: - Swipe Actions
 
     private func leadingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        let lockManager = ConversationLockManager.shared
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
@@ -285,7 +285,7 @@ struct ConversationListView: View {
                 if isLocked {
                     lockSheetMode = .unlockConversation
                     lockSheetConversation = conversation
-                } else if lockManager.hasMasterPin() {
+                } else if lockManager.masterPinConfigured {
                     lockSheetMode = .lockConversation
                     lockSheetConversation = conversation
                 } else {

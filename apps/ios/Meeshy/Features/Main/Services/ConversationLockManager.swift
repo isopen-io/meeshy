@@ -7,6 +7,7 @@ class ConversationLockManager: ObservableObject {
     static let shared = ConversationLockManager()
 
     @Published private(set) var lockedConversationIds: Set<String> = []
+    @Published private(set) var masterPinConfigured: Bool = false
 
     private let keychainService = "me.meeshy.app.conversation-locks"
     private let masterPinKey = "meeshy_master_pin"
@@ -14,6 +15,7 @@ class ConversationLockManager: ObservableObject {
 
     private init() {
         loadLockedIds()
+        masterPinConfigured = readFromKeychain(key: masterPinKey) != nil
     }
 
     // MARK: - Master PIN (6 digits)
@@ -24,6 +26,7 @@ class ConversationLockManager: ObservableObject {
 
     func setMasterPin(_ pin: String) {
         saveToKeychain(key: masterPinKey, value: sha256(pin))
+        masterPinConfigured = true
     }
 
     func verifyMasterPin(_ pin: String) -> Bool {
@@ -35,11 +38,13 @@ class ConversationLockManager: ObservableObject {
     func removeMasterPin() {
         guard lockedConversationIds.isEmpty else { return }
         deleteFromKeychain(key: masterPinKey)
+        masterPinConfigured = false
     }
 
     /// Force la suppression du master PIN (pour tests / unlock all).
     func forceRemoveMasterPin() {
         deleteFromKeychain(key: masterPinKey)
+        masterPinConfigured = false
     }
 
     // MARK: - Per-conversation PIN (4 digits)
