@@ -1,5 +1,6 @@
 import Foundation
 import os
+import GRDB
 
 // MARK: - Local Store
 
@@ -9,12 +10,12 @@ public actor LocalStore {
     private let fileManager = FileManager.default
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "localstore")
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "localstore-grdb")
+    
+    private let dbWriter: DatabaseWriter
 
-    private static let conversationsFileName = "cached_conversations.json"
-    private static let messagesDirectoryName = "cached_messages"
-    private static let metadataFileName = "cache_metadata.json"
     private static let maxCachedMessagesPerConversation = 50
+    // GRDB handles dates naturally, but we define thresholds for cleanup if needed.
     private static let staleConversationThresholdDays = 30
 
     private init() {
@@ -23,62 +24,96 @@ public actor LocalStore {
 
         decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-    }
-
-    // MARK: - Directory Helpers
-
-    private var cacheDirectory: URL {
-        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !fileManager.fileExists(atPath: cacheDir.path) {
-            try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        
+        // Setup SQLite via GRDB
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dbDirectory = documentsURL.appendingPathComponent("meeshy_cache_db", isDirectory: true)
+        
+        do {
+            if !FileManager.default.fileExists(atPath: dbDirectory.path) {
+                try FileManager.default.createDirectory(at: dbDirectory, withIntermediateDirectories: true)
+            }
+            let dbURL = dbDirectory.appendingPathComponent("meeshy_cache.sqlite")
+            dbWriter = try DatabasePool(path: dbURL.path)
+            
+            // Perform migrations
+            var migrator = DatabaseMigrator()
+            migrator.registerMigration("v1_create_tables") { db in
+                try db.create(table: "conversations") { t in
+                    t.column("id", .text).primaryKey()
+                    t.column("updatedAt", .datetime).notNull()
+                    t.column("lastAccessAt", .datetime).notNull()
+                    t.column("encodedData", .blob).notNull()
+                }
+                
+                try db.create(table: "messages") { t in
+                    t.column("id", .text).primaryKey()
+                    t.column("conversationId", .text).notNull().references("conversations", onDelete: .cascade)
+                    t.column("createdAt", .datetime).notNull()
+                    t.column("encodedData", .blob).notNull()
+                }
+                
+                try db.create(index: "index_messages_on_conversationId_createdAt", on: "messages", columns: ["conversationId", "createdAt"])
+            }
+            try migrator.migrate(dbWriter)
+            logger.info("GRDB initialized successfully at \(dbURL.path)")
+            
+        } catch {
+            fatalError("Failed to initialize GRDB cache: \(error.localizedDescription)")
         }
-        return cacheDir
     }
 
-    private var messagesDirectory: URL {
-        let dir = cacheDirectory.appendingPathComponent(Self.messagesDirectoryName, isDirectory: true)
-        if !fileManager.fileExists(atPath: dir.path) {
-            try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-        return dir
+    // MARK: - Helper DB Models
+    
+    private struct DBConversation: Codable, FetchableRecord, PersistableRecord {
+        static let databaseTableName = "conversations"
+        var id: String
+        var updatedAt: Date
+        var lastAccessAt: Date
+        var encodedData: Data
     }
-
-    private var conversationsFileURL: URL {
-        cacheDirectory.appendingPathComponent(Self.conversationsFileName)
-    }
-
-    private var metadataFileURL: URL {
-        cacheDirectory.appendingPathComponent(Self.metadataFileName)
-    }
-
-    private func messagesFileURL(for conversationId: String) -> URL {
-        messagesDirectory.appendingPathComponent("\(conversationId).json")
+    
+    private struct DBMessage: Codable, FetchableRecord, PersistableRecord {
+        static let databaseTableName = "messages"
+        var id: String
+        var conversationId: String
+        var createdAt: Date
+        var encodedData: Data
     }
 
     // MARK: - Conversations
 
     public func saveConversations(_ conversations: [MeeshyConversation]) {
         do {
-            let data = try encoder.encode(conversations)
-            try data.write(to: conversationsFileURL, options: .atomic)
-            logger.debug("Saved \(conversations.count) conversations to cache")
+            try dbWriter.write { db in
+                let now = Date()
+                for conv in conversations {
+                    let encoded = try encoder.encode(conv)
+                    let dbConv = DBConversation(
+                        id: conv.id,
+                        updatedAt: conv.updatedAt ?? now,
+                        lastAccessAt: now,
+                        encodedData: encoded
+                    )
+                    try dbConv.save(db)
+                }
+            }
+            logger.debug("Saved \(conversations.count) conversations to SQLite")
         } catch {
-            logger.error("Failed to save conversations: \(error.localizedDescription)")
+            logger.error("Failed to save conversations to SQLite: \(error.localizedDescription)")
         }
     }
 
     public func loadConversations() -> [MeeshyConversation] {
-        let url = conversationsFileURL
-        guard fileManager.fileExists(atPath: url.path) else { return [] }
-
         do {
-            let data = try Data(contentsOf: url)
-            let conversations = try decoder.decode([MeeshyConversation].self, from: data)
-            logger.debug("Loaded \(conversations.count) conversations from cache")
-            return conversations
+            return try dbWriter.read { db in
+                let records = try DBConversation.order(Column("updatedAt").desc).fetchAll(db)
+                return records.compactMap { record in
+                    try? decoder.decode(MeeshyConversation.self, from: record.encodedData)
+                }
+            }
         } catch {
-            logger.error("Failed to load conversations: \(error.localizedDescription)")
+            logger.error("Failed to load conversations from SQLite: \(error.localizedDescription)")
             return []
         }
     }
@@ -87,97 +122,100 @@ public actor LocalStore {
 
     public func saveMessages(_ messages: [MeeshyMessage], for conversationId: String) {
         do {
-            let trimmed = Array(messages.suffix(Self.maxCachedMessagesPerConversation))
-            let data = try encoder.encode(trimmed)
-            try data.write(to: messagesFileURL(for: conversationId), options: .atomic)
-            updateMetadata(conversationId: conversationId)
-            logger.debug("Saved \(trimmed.count) messages for conversation \(conversationId)")
+            let sortedMessages = messages.sorted { ($0.createdAt ?? Date.distantPast) < ($1.createdAt ?? Date.distantPast) }
+            let trimmed = Array(sortedMessages.suffix(Self.maxCachedMessagesPerConversation))
+            
+            try dbWriter.write { db in
+                // Update conversation's last access metadata
+                if var conv = try DBConversation.fetchOne(db, key: conversationId) {
+                    conv.lastAccessAt = Date()
+                    try conv.update(db)
+                }
+                
+                // Insert messages
+                for msg in trimmed {
+                    let encoded = try encoder.encode(msg)
+                    let dbMsg = DBMessage(
+                        id: msg.id,
+                        conversationId: conversationId,
+                        createdAt: msg.createdAt ?? Date(),
+                        encodedData: encoded
+                    )
+                    try dbMsg.save(db) // Upserts
+                }
+                
+                // Trim messages exceeding max limit for this conversation
+                let count = try DBMessage.filter(Column("conversationId") == conversationId).fetchCount(db)
+                if count > Self.maxCachedMessagesPerConversation {
+                    let removeCount = count - Self.maxCachedMessagesPerConversation
+                    let toDelete = try String.fetchAll(db, sql: "SELECT id FROM messages WHERE conversationId = ? ORDER BY createdAt ASC LIMIT ?", arguments: [conversationId, removeCount])
+                    try DBMessage.filter(toDelete.contains(Column("id"))).deleteAll(db)
+                }
+            }
+            logger.debug("Saved \(trimmed.count) messages for conversation \(conversationId) in SQLite")
         } catch {
-            logger.error("Failed to save messages for \(conversationId): \(error.localizedDescription)")
+            logger.error("Failed to save messages for \(conversationId) in SQLite: \(error.localizedDescription)")
         }
     }
 
     public func loadMessages(for conversationId: String) -> [MeeshyMessage] {
-        let url = messagesFileURL(for: conversationId)
-        guard fileManager.fileExists(atPath: url.path) else { return [] }
-
         do {
-            let data = try Data(contentsOf: url)
-            let messages = try decoder.decode([MeeshyMessage].self, from: data)
-            logger.debug("Loaded \(messages.count) cached messages for conversation \(conversationId)")
-            return messages
+            return try dbWriter.read { db in
+                let records = try DBMessage
+                    .filter(Column("conversationId") == conversationId)
+                    .order(Column("createdAt").asc)
+                    .fetchAll(db)
+                
+                let messages = records.compactMap { record in
+                    try? decoder.decode(MeeshyMessage.self, from: record.encodedData)
+                }
+                logger.debug("Loaded \(messages.count) cached messages for conversation \(conversationId) from SQLite")
+                return messages
+            }
         } catch {
-            logger.error("Failed to load messages for \(conversationId): \(error.localizedDescription)")
+            logger.error("Failed to load sqlite messages for \(conversationId): \(error.localizedDescription)")
             return []
         }
-    }
-
-    // MARK: - Metadata Tracking
-
-    private struct CacheMetadata: Codable {
-        var conversationAccessDates: [String: Date]
-    }
-
-    private func loadMetadata() -> CacheMetadata {
-        let url = metadataFileURL
-        guard fileManager.fileExists(atPath: url.path) else {
-            return CacheMetadata(conversationAccessDates: [:])
-        }
-        do {
-            let data = try Data(contentsOf: url)
-            return try decoder.decode(CacheMetadata.self, from: data)
-        } catch {
-            return CacheMetadata(conversationAccessDates: [:])
-        }
-    }
-
-    private func saveMetadata(_ metadata: CacheMetadata) {
-        do {
-            let data = try encoder.encode(metadata)
-            try data.write(to: metadataFileURL, options: .atomic)
-        } catch {
-            logger.error("Failed to save metadata: \(error.localizedDescription)")
-        }
-    }
-
-    private func updateMetadata(conversationId: String) {
-        var metadata = loadMetadata()
-        metadata.conversationAccessDates[conversationId] = Date()
-        saveMetadata(metadata)
     }
 
     // MARK: - Cleanup
 
     public func cleanupStaleMessageCaches() {
-        let metadata = loadMetadata()
         let threshold = Calendar.current.date(
             byAdding: .day,
             value: -Self.staleConversationThresholdDays,
             to: Date()
         ) ?? Date()
 
-        var updatedMetadata = metadata
-        var removedCount = 0
-
-        for (conversationId, lastAccess) in metadata.conversationAccessDates {
-            if lastAccess < threshold {
-                let fileURL = messagesFileURL(for: conversationId)
-                try? fileManager.removeItem(at: fileURL)
-                updatedMetadata.conversationAccessDates.removeValue(forKey: conversationId)
-                removedCount += 1
+        do {
+            try dbWriter.write { db in
+                let staleConversations = try DBConversation
+                    .filter(Column("lastAccessAt") < threshold)
+                    .fetchAll(db)
+                
+                let staleIds = staleConversations.map(\.id)
+                guard !staleIds.isEmpty else { return }
+                
+                // SQLite foreign key cascade will delete related messages
+                let deletedCount = try DBConversation.filter(staleIds.contains(Column("id"))).deleteAll(db)
+                logger.info("Cleaned up \(deletedCount) stale conversation caches from SQLite")
             }
-        }
-
-        if removedCount > 0 {
-            saveMetadata(updatedMetadata)
-            logger.info("Cleaned up \(removedCount) stale message caches")
+        } catch {
+            logger.error("Failed to cleanup SQLite cache: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Clear All
 
     public func clearAll() {
-        try? fileManager.removeItem(at: cacheDirectory)
-        logger.info("Cleared all local cache")
+        do {
+            try dbWriter.write { db in
+                try DBMessage.deleteAll(db)
+                try DBConversation.deleteAll(db)
+            }
+            logger.info("Cleared all SQLite local cache tables")
+        } catch {
+            logger.error("Failed to clear SQLite cache: \(error.localizedDescription)")
+        }
     }
 }
