@@ -63,17 +63,17 @@ public actor ClientInfoProvider {
     }
 
     private func enrichWithLocation(_ headers: inout [String: String]) async {
-        // Check permission passively via instance property (iOS 14+) — never request
-        let manager = await MainActor.run { CLLocationManager() }
-        let status  = await MainActor.run { manager.authorizationStatus }
-        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
-
-        // Return cached result if still fresh (1h TTL)
+        // Return cached result if still fresh (1h TTL) — avant tout accès CoreLocation
         if Date() < geoCacheExpiry, let city = cachedCity {
             headers["X-Meeshy-City"] = city
             if let region = cachedRegion { headers["X-Meeshy-Region"] = region }
             return
         }
+
+        // Check permission passively via instance property (iOS 14+) — never request
+        let manager = await MainActor.run { CLLocationManager() }
+        let status  = await MainActor.run { manager.authorizationStatus }
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
 
         guard let location = await MainActor.run(body: { manager.location }) else { return }
 
