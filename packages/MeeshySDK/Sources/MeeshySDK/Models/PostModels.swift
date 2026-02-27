@@ -26,6 +26,8 @@ public struct APIPostMedia: Decodable {
     public let order: Int?
     public let caption: String?
     public let alt: String?
+    public let transcription: APIAttachmentTranscription?
+    public let translations: [String: APIAttachmentTranslation]?
 
     public var mediaType: FeedMediaType {
         guard let mime = mimeType else { return .image }
