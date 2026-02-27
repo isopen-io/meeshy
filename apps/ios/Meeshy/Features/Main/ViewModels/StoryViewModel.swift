@@ -105,15 +105,44 @@ class StoryViewModel: ObservableObject {
         publishError = nil
 
         do {
+            var uploadResult: TusUploadResult? = nil
+
+            if let image {
+                let serverOrigin = MeeshyConfig.shared.serverOrigin
+                guard let baseURL = URL(string: serverOrigin),
+                      let token = APIClient.shared.authToken else {
+                    publishError = "Authentication required"
+                    isPublishing = false
+                    return
+                }
+
+                let compressed = await MediaCompressor.shared.compressImage(image)
+                let fileName = "photo_\(UUID().uuidString).\(compressed.fileExtension)"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                try compressed.data.write(to: tempURL)
+                defer { try? FileManager.default.removeItem(at: tempURL) }
+
+                let uploader = TusUploadManager(baseURL: baseURL)
+                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token)
+            }
+
             let post = try await postService.createStory(
                 content: content,
                 storyEffects: effects,
-                visibility: "PUBLIC"
+                visibility: "PUBLIC",
+                mediaIds: uploadResult.map { [$0.id] }
             )
 
-            let media: [FeedMedia] = (post.media ?? []).map { m in
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+            // Build local media from upload result (API response may not include linked media yet)
+            let media: [FeedMedia]
+            if let uploaded = uploadResult {
+                media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
+                                   thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
+            } else {
+                media = (post.media ?? []).map { m in
+                    FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                              width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+                }
             }
             let newItem = StoryItem(id: post.id, content: post.content, media: media,
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
