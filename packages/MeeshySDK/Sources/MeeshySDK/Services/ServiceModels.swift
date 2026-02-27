@@ -60,6 +60,11 @@ public struct MobileTranscriptionPayload: Encodable {
         self.text = text; self.language = language
         self.confidence = confidence; self.durationMs = durationMs; self.segments = segments
     }
+
+    enum CodingKeys: String, CodingKey {
+        case text, language, confidence, segments
+        case durationMs = "duration_ms"
+    }
 }
 
 // MARK: - Post Requests
