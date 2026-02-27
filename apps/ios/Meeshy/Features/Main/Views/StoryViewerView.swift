@@ -655,8 +655,8 @@ struct StoryViewerView: View {
     private var storyComposerBar: some View {
         UniversalComposerBar(
             style: .dark,
-            placeholder: "Répondre...",
-            onSend: { text in sendReply(text: text) },
+            placeholder: "Commenter...",
+            onSend: { text in sendComment(text: text) },
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true

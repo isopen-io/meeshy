@@ -489,14 +489,8 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendReply(text: String) {
-        guard !text.isEmpty, let story = currentStory, let group = currentGroup else { return }
-        let context = ReplyContext.story(
-            storyId: story.id,
-            authorId: group.id,
-            authorName: group.username,
-            preview: story.content ?? "Story"
-        )
+    func sendComment(text: String) {
+        guard !text.isEmpty, let story = currentStory else { return }
 
         // Fire & forget comment
         Task {
@@ -507,10 +501,11 @@ extension StoryViewerView {
             )
         }
 
-        // Navigate to DM
-        dismissViewer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            onReplyToStory?(context)
+        // Just dismiss composer and give feedback
+        DispatchQueue.main.async {
+            HapticFeedback.success()
+            self.dismissComposer()
+            self.storyDrafts.removeValue(forKey: story.id)
         }
     }
 
