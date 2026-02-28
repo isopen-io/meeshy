@@ -364,12 +364,21 @@ extension StoryViewerView {
         // 1. Snapshot current story as outgoing (already rendered, no reload needed)
         outgoingStory = currentStory
         outgoingOpacity = 1
+        closingScale = 1.0
         contentOpacity = 0
 
-        // Lire l'effet AVANT le swap (currentStory va changer après update())
+        // Read closing effect from the OUTGOING story before swapping
+        let closingEffect = currentStory?.storyEffects?.closing
+
+        // 2. Swap to the incoming story (invisible because contentOpacity = 0)
+        update()
+        markCurrentViewed()
+        prefetchStory(at: currentStoryIndex + 1)
+
+        // Read opening effect from the INCOMING story (currentStory is now the new one)
         let incomingEffect = currentStory?.storyEffects?.opening
 
-        // État initial selon l'effet entrant
+        // Set initial animation state for incoming content
         switch incomingEffect {
         case .zoom:
             openingScale = 0.88
@@ -389,11 +398,6 @@ extension StoryViewerView {
             isRevealActive = false
         }
 
-        // 2. Instantly swap to the new story
-        update()
-        markCurrentViewed()
-        prefetchStory(at: currentStoryIndex + 1)
-
         let animDuration: Double
         let animation: Animation
         switch incomingEffect {
@@ -411,19 +415,21 @@ extension StoryViewerView {
             animation = .easeOut(duration: 0.35)
         }
 
-        // 3. Simultaneously cross-dissolve with effect-specific animation
+        // 3. Animate incoming in + outgoing out with closing effect applied
         withAnimation(animation) {
             outgoingOpacity = 0
             contentOpacity = 1
             openingScale = 1.0
             textSlideOffset = 0
             if incomingEffect == .reveal { isRevealActive = true }
+            if closingEffect == .zoom { closingScale = 1.08 }
         }
 
         restartTimer()
         DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
             outgoingStory = nil
             isTransitioning = false
+            closingScale = 1.0
             // isRevealActive is reset at the start of each new transition (switch incomingEffect above)
         }
     }

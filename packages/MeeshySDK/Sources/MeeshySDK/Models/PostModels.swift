@@ -80,6 +80,7 @@ public struct APIPost: Decodable {
     public let originalLanguage: String?
     public let createdAt: Date
     public let updatedAt: Date?
+    public let expiresAt: Date?
     public let author: APIAuthor
     public let likeCount: Int?
     public let commentCount: Int?

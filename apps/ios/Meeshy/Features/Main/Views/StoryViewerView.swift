@@ -71,6 +71,7 @@ struct StoryViewerView: View {
     // Opening effect animation states
     @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
     @State var isRevealActive: Bool = false       // internal for cross-file extension access
+    @State var closingScale: CGFloat = 1.0        // internal for cross-file extension access
 
     // Horizontal swipe (group ↔ group)
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
@@ -186,6 +187,7 @@ struct StoryViewerView: View {
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
                 StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage)
                     .opacity(outgoingOpacity)
+                    .scaleEffect(closingScale)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

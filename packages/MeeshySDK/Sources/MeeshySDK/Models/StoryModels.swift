@@ -463,9 +463,11 @@ extension Array where Element == APIPost {
             let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
                 dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
             }
+            let effectiveExpiresAt = post.expiresAt
+                ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
             let item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: post.storyEffects,
-                                 createdAt: post.createdAt, expiresAt: post.updatedAt,
+                                 createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id, isViewed: false,
                                  translations: storyTranslations)
             if var existing = grouped[authorId] {
