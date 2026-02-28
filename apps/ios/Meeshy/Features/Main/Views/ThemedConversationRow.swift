@@ -520,16 +520,11 @@ private struct ConversationAvatarView: View {
 
     @State private var showLastSeenTooltip = false
 
-    private var avatarContextMenuItems: [AvatarContextMenuItem] {
+    private var isDirect: Bool { conversation.type == .direct }
+
+    /// Menu long-press pour les conversations non-DM (groupe, public, global, etc.)
+    private var groupContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
-        if storyRingState != .none {
-            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                onViewStory?()
-            })
-        }
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            onViewProfile?()
-        })
         items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
@@ -549,13 +544,16 @@ private struct ConversationAvatarView: View {
                 mode: .conversationList,
                 accentColor: conversation.accentColor,
                 secondaryColor: conversation.colorPalette.secondary,
-                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceState : .offline,
+                presenceState: (isDirect && moodStatus == nil) ? presenceState : .offline,
                 enablePulse: false,
-                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
-                onViewStory: onViewStory,
+                // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
+                // Groupe : tap → infos conversation directement via onTap
+                onTap: isDirect ? nil : onViewConversationInfo,
+                onViewProfile: isDirect ? onViewProfile : nil,
+                onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -567,7 +565,9 @@ private struct ConversationAvatarView: View {
                         }
                     }
                 },
-                contextMenuItems: avatarContextMenuItems
+                // DM : MeeshyAvatar génère automatiquement "Voir le profil" + "Voir la story"
+                // Groupe : menu personnalisé avec infos + lien de partage
+                contextMenuItems: isDirect ? [] : groupContextMenuItems
             )
 
             // Last seen tooltip

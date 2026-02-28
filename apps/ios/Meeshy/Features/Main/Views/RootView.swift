@@ -329,6 +329,7 @@ struct RootView: View {
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
             ProfileFetchingSheet(user: user)
+                .environmentObject(statusViewModel)
         }
         .sheet(isPresented: $showSharePicker) {
             if let content = router.pendingShareContent {
