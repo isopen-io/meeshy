@@ -12,6 +12,7 @@ public enum StoryComposerPanel: Equatable {
     case filter
     case audio
     case background
+    case transition
 }
 
 // MARK: - Story Background Picker Palette
@@ -59,6 +60,9 @@ public struct StoryComposerView: View {
     @State private var selectedAudioTitle: String? = nil
     @State private var audioVolume: Float = 0.7
     @State private var audioTrimStart: TimeInterval = 0
+
+    @State private var openingEffect: StoryTransitionEffect? = nil
+    @State private var closingEffect: StoryTransitionEffect? = nil
 
     @State private var activePanel: StoryComposerPanel = .none
     @State private var showPhotoPicker = false
@@ -194,6 +198,7 @@ public struct StoryComposerView: View {
             toolButton(icon: "camera.filters", label: "Filter", panel: .filter)
             toolButton(icon: "music.note", label: "Audio", panel: .audio)
             toolButton(icon: "paintpalette", label: "BG", panel: .background)
+            toolButton(icon: "sparkles", label: "Effet", panel: .transition)
         }
         .padding(.vertical, 8)
         .background(Color.black.opacity(0.3))
@@ -273,6 +278,10 @@ public struct StoryComposerView: View {
             backgroundPicker
                 .transition(.move(edge: .bottom).combined(with: .opacity))
 
+        case .transition:
+            transitionPicker
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+
         case .none:
             EmptyView()
         }
@@ -344,6 +353,65 @@ public struct StoryComposerView: View {
         .background(Color.black.opacity(0.3))
     }
 
+    // MARK: - Transition Picker
+
+    private var transitionPicker: some View {
+        VStack(spacing: 12) {
+            Text("Effet d'ouverture")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+
+            HStack(spacing: 12) {
+                effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: true)
+                ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
+                    effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
+                }
+            }
+
+            Text("Effet de fermeture")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+
+            HStack(spacing: 12) {
+                effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: false)
+                ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
+                    effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+    }
+
+    private func effectButton(effect: StoryTransitionEffect?, label: String, icon: String, isOpening: Bool) -> some View {
+        let isSelected = isOpening ? (openingEffect == effect) : (closingEffect == effect)
+        return Button {
+            withAnimation(.spring(response: 0.25)) {
+                if isOpening { openingEffect = effect } else { closingEffect = effect }
+            }
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white.opacity(0.6))
+                Text(label)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white.opacity(0.4))
+            }
+            .frame(width: 60, height: 54)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color(hex: "FF2E63").opacity(0.15) : Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isSelected ? Color(hex: "FF2E63").opacity(0.5) : Color.clear, lineWidth: 1)
+                    )
+            )
+        }
+        .accessibilityLabel(label)
+    }
+
     // MARK: - Actions
 
     private func loadPhoto(from item: PhotosPickerItem?) {
@@ -382,7 +450,9 @@ public struct StoryComposerView: View {
             drawingData: drawingData,
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
-            backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil
+            backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
+            opening: openingEffect,
+            closing: closingEffect
         )
     }
 
