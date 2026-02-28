@@ -105,7 +105,8 @@ struct ThemedConversationRow: View {
     }
 
     private var lastMessageEffect: LastMessageEffect {
-        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt <= Date() {
+        let now = Date()
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt <= now {
             return .expired
         }
         if conversation.lastMessageIsBlurred {
@@ -114,7 +115,7 @@ struct ThemedConversationRow: View {
         if conversation.lastMessageIsViewOnce {
             return .viewOnce
         }
-        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt > Date() {
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt > now {
             return .ephemeralActive
         }
         return .none
@@ -195,8 +196,21 @@ struct ThemedConversationRow: View {
     private var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append("Conversation avec \(conversation.name)")
-        if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append("dernier message: \(preview)")
+        switch lastMessageEffect {
+        case .expired:
+            parts.append("dernier message expiré")
+        case .blurred:
+            parts.append("dernier message flouté")
+        case .viewOnce:
+            parts.append("dernier message : voir une fois")
+        case .ephemeralActive:
+            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                parts.append("dernier message éphémère : \(preview)")
+            }
+        case .none:
+            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                parts.append("dernier message: \(preview)")
+            }
         }
         parts.append(timeAgo(conversation.lastMessageAt))
         if conversation.unreadCount > 0 {
@@ -326,6 +340,40 @@ struct ThemedConversationRow: View {
     // MARK: - Last Message Preview
 
     @ViewBuilder
+    private func standardMessageContent(showEphemeralIcon: Bool) -> some View {
+        let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let attachments = conversation.lastMessageAttachments
+        let totalCount = conversation.lastMessageAttachmentCount
+        HStack(spacing: 4) {
+            if showEphemeralIcon {
+                Image(systemName: "timer")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+            senderLabel
+            if !hasText && !attachments.isEmpty {
+                let att = attachments[0]
+                attachmentIcon(for: att.mimeType)
+                attachmentMeta(for: att)
+                if totalCount > 1 {
+                    Text("+\(totalCount - 1)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                }
+            } else if hasText {
+                if !attachments.isEmpty {
+                    attachmentIcon(for: attachments[0].mimeType)
+                        .font(.system(size: 11))
+                }
+                Text(conversation.lastMessagePreview ?? "")
+                    .font(.system(size: 13))
+                    .foregroundColor(textSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var lastMessagePreviewView: some View {
         switch lastMessageEffect {
         case .expired:
@@ -365,63 +413,15 @@ struct ThemedConversationRow: View {
             }
 
         case .ephemeralActive:
-            let hasTextEph = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let attachmentsEph = conversation.lastMessageAttachments
-            let totalCountEph = conversation.lastMessageAttachmentCount
-            HStack(spacing: 4) {
-                Image(systemName: "timer")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
-                senderLabel
-                if !hasTextEph && !attachmentsEph.isEmpty {
-                    let att = attachmentsEph[0]
-                    attachmentIcon(for: att.mimeType)
-                    attachmentMeta(for: att)
-                    if totalCountEph > 1 {
-                        Text("+\(totalCountEph - 1)")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
-                    }
-                } else if hasTextEph {
-                    if !attachmentsEph.isEmpty {
-                        attachmentIcon(for: attachmentsEph[0].mimeType)
-                            .font(.system(size: 11))
-                    }
-                    Text(conversation.lastMessagePreview ?? "")
-                        .font(.system(size: 13))
-                        .foregroundColor(textSecondary)
-                        .lineLimit(1)
-                }
-            }
+            standardMessageContent(showEphemeralIcon: true)
 
         case .none:
             let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let attachments = conversation.lastMessageAttachments
-            let totalCount = conversation.lastMessageAttachmentCount
             if !hasText && !attachments.isEmpty {
-                HStack(spacing: 4) {
-                    senderLabel
-                    let att = attachments[0]
-                    attachmentIcon(for: att.mimeType)
-                    attachmentMeta(for: att)
-                    if totalCount > 1 {
-                        Text("+\(totalCount - 1)")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
-                    }
-                }
+                standardMessageContent(showEphemeralIcon: false)
             } else if hasText {
-                HStack(spacing: 4) {
-                    senderLabel
-                    if !attachments.isEmpty {
-                        attachmentIcon(for: attachments[0].mimeType)
-                            .font(.system(size: 11))
-                    }
-                    Text(conversation.lastMessagePreview ?? "")
-                        .font(.system(size: 13))
-                        .foregroundColor(textSecondary)
-                        .lineLimit(1)
-                }
+                standardMessageContent(showEphemeralIcon: false)
             } else {
                 Text("")
                     .font(.system(size: 13))
