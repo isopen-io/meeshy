@@ -663,9 +663,9 @@ public struct StoryComposerView: View {
     }
 
     private func publishAllSlides() {
+        isPublishingAll = true
         publishTask = Task {
             let (slides, images) = allSlidesSnapshot()
-            isPublishingAll = true
 
             var index = 0
             while index < slides.count {

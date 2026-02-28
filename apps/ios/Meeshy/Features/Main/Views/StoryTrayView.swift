@@ -36,39 +36,41 @@ struct StoryTrayView: View {
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
-            StoryComposerView(
-                onPublishSlide: { slide, image in
-                    try await viewModel.publishStorySingle(
-                        effects: slide.effects,
-                        content: slide.content,
-                        image: image
-                    )
-                },
-                onPreview: { slides, images in
-                    previewSlides = slides
-                    previewImages = images
-                    showStoryPreview = true
-                },
-                onDismiss: {
-                    viewModel.showStoryComposer = false
-                }
-            )
-        }
-        .fullScreenCover(isPresented: $showStoryPreview) {
-            let items = previewSlides.map { $0.toPreviewStoryItem() }
-            let group = StoryGroup(
-                id: "preview",
-                username: "Aperçu",
-                avatarColor: "FF2E63",
-                stories: items
-            )
-            StoryViewerView(
-                viewModel: viewModel,
-                groups: [group],
-                currentGroupIndex: 0,
-                isPresented: $showStoryPreview,
-                isPreviewMode: true
-            )
+            ZStack {
+                StoryComposerView(
+                    onPublishSlide: { slide, image in
+                        try await viewModel.publishStorySingle(
+                            effects: slide.effects,
+                            content: slide.content,
+                            image: image
+                        )
+                    },
+                    onPreview: { slides, images in
+                        previewSlides = slides
+                        previewImages = images
+                        showStoryPreview = true
+                    },
+                    onDismiss: {
+                        viewModel.showStoryComposer = false
+                    }
+                )
+            }
+            .fullScreenCover(isPresented: $showStoryPreview) {
+                let items = previewSlides.map { $0.toPreviewStoryItem() }
+                let group = StoryGroup(
+                    id: "preview",
+                    username: "Aperçu",
+                    avatarColor: "FF2E63",
+                    stories: items
+                )
+                StoryViewerView(
+                    viewModel: viewModel,
+                    groups: [group],
+                    currentGroupIndex: 0,
+                    isPresented: $showStoryPreview,
+                    isPreviewMode: true
+                )
+            }
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
