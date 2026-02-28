@@ -191,12 +191,14 @@ struct ShareLinkDetailView: View {
     private func toggleActive() {
         Task {
             do {
-                try await ShareLinkService.shared.toggleLink(linkId: link.linkId)
+                try await ShareLinkService.shared.toggleLink(linkId: link.linkId, isActive: !isActive)
                 await MainActor.run {
                     withAnimation { isActive.toggle() }
                     HapticFeedback.light()
                 }
-            } catch { /* silently ignore */ }
+            } catch {
+                await MainActor.run { HapticFeedback.error() }
+            }
         }
     }
 
@@ -205,7 +207,9 @@ struct ShareLinkDetailView: View {
             do {
                 try await ShareLinkService.shared.deleteLink(linkId: link.linkId)
                 await MainActor.run { dismiss() }
-            } catch { /* handle if needed */ }
+            } catch {
+                await MainActor.run { HapticFeedback.error() }
+            }
         }
     }
 

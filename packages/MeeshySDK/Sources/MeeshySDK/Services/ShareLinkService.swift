@@ -64,10 +64,11 @@ public final class ShareLinkService {
 
     // MARK: - Toggle Link Active/Inactive (authenticated)
 
-    public func toggleLink(linkId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(
-            endpoint: "/links/\(linkId)/toggle",
-            method: "PATCH"
+    public func toggleLink(linkId: String, isActive: Bool) async throws {
+        struct ToggleBody: Encodable { let isActive: Bool }
+        let _: APIResponse<MyShareLink> = try await api.patch(
+            endpoint: "/links/\(linkId)",
+            body: ToggleBody(isActive: isActive)
         )
     }
 

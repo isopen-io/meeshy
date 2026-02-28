@@ -6,6 +6,7 @@ import MeeshySDK
 struct ShareLinksView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = ShareLinksViewModel()
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var showCreate = false
 
     var body: some View {
@@ -46,6 +47,7 @@ struct ShareLinksView: View {
             CreateShareLinkView { _ in
                 Task { await viewModel.load() }
             }
+            .environmentObject(conversationListViewModel)
         }
     }
 

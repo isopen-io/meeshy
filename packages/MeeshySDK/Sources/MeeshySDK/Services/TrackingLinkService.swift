@@ -8,12 +8,16 @@ public final class TrackingLinkService {
 
     private init() {}
 
+    private struct TrackingLinksData: Decodable {
+        let trackingLinks: [TrackingLink]
+    }
+
     /// Liste les liens de tracking de l'utilisateur connecté
     public func listLinks(offset: Int = 0, limit: Int = 50) async throws -> [TrackingLink] {
-        let response: APIResponse<[TrackingLink]> = try await api.request(
-            endpoint: "/tracking-links?offset=\(offset)&limit=\(limit)"
+        let response: APIResponse<TrackingLinksData> = try await api.request(
+            endpoint: "/tracking-links/user/me?offset=\(offset)&limit=\(limit)"
         )
-        return response.data
+        return response.data.trackingLinks
     }
 
     /// Stats globales des liens de l'utilisateur
@@ -41,11 +45,12 @@ public final class TrackingLinkService {
         return response.data
     }
 
-    /// Active/désactive un lien
-    public func toggleLink(token: String) async throws {
+    /// Active ou désactive un lien
+    public func setActive(token: String, isActive: Bool) async throws {
+        struct SetActiveBody: Encodable { let isActive: Bool }
         let _: APIResponse<TrackingLink> = try await api.patch(
-            endpoint: "/tracking-links/\(token)/toggle",
-            body: EmptyTrackingBody()
+            endpoint: "/tracking-links/\(token)",
+            body: SetActiveBody(isActive: isActive)
         )
     }
 
@@ -56,5 +61,3 @@ public final class TrackingLinkService {
         )
     }
 }
-
-private struct EmptyTrackingBody: Encodable {}
