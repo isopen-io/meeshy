@@ -394,9 +394,8 @@ public struct MeeshyAvatar: View {
                 onOnlineTap?()
             }
 
-        if effectivePresence == .online {
-            dot.pulse(intensity: 0.15)
-        } else { dot }
+        // .pulse retiré : animation repeatForever inutile sur chaque avatar de la liste
+        dot
     }
 
     // MARK: - Helpers
