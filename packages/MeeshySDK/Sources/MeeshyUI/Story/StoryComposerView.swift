@@ -361,22 +361,28 @@ public struct StoryComposerView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
 
-            HStack(spacing: 12) {
-                effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: true)
-                ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                    effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: true)
+                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
+                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
+                    }
                 }
+                .padding(.horizontal, 2)
             }
 
             Text("Effet de fermeture")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
 
-            HStack(spacing: 12) {
-                effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: false)
-                ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                    effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: false)
+                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
+                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
+                    }
                 }
+                .padding(.horizontal, 2)
             }
         }
         .padding(.vertical, 12)
