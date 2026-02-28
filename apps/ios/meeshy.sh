@@ -102,8 +102,13 @@ do_device_deploy() {
     local ncpu
     ncpu=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-    # ── Attempt 1: Build with full entitlements ──
-    log "Attempt 1: Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC} (full entitlements)..."
+    # Strip restricted capabilities upfront — physical device provisioning profiles
+    # never include Associated Domains or Push Notifications on a personal/free account.
+    # Stripping first avoids a guaranteed-to-fail first attempt.
+    strip_entitlements
+    trap restore_entitlements EXIT
+
+    log "Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC}..."
 
     set +e
     xcodebuild \
@@ -121,55 +126,19 @@ do_device_deploy() {
     local build_rc=$?
     set -e
 
-    if [ "$build_rc" -eq 0 ]; then
-        ok "Build succeeded with full entitlements"
-        rm -f "$build_log"
-    elif grep -qiE "provisioning|Associated Domains|Push Notifications|aps-environment" "$build_log"; then
-        warn "Provisioning error detected. Stripping capabilities and retrying..."
-        grep -iE "(error:.*provisioning|error:.*Associated|error:.*Push|error:.*aps-)" "$build_log" | head -3 || true
+    # Restore entitlements IMMEDIATELY after build, before anything else
+    restore_entitlements
+    trap - EXIT
 
-        # ── Attempt 2: Strip capabilities and re-link/re-sign (no full recompile) ──
-        strip_entitlements
-        trap restore_entitlements EXIT
-
-        log "Attempt 2: Re-linking without restricted capabilities..."
-
-        set +e
-        xcodebuild \
-            -project "$PROJECT" \
-            -scheme "$SCHEME" \
-            -configuration "$CONFIGURATION" \
-            -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
-            -derivedDataPath "$DERIVED_DATA" \
-            -allowProvisioningUpdates \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            -jobs "$ncpu" \
-            ONLY_ACTIVE_ARCH=YES \
-            build >"$build_log" 2>&1
-        build_rc=$?
-        set -e
-
-        # Restore entitlements IMMEDIATELY after build
-        restore_entitlements
-        trap - EXIT
-
-        if [ "$build_rc" -ne 0 ]; then
-            err "Build FAILED even after stripping capabilities"
-            grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
-            cp "$build_log" /tmp/meeshy_device_last_failure.log
-            rm -f "$build_log"
-            exit 1
-        fi
-        ok "Build succeeded (restricted capabilities stripped)"
-        rm -f "$build_log"
-    else
-        err "Build FAILED (not a provisioning issue)"
-        grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib" | head -30 || tail -20 "$build_log"
+    if [ "$build_rc" -ne 0 ]; then
+        err "Build FAILED"
+        grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
         cp "$build_log" /tmp/meeshy_device_last_failure.log
         rm -f "$build_log"
         exit 1
     fi
+    ok "Build succeeded"
+    rm -f "$build_log"
 
     # ── Install on device ──
     if [ ! -d "$device_app_path" ]; then
@@ -195,6 +164,16 @@ do_device_deploy() {
     xcrun devicectl device process launch --device "$PHYSICAL_DEVICE_ID" "$BUNDLE_ID" 2>&1
     set -e
     ok "Done! App deployed to ${BOLD}$PHYSICAL_DEVICE_NAME${NC}"
+
+    # ── Clean device build artifacts ──
+    # The .app and .xcent were built with stripped entitlements. Remove them so
+    # the next device deploy rebuilds cleanly from the restored entitlements
+    # (all .o intermediates are kept → re-link/re-sign only, ~30s).
+    log "Cleaning device build artifacts (keeping .o intermediates)..."
+    rm -rf "$device_app_path" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
+    ok "Ready for next deploy"
 }
 
 # ─── Simulator Detection ────────────────────────────────────────────────────
