@@ -63,6 +63,13 @@ public struct APIPostTranslationEntry: Decodable {
     public let translationModel: String?
     public let confidenceScore: Double?
     public let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case translationModel = "translation_model"
+        case confidenceScore  = "confidence_score"
+        case createdAt        = "created_at"
+    }
 }
 
 public struct APIPost: Decodable {

@@ -320,6 +320,8 @@ public struct StoryEffects: Codable, Sendable {
         if let vol = backgroundAudioVolume { dict["backgroundAudioVolume"] = vol }
         if let start = backgroundAudioStart { dict["backgroundAudioStart"] = start }
         if let vid = voiceAttachmentId { dict["voiceAttachmentId"] = vid }
+        if let op = opening { dict["opening"] = op.rawValue }
+        if let cl = closing { dict["closing"] = cl.rawValue }
         return dict
     }
 }
