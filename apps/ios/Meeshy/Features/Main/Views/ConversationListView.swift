@@ -499,19 +499,20 @@ struct ConversationListView: View {
                         }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(
-                DragGesture()
+                DragGesture(minimumDistance: 10)
                     .onChanged { value in
                         let translation = value.translation.height
-                        
-                        // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
-                        if translation < -20 && !hideSearchBar {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+
+                        if translation < -10 && !hideSearchBar {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
                                 hideSearchBar = true
                                 isScrollingDown = true
+                                isSearching = false
                             }
-                        } else if translation > 20 && hideSearchBar {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        } else if translation > 10 && hideSearchBar {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
                                 hideSearchBar = false
                                 isScrollingDown = false
                             }
