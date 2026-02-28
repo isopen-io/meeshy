@@ -14,6 +14,7 @@ struct ThemedConversationRow: View {
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
+    var onCreateShareLink: (() -> Void)? = nil
 
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
@@ -215,7 +216,8 @@ struct ThemedConversationRow: View {
             onViewStory: onViewStory,
             onViewProfile: onViewProfile,
             onViewConversationInfo: onViewConversationInfo,
-            onMoodBadgeTap: onMoodBadgeTap
+            onMoodBadgeTap: onMoodBadgeTap,
+            onCreateShareLink: onCreateShareLink
         )
     }
 
@@ -422,6 +424,7 @@ private struct ConversationAvatarView: View {
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
+    var onCreateShareLink: (() -> Void)? = nil
 
     @State private var showLastSeenTooltip = false
 
@@ -438,6 +441,12 @@ private struct ConversationAvatarView: View {
         items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
+        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global]
+        if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
+            items.append(AvatarContextMenuItem(label: "Créer un lien de partage", icon: "link.badge.plus") {
+                handler()
+            })
+        }
         return items
     }
 
