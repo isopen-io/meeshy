@@ -540,13 +540,13 @@ struct ConversationListView: View {
                 if showSearchOverlay {
                     communitiesSection
                         .padding(.vertical, 10)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 // Category filters - only when search overlay is open (loupe tap)
                 if showSearchOverlay {
                     categoryFilters
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 // Search bar - always visible (unless scrolled away)
@@ -557,7 +557,7 @@ struct ConversationListView: View {
             .offset(y: hideSearchBar ? 150 : 0)
             .opacity(hideSearchBar ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+            .animation(.spring(response: 0.2, dampingFraction: 0.9), value: showSearchOverlay)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
@@ -575,8 +575,9 @@ struct ConversationListView: View {
             }
         }
         .task {
-            await conversationViewModel.loadConversations()
-            await loadUserCommunities()
+            async let conversations: Void = conversationViewModel.loadConversations()
+            async let communities: Void = loadUserCommunities()
+            _ = await (conversations, communities)
         }
         .onChange(of: conversationViewModel.userCategories) { _, categories in
             for cat in categories where cat.isExpanded {

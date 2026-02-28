@@ -167,13 +167,13 @@ do_device_deploy() {
     ok "Done! App deployed to ${BOLD}$PHYSICAL_DEVICE_NAME${NC}"
 
     # ── Clean device build artifacts ──
-    # The .app and .xcent were built with stripped entitlements. Remove them so
-    # the next device deploy rebuilds cleanly from the restored entitlements
-    # (all .o intermediates are kept → re-link/re-sign only, ~30s).
-    log "Cleaning device build artifacts (keeping .o intermediates)..."
+    # Remove only the .app and .xcent signed with stripped entitlements.
+    # Keep build.db (shared with simulator builds) and all .o intermediates.
+    # Deleting build.db would force a full rebuild and triggers Xcode's
+    # "entitlements modified during build" error on the next simulator build.
+    log "Cleaning device build artifacts (keeping .o intermediates and build.db)..."
     rm -rf "$device_app_path" 2>/dev/null || true
     rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
-    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
     ok "Ready for next deploy"
 }
 
