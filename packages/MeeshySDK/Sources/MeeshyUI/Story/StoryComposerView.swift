@@ -44,6 +44,12 @@ struct StoryComposerDraft: Codable {
     static let userDefaultsKey = "storyComposerDraft"
 }
 
+// MARK: - Slide Publish Action
+
+public enum SlidePublishAction {
+    case retry, skip, cancel
+}
+
 // MARK: - Story Composer View
 
 public struct StoryComposerView: View {
@@ -79,12 +85,29 @@ public struct StoryComposerView: View {
     @State private var showRestoreDraftAlert = false
     @State private var pendingDraft: StoryComposerDraft? = nil
 
-    public var onPublish: (StoryEffects, String?, UIImage?) -> Void
+    // Preview + contextual menu
+    @State private var showPreview = false
+    @State private var visibility: String = "PUBLIC"
+    // Dismiss alert
+    @State private var showDiscardAlert = false
+    // Multi-slide publish (seront utilisées dans Task 2)
+    @State private var isPublishingAll = false
+    @State private var publishProgressText: String? = nil
+    @State private var slidePublishError: String? = nil
+    @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>? = nil
+    @State private var showPublishError = false
+    @State private var publishTask: Task<Void, Never>? = nil
+
+    public var onPublishSlide: (StorySlide, UIImage?) async throws -> Void
+    public var onPreview: ([StorySlide], [String: UIImage]) -> Void
     public var onDismiss: () -> Void
 
-    public init(onPublish: @escaping (StoryEffects, String?, UIImage?) -> Void,
+    public init(onPublishSlide: @escaping (StorySlide, UIImage?) async throws -> Void,
+                onPreview: @escaping ([StorySlide], [String: UIImage]) -> Void,
                 onDismiss: @escaping () -> Void) {
-        self.onPublish = onPublish; self.onDismiss = onDismiss
+        self.onPublishSlide = onPublishSlide
+        self.onPreview = onPreview
+        self.onDismiss = onDismiss
     }
 
     public var body: some View {
@@ -94,14 +117,11 @@ public struct StoryComposerView: View {
             VStack(spacing: 0) {
                 topBar
                 canvasArea
-                if slideManager.slideCount > 1 {
-                    StorySlideCarousel(manager: slideManager) {
-                        slideManager.addSlide()
-                    }
-                }
                 if !isDrawingActive {
                     toolBar
                     activeToolPanel
+                        .frame(maxHeight: 200)
+                        .clipped()
                 }
             }
         }
@@ -110,7 +130,25 @@ public struct StoryComposerView: View {
         .onChange(of: photoPickerItem) { newItem in
             loadPhoto(from: newItem)
         }
-        .statusBarHidden()
+        .alert("Erreur de publication", isPresented: $showPublishError) {
+            Button("Réessayer") {
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .retry)
+            }
+            Button("Ignorer", role: .cancel) {
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .skip)
+            }
+            Button("Annuler tout", role: .destructive) {
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .cancel)
+            }
+        } message: {
+            Text(slidePublishError ?? "")
+        }
         .onAppear {
             if let draft = loadDraft() {
                 pendingDraft = draft
@@ -131,56 +169,71 @@ public struct StoryComposerView: View {
         } message: {
             Text("Vous avez un brouillon non publié.")
         }
+        .statusBarHidden()
     }
 
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 0) {
+            // [✕] Dismiss
             Button {
-                onDismiss()
+                handleDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 32, height: 32)
                     .background(Circle().fill(Color.black.opacity(0.4)))
             }
+            .padding(.leading, 12)
 
-            Spacer()
+            // Strip de slides scrollable
+            slideStrip
+                .frame(maxWidth: .infinity)
 
-            if slideManager.canAddSlide {
-                Button {
-                    slideManager.addSlide()
-                    HapticFeedback.medium()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                        Text("Slide")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.white.opacity(0.15)))
-                }
+            // Séparateur visuel
+            Rectangle()
+                .fill(Color.white.opacity(0.2))
+                .frame(width: 1, height: 24)
+                .padding(.horizontal, 6)
+
+            // [▶] Preview
+            Button {
+                let (slides, images) = allSlidesSnapshot()
+                onPreview(slides, images)
+            } label: {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white.opacity(0.9))
             }
 
-            Spacer()
-
+            // [Publish] ou [Publier X/N...]
             Button {
-                publishStory()
+                publishAllSlides()
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 13))
-                    Text("Publish")
-                        .font(.system(size: 14, weight: .bold))
+                Group {
+                    if let progress = publishProgressText {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(0.7)
+                                .tint(.white)
+                            Text(progress)
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 12))
+                            Text("Publish")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                    }
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
                 .background(
                     Capsule().fill(
                         LinearGradient(
@@ -189,31 +242,171 @@ public struct StoryComposerView: View {
                         )
                     )
                 )
-                .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: 8, y: 2)
+            }
+            .disabled(isPublishingAll)
+            .padding(.leading, 6)
+
+            // [···] Menu contextuel
+            Menu {
+                Button { saveDraft() } label: {
+                    Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
+                }
+                Menu {
+                    Button { visibility = "PUBLIC" } label: {
+                        Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
+                    }
+                    Button { visibility = "FRIENDS" } label: {
+                        Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                    }
+                    Button { visibility = "PRIVATE" } label: {
+                        Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                    }
+                } label: {
+                    Label("Visibilité", systemImage: "eye")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    slideManager.slides = [StorySlide()]
+                    slideManager.currentSlideIndex = 0
+                } label: {
+                    Label("Supprimer tous les slides", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 32, height: 32)
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
+        }
+        .frame(height: 52)
+        .background(Color.black.opacity(0.3))
+        .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
+            Button("Sauvegarder") { saveDraft(); onDismiss() }
+            Button("Quitter", role: .destructive) { cancelPublishIfNeeded(); clearDraft(); onDismiss() }
+            Button("Annuler", role: .cancel) { }
+        }
+    }
+
+    // MARK: - Slide Strip
+
+    private var slideStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(slideManager.slides.enumerated()), id: \.element.id) { index, slide in
+                    slideThumb(slide: slide, index: index)
+                }
+                if slideManager.canAddSlide {
+                    Button {
+                        slideManager.addSlide()
+                        HapticFeedback.medium()
+                    } label: {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(width: 40, height: 52)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.white.opacity(0.25),
+                                            style: StrokeStyle(lineWidth: 1, dash: [4]))
+                            )
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.5))
+                            )
+                    }
+                    .accessibilityLabel("Ajouter un slide")
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+    }
+
+    private func slideThumb(slide: StorySlide, index: Int) -> some View {
+        let isSelected = slideManager.currentSlideIndex == index
+        return Button {
+            let currentIdx = slideManager.currentSlideIndex
+            if currentIdx < slideManager.slides.count {
+                slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+                slideManager.slides[currentIdx].effects = buildEffects()
+            }
+            withAnimation(.spring(response: 0.25)) {
+                slideManager.selectSlide(at: index)
+            }
+            HapticFeedback.light()
+        } label: {
+            ZStack {
+                if let image = slideManager.slideImages[slide.id] {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else if let bg = slide.effects.background {
+                    Color(hex: bg)
+                } else {
+                    Color(hex: "1A1A2E")
+                }
+            }
+            .frame(width: 40, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.25),
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            )
+            .scaleEffect(isSelected ? 1.08 : 1.0)
+            .animation(.spring(response: 0.2), value: isSelected)
+        }
+        .contextMenu {
+            if slideManager.slides.count > 1 {
+                Button(role: .destructive) {
+                    slideManager.removeSlide(at: index)
+                } label: {
+                    Label("Supprimer", systemImage: "trash")
+                }
+            }
+            Button {
+                slideManager.duplicateSlide(at: index)
+            } label: {
+                Label("Dupliquer", systemImage: "doc.on.doc")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 
     // MARK: - Canvas Area
 
     private var canvasArea: some View {
-        StoryCanvasView(
-            text: $text,
-            textStyle: $textStyle,
-            textColor: $textColor,
-            textSize: $textSize,
-            textBgEnabled: $textBgEnabled,
-            textAlignment: $textAlignment,
-            textPosition: $textPosition,
-            stickerObjects: $stickerObjects,
-            selectedFilter: $selectedFilter,
-            drawingData: $drawingData,
-            isDrawingActive: $isDrawingActive,
-            backgroundColor: $backgroundColor,
-            selectedImage: $selectedImage
-        )
+        ZStack {
+            StoryCanvasView(
+                text: $text,
+                textStyle: $textStyle,
+                textColor: $textColor,
+                textSize: $textSize,
+                textBgEnabled: $textBgEnabled,
+                textAlignment: $textAlignment,
+                textPosition: $textPosition,
+                stickerObjects: $stickerObjects,
+                selectedFilter: $selectedFilter,
+                drawingData: $drawingData,
+                isDrawingActive: $isDrawingActive,
+                backgroundColor: $backgroundColor,
+                selectedImage: $selectedImage
+            )
+
+            // Overlay transparent : ferme le panel actif si on tape le canvas
+            if activePanel != .none {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            activePanel = .none
+                            isDrawingActive = false
+                        }
+                    }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 8)
     }
@@ -286,7 +479,6 @@ public struct StoryComposerView: View {
                 stickerObjects.append(sticker)
                 HapticFeedback.medium()
             }
-            .frame(height: 320)
             .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .drawing:
@@ -462,16 +654,103 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func publishStory() {
-        let effects = buildEffects()
-        let content = text.isEmpty ? nil : text
-        onPublish(effects, content, selectedImage)
-        HapticFeedback.success()
+    private func allSlidesSnapshot() -> ([StorySlide], [String: UIImage]) {
+        var slides = slideManager.slides
+        let idx = slideManager.currentSlideIndex
+        guard idx < slides.count else { return (slides, slideManager.slideImages) }
+        slides[idx].content = text.isEmpty ? nil : text
+        slides[idx].effects = buildEffects()
+        return (slides, slideManager.slideImages)
+    }
+
+    private func handleDismiss() {
+        let hasContent = slideManager.slides.contains {
+            let slideId = $0.id
+            return $0.content != nil
+                || slideManager.slideImages[slideId] != nil
+                || $0.effects.background != nil
+        } || !stickerObjects.isEmpty
+          || drawingData != nil
+        if hasContent {
+            showDiscardAlert = true
+        } else {
+            cancelPublishIfNeeded()
+            clearDraft()
+            onDismiss()
+        }
+    }
+
+    private func cancelPublishIfNeeded() {
+        if let cont = slidePublishContinuation {
+            slidePublishContinuation = nil
+            slidePublishError = nil
+            showPublishError = false
+            cont.resume(returning: .cancel)
+        }
+        publishTask?.cancel()
+        publishTask = nil
+        isPublishingAll = false
+        publishProgressText = nil
+    }
+
+    private func publishAllSlides() {
+        isPublishingAll = true
+        publishTask = Task {
+            let (slides, images) = allSlidesSnapshot()
+
+            var index = 0
+            while index < slides.count {
+                guard !Task.isCancelled else { break }
+                let slide = slides[index]
+                let image = images[slide.id]
+                publishProgressText = "Publier \(index + 1)/\(slides.count)..."
+
+                var retrying = true
+                while retrying {
+                    do {
+                        try await onPublishSlide(slide, image)
+                        retrying = false
+                        index += 1
+                    } catch {
+                        let action = await withCheckedContinuation { (continuation: CheckedContinuation<SlidePublishAction, Never>) in
+                            slidePublishContinuation = continuation
+                            slidePublishError = "Erreur slide \(index + 1)/\(slides.count) : \(error.localizedDescription)"
+                            showPublishError = true
+                        }
+                        slidePublishError = nil
+                        showPublishError = false
+                        switch action {
+                        case .retry:
+                            break
+                        case .skip:
+                            retrying = false
+                            index += 1
+                        case .cancel:
+                            isPublishingAll = false
+                            publishProgressText = nil
+                            return
+                        }
+                    }
+                }
+            }
+
+            guard !Task.isCancelled else {
+                isPublishingAll = false
+                publishProgressText = nil
+                return
+            }
+
+            clearDraft()
+            isPublishingAll = false
+            publishProgressText = nil
+            HapticFeedback.success()
+            onDismiss()
+        }
     }
 
     private func saveDraft() {
         let slides = slideManager.slides
-        let draft = StoryComposerDraft(slides: slides, visibilityPreference: "PUBLIC")
+        let draft = StoryComposerDraft(slides: slides, visibilityPreference: visibility)
         if let data = try? JSONEncoder().encode(draft) {
             UserDefaults.standard.set(data, forKey: StoryComposerDraft.userDefaultsKey)
         }
@@ -499,6 +778,7 @@ public struct StoryComposerView: View {
                 backgroundColor = Color(hex: bg)
             }
         }
+        visibility = draft.visibilityPreference
     }
 
     private func buildEffects() -> StoryEffects {

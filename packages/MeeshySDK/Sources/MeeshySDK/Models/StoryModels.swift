@@ -547,3 +547,23 @@ public struct StoryViewRequest: Encodable {
     public let viewed = true
     public init() {}
 }
+
+// MARK: - StorySlide Preview Conversion
+
+extension StorySlide {
+    /// Convertit un StorySlide (local, non encore publié) en StoryItem pour la preview.
+    public func toPreviewStoryItem() -> StoryItem {
+        StoryItem(
+            id: id,
+            content: content,
+            media: mediaURL.map { url in
+                [FeedMedia(id: id, type: .image, url: url,
+                           thumbnailColor: "4ECDC4", width: nil, height: nil)]
+            } ?? [],
+            storyEffects: effects,
+            createdAt: Date(),
+            expiresAt: Calendar.current.date(byAdding: .hour, value: 21, to: Date()),
+            isViewed: false
+        )
+    }
+}

@@ -13,6 +13,9 @@ struct StoryTrayView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showStatusComposer = false
+    @State private var previewSlides: [StorySlide] = []
+    @State private var previewImages: [String: UIImage] = [:]
+    @State private var showStoryPreview = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,16 +36,41 @@ struct StoryTrayView: View {
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
-            StoryComposerView(
-                onPublish: { effects, content, image in
-                    Task {
-                        await viewModel.publishStory(effects: effects, content: content, image: image)
+            ZStack {
+                StoryComposerView(
+                    onPublishSlide: { slide, image in
+                        try await viewModel.publishStorySingle(
+                            effects: slide.effects,
+                            content: slide.content,
+                            image: image
+                        )
+                    },
+                    onPreview: { slides, images in
+                        previewSlides = slides
+                        previewImages = images
+                        showStoryPreview = true
+                    },
+                    onDismiss: {
+                        viewModel.showStoryComposer = false
                     }
-                },
-                onDismiss: {
-                    viewModel.showStoryComposer = false
-                }
-            )
+                )
+            }
+            .fullScreenCover(isPresented: $showStoryPreview) {
+                let items = previewSlides.map { $0.toPreviewStoryItem() }
+                let group = StoryGroup(
+                    id: "preview",
+                    username: "Aperçu",
+                    avatarColor: "FF2E63",
+                    stories: items
+                )
+                StoryViewerView(
+                    viewModel: viewModel,
+                    groups: [group],
+                    currentGroupIndex: 0,
+                    isPresented: $showStoryPreview,
+                    isPreviewMode: true
+                )
+            }
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)

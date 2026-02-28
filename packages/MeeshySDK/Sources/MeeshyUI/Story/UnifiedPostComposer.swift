@@ -52,10 +52,11 @@ public struct UnifiedPostComposer: View {
         }
         .fullScreenCover(isPresented: $showStoryComposer) {
             StoryComposerView(
-                onPublish: { effects, text, image in
-                    onPublish(.story, text ?? "", nil, effects, image)
+                onPublishSlide: { slide, image in
+                    onPublish(.story, slide.content ?? "", nil, slide.effects, image)
                     showStoryComposer = false
                 },
+                onPreview: { _, _ in },
                 onDismiss: { showStoryComposer = false }
             )
         }

@@ -175,6 +175,73 @@ class StoryViewModel: ObservableObject {
 
         isPublishing = false
     }
+    // MARK: - Publish Single Story (throws)
+
+    @MainActor
+    func publishStorySingle(effects: StoryEffects, content: String?, image: UIImage?) async throws {
+        var uploadResult: TusUploadResult? = nil
+
+        if let image {
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin),
+                  let token = APIClient.shared.authToken else {
+                throw URLError(.userAuthenticationRequired)
+            }
+
+            let compressed = await MediaCompressor.shared.compressImage(image)
+            let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            try compressed.data.write(to: tempURL)
+            defer { try? FileManager.default.removeItem(at: tempURL) }
+
+            let uploader = TusUploadManager(baseURL: baseURL)
+            uploadResult = try await uploader.uploadFile(
+                fileURL: tempURL, mimeType: compressed.mimeType,
+                token: token, uploadContext: "story"
+            )
+        }
+
+        let post = try await postService.createStory(
+            content: content,
+            storyEffects: effects,
+            visibility: "PUBLIC",
+            mediaIds: uploadResult.map { [$0.id] }
+        )
+
+        let media: [FeedMedia]
+        if let uploaded = uploadResult {
+            media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
+                               thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
+        } else {
+            media = (post.media ?? []).map { m in
+                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+            }
+        }
+        let newItem = StoryItem(id: post.id, content: post.content, media: media,
+                                 storyEffects: effects, createdAt: post.createdAt, isViewed: true)
+
+        if let idx = storyGroups.firstIndex(where: { $0.id == post.author.id }) {
+            var updated = storyGroups[idx].stories
+            updated.append(newItem)
+            storyGroups[idx] = StoryGroup(
+                id: storyGroups[idx].id,
+                username: storyGroups[idx].username,
+                avatarColor: storyGroups[idx].avatarColor,
+                avatarURL: storyGroups[idx].avatarURL,
+                stories: updated
+            )
+        } else {
+            storyGroups.insert(StoryGroup(
+                id: post.author.id,
+                username: post.author.name,
+                avatarColor: DynamicColorGenerator.colorForName(post.author.name),
+                avatarURL: post.author.avatar ?? post.author.avatarUrl,
+                stories: [newItem]
+            ), at: 0)
+        }
+    }
+
     // MARK: - Delete Story
 
     func deleteStory(storyId: String) async -> Bool {
