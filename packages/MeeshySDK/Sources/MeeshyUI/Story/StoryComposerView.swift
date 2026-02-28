@@ -162,7 +162,7 @@ public struct StoryComposerView: View {
                 }
                 pendingDraft = nil
             }
-            Button("Ignorer", role: .destructive) {
+            Button("Effacer le brouillon", role: .destructive) {
                 clearDraft()
                 pendingDraft = nil
             }
@@ -749,6 +749,9 @@ public struct StoryComposerView: View {
     }
 
     private func saveDraft() {
+        // Note: mediaData (UIImage) est intentionnellement exclue du draft (évite les gros binaires
+        // dans UserDefaults). Les slides avec images locales non encore uploadées perdront leur image
+        // au restore — seule l'URL distante est préservée si elle existe dans mediaURL.
         let slides = slideManager.slides
         let draft = StoryComposerDraft(slides: slides, visibilityPreference: visibility)
         if let data = try? JSONEncoder().encode(draft) {
