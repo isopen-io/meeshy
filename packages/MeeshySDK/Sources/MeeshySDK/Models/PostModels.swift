@@ -58,6 +58,13 @@ public struct APIPostComment: Decodable {
     public let author: APIAuthor
 }
 
+public struct APIPostTranslationEntry: Decodable {
+    public let text: String
+    public let translationModel: String?
+    public let confidenceScore: Double?
+    public let createdAt: String?
+}
+
 public struct APIPost: Decodable {
     public let id: String
     public let type: String?
@@ -84,6 +91,7 @@ public struct APIPost: Decodable {
     public let audioUrl: String?
     public let audioDuration: Int?
     public let storyEffects: StoryEffects?
+    public let translations: [String: APIPostTranslationEntry]?
 }
 
 // MARK: - Conversion helpers

@@ -458,10 +458,14 @@ extension Array where Element == APIPost {
                 FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
                           width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
             }
+            let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
+                dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
+            }
             let item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: post.storyEffects,
                                  createdAt: post.createdAt, expiresAt: post.updatedAt,
-                                 repostOfId: post.repostOf?.id, isViewed: false)
+                                 repostOfId: post.repostOf?.id, isViewed: false,
+                                 translations: storyTranslations)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {
