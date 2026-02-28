@@ -77,10 +77,9 @@ strip_entitlements() {
     cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.bak"
     /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" 2>/dev/null || true
-    # Remove cached app bundle + signing intermediates + provisioning profiles so Xcode
-    # regenerates everything fresh without the stripped capabilities
+    # Remove only the final .app bundle and build database so Xcode re-links and re-signs
+    # WITHOUT recompiling — keeps .o intermediates for a fast incremental re-link (~30s vs ~3min)
     rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
-    rm -rf "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build" 2>/dev/null || true
     rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
     grep -rl "me.meeshy.app" ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | xargs rm -f 2>/dev/null || true
     ok "Entitlements stripped (backup at ${ENTITLEMENTS_FILE}.bak)"
@@ -99,6 +98,9 @@ do_device_deploy() {
     local device_app_path="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
+    local ncpu
+    ncpu=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
     # ── Attempt 1: Build with full entitlements ──
     log "Attempt 1: Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC} (full entitlements)..."
 
@@ -110,6 +112,10 @@ do_device_deploy() {
         -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
         -derivedDataPath "$DERIVED_DATA" \
         -allowProvisioningUpdates \
+        -skipPackagePluginValidation \
+        -skipMacroValidation \
+        -jobs "$ncpu" \
+        ONLY_ACTIVE_ARCH=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
     set -e
@@ -121,11 +127,11 @@ do_device_deploy() {
         warn "Provisioning error detected. Stripping capabilities and retrying..."
         grep -iE "(error:.*provisioning|error:.*Associated|error:.*Push|error:.*aps-)" "$build_log" | head -3 || true
 
-        # ── Attempt 2: Strip capabilities and rebuild ──
+        # ── Attempt 2: Strip capabilities and re-link/re-sign (no full recompile) ──
         strip_entitlements
         trap restore_entitlements EXIT
 
-        log "Attempt 2: Building without restricted capabilities..."
+        log "Attempt 2: Re-linking without restricted capabilities..."
 
         set +e
         xcodebuild \
@@ -135,6 +141,10 @@ do_device_deploy() {
             -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
             -derivedDataPath "$DERIVED_DATA" \
             -allowProvisioningUpdates \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            -jobs "$ncpu" \
+            ONLY_ACTIVE_ARCH=YES \
             build >"$build_log" 2>&1
         build_rc=$?
         set -e
