@@ -202,7 +202,7 @@ export class PostService {
 
       const targetLanguages = [...new Set(
         contacts
-          .map((c) => (c as any).user?.systemLanguage as string | undefined)
+          .map((c) => c.user?.systemLanguage ?? undefined)
           .filter((l): l is string => !!l && l !== 'en')
       )].slice(0, 10);
 
@@ -228,22 +228,17 @@ export class PostService {
         if (event.messageId !== storyMessageId) return;
 
         try {
-          const post = await this.prisma.post.findUnique({
-            where: { id: postId },
-            select: { translations: true },
-          });
-
-          const translations: Record<string, unknown> = (post?.translations as Record<string, unknown>) ?? {};
-          translations[event.targetLanguage] = {
-            text: event.translatedText,
-            translationModel: event.translatorModel ?? 'nllb',
-            confidenceScore: event.confidenceScore ?? 1,
-            createdAt: new Date().toISOString(),
-          };
-
-          await this.prisma.post.update({
-            where: { id: postId },
-            data: { translations: translations as any },
+          await (this.prisma as any).$runCommandRaw({
+            update: 'Post',
+            updates: [{
+              q: { _id: { $oid: postId } },
+              u: { $set: { [`translations.${event.targetLanguage}`]: {
+                text: event.translatedText,
+                translationModel: event.translatorModel ?? 'nllb',
+                confidenceScore: event.confidenceScore ?? 1,
+                createdAt: new Date().toISOString(),
+              }}},
+            }],
           });
 
           log.info('StoryTranslation: saved', { postId, lang: event.targetLanguage });
@@ -255,13 +250,18 @@ export class PostService {
       zmqClient.on('translationCompleted', handleResult);
 
       // 4. Envoyer la requête ZMQ
-      await zmqClient.translateToMultipleLanguages(
-        content,
-        sourceLanguage,
-        targetLanguages,
-        storyMessageId,
-        `story_context:${postId}`,
-      );
+      try {
+        await zmqClient.translateToMultipleLanguages(
+          content,
+          sourceLanguage,
+          targetLanguages,
+          storyMessageId,
+          `story_context:${postId}`,
+        );
+      } catch (sendError) {
+        zmqClient.off('translationCompleted', handleResult);
+        throw sendError;
+      }
 
       // 5. Cleanup du listener après timeout (évite les memory leaks)
       setTimeout(() => {
