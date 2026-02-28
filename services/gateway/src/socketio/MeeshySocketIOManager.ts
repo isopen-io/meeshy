@@ -2538,6 +2538,14 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Public wrapper pour broadcaster un nouveau message depuis une route REST.
+   * Permet aux routes HTTP de déclencher le broadcast socket sans accéder aux méthodes privées.
+   */
+  public async broadcastMessage(message: Message, conversationId: string): Promise<void> {
+    await this._broadcastNewMessage(message, conversationId);
+  }
+
+  /**
    * PHASE 3.1.1: Extraction du JWT Token depuis le socket
    */
   private extractJWTToken(socket: any): string | undefined {

@@ -41,6 +41,15 @@ public enum SlidePublishAction {
     case retry, skip, cancel
 }
 
+// MARK: - Story Composer Draft
+
+struct StoryComposerDraft: Codable {
+    let slides: [StorySlide]
+    let visibilityPreference: String
+
+    static let userDefaultsKey = "storyComposerDraft"
+}
+
 // MARK: - Story Composer View
 
 public struct StoryComposerView: View {
@@ -86,6 +95,8 @@ public struct StoryComposerView: View {
     @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>? = nil
     @State private var showPublishError = false
     @State private var publishTask: Task<Void, Never>? = nil
+    @State private var showRestoreDraftAlert = false
+    @State private var pendingDraft: StoryComposerDraft? = nil
 
     public var onPublishSlide: (StorySlide, UIImage?) async throws -> Void
     public var onPreview: ([StorySlide], [String: UIImage]) -> Void
@@ -139,6 +150,26 @@ public struct StoryComposerView: View {
             Text(slidePublishError ?? "")
         }
         .statusBarHidden()
+        .onAppear {
+            if let draft = loadDraft() {
+                pendingDraft = draft
+                showRestoreDraftAlert = true
+            }
+        }
+        .alert("Reprendre votre story ?", isPresented: $showRestoreDraftAlert) {
+            Button("Reprendre") {
+                if let draft = pendingDraft {
+                    applyDraft(draft)
+                }
+                pendingDraft = nil
+            }
+            Button("Ignorer", role: .destructive) {
+                clearDraft()
+                pendingDraft = nil
+            }
+        } message: {
+            Text("Vous avez un brouillon non publié.")
+        }
     }
 
     // MARK: - Top Bar
@@ -717,9 +748,38 @@ public struct StoryComposerView: View {
         }
     }
 
-    // Stubs — seront implémentés dans Task 5
-    private func saveDraft() { }
-    private func clearDraft() { }
+    private func saveDraft() {
+        let (slides, _) = allSlidesSnapshot()
+        let draft = StoryComposerDraft(slides: slides, visibilityPreference: visibility)
+        if let data = try? JSONEncoder().encode(draft) {
+            UserDefaults.standard.set(data, forKey: StoryComposerDraft.userDefaultsKey)
+        }
+        HapticFeedback.light()
+    }
+
+    private func loadDraft() -> StoryComposerDraft? {
+        guard let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
+              let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else {
+            return nil
+        }
+        return draft
+    }
+
+    private func clearDraft() {
+        UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
+    private func applyDraft(_ draft: StoryComposerDraft) {
+        slideManager.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
+        slideManager.currentSlideIndex = 0
+        visibility = draft.visibilityPreference
+        if let first = slideManager.slides.first {
+            text = first.content ?? ""
+            if let bg = first.effects.background {
+                backgroundColor = Color(hex: bg)
+            }
+        }
+    }
 
     private func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : colorToHex(backgroundColor)

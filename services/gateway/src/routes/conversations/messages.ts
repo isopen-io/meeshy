@@ -1544,6 +1544,17 @@ export function registerMessagesRoutes(
         }
       }
 
+      // Broadcaster le nouveau message via socket (message:new) pour tous les membres de la conversation.
+      // Utiliser setImmediate pour ne pas bloquer la réponse REST.
+      // Cela permet à la liste de conversations iOS de se mettre à jour en temps réel avec les bons effets (isBlurred, etc.)
+      if (socketIOHandler && typeof socketIOHandler.broadcastMessage === 'function') {
+        setImmediate(() => {
+          socketIOHandler.broadcastMessage(message as any, conversationId).catch((broadcastError: unknown) => {
+            logger.error('⚠️ [REST] Erreur broadcast message:new', broadcastError);
+          });
+        });
+      }
+
       // Déclencher les traductions via le MessageTranslationService (gère les langues des participants)
       try {
         await translationService.handleNewMessage({
