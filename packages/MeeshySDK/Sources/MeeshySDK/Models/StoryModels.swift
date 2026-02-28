@@ -241,6 +241,7 @@ public struct StoryEffects: Codable, Sendable {
     public var backgroundAudioId: String?
     public var backgroundAudioVolume: Float?
     public var backgroundAudioStart: TimeInterval?
+    public var backgroundAudioEnd: TimeInterval?
 
     // Audio vocal (transcrit + traduit par Whisper/NLLB)
     public var voiceAttachmentId: String?
@@ -264,7 +265,7 @@ public struct StoryEffects: Codable, Sendable {
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
                 drawingData: Data? = nil,
                 backgroundAudioId: String? = nil, backgroundAudioVolume: Float? = nil,
-                backgroundAudioStart: TimeInterval? = nil,
+                backgroundAudioStart: TimeInterval? = nil, backgroundAudioEnd: TimeInterval? = nil,
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
                 opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
@@ -275,6 +276,7 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioId = backgroundAudioId
         self.backgroundAudioVolume = backgroundAudioVolume
         self.backgroundAudioStart = backgroundAudioStart
+        self.backgroundAudioEnd = backgroundAudioEnd
         self.voiceAttachmentId = voiceAttachmentId
         self.voiceTranscriptions = voiceTranscriptions
         self.opening = opening
@@ -319,6 +321,7 @@ public struct StoryEffects: Codable, Sendable {
         if let aid = backgroundAudioId { dict["backgroundAudioId"] = aid }
         if let vol = backgroundAudioVolume { dict["backgroundAudioVolume"] = vol }
         if let start = backgroundAudioStart { dict["backgroundAudioStart"] = start }
+        if let end = backgroundAudioEnd { dict["backgroundAudioEnd"] = end }
         if let vid = voiceAttachmentId { dict["voiceAttachmentId"] = vid }
         if let op = opening { dict["opening"] = op.rawValue }
         if let cl = closing { dict["closing"] = cl.rawValue }

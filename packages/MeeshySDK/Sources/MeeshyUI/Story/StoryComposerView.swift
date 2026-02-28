@@ -82,6 +82,7 @@ public struct StoryComposerView: View {
     @State private var selectedAudioTitle: String? = nil
     @State private var audioVolume: Float = 0.7
     @State private var audioTrimStart: TimeInterval = 0
+    @State private var audioTrimEnd: TimeInterval = 0
 
     @State private var openingEffect: StoryTransitionEffect? = nil
     @State private var closingEffect: StoryTransitionEffect? = nil
@@ -139,11 +140,13 @@ public struct StoryComposerView: View {
         }
         .fullScreenCover(isPresented: $showAudioEditor) {
             if let url = pendingAudioEditorURL {
-                StoryAudioEditorView(
+                MeeshyAudioEditorView(
                     url: url,
-                    onConfirm: { confirmedURL, _ in
+                    onConfirm: { confirmedURL, _, trimS, trimE in
                         selectedAudioId = confirmedURL.lastPathComponent
                         selectedAudioTitle = "Enregistrement"
+                        audioTrimStart = trimS
+                        audioTrimEnd = trimE
                         showAudioEditor = false
                         pendingAudioEditorURL = nil
                     },
@@ -517,7 +520,7 @@ public struct StoryComposerView: View {
                 toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
                 toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
                 toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
-                toolPill(icon: "music.note", label: "Audio", panel: .audio)
+                toolPill(icon: "music.note", label: "Audio", panel: .audio, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "paintpalette", label: "Fond", panel: .background)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
             }
@@ -526,7 +529,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func toolPill(icon: String, label: String, panel: StoryComposerPanel?, action: (() -> Void)? = nil) -> some View {
+    private func toolPill(icon: String, label: String, panel: StoryComposerPanel?, action: (() -> Void)? = nil, hasBadge: Bool = false) -> some View {
         let isActive = panel != nil && activePanel == panel
         return Button {
             if let action {
@@ -564,6 +567,14 @@ public struct StoryComposerView: View {
                           : AnyShapeStyle(Color.white.opacity(0.1))
                     )
             )
+            .overlay(alignment: .topTrailing) {
+                if hasBadge && !isActive {
+                    Circle()
+                        .fill(Color(hex: "FF2E63"))
+                        .frame(width: 7, height: 7)
+                        .offset(x: 2, y: -2)
+                }
+            }
         }
         .accessibilityLabel(label)
     }
@@ -923,6 +934,7 @@ public struct StoryComposerView: View {
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
+            backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
             opening: openingEffect,
             closing: closingEffect
         )
