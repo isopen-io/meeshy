@@ -77,9 +77,10 @@ strip_entitlements() {
     cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.bak"
     /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" 2>/dev/null || true
-    # Remove only the final .app bundle and build database so Xcode re-links and re-signs
-    # WITHOUT recompiling — keeps .o intermediates for a fast incremental re-link (~30s vs ~3min)
+    # Remove final .app, the .xcent derived from entitlements (so Xcode regenerates it from
+    # the stripped source), and build.db — keeps all .o intermediates for a fast re-link (~30s vs ~3min)
     rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
     rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
     grep -rl "me.meeshy.app" ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | xargs rm -f 2>/dev/null || true
     ok "Entitlements stripped (backup at ${ENTITLEMENTS_FILE}.bak)"
