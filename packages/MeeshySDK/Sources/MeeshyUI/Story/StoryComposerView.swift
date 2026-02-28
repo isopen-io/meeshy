@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import PencilKit
 import MeeshySDK
 
 // MARK: - Story Composer Active Panel
@@ -70,7 +71,13 @@ public struct StoryComposerView: View {
     @State private var backgroundColor: Color = Color(hex: "0F0C29")
     @State private var selectedImage: UIImage? = nil
 
-    // Audio — sera remplacé par StoryAudioPanel (Phase 2c)
+    // Drawing state (partagé avec DrawingToolbarPanel et StoryCanvasView)
+    @State private var drawingCanvas = PKCanvasView()
+    @State private var drawingColor: Color = .white
+    @State private var drawingWidth: CGFloat = 5
+    @State private var drawingTool: DrawingTool = .pen
+
+    // Audio
     @State private var selectedAudioId: String? = nil
     @State private var selectedAudioTitle: String? = nil
     @State private var audioVolume: Float = 0.7
@@ -85,12 +92,9 @@ public struct StoryComposerView: View {
     @State private var showRestoreDraftAlert = false
     @State private var pendingDraft: StoryComposerDraft? = nil
 
-    // Preview + contextual menu
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
-    // Dismiss alert
     @State private var showDiscardAlert = false
-    // Multi-slide publish (seront utilisées dans Task 2)
     @State private var isPublishingAll = false
     @State private var publishProgressText: String? = nil
     @State private var slidePublishError: String? = nil
@@ -112,19 +116,26 @@ public struct StoryComposerView: View {
 
     public var body: some View {
         ZStack {
+            // Canvas plein écran
             Color.black.ignoresSafeArea()
+            canvasArea
 
+            // Guides zones story (subtil)
+            storyZoneGuides
+
+            // Overlay haut
             VStack(spacing: 0) {
                 topBar
-                canvasArea
-                if !isDrawingActive {
-                    toolBar
-                    activeToolPanel
-                        .frame(maxHeight: 200)
-                        .clipped()
-                }
+                Spacer()
+            }
+
+            // Overlay bas (toolbar + panel actif)
+            VStack(spacing: 0) {
+                Spacer()
+                bottomOverlay
             }
         }
+        .statusBarHidden()
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem,
                       matching: .any(of: [.images, .videos]))
         .onChange(of: photoPickerItem) { newItem in
@@ -169,10 +180,69 @@ public struct StoryComposerView: View {
         } message: {
             Text("Vous avez un brouillon non publié.")
         }
-        .statusBarHidden()
     }
 
-    // MARK: - Top Bar
+    // MARK: - Canvas Area (plein écran)
+
+    private var canvasArea: some View {
+        ZStack {
+            StoryCanvasView(
+                text: $text,
+                textStyle: $textStyle,
+                textColor: $textColor,
+                textSize: $textSize,
+                textBgEnabled: $textBgEnabled,
+                textAlignment: $textAlignment,
+                textPosition: $textPosition,
+                stickerObjects: $stickerObjects,
+                selectedFilter: $selectedFilter,
+                drawingData: $drawingData,
+                isDrawingActive: $isDrawingActive,
+                backgroundColor: $backgroundColor,
+                selectedImage: $selectedImage,
+                drawingCanvas: $drawingCanvas,
+                drawingColor: $drawingColor,
+                drawingWidth: $drawingWidth,
+                drawingTool: $drawingTool
+            )
+
+            // Ferme le panel actif en tapant le canvas (sauf en mode dessin)
+            if activePanel != .none && !isDrawingActive {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            activePanel = .none
+                        }
+                    }
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Story Zone Guides
+
+    private var storyZoneGuides: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Zone top (zone de danger UI viewer)
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: geo.size.height * 0.12)
+                    .frame(maxWidth: .infinity, alignment: .top)
+
+                // Zone bottom (zone de danger UI viewer)
+                Rectangle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(height: geo.size.height * 0.15)
+                    .frame(maxWidth: .infinity, alignment: .bottom)
+            }
+        }
+        .allowsHitTesting(false)
+        .opacity(activePanel == .none ? 0 : 0) // masqué par défaut, visible en mode édition
+    }
+
+    // MARK: - Top Bar (moderne, overlay)
 
     private var topBar: some View {
         HStack(spacing: 0) {
@@ -181,107 +251,122 @@ public struct StoryComposerView: View {
                 handleDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color.black.opacity(0.4)))
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(.black.opacity(0.55))
+                            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                    )
             }
-            .padding(.leading, 12)
+            .padding(.leading, 16)
 
             // Strip de slides scrollable
             slideStrip
                 .frame(maxWidth: .infinity)
 
-            // Séparateur visuel
-            Rectangle()
-                .fill(Color.white.opacity(0.2))
-                .frame(width: 1, height: 24)
-                .padding(.horizontal, 6)
-
-            // [▶] Preview
-            Button {
-                let (slides, images) = allSlidesSnapshot()
-                onPreview(slides, images)
-            } label: {
-                Image(systemName: "play.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(.white.opacity(0.9))
-            }
-
-            // [Publish] ou [Publier X/N...]
-            Button {
-                publishAllSlides()
-            } label: {
-                Group {
-                    if let progress = publishProgressText {
-                        HStack(spacing: 4) {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .scaleEffect(0.7)
-                                .tint(.white)
-                            Text(progress)
-                                .font(.system(size: 12, weight: .bold))
+            // Actions groupées
+            HStack(spacing: 8) {
+                // [⋯] Menu contextuel
+                Menu {
+                    Button { saveDraft() } label: {
+                        Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
+                    }
+                    Menu {
+                        Button { visibility = "PUBLIC" } label: {
+                            Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
                         }
-                    } else {
-                        HStack(spacing: 4) {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 12))
-                            Text("Publish")
-                                .font(.system(size: 13, weight: .bold))
+                        Button { visibility = "FRIENDS" } label: {
+                            Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                        }
+                        Button { visibility = "PRIVATE" } label: {
+                            Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                        }
+                    } label: {
+                        Label("Visibilité", systemImage: "eye")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        slideManager.slides = [StorySlide()]
+                        slideManager.currentSlideIndex = 0
+                    } label: {
+                        Label("Supprimer tous les slides", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(.black.opacity(0.55))
+                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                        )
+                }
+
+                // [▶] Preview
+                Button {
+                    let (slides, images) = allSlidesSnapshot()
+                    onPreview(slides, images)
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(.black.opacity(0.55))
+                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                        )
+                }
+
+                // [Publier]
+                Button {
+                    publishAllSlides()
+                } label: {
+                    Group {
+                        if let progress = publishProgressText {
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.65)
+                                    .tint(.white)
+                                Text(progress)
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                        } else {
+                            HStack(spacing: 4) {
+                                Text("Publier")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .lineLimit(1)
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 13))
+                            }
+                            .fixedSize()
                         }
                     }
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
-                            startPoint: .leading, endPoint: .trailing
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
+                                startPoint: .leading, endPoint: .trailing
+                            )
                         )
                     )
-                )
+                }
+                .disabled(isPublishingAll)
             }
-            .disabled(isPublishingAll)
-            .padding(.leading, 6)
-
-            // [···] Menu contextuel
-            Menu {
-                Button { saveDraft() } label: {
-                    Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
-                }
-                Menu {
-                    Button { visibility = "PUBLIC" } label: {
-                        Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
-                    }
-                    Button { visibility = "FRIENDS" } label: {
-                        Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
-                    }
-                    Button { visibility = "PRIVATE" } label: {
-                        Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
-                    }
-                } label: {
-                    Label("Visibilité", systemImage: "eye")
-                }
-                Divider()
-                Button(role: .destructive) {
-                    slideManager.slides = [StorySlide()]
-                    slideManager.currentSlideIndex = 0
-                } label: {
-                    Label("Supprimer tous les slides", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(.white.opacity(0.8))
-                    .frame(width: 32, height: 32)
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, 12)
+            .padding(.trailing, 16)
         }
-        .frame(height: 52)
-        .background(Color.black.opacity(0.3))
+        .frame(height: 60)
+        .background(
+            Color.black.opacity(0.45)
+                .background(.ultraThinMaterial.opacity(0.6))
+        )
         .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
             Button("Sauvegarder") { saveDraft(); onDismiss() }
             Button("Quitter", role: .destructive) { cancelPublishIfNeeded(); clearDraft(); onDismiss() }
@@ -302,17 +387,17 @@ public struct StoryComposerView: View {
                         slideManager.addSlide()
                         HapticFeedback.medium()
                     } label: {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.08))
-                            .frame(width: 40, height: 52)
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 34, height: 46)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.white.opacity(0.25),
-                                            style: StrokeStyle(lineWidth: 1, dash: [4]))
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.white.opacity(0.2),
+                                            style: StrokeStyle(lineWidth: 1, dash: [3]))
                             )
                             .overlay(
                                 Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.5))
                             )
                     }
@@ -347,13 +432,13 @@ public struct StoryComposerView: View {
                     Color(hex: "1A1A2E")
                 }
             }
-            .frame(width: 40, height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: 34, height: 46)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 5)
                     .stroke(
-                        isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.25),
-                        lineWidth: isSelected ? 2 : 1
+                        isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
+                        lineWidth: isSelected ? 2 : 0.5
                     )
             )
             .scaleEffect(isSelected ? 1.08 : 1.0)
@@ -375,60 +460,54 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Canvas Area
+    // MARK: - Bottom Overlay (toolbar + panel)
 
-    private var canvasArea: some View {
-        ZStack {
-            StoryCanvasView(
-                text: $text,
-                textStyle: $textStyle,
-                textColor: $textColor,
-                textSize: $textSize,
-                textBgEnabled: $textBgEnabled,
-                textAlignment: $textAlignment,
-                textPosition: $textPosition,
-                stickerObjects: $stickerObjects,
-                selectedFilter: $selectedFilter,
-                drawingData: $drawingData,
-                isDrawingActive: $isDrawingActive,
-                backgroundColor: $backgroundColor,
-                selectedImage: $selectedImage
-            )
+    private var bottomOverlay: some View {
+        VStack(spacing: 0) {
+            // Séparateur subtil
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 0.5)
 
-            // Overlay transparent : ferme le panel actif si on tape le canvas
+            // Toolbar scrollable
+            toolBarScrollable
+
+            // Panel actif (animé)
             if activePanel != .none {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            activePanel = .none
-                            isDrawingActive = false
-                        }
-                    }
+                activeToolPanel
+                    .frame(maxHeight: 220)
+                    .clipped()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 8)
+        .background(
+            Color.black.opacity(0.55)
+                .background(.ultraThinMaterial.opacity(0.7))
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: activePanel)
     }
 
-    // MARK: - Tool Bar
+    // MARK: - Toolbar Scrollable
 
-    private var toolBar: some View {
-        HStack(spacing: 0) {
-            toolButton(icon: "photo.on.rectangle", label: "Photo", panel: nil, action: { showPhotoPicker = true })
-            toolButton(icon: "textformat", label: "Text", panel: .text)
-            toolButton(icon: "face.smiling", label: "Stickers", panel: .stickers)
-            toolButton(icon: "pencil.tip", label: "Draw", panel: .drawing)
-            toolButton(icon: "camera.filters", label: "Filter", panel: .filter)
-            toolButton(icon: "music.note", label: "Audio", panel: .audio)
-            toolButton(icon: "paintpalette", label: "BG", panel: .background)
-            toolButton(icon: "sparkles", label: "Effet", panel: .transition)
+    private var toolBarScrollable: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                toolPill(icon: "photo.on.rectangle", label: "Photo", panel: nil, action: { showPhotoPicker = true })
+                toolPill(icon: "textformat", label: "Texte", panel: .text)
+                toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
+                toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
+                toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
+                toolPill(icon: "music.note", label: "Audio", panel: .audio)
+                toolPill(icon: "paintpalette", label: "Fond", panel: .background)
+                toolPill(icon: "sparkles", label: "Effets", panel: .transition)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .padding(.vertical, 8)
-        .background(Color.black.opacity(0.3))
     }
 
-    private func toolButton(icon: String, label: String, panel: StoryComposerPanel?, action: (() -> Void)? = nil) -> some View {
+    private func toolPill(icon: String, label: String, panel: StoryComposerPanel?, action: (() -> Void)? = nil) -> some View {
         let isActive = panel != nil && activePanel == panel
         return Button {
             if let action {
@@ -447,15 +526,25 @@ public struct StoryComposerView: View {
             }
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 3) {
+            HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(isActive ? Color(hex: "FF2E63") : .white.opacity(0.6))
+                    .font(.system(size: 14, weight: .medium))
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isActive ? Color(hex: "FF2E63") : .white.opacity(0.4))
+                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
             }
-            .frame(maxWidth: .infinity)
+            .foregroundColor(isActive ? .white : .white.opacity(0.65))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? AnyShapeStyle(LinearGradient(
+                              colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
+                              startPoint: .leading, endPoint: .trailing
+                          ))
+                          : AnyShapeStyle(Color.white.opacity(0.1))
+                    )
+            )
         }
         .accessibilityLabel(label)
     }
@@ -471,7 +560,6 @@ public struct StoryComposerView: View {
                 textSize: $textSize, textBgEnabled: $textBgEnabled, textAlignment: $textAlignment
             )
             .padding(.bottom, 8)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .stickers:
             StickerPickerView { emoji in
@@ -479,15 +567,28 @@ public struct StoryComposerView: View {
                 stickerObjects.append(sticker)
                 HapticFeedback.medium()
             }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .drawing:
-            EmptyView()
+            DrawingToolbarPanel(
+                toolColor: $drawingColor,
+                toolWidth: $drawingWidth,
+                toolType: $drawingTool,
+                onUndo: {
+                    drawingCanvas.undoManager?.undo()
+                    drawingData = drawingCanvas.drawing.dataRepresentation()
+                    HapticFeedback.light()
+                },
+                onClear: {
+                    drawingCanvas.drawing = PKDrawing()
+                    drawingData = nil
+                    HapticFeedback.medium()
+                }
+            )
+            .padding(.bottom, 8)
 
         case .filter:
             StoryFilterPicker(selectedFilter: $selectedFilter)
                 .padding(.vertical, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .audio:
             StoryAudioPanel(
@@ -495,15 +596,12 @@ public struct StoryComposerView: View {
                 selectedAudioTitle: $selectedAudioTitle,
                 audioVolume: $audioVolume
             )
-            .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .background:
             backgroundPicker
-                .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .transition:
             transitionPicker
-                .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .none:
             EmptyView()
@@ -514,9 +612,9 @@ public struct StoryComposerView: View {
 
     private var backgroundPicker: some View {
         VStack(spacing: 12) {
-            Text("Background")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
+            Text("Arrière-plan")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -573,7 +671,6 @@ public struct StoryComposerView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color.black.opacity(0.3))
     }
 
     // MARK: - Transition Picker
@@ -703,7 +800,7 @@ public struct StoryComposerView: View {
                 guard !Task.isCancelled else { break }
                 let slide = slides[index]
                 let image = images[slide.id]
-                publishProgressText = "Publier \(index + 1)/\(slides.count)..."
+                publishProgressText = "\(index + 1)/\(slides.count)..."
 
                 var retrying = true
                 while retrying {

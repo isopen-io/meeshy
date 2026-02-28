@@ -1,4 +1,5 @@
 import SwiftUI
+import PencilKit
 import MeeshySDK
 
 /// Reconstruit pixel-perfect le canvas d'une story (lecture seule).
@@ -100,7 +101,11 @@ public struct StoryCanvasReaderView: View {
         if let drawingData = story.storyEffects?.drawingData {
             DrawingOverlayView(
                 drawingData: .constant(drawingData),
-                isActive: .constant(false)
+                isActive: .constant(false),
+                canvasView: .constant(PKCanvasView()),
+                toolColor: .constant(.white),
+                toolWidth: .constant(5),
+                toolType: .constant(.pen)
             )
             .allowsHitTesting(false)
         }

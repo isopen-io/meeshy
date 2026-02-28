@@ -2,49 +2,62 @@ import SwiftUI
 import PencilKit
 import MeeshySDK
 
-// MARK: - Drawing Overlay View
+// MARK: - Drawing Overlay View (canvas uniquement, sans toolbar)
 
 public struct DrawingOverlayView: View {
     @Binding public var drawingData: Data?
     @Binding public var isActive: Bool
+    @Binding public var canvasView: PKCanvasView
+    @Binding public var toolColor: Color
+    @Binding public var toolWidth: CGFloat
+    @Binding public var toolType: DrawingTool
 
-    @State private var canvasView = PKCanvasView()
-    @State private var selectedColor: Color = .white
-    @State private var selectedWidth: CGFloat = 5
-    @State private var toolType: DrawingTool = .pen
-
-    public init(drawingData: Binding<Data?>, isActive: Binding<Bool>) {
+    public init(drawingData: Binding<Data?>, isActive: Binding<Bool>,
+                canvasView: Binding<PKCanvasView>, toolColor: Binding<Color>,
+                toolWidth: Binding<CGFloat>, toolType: Binding<DrawingTool>) {
         self._drawingData = drawingData
         self._isActive = isActive
+        self._canvasView = canvasView
+        self._toolColor = toolColor
+        self._toolWidth = toolWidth
+        self._toolType = toolType
     }
 
     public var body: some View {
-        ZStack {
-            PencilKitCanvas(
-                canvasView: $canvasView,
-                drawingData: $drawingData,
-                isActive: isActive,
-                inkColor: UIColor(selectedColor),
-                inkWidth: selectedWidth,
-                toolType: toolType
-            )
-            .allowsHitTesting(isActive)
+        PencilKitCanvas(
+            canvasView: $canvasView,
+            drawingData: $drawingData,
+            isActive: isActive,
+            inkColor: UIColor(toolColor),
+            inkWidth: toolWidth,
+            toolType: toolType
+        )
+        .allowsHitTesting(isActive)
+    }
+}
 
-            if isActive {
-                VStack {
-                    Spacer()
-                    drawingToolbar
-                }
-            }
-        }
+// MARK: - Drawing Toolbar Panel (affiché dans le panneau inférieur du composer)
+
+public struct DrawingToolbarPanel: View {
+    @Binding public var toolColor: Color
+    @Binding public var toolWidth: CGFloat
+    @Binding public var toolType: DrawingTool
+    public var onUndo: () -> Void
+    public var onClear: () -> Void
+
+    public init(toolColor: Binding<Color>, toolWidth: Binding<CGFloat>,
+                toolType: Binding<DrawingTool>, onUndo: @escaping () -> Void,
+                onClear: @escaping () -> Void) {
+        self._toolColor = toolColor
+        self._toolWidth = toolWidth
+        self._toolType = toolType
+        self.onUndo = onUndo
+        self.onClear = onClear
     }
 
-    // MARK: - Drawing Toolbar
-
-    private var drawingToolbar: some View {
+    public var body: some View {
         VStack(spacing: 12) {
             widthSlider
-
             HStack(spacing: 12) {
                 toolButtons
                 Spacer()
@@ -55,26 +68,21 @@ public struct DrawingOverlayView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20, corners: [.topLeft, .topRight])
     }
 
     private var widthSlider: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(selectedColor)
-                .frame(width: max(4, selectedWidth * 0.6), height: max(4, selectedWidth * 0.6))
+                .fill(toolColor)
+                .frame(width: max(4, toolWidth * 0.6), height: max(4, toolWidth * 0.6))
 
-            Slider(value: $selectedWidth, in: 1...30) {
-                Text("Brush size")
+            Slider(value: $toolWidth, in: 1...30) {
+                Text("Taille pinceau")
             }
-            .tint(selectedColor)
-            .onChange(of: selectedWidth) { _ in
-                updateTool()
-            }
+            .tint(toolColor)
 
             Circle()
-                .fill(selectedColor)
+                .fill(toolColor)
                 .frame(width: 20, height: 20)
         }
     }
@@ -84,7 +92,6 @@ public struct DrawingOverlayView: View {
             ForEach(DrawingTool.allCases, id: \.self) { tool in
                 Button {
                     withAnimation(.spring(response: 0.2)) { toolType = tool }
-                    updateTool()
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: tool.icon)
@@ -92,8 +99,7 @@ public struct DrawingOverlayView: View {
                         .foregroundColor(toolType == tool ? .white : .white.opacity(0.5))
                         .frame(width: 36, height: 36)
                         .background(
-                            Circle()
-                                .fill(toolType == tool ? Color(hex: "FF2E63") : Color.white.opacity(0.1))
+                            Circle().fill(toolType == tool ? Color(hex: "FF2E63") : Color.white.opacity(0.1))
                         )
                 }
                 .accessibilityLabel(tool.label)
@@ -105,8 +111,7 @@ public struct DrawingOverlayView: View {
         HStack(spacing: 6) {
             ForEach(DrawingColorOption.palette, id: \.self) { colorHex in
                 Button {
-                    selectedColor = Color(hex: colorHex)
-                    updateTool()
+                    toolColor = Color(hex: colorHex)
                     HapticFeedback.light()
                 } label: {
                     Circle()
@@ -114,7 +119,7 @@ public struct DrawingOverlayView: View {
                         .frame(width: 24, height: 24)
                         .overlay(
                             Circle()
-                                .stroke(Color.white, lineWidth: Color(hex: colorHex) == selectedColor ? 2 : 0)
+                                .stroke(Color.white, lineWidth: Color(hex: colorHex) == toolColor ? 2 : 0)
                         )
                 }
             }
@@ -124,8 +129,7 @@ public struct DrawingOverlayView: View {
     private var actionButtons: some View {
         HStack(spacing: 8) {
             Button {
-                canvasView.undoManager?.undo()
-                syncDrawingData()
+                onUndo()
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "arrow.uturn.backward")
@@ -135,8 +139,7 @@ public struct DrawingOverlayView: View {
             }
 
             Button {
-                canvasView.drawing = PKDrawing()
-                drawingData = nil
+                onClear()
                 HapticFeedback.medium()
             } label: {
                 Image(systemName: "trash")
@@ -145,22 +148,6 @@ public struct DrawingOverlayView: View {
                     .frame(width: 36, height: 36)
             }
         }
-    }
-
-    private func updateTool() {
-        let uiColor = UIColor(selectedColor)
-        switch toolType {
-        case .pen:
-            canvasView.tool = PKInkingTool(.pen, color: uiColor, width: selectedWidth)
-        case .marker:
-            canvasView.tool = PKInkingTool(.marker, color: uiColor, width: selectedWidth * 2)
-        case .eraser:
-            canvasView.tool = PKEraserTool(.bitmap)
-        }
-    }
-
-    private func syncDrawingData() {
-        drawingData = canvasView.drawing.dataRepresentation()
     }
 }
 
@@ -181,7 +168,7 @@ public enum DrawingTool: String, CaseIterable {
         switch self {
         case .pen: return "Pen"
         case .marker: return "Marker"
-        case .eraser: return "Eraser"
+        case .eraser: return "Gomme"
         }
     }
 }
