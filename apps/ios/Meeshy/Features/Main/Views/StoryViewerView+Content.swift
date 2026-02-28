@@ -424,7 +424,7 @@ extension StoryViewerView {
         DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
             outgoingStory = nil
             isTransitioning = false
-            isRevealActive = false
+            // isRevealActive is reset at the start of each new transition (switch incomingEffect above)
         }
     }
 
