@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 // MARK: - Scroll Offset Preference Key
-struct ScrollOffsetPreferenceKey: PreferenceKey {
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
@@ -75,7 +75,6 @@ struct ConversationListView: View {
     @State var showGlobalSearch = false
 
     // Scroll tracking
-    @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
@@ -451,8 +450,16 @@ struct ConversationListView: View {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Top spacer
+                    // Top spacer (also serves as scroll offset detector via background)
                     Color.clear.frame(height: 70)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ScrollOffsetPreferenceKey.self,
+                                    value: geo.frame(in: .named("convList")).minY
+                                )
+                            }
+                        )
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel) { groupIndex in
@@ -515,26 +522,22 @@ struct ConversationListView: View {
                         }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { value in
-                        let translation = value.translation.height
-
-                        if translation < -10 && !hideSearchBar {
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
-                                hideSearchBar = true
-                                isScrollingDown = true
-                                isSearching = false
-                            }
-                        } else if translation > 10 && hideSearchBar {
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
-                                hideSearchBar = false
-                                isScrollingDown = false
-                            }
-                        }
+            .coordinateSpace(name: "convList")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minY in
+                // minY < 0 → scrolled down (top spacer above viewport), minY ≥ 0 → near top
+                let scrolledDown = minY < -scrollThreshold
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                    if scrolledDown && !hideSearchBar {
+                        hideSearchBar = true
+                        isScrollingDown = true
+                        isSearching = false
+                    } else if !scrolledDown && hideSearchBar {
+                        hideSearchBar = false
+                        isScrollingDown = false
                     }
-            )
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 HapticFeedback.medium()
                 await conversationViewModel.forceRefresh()

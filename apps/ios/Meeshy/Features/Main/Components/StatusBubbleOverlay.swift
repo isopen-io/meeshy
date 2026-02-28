@@ -106,8 +106,6 @@ struct StatusBubbleOverlay: View {
                     + Text(content)
                         .font(.system(size: 13))
                         .foregroundColor(theme.textPrimary))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineLimit(nil)
                 }
             }
         }

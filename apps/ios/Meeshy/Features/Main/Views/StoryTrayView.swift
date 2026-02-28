@@ -200,18 +200,11 @@ private struct MyStoryButton: View {
                     avatarURL: currentUser?.avatar,
                     storyState: storyState,
                     presenceState: .offline,
-                    onTap: hasMyStory ? {
-                        if let idx = myGroupIndex { onViewStory(idx) }
-                        HapticFeedback.medium()
-                    } : {
+                    onTap: {
                         viewModel.showStoryComposer = true
                         HapticFeedback.medium()
                     },
                     contextMenuItems: hasMyStory ? [
-                        AvatarContextMenuItem(label: "Créer une story", icon: "plus.circle.fill") {
-                            viewModel.showStoryComposer = true
-                            HapticFeedback.medium()
-                        },
                         AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
                             if let idx = myGroupIndex { onViewStory(idx) }
                             HapticFeedback.medium()

@@ -134,6 +134,7 @@ export class PostService {
     });
 
     // Link pre-uploaded media if any
+    // mediaIds contains PostMedia IDs (created directly by TUS handler with postId=null)
     if (data.mediaIds?.length) {
       await this.prisma.postMedia.updateMany({
         where: { id: { in: data.mediaIds } },

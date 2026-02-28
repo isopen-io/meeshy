@@ -276,6 +276,7 @@ do_build() {
         -destination "id=$DEVICE_ID" \
         -derivedDataPath "$DERIVED_DATA" \
         -quiet \
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build 2>&1 | while IFS= read -r line; do
             if echo "$line" | grep -qE "(error:|warning:|BUILD FAILED)"; then
                 err "$line"

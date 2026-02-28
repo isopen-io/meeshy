@@ -2683,9 +2683,10 @@ model StoryBackgroundAudio {
 }
 
 /// Media attaché à un post (images, vidéos, audio, documents)
+/// postId est nullable : null = media uploadé mais pas encore lié à un post (pending)
 model PostMedia {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  postId       String @db.ObjectId
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  postId       String? @db.ObjectId
 
   // Fichier
   fileName     String
@@ -2747,7 +2748,7 @@ model PostMedia {
 
   createdAt    DateTime @default(now())
 
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
 }
