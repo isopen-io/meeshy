@@ -11,6 +11,7 @@ struct ForwardPickerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var conversations: [Conversation] = []
     @State private var isLoading = true
@@ -79,6 +80,7 @@ struct ForwardPickerSheet: View {
         .task {
             await loadConversations()
         }
+        .withStatusBubble()
     }
 
     // MARK: - Message Preview (thin, like reply banner)
@@ -142,7 +144,9 @@ struct ForwardPickerSheet: View {
                 name: conv.name,
                 mode: .conversationList,
                 accentColor: conv.accentColor,
-                avatarURL: conv.avatar
+                avatarURL: conv.avatar,
+                moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
             VStack(alignment: .leading, spacing: 2) {

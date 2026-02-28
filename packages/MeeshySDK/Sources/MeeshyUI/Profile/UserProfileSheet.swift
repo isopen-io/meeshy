@@ -21,6 +21,8 @@ public struct UserProfileSheet: View {
     public var onDismiss: (() -> Void)?
     public var onLoadStats: (() async -> Void)?
     public var currentUserId: String = ""
+    public var moodEmoji: String? = nil
+    public var onMoodTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -52,7 +54,9 @@ public struct UserProfileSheet: View {
         onConnectionRequest: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onLoadStats: (() async -> Void)? = nil,
-        currentUserId: String = ""
+        currentUserId: String = "",
+        moodEmoji: String? = nil,
+        onMoodTap: ((CGPoint) -> Void)? = nil
     ) {
         self.user = user
         self.conversations = conversations
@@ -71,6 +75,8 @@ public struct UserProfileSheet: View {
         self.onDismiss = onDismiss
         self.onLoadStats = onLoadStats
         self.currentUserId = currentUserId
+        self.moodEmoji = moodEmoji
+        self.onMoodTap = onMoodTap
     }
 
     private var resolvedAccent: String {
@@ -239,7 +245,9 @@ public struct UserProfileSheet: View {
             accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
             avatarURL: displayUser.avatarURL,
             storyState: showRing ? .read : .none,
-            presenceState: isBlockedByTarget ? .offline : presenceFromUser
+            moodEmoji: isBlockedByTarget ? nil : moodEmoji,
+            presenceState: isBlockedByTarget ? .offline : presenceFromUser,
+            onMoodTap: isBlockedByTarget ? nil : onMoodTap
         )
     }
 

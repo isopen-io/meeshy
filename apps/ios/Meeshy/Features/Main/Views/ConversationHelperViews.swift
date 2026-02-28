@@ -66,6 +66,7 @@ struct ThemedAvatarButton: View {
     var hasStoryRing: Bool = false
     var avatarURL: String? = nil
     var presenceState: PresenceState = .offline
+    var moodEmoji: String? = nil
     let action: () -> Void
     @State private var isPressed = false
 
@@ -84,7 +85,9 @@ struct ThemedAvatarButton: View {
                 secondaryColor: secondaryColor,
                 avatarURL: avatarURL,
                 storyState: hasStoryRing ? .unread : .none,
-                presenceState: presenceState
+                moodEmoji: moodEmoji,
+                presenceState: presenceState,
+                enablePulse: true
             )
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))

@@ -176,6 +176,30 @@ public struct CreatedShareLink: Decodable {
     public let createdAt: Date
 }
 
+// MARK: - User's Own Links (authenticated)
+
+public struct MyShareLink: Decodable, Identifiable {
+    public let id: String
+    public let linkId: String
+    public let identifier: String?
+    public let name: String?
+    public let isActive: Bool
+    public let currentUses: Int
+    public let maxUses: Int?
+    public let expiresAt: Date?
+    public let createdAt: Date
+    public let conversationTitle: String?
+
+    public var displayName: String { name ?? identifier ?? linkId }
+    public var joinUrl: String { "\(MeeshyConfig.shared.serverOrigin)/join/\(identifier ?? linkId)" }
+}
+
+public struct MyShareLinkStats: Decodable {
+    public let totalLinks: Int
+    public let activeLinks: Int
+    public let totalUses: Int
+}
+
 // MARK: - String Helper
 
 private extension String {

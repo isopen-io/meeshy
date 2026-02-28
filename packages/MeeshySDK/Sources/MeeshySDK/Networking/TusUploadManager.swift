@@ -43,7 +43,7 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    private var queue: [(URL, String, String, CheckedContinuation<TusUploadResult, Error>)] = []
+    private var queue: [(URL, String, String, String?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
 
@@ -55,7 +55,7 @@ public actor TusUploadManager {
         self.baseURL = baseURL
     }
 
-    public func uploadFile(fileURL: URL, mimeType: String, token: String) async throws -> TusUploadResult {
+    public func uploadFile(fileURL: URL, mimeType: String, token: String, uploadContext: String? = nil) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -68,7 +68,7 @@ public actor TusUploadManager {
         emitProgress()
 
         return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, token, continuation))
+            queue.append((fileURL, mimeType, token, uploadContext, continuation))
             processQueue()
         }
     }
@@ -90,11 +90,11 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, token, continuation) = queue.removeFirst()
+            let (fileURL, mimeType, token, uploadContext, continuation) = queue.removeFirst()
             activeCount += 1
             Task {
                 do {
-                    let result = try await performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token)
+                    let result = try await performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext)
                     activeCount -= 1
                     continuation.resume(returning: result)
                     processQueue()
@@ -107,7 +107,7 @@ public actor TusUploadManager {
         }
     }
 
-    private func performTusUpload(fileURL: URL, mimeType: String, token: String) async throws -> TusUploadResult {
+    private func performTusUpload(fileURL: URL, mimeType: String, token: String, uploadContext: String? = nil) async throws -> TusUploadResult {
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
@@ -123,7 +123,12 @@ public actor TusUploadManager {
 
         let encodedFilename = Data(fileName.utf8).base64EncodedString()
         let encodedFiletype = Data(mimeType.utf8).base64EncodedString()
-        createReq.setValue("filename \(encodedFilename),filetype \(encodedFiletype)", forHTTPHeaderField: "Upload-Metadata")
+        var metadataValue = "filename \(encodedFilename),filetype \(encodedFiletype)"
+        if let context = uploadContext {
+            let encodedContext = Data(context.utf8).base64EncodedString()
+            metadataValue += ",uploadcontext \(encodedContext)"
+        }
+        createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
         let (_, createResponse) = try await URLSession.shared.data(for: createReq)
         guard let httpResponse = createResponse as? HTTPURLResponse,

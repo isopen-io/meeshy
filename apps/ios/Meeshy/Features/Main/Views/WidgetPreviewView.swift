@@ -13,6 +13,11 @@ struct WidgetPreviewView: View {
 
     @State private var animatedUnreadCount: Int = 0
     @State private var showCards = false
+    @StateObject private var affiliateVM = AffiliateViewModel()
+    @State private var trackingStats: TrackingLinkStats? = nil
+    @State private var shareStats: MyShareLinkStats? = nil
+    @State private var communityLinks: [CommunityLink] = []
+    @State private var showCreateShareLink = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "widget")
 
@@ -41,11 +46,14 @@ struct WidgetPreviewView: View {
                     recentConversationsCard
                         .staggeredAppear(index: 1, baseDelay: 0.08)
 
-                    quickActionsCard
+                    linksOverviewSection
                         .staggeredAppear(index: 2, baseDelay: 0.08)
 
-                    widgetHintBanner
+                    quickActionsCard
                         .staggeredAppear(index: 3, baseDelay: 0.08)
+
+                    widgetHintBanner
+                        .staggeredAppear(index: 4, baseDelay: 0.08)
 
                     Color.clear.frame(height: 40)
                 }
@@ -69,6 +77,20 @@ struct WidgetPreviewView: View {
                     }
                     .accessibilityLabel("Fermer le tableau de bord")
                 }
+            }
+        }
+        .task {
+            await affiliateVM.load()
+            async let t = TrackingLinkService.shared.fetchStats()
+            async let s = ShareLinkService.shared.fetchMyStats()
+            async let c = CommunityLinkService.shared.listCommunityLinks()
+            trackingStats = try? await t
+            shareStats = try? await s
+            communityLinks = (try? await c) ?? []
+        }
+        .sheet(isPresented: $showCreateShareLink) {
+            CreateShareLinkView { _ in
+                Task { shareStats = try? await ShareLinkService.shared.fetchMyStats() }
             }
         }
         .onAppear {
@@ -261,7 +283,10 @@ struct WidgetPreviewView: View {
                 Spacer()
             }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 12
+            ) {
                 quickActionButton(
                     icon: "square.and.pencil",
                     label: "Nouveau",
@@ -274,16 +299,21 @@ struct WidgetPreviewView: View {
                 }
 
                 quickActionButton(
-                    icon: "magnifyingglass",
-                    label: "Rechercher",
+                    icon: "link.badge.plus",
+                    label: "Partager",
+                    gradient: [Color(hex: "08D9D6"), Color(hex: "2ECC71")]
+                ) {
+                    showCreateShareLink = true
+                }
+
+                quickActionButton(
+                    icon: "megaphone.fill",
+                    label: "Post",
                     gradient: [Color(hex: "A855F7"), Color(hex: "6366F1")]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(
-                            name: Notification.Name("openGlobalSearch"),
-                            object: nil
-                        )
+                        NotificationCenter.default.post(name: .openFeedComposer, object: nil)
                     }
                 }
 
@@ -344,6 +374,137 @@ struct WidgetPreviewView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+
+    // MARK: - Links Overview Section
+
+    private var linksOverviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                Text("MES LIENS")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                    .kerning(0.8)
+                Spacer()
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    linkTypeCard(
+                        title: "Parrainage",
+                        icon: "person.badge.plus",
+                        color: "2ECC71",
+                        stat1: "\(affiliateVM.tokens.count) lien(s)",
+                        stat2: "\(affiliateVM.tokens.reduce(0) { $0 + $1.referralCount }) inscrits"
+                    ) {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            router.push(.affiliate)
+                        }
+                    }
+
+                    linkTypeCard(
+                        title: "Partage",
+                        icon: "link.badge.plus",
+                        color: "08D9D6",
+                        stat1: "\(shareStats?.totalLinks ?? 0) lien(s)",
+                        stat2: "\(shareStats?.totalUses ?? 0) rejoints"
+                    ) {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            router.push(.shareLinks)
+                        }
+                    }
+
+                    linkTypeCard(
+                        title: "Tracking",
+                        icon: "chart.bar.fill",
+                        color: "A855F7",
+                        stat1: "\(trackingStats?.totalLinks ?? 0) lien(s)",
+                        stat2: "\(trackingStats?.totalClicks ?? 0) clics"
+                    ) {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            router.push(.trackingLinks)
+                        }
+                    }
+
+                    linkTypeCard(
+                        title: "Communaut\u{00e9}",
+                        icon: "person.3.fill",
+                        color: "F8B500",
+                        stat1: "\(communityLinks.count) groupe(s)",
+                        stat2: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres"
+                    ) {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            router.push(.communityLinks)
+                        }
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+        )
+    }
+
+    @ViewBuilder
+    private func linkTypeCard(
+        title: String, icon: String, color: String,
+        stat1: String, stat2: String,
+        onTap: @escaping () -> Void
+    ) -> some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: color).opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: color))
+                }
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stat1)
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textMuted)
+                    Text(stat2)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: color))
+                }
+            }
+            .padding(12)
+            .frame(width: 110)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color(hex: color).opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Widget Hint Banner
@@ -419,4 +580,10 @@ struct WidgetPreviewView: View {
         formatter.dateFormat = "dd/MM"
         return formatter.string(from: date)
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let openFeedComposer = Notification.Name("openFeedComposer")
 }

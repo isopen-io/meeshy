@@ -17,6 +17,9 @@ enum Route: Hashable {
     case notifications
     case userStats
     case affiliate
+    case trackingLinks
+    case shareLinks
+    case communityLinks
     case dataExport
 }
 

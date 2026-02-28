@@ -96,7 +96,7 @@ public enum AvatarSize {
 
 // MARK: - Story Ring State
 
-public enum StoryRingState {
+public enum StoryRingState: Equatable {
     case none, unread, read
 }
 
@@ -131,12 +131,15 @@ public struct MeeshyAvatar: View {
     public var onMoodTap: ((CGPoint) -> Void)? = nil
     public var onOnlineTap: (() -> Void)? = nil
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
+    /// Contrôle si le badge mood et le dot de présence animent un pulse.
+    /// Mettre à `false` dans les listes pour éviter N animations simultanées.
+    public var enablePulse: Bool = true
 
     // Legacy init (AvatarSize)
     public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
                 avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline,
-                onOnlineTap: (() -> Void)? = nil) {
+                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool = true) {
         self.name = name
         switch size {
         case .small: self.mode = .messageBubble
@@ -148,18 +151,20 @@ public struct MeeshyAvatar: View {
         self.accentColor = accentColor; self.secondaryColor = secondaryColor
         self.avatarURL = avatarURL; self.storyState = storyState; self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap; self.presenceState = presenceState; self.onOnlineTap = onOnlineTap
+        self.enablePulse = enablePulse
     }
 
     // Primary init (AvatarMode)
     public init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil,
                 avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState = .offline, onTap: (() -> Void)? = nil,
-                onViewProfile: (() -> Void)? = nil, onViewStory: (() -> Void)? = nil,
-                onMoodTap: ((CGPoint) -> Void)? = nil, onOnlineTap: (() -> Void)? = nil,
-                contextMenuItems: [AvatarContextMenuItem]? = nil) {
+                presenceState: PresenceState = .offline, enablePulse: Bool = true,
+                onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
+                onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
+                onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name; self.mode = mode; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
+        self.enablePulse = enablePulse
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
     }
@@ -241,7 +246,13 @@ public struct MeeshyAvatar: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            badge.offset(badgeOffsetWhenRingVisible)
+            if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+                moodBadge(emoji: emoji)
+                    .offset(badgeOffset(badgeHalfSize: mode.badgeSize / 2))
+            } else if effectivePresence != .offline {
+                onlineDot
+                    .offset(badgeOffset(badgeHalfSize: mode.onlineDotSize / 2))
+            }
         }
         .scaleEffect(tapScale)
         .onAppear {
@@ -333,30 +344,19 @@ public struct MeeshyAvatar: View {
         }
     }
 
-    /// When a story ring is visible, shift the badge so its center lands on
-    /// the ring circumference at the 45° bottom-right angle instead of the
-    /// bounding-box corner (which sits just outside the ring).
-    private var badgeOffsetWhenRingVisible: CGSize {
+    /// Calcule l'offset pour positionner le badge sur le bord de l'avatar à 45°,
+    /// en tenant compte du fait que le glow story-unread agrandit le ZStack à (size+20).
+    private func badgeOffset(badgeHalfSize: CGFloat) -> CGSize {
         guard effectiveStoryState != .none else { return .zero }
-        let r = mode.ringSize / 2          // ring frame half-width
-        let avatarR = mode.size / 2        // avatar outer edge from ring frame center
-        let dot = mode.onlineDotSize / 2
-        // target: dot center at avatar's outer edge at 45° (on the ring border)
-        let target = r + avatarR * cos(.pi / 4)
-        let current = mode.ringSize - dot
+        let avatarR = mode.size / 2
+        // Le glow Circle (size+20) agrandit le ZStack au-delà du ring quand story unread
+        let zstackSize: CGFloat = effectiveStoryState == .unread ? (mode.size + 20) : mode.ringSize
+        let zstackCenter = zstackSize / 2
+        // Cible : badge centré sur le bord de l'avatar à 45° dans les coords du ZStack
+        let target = zstackCenter + avatarR * cos(.pi / 4)
+        let current = zstackSize - badgeHalfSize
         let delta = target - current
         return CGSize(width: delta, height: delta)
-    }
-
-    // MARK: - Badge
-
-    @ViewBuilder
-    private var badge: some View {
-        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
-            moodBadge(emoji: emoji)
-        } else if effectivePresence != .offline {
-            onlineDot
-        }
     }
 
     private func moodBadge(emoji: String) -> some View {
@@ -372,7 +372,7 @@ public struct MeeshyAvatar: View {
                 }
         }
         .frame(width: mode.badgeSize, height: mode.badgeSize)
-        .pulse(intensity: 0.15)
+        .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 
     private var dotColor: Color {
@@ -394,9 +394,12 @@ public struct MeeshyAvatar: View {
                 onOnlineTap?()
             }
 
-        if effectivePresence == .online {
-            dot.pulse(intensity: 0.15)
-        } else { dot }
+        // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
+        if enablePulse && effectivePresence == .online && effectiveStoryState != .none {
+            dot.pulse(intensity: 0.12)
+        } else {
+            dot
+        }
     }
 
     // MARK: - Helpers

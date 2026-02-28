@@ -1284,6 +1284,7 @@ model AffiliateToken {
   createdBy   String    @db.ObjectId
   maxUses     Int? // Limite d'utilisation (null = illimité)
   currentUses Int       @default(0)
+  clickCount  Int       @default(0) // Nombre de clics sur le lien d'affiliation
   expiresAt   DateTime? // Date d'expiration (null = pas d'expiration)
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
@@ -2682,9 +2683,10 @@ model StoryBackgroundAudio {
 }
 
 /// Media attaché à un post (images, vidéos, audio, documents)
+/// postId est nullable : null = media uploadé mais pas encore lié à un post (pending)
 model PostMedia {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  postId       String @db.ObjectId
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  postId       String? @db.ObjectId
 
   // Fichier
   fileName     String
@@ -2746,7 +2748,7 @@ model PostMedia {
 
   createdAt    DateTime @default(now())
 
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
 }

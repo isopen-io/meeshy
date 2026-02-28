@@ -16,6 +16,7 @@ struct ConversationParticipant: Identifiable, Decodable {
     let conversationRole: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
+    let joinedAt: Date?
 
     var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmpty(username ?? "?")
@@ -45,6 +46,7 @@ struct ConversationInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var participants: [ConversationParticipant] = []
     @State private var isLoadingParticipants = false
@@ -132,6 +134,7 @@ struct ConversationInfoSheet: View {
         } message: {
             Text("Vous ne recevrez plus de messages de cette conversation.")
         }
+        .withStatusBubble()
     }
 
     // MARK: - Sheet Background
@@ -195,7 +198,9 @@ struct ConversationInfoSheet: View {
                 accentColor: accentColor,
                 avatarURL: conversation.type == .direct
                     ? conversation.participantAvatarURL
-                    : conversation.avatar
+                    : conversation.avatar,
+                moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
             )
 
             // Name
@@ -374,28 +379,19 @@ struct ConversationInfoSheet: View {
     }
 
     private func memberRow(_ participant: ConversationParticipant) -> some View {
-        let isOnline = presenceManager.presenceState(for: participant.id) == .online
         let color = DynamicColorGenerator.colorForName(participant.name)
+        let presence = presenceManager.presenceState(for: participant.id)
 
         return HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                MeeshyAvatar(
-                    name: participant.name,
-                    size: .small,
-                    accentColor: color,
-                    avatarURL: participant.avatar
-                )
-
-                if isOnline {
-                    Circle()
-                        .fill(Color(hex: "4ECDC4"))
-                        .frame(width: 10, height: 10)
-                        .overlay(
-                            Circle().stroke(theme.backgroundPrimary, lineWidth: 2)
-                        )
-                        .offset(x: 2, y: 2)
-                }
-            }
+            MeeshyAvatar(
+                name: participant.name,
+                size: .small,
+                accentColor: color,
+                avatarURL: participant.avatar,
+                moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) },
+                presenceState: presence
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -427,14 +423,15 @@ struct ConversationInfoSheet: View {
 
             Spacer()
 
-            if isOnline {
-                Text("En ligne")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
-            } else if let lastActive = participant.lastActiveAt {
-                Text(relativeTime(from: lastActive))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+            if let joinedAt = participant.joinedAt {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("Depuis")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    Text(shortDate(joinedAt))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -779,6 +776,14 @@ struct ConversationInfoSheet: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM"
+        return formatter.string(from: date)
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
         return formatter.string(from: date)
     }
 

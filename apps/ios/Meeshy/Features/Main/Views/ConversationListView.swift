@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 // MARK: - Scroll Offset Preference Key
-struct ScrollOffsetPreferenceKey: PreferenceKey {
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
@@ -60,15 +60,14 @@ struct ConversationListView: View {
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
+    private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
-    // Status bubble overlay state
-    @State private var showStatusBubble = false
-    @State private var selectedStatusEntry: StatusEntry?
-    @State private var moodBadgeAnchor: CGPoint = .zero
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
@@ -76,7 +75,6 @@ struct ConversationListView: View {
     @State var showGlobalSearch = false
 
     // Scroll tracking
-    @State private var lastScrollOffset: CGFloat? = nil
     @State private var hideSearchBar = false
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
@@ -106,6 +104,7 @@ struct ConversationListView: View {
 
     // Communities data (replaces SampleData)
     @State var userCommunities: [MeeshyCommunity] = []
+    @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
@@ -160,19 +159,37 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
-            conversationRow(for: conversation)
-                .staggeredAppear(index: index, baseDelay: 0.04)
-                .onAppear {
-                    triggerLoadMoreIfNeeded(conversation: conversation)
-                }
+        // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
+        // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
+        let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
+        LazyVStack(spacing: 0) {
+            ForEach(conversations, id: \.id) { conversation in
+                conversationRow(for: conversation, rowWidth: rowWidth)
+                    .onAppear {
+                        // Scroll infini uniquement pour les users avec >1000 conversations
+                        // (loadMore() est no-op sinon)
+                        triggerLoadMoreIfNeeded(conversation: conversation)
+                    }
+            }
         }
+    }
+
+    private func storyRingState(for conversation: Conversation) -> StoryRingState {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
+        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
+        if storyViewModel.hasStories(forUserId: userId) { return .read }
+        return .none
+    }
+
+    private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
+        return statusViewModel.statusForUser(userId: userId)
     }
 
     private func enrichedConversation(_ conversation: Conversation) -> Conversation {
         guard conversation.type == .community || conversation.communityId != nil,
               let communityId = conversation.communityId,
-              let community = userCommunities.first(where: { $0.id == communityId })
+              let community = userCommunityLookup[communityId]
         else { return conversation }
 
         var result = conversation
@@ -186,8 +203,7 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func conversationRow(for conversation: Conversation) -> some View {
-        let rowWidth = UIScreen.main.bounds.width - 32 - 52 - 28 - 24
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
         let displayConversation = enrichedConversation(conversation)
 
         SwipeableRow(
@@ -198,6 +214,7 @@ struct ConversationListView: View {
                 conversation: displayConversation,
                 availableWidth: rowWidth,
                 isDragging: draggingConversation?.id == displayConversation.id,
+                presenceState: presenceManager.presenceState(for: displayConversation.participantUserId ?? ""),
                 onViewStory: {
                     handleStoryView(displayConversation)
                 },
@@ -209,8 +226,12 @@ struct ConversationListView: View {
                 },
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(displayConversation, at: anchor)
-                }
+                },
+                isDark: theme.mode.isDark,
+                storyRingState: storyRingState(for: displayConversation),
+                moodStatus: conversationMoodStatus(for: displayConversation)
             )
+            .equatable()
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -379,6 +400,9 @@ struct ConversationListView: View {
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
+        // Scroll infini uniquement au-delà de 1000 conversations chargées
+        // (en dessous, loadAllRemainingBackground() a tout chargé)
+        guard all.count >= 1000 else { return }
         guard let idx = all.firstIndex(where: { $0.id == conversation.id }) else { return }
         let threshold = max(0, all.count - 5)
         if idx >= threshold {
@@ -418,6 +442,7 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        .withStatusBubble()
     }
 
     private var mainContent: some View {
@@ -425,8 +450,16 @@ struct ConversationListView: View {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Top spacer
+                    // Top spacer (also serves as scroll offset detector via background)
                     Color.clear.frame(height: 70)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ScrollOffsetPreferenceKey.self,
+                                    value: geo.frame(in: .named("convList")).minY
+                                )
+                            }
+                        )
 
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel) { groupIndex in
@@ -488,31 +521,23 @@ struct ConversationListView: View {
                             }
                         }
                 }
-                // Background view to track scroll changes cleanly without fighting ScrollView gestures
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.onChange(of: proxy.frame(in: .named("scroll")).minY) { oldVal, newVal in
-                            let delta = newVal - oldVal
-                            // The delta is calculated per frame (e.g. 1/60th or 1/120th of a sec)
-                            // Therefore, values strictly > 2 or < -2 are ample to detect user intent avoiding jitters.
-                            
-                            // Prevent hiding when bouncing at the top (pull-to-refresh snap back)
-                            if delta < -2 && !hideSearchBar && newVal < -20 {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    hideSearchBar = true
-                                    isScrollingDown = true
-                                }
-                            } else if (delta > 4 || newVal > -5) && hideSearchBar {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    hideSearchBar = false
-                                    isScrollingDown = false
-                                }
-                            }
-                        }
-                    }
-                )
             }
-            .coordinateSpace(name: "scroll")
+            .coordinateSpace(name: "convList")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minY in
+                // minY < 0 → scrolled down (top spacer above viewport), minY ≥ 0 → near top
+                let scrolledDown = minY < -scrollThreshold
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                    if scrolledDown && !hideSearchBar {
+                        hideSearchBar = true
+                        isScrollingDown = true
+                        isSearching = false
+                    } else if !scrolledDown && hideSearchBar {
+                        hideSearchBar = false
+                        isScrollingDown = false
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 HapticFeedback.medium()
                 await conversationViewModel.forceRefresh()
@@ -534,13 +559,13 @@ struct ConversationListView: View {
                 if showSearchOverlay {
                     communitiesSection
                         .padding(.vertical, 10)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 // Category filters - only when search overlay is open (loupe tap)
                 if showSearchOverlay {
                     categoryFilters
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 // Search bar - always visible (unless scrolled away)
@@ -551,7 +576,7 @@ struct ConversationListView: View {
             .offset(y: hideSearchBar ? 150 : 0)
             .opacity(hideSearchBar ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+            .animation(.spring(response: 0.2, dampingFraction: 0.9), value: showSearchOverlay)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
@@ -569,8 +594,9 @@ struct ConversationListView: View {
             }
         }
         .task {
-            await conversationViewModel.loadConversations()
-            await loadUserCommunities()
+            async let conversations: Void = conversationViewModel.loadConversations()
+            async let communities: Void = loadUserCommunities()
+            _ = await (conversations, communities)
         }
         .onChange(of: conversationViewModel.userCategories) { _, categories in
             for cat in categories where cat.isExpanded {
@@ -600,17 +626,6 @@ struct ConversationListView: View {
                     hideSearchBar = false
                     isScrollingDown = false
                 }
-            }
-        }
-        .overlay {
-            // Status bubble overlay
-            if showStatusBubble, let status = selectedStatusEntry {
-                StatusBubbleOverlay(
-                    status: status,
-                    anchorPoint: moodBadgeAnchor,
-                    isPresented: $showStatusBubble
-                )
-                .zIndex(200)
             }
         }
         .sheet(item: $lockSheetConversation) { conversation in
@@ -697,9 +712,7 @@ struct ConversationListView: View {
         guard conversation.type == .direct,
               let userId = conversation.participantUserId,
               let status = statusViewModel.statusForUser(userId: userId) else { return }
-        selectedStatusEntry = status
-        moodBadgeAnchor = anchor
-        showStatusBubble = true
+        StatusBubbleController.shared.show(entry: status, anchor: anchor)
     }
 
     // See ConversationListView+Overlays.swift for conversationContextMenu
@@ -730,6 +743,7 @@ struct ConversationListView: View {
         do {
             let response = try await CommunityService.shared.list(offset: 0, limit: 10)
             userCommunities = response.data.map { $0.toCommunity() }
+            userCommunityLookup = Dictionary(uniqueKeysWithValues: userCommunities.map { ($0.id, $0) })
         } catch {
             print("[ConversationListView] Error loading communities: \(error)")
         }

@@ -6,6 +6,7 @@ struct FriendRequestListView: View {
     @StateObject private var viewModel = FriendRequestListViewModel()
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     private var isDark: Bool { theme.mode.isDark }
 
@@ -16,6 +17,7 @@ struct FriendRequestListView: View {
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .task { await viewModel.loadRequests() }
+        .withStatusBubble()
     }
 
     // MARK: - Header
@@ -103,7 +105,9 @@ struct FriendRequestListView: View {
                 name: name,
                 size: .small,
                 accentColor: color,
-                avatarURL: sender?.avatar
+                avatarURL: sender?.avatar,
+                moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 
             VStack(alignment: .leading, spacing: 3) {

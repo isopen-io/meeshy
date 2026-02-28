@@ -246,6 +246,7 @@ export function registerParticipantsRoutes(
         email: participant.user.email,
         role: participant.user.role, // Rôle global de l'utilisateur
         conversationRole: participant.role, // Rôle dans cette conversation spécifique
+        joinedAt: participant.joinedAt,     // Date d'adhésion à cette conversation
         isOnline: participant.user.isOnline,
         lastActiveAt: participant.user.lastActiveAt,
         systemLanguage: participant.user.systemLanguage,

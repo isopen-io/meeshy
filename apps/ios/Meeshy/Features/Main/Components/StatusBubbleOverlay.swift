@@ -86,23 +86,27 @@ struct StatusBubbleOverlay: View {
 
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(status.moodEmoji)
-                    .font(.system(size: 18))
-                Spacer()
+            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
+                // Audio : date sur sa propre ligne + player
                 Text(status.timeAgo)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
-            }
-
-            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
                 audioPlayerView(urlString: audioUrl)
-            } else if let content = status.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // Date + contenu directement à la suite, multilignes
+                let content = status.content ?? ""
+                if content.isEmpty {
+                    Text(status.timeAgo)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                } else {
+                    (Text(status.timeAgo + "  ")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    + Text(content)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textPrimary))
+                }
             }
         }
         .padding(.horizontal, 12)

@@ -123,7 +123,7 @@ class StoryViewModel: ObservableObject {
                 defer { try? FileManager.default.removeItem(at: tempURL) }
 
                 let uploader = TusUploadManager(baseURL: baseURL)
-                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token)
+                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token, uploadContext: "story")
             }
 
             let post = try await postService.createStory(

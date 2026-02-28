@@ -158,6 +158,15 @@ struct RootView: View {
                     case .affiliate:
                         AffiliateView()
                             .navigationBarHidden(true)
+                    case .trackingLinks:
+                        TrackingLinksView()
+                            .navigationBarHidden(true)
+                    case .shareLinks:
+                        ShareLinksView()
+                            .navigationBarHidden(true)
+                    case .communityLinks:
+                        CommunityLinksView()
+                            .navigationBarHidden(true)
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
@@ -244,6 +253,7 @@ struct RootView: View {
         .task {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
+            statusViewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
@@ -495,21 +505,16 @@ struct RootView: View {
         ZStack {
             theme.backgroundGradient
 
-            // Animated ambient orbs - now with floating motion
-            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
+            // Static blurred orbs — 100% static, cached by Metal once, zero per-frame GPU work
+            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { _, orb in
                 Circle()
                     .fill(Color(hex: orb.color).opacity(orb.opacity))
                     .frame(width: orb.size, height: orb.size)
                     .blur(radius: orb.size * 0.25)
                     .offset(x: orb.offset.x, y: orb.offset.y)
-                    .floating(
-                        range: CGFloat(15 + index * 8),
-                        duration: Double(4.0 + Double(index) * 1.2)
-                    )
-                    .scaleEffect(1.0)
-                    .pulse(intensity: 0.06)
             }
         }
+        .drawingGroup()  // Rasterise l'ensemble en une seule texture Metal — zéro composition par frame
         .ignoresSafeArea()
     }
 
@@ -696,6 +701,7 @@ private struct ProfileFetchingSheet: View {
     @State private var fetchError: String?
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
         Group {
@@ -737,7 +743,9 @@ private struct ProfileFetchingSheet: View {
             isLoading: isLoading,
             fullUser: fullUser,
             onDismiss: { dismiss() },
-            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+            currentUserId: AuthManager.shared.currentUser?.id ?? "",
+            moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+            onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
         )
     }
 

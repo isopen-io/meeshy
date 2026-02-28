@@ -306,6 +306,12 @@ extension View {
         modifier(BounceOnTap(scale: scale))
     }
 
+    /// Applique un modificateur conditionnel sans `AnyView`.
+    @ViewBuilder
+    public func ifTrue<T: View>(_ condition: Bool, transform: (Self) -> T) -> some View {
+        if condition { transform(self) } else { self }
+    }
+
     public func bounceOnFocus(_ focused: Bool) -> some View {
         modifier(BounceOnFocus(focused: focused))
     }

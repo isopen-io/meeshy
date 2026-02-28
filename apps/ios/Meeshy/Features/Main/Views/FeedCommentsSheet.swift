@@ -13,6 +13,7 @@ struct CommentsSheetView: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var commentText = ""
     @State private var replyingTo: FeedComment? = nil
     @FocusState private var isComposerFocused: Bool
@@ -80,10 +81,15 @@ struct CommentsSheetView: View {
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        .withStatusBubble()
     }
 
     // MARK: - Post Preview
@@ -95,7 +101,9 @@ struct CommentsSheetView: View {
                     name: post.author,
                     mode: .custom(40),
                     accentColor: post.authorColor,
+                    moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
+                    onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
@@ -307,6 +315,7 @@ struct CommentRowView: View {
     var onLikeComment: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var isLiked = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
@@ -317,7 +326,9 @@ struct CommentRowView: View {
                 name: comment.author,
                 mode: .custom(36),
                 accentColor: comment.authorColor,
+                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
+                onMoodTap: statusViewModel.moodTapHandler(for: comment.authorId),
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                         selectedProfileUser = .from(feedComment: comment)
@@ -405,10 +416,15 @@ struct CommentRowView: View {
             alignment: .bottom
         )
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        .withStatusBubble()
     }
 
     private func timeAgo(from date: Date) -> String {

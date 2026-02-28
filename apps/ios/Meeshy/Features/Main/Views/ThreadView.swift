@@ -8,6 +8,7 @@ struct ThreadView: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var replyText = ""
     @State private var replies: [MeeshyMessage] = []
     @State private var isLoading = false
@@ -27,6 +28,7 @@ struct ThreadView: View {
             }
         }
         .task { await loadReplies() }
+        .withStatusBubble()
     }
 
     // MARK: - Header
@@ -78,7 +80,9 @@ struct ThreadView: View {
                 MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
                     mode: .custom(32),
-                    accentColor: accentColor
+                    accentColor: accentColor,
+                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId ?? "")?.moodEmoji,
+                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId ?? "")
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -139,7 +143,9 @@ struct ThreadView: View {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
                 mode: .custom(28),
-                accentColor: message.senderColor ?? "4ECDC4"
+                accentColor: message.senderColor ?? "4ECDC4",
+                moodEmoji: statusViewModel.statusForUser(userId: message.senderId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId ?? "")
             )
 
             VStack(alignment: .leading, spacing: 3) {
