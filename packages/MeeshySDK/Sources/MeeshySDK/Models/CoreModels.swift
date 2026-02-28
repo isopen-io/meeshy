@@ -174,6 +174,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
         h.combine(lastMessageAt)
         h.combine(lastMessageSenderName)
         h.combine(lastMessageAttachmentCount)
+        h.combine(lastMessageAttachments.first?.id)
         h.combine(lastMessageIsBlurred)
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
