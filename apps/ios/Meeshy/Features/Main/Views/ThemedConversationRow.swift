@@ -6,6 +6,7 @@ import MeeshySDK
 // MARK: - Themed Conversation Row
 struct ThemedConversationRow: View {
     let conversation: Conversation
+    var community: MeeshyCommunity? = nil
     var availableWidth: CGFloat = 200 // Default width for tags calculation
     var isDragging: Bool = false
     /// Présence pré-calculée par le parent — évite que chaque ligne observe PresenceManager
@@ -15,10 +16,12 @@ struct ThemedConversationRow: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
+    var onCommunityTap: (() -> Void)? = nil
 
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
+    var isTyping: Bool = false
 
     private var accentColor: String { conversation.accentColor }
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
@@ -337,6 +340,44 @@ struct ThemedConversationRow: View {
         return "\(seconds / 86400)d"
     }
 
+    // MARK: - Typing Indicator
+
+    private struct TypingDotsView: View {
+        let accentColor: String
+        @State private var isAnimating = false
+
+        var body: some View {
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color(hex: accentColor))
+                        .frame(width: 5, height: 5)
+                        .scaleEffect(isAnimating ? 1.0 : 0.5)
+                        .opacity(isAnimating ? 1.0 : 0.4)
+                        .animation(
+                            .easeInOut(duration: 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.18),
+                            value: isAnimating
+                        )
+                }
+            }
+            .onAppear { isAnimating = true }
+            .onDisappear { isAnimating = false }
+        }
+    }
+
+    @ViewBuilder
+    private var typingIndicatorView: some View {
+        HStack(spacing: 5) {
+            TypingDotsView(accentColor: accentColor)
+            Text(String(localized: "typing.in_progress", defaultValue: "est en train d'écrire"))
+                .font(.system(size: 13).italic())
+                .foregroundColor(Color(hex: accentColor))
+                .lineLimit(1)
+        }
+    }
+
     // MARK: - Last Message Preview
 
     @ViewBuilder
@@ -375,55 +416,59 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private var lastMessagePreviewView: some View {
-        switch lastMessageEffect {
-        case .expired:
-            HStack(spacing: 4) {
-                Image(systemName: "timer.badge.xmark")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(textMuted)
-                Text(String(localized: "message.expired", defaultValue: "Message expiré"))
-                    .font(.system(size: 13).italic())
-                    .foregroundColor(textMuted)
-                    .lineLimit(1)
-            }
+        if isTyping {
+            typingIndicatorView
+        } else {
+            switch lastMessageEffect {
+            case .expired:
+                HStack(spacing: 4) {
+                    Image(systemName: "timer.badge.xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(textMuted)
+                    Text(String(localized: "message.expired", defaultValue: "Message expiré"))
+                        .font(.system(size: 13).italic())
+                        .foregroundColor(textMuted)
+                        .lineLimit(1)
+                }
 
-        case .blurred:
-            HStack(spacing: 4) {
-                senderLabel
-                Image(systemName: "eye.slash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(textSecondary)
-                Text(conversation.lastMessagePreview ?? "")
-                    .font(.system(size: 13))
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
-                    .blur(radius: 4)
-            }
+            case .blurred:
+                HStack(spacing: 4) {
+                    senderLabel
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(textSecondary)
+                    Text(conversation.lastMessagePreview ?? "")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                        .lineLimit(1)
+                        .blur(radius: 4)
+                }
 
-        case .viewOnce:
-            HStack(spacing: 4) {
-                senderLabel
-                Image(systemName: "flame")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
-                Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(hex: accentColor))
-                    .lineLimit(1)
-            }
+            case .viewOnce:
+                HStack(spacing: 4) {
+                    senderLabel
+                    Image(systemName: "flame")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: accentColor))
+                    Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: accentColor))
+                        .lineLimit(1)
+                }
 
-        case .ephemeralActive:
-            standardMessageContent(showEphemeralIcon: true)
+            case .ephemeralActive:
+                standardMessageContent(showEphemeralIcon: true)
 
-        case .none:
-            let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let attachments = conversation.lastMessageAttachments
-            if hasText || !attachments.isEmpty {
-                standardMessageContent(showEphemeralIcon: false)
-            } else {
-                Text("")
-                    .font(.system(size: 13))
-                    .foregroundColor(textSecondary)
+            case .none:
+                let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let attachments = conversation.lastMessageAttachments
+                if hasText || !attachments.isEmpty {
+                    standardMessageContent(showEphemeralIcon: false)
+                } else {
+                    Text("")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                }
             }
         }
     }
@@ -495,7 +540,9 @@ struct ThemedConversationRow: View {
 // MARK: - Equatable (permet .equatable() pour éviter les re-renders superflus)
 extension ThemedConversationRow: Equatable {
     static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
-        lhs.conversation == rhs.conversation &&
+        lhs.conversation.id == rhs.conversation.id &&
+        lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&
+        lhs.isTyping == rhs.isTyping &&
         lhs.availableWidth == rhs.availableWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.isDark == rhs.isDark &&

@@ -3,6 +3,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { ZMQSingleton } from './ZmqSingleton';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -189,7 +190,7 @@ export class PostService {
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string): Promise<void> {
     try {
-      // Récupérer les langues système des contacts de l'auteur
+      // 1. Résoudre les langues cibles depuis les contacts de l'auteur
       const contacts = await this.prisma.conversationMember.findMany({
         where: {
           conversation: { members: { some: { userId: authorId } } },
@@ -199,17 +200,74 @@ export class PostService {
         take: 100,
       });
 
-      const languages = [...new Set(
+      const targetLanguages = [...new Set(
         contacts
-          .map((c) => (c as any).user?.systemLanguage as string | undefined)
+          .map((c) => c.user?.systemLanguage ?? undefined)
           .filter((l): l is string => !!l && l !== 'en')
       )].slice(0, 10);
 
-      if (languages.length === 0) return;
+      if (targetLanguages.length === 0) {
+        log.info('StoryTranslation: no target languages', { postId });
+        return;
+      }
 
-      // Stocker les langues cibles dans les translations du post (async best-effort)
-      // Le translator viendra compléter avec les traductions réelles via ZMQ
-      log.info('StoryTranslation targets resolved', { postId, targets: languages });
+      // 2. Obtenir le client ZMQ
+      const zmqClient = ZMQSingleton.getInstanceSync();
+      if (!zmqClient) {
+        log.warn('StoryTranslation: ZMQ client not available', { postId });
+        return;
+      }
+
+      const storyMessageId = `story:${postId}`;
+      const sourceLanguage = detectLanguage(content);
+
+      log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
+
+      // 3. Listener pour recevoir les résultats un par un
+      const handleResult = async (event: { messageId: string; translatedText: string; targetLanguage: string; confidenceScore?: number; translatorModel?: string; }) => {
+        if (event.messageId !== storyMessageId) return;
+
+        try {
+          await (this.prisma as any).$runCommandRaw({
+            update: 'Post',
+            updates: [{
+              q: { _id: { $oid: postId } },
+              u: { $set: { [`translations.${event.targetLanguage}`]: {
+                text: event.translatedText,
+                translationModel: event.translatorModel ?? 'nllb',
+                confidenceScore: event.confidenceScore ?? 1,
+                createdAt: new Date().toISOString(),
+              }}},
+            }],
+          });
+
+          log.info('StoryTranslation: saved', { postId, lang: event.targetLanguage });
+        } catch (err) {
+          log.warn('StoryTranslation: save failed', { err, postId });
+        }
+      };
+
+      zmqClient.on('translationCompleted', handleResult);
+
+      // 4. Envoyer la requête ZMQ
+      try {
+        await zmqClient.translateToMultipleLanguages(
+          content,
+          sourceLanguage,
+          targetLanguages,
+          storyMessageId,
+          `story_context:${postId}`,
+        );
+      } catch (sendError) {
+        zmqClient.off('translationCompleted', handleResult);
+        throw sendError;
+      }
+
+      // 5. Cleanup du listener après timeout (évite les memory leaks)
+      setTimeout(() => {
+        zmqClient.off('translationCompleted', handleResult);
+      }, 60_000);
+
     } catch (error) {
       log.warn('StoryTranslation failed', { err: error, postId });
     }

@@ -11,6 +11,7 @@ private struct ScrollOffsetPreferenceKey: PreferenceKey {
 }
 
 // MARK: - Section Drop Delegate
+
 struct SectionDropDelegate: DropDelegate {
     let sectionId: String
     @Binding var dropTargetSection: String?
@@ -68,22 +69,39 @@ struct ConversationListView: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
+    // Status bubble overlay state
+    @State private var showStatusBubble = false
+    @State private var selectedStatusEntry: StatusEntry?
+    @State private var moodBadgeAnchor: CGPoint = .zero
+
+    // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
     @State var searchBounce: Bool = false
     @State private var animateGradient = false
-    @State var showGlobalSearch = false
+    @State private var expandedSections: Set<String> = ["pinned", "other"]
 
     // Scroll tracking
     @State private var hideSearchBar = false
+
+    // Performance optimized scroll variables
     @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
+    
+    // UI states
+    @State var blockTargetConversation: Conversation? = nil
+    @State var showBlockConfirmation = false
+    @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
+    @State var lockSheetConversation: Conversation? = nil
+    @State var showNoMasterPinAlert = false
+    @State var showGlobalSearch = false
     @State var conversationInfoConversation: Conversation? = nil
-    private let scrollThreshold: CGFloat = 15
-    private let pullToShowThreshold: CGFloat = 60  // How much to pull down to show search bar
+    
+    // Widget preview state
+    @State var showWidgetPreview = false
 
-    // Section expansion state (pinned + other always expanded, user categories added dynamically)
-    @State private var expandedSections: Set<String> = ["pinned", "other"]
+    // Communities data
+    @State var userCommunities: [MeeshyCommunity] = []
 
     // Preview state for hard press
     @State private var previewConversation: Conversation? = nil
@@ -92,19 +110,8 @@ struct ConversationListView: View {
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
 
-    // Lock & Block state
-    @State var lockSheetConversation: Conversation? = nil
-    @State var lockSheetMode: ConversationLockSheet.Mode = .openConversation
-    @State var showNoMasterPinAlert = false
-    @State var showBlockConfirmation = false
-    @State var blockTargetConversation: Conversation? = nil
-
-    // Widget preview state
-    @State var showWidgetPreview = false
-
-    // Communities data (replaces SampleData)
-    @State var userCommunities: [MeeshyCommunity] = []
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
+
 
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
@@ -187,42 +194,36 @@ struct ConversationListView: View {
     }
 
     private func enrichedConversation(_ conversation: Conversation) -> Conversation {
-        guard conversation.type == .community || conversation.communityId != nil,
-              let communityId = conversation.communityId,
-              let community = userCommunityLookup[communityId]
-        else { return conversation }
-
-        var result = conversation
-        if result.title == nil || result.name == "Conversation" || result.name.isEmpty {
-            result.title = community.name
-        }
-        if result.avatar == nil {
-            result.avatar = community.avatar ?? community.banner
-        }
-        return result
+        return conversation
     }
 
     @ViewBuilder
     private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
         let displayConversation = enrichedConversation(conversation)
+        let community: MeeshyCommunity? = {
+            guard conversation.type == .community || conversation.communityId != nil,
+                  let communityId = conversation.communityId else { return nil }
+            return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
+        }()
 
         SwipeableRow(
-            leadingActions: leadingSwipeActions(for: displayConversation),
-            trailingActions: trailingSwipeActions(for: displayConversation)
+            leadingActions: leadingSwipeActions(for: conversation),
+            trailingActions: trailingSwipeActions(for: conversation)
         ) {
             ThemedConversationRow(
-                conversation: displayConversation,
+                conversation: conversation,
+                community: community,
                 availableWidth: rowWidth,
                 isDragging: draggingConversation?.id == displayConversation.id,
                 presenceState: presenceManager.presenceState(for: displayConversation.participantUserId ?? ""),
                 onViewStory: {
-                    handleStoryView(displayConversation)
+                    handleStoryView(conversation)
                 },
                 onViewProfile: {
-                    handleProfileView(displayConversation)
+                    handleProfileView(conversation)
                 },
                 onViewConversationInfo: {
-                    handleConversationInfoView(displayConversation)
+                    handleConversationInfoView(conversation)
                 },
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(displayConversation, at: anchor)
@@ -232,28 +233,29 @@ struct ConversationListView: View {
                 } : nil,
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: displayConversation),
-                moodStatus: conversationMoodStatus(for: displayConversation)
+                moodStatus: conversationMoodStatus(for: displayConversation),
+                isTyping: conversationViewModel.typingConversationIds.contains(displayConversation.id)
             )
             .equatable()
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
-                if ConversationLockManager.shared.isLocked(displayConversation.id) {
+                if ConversationLockManager.shared.isLocked(conversation.id) {
                     lockSheetMode = .openConversation
-                    lockSheetConversation = displayConversation
+                    lockSheetConversation = conversation
                 } else {
-                    onSelect(displayConversation)
+                    onSelect(conversation)
                 }
             }
             .onDrag {
-                draggingConversation = displayConversation
+                draggingConversation = conversation
                 HapticFeedback.medium()
-                return NSItemProvider(object: displayConversation.id as NSString)
+                return NSItemProvider(object: conversation.id as NSString)
             }
             .contextMenu {
-                conversationContextMenu(for: displayConversation)
+                conversationContextMenu(for: conversation)
             } preview: {
-                ConversationPreviewView(conversation: displayConversation)
+                ConversationPreviewView(conversation: conversation)
             }
         }
     }
@@ -459,6 +461,92 @@ struct ConversationListView: View {
     }
 
     private var mainContent: some View {
+        mainContentZStack
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
+            .onChange(of: isScrollingDown) { wasHidden, isHidden in
+                if !wasHidden && isHidden { showSearchOverlay = false }
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+            }
+            .task {
+                async let conversations: Void = conversationViewModel.loadConversations()
+                async let communities: Void = loadUserCommunities()
+                _ = await (conversations, communities)
+            }
+            .onChange(of: conversationViewModel.userCategories) { _, categories in
+                for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
+            }
+            .onChange(of: conversationViewModel.filteredConversations.isEmpty) { _, isEmpty in
+                if isEmpty && isScrollingDown {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                }
+            }
+            .onChange(of: conversationViewModel.selectedFilter) { _, _ in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+            }
+            .onChange(of: feedIsVisible) { wasVisible, isVisible in
+                if wasVisible && !isVisible {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                }
+            }
+            .overlay {
+                if showStatusBubble, let status = selectedStatusEntry {
+                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble)
+                        .zIndex(200)
+                }
+            }
+            .sheet(item: $lockSheetConversation) { conversation in
+                ConversationLockSheet(
+                    mode: lockSheetMode,
+                    conversationId: conversation.id,
+                    conversationName: conversation.name,
+                    onSuccess: {
+                        if case .openConversation = lockSheetMode { onSelect(conversation) }
+                    }
+                )
+                .environmentObject(theme)
+            }
+            .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
+                Button("Configurer", role: .none) {}
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
+            }
+            .sheet(isPresented: $showWidgetPreview) {
+                WidgetPreviewView()
+                    .environmentObject(conversationViewModel)
+                    .environmentObject(router)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .fullScreenCover(isPresented: $showGlobalSearch) {
+                GlobalSearchView()
+                    .environmentObject(conversationViewModel)
+                    .environmentObject(router)
+            }
+            .confirmationDialog(
+                String(localized: "block.confirm.title", defaultValue: "Bloquer cet utilisateur ?"),
+                isPresented: $showBlockConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "action.block", defaultValue: "Bloquer"), role: .destructive) {
+                    guard let conv = blockTargetConversation,
+                          let targetUserId = conv.participantUserId else { return }
+                    Task {
+                        try? await BlockService.shared.blockUser(userId: targetUserId)
+                        await conversationViewModel.archiveConversation(conversationId: conv.id)
+                        HapticFeedback.success()
+                    }
+                }
+                Button(String(localized: "action.cancel", defaultValue: "Annuler"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "block.confirm.message", defaultValue: "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."))
+            }
+    }
+
+    private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
             // Main scroll content with gesture detection
             ScrollView(showsIndicators: false) {
@@ -534,20 +622,15 @@ struct ConversationListView: View {
                             }
                         }
                 }
+                .padding(.top, 8)
+                .padding(.bottom, 120)
             }
-            .coordinateSpace(name: "convList")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minY in
-                // minY < 0 → scrolled down (top spacer above viewport), minY ≥ 0 → near top
-                let scrolledDown = minY < -scrollThreshold
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                    if scrolledDown && !hideSearchBar {
-                        hideSearchBar = true
-                        isScrollingDown = true
-                        isSearching = false
-                    } else if !scrolledDown && hideSearchBar {
-                        hideSearchBar = false
-                        isScrollingDown = false
-                    }
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                guard !isSearching, !showSearchOverlay else { return }
+                let scrollingDown = offset < -30
+                if scrollingDown != isScrollingDown {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = scrollingDown }
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -556,9 +639,8 @@ struct ConversationListView: View {
                 await conversationViewModel.forceRefresh()
                 
                 // Show the search bar seamlessly after reloading finishes
-                if hideSearchBar {
+                if isScrollingDown {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        hideSearchBar = false
                         isScrollingDown = false
                     }
                 }
@@ -586,109 +668,10 @@ struct ConversationListView: View {
             }
             .padding(.bottom, 8)
             // Hide on scroll down
-            .offset(y: hideSearchBar ? 150 : 0)
-            .opacity(hideSearchBar ? 0 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: hideSearchBar)
-            .animation(.spring(response: 0.2, dampingFraction: 0.9), value: showSearchOverlay)
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
-        .onChange(of: hideSearchBar) { wasHidden, isHidden in
-            isScrollingDown = isHidden
-            if !wasHidden && isHidden {
-                showSearchOverlay = false
-            }
-        }
-        // Show search bar when returning to this view
-        .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                hideSearchBar = false
-                isScrollingDown = false
-            }
-        }
-        .task {
-            async let conversations: Void = conversationViewModel.loadConversations()
-            async let communities: Void = loadUserCommunities()
-            _ = await (conversations, communities)
-        }
-        .onChange(of: conversationViewModel.userCategories) { _, categories in
-            for cat in categories where cat.isExpanded {
-                expandedSections.insert(cat.id)
-            }
-        }
-        // Show search bar when filtered list is empty
-        .onChange(of: conversationViewModel.filteredConversations.isEmpty) { _, isEmpty in
-            if isEmpty && hideSearchBar {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    hideSearchBar = false
-                    isScrollingDown = false
-                }
-            }
-        }
-        // Show search bar when category changes
-        .onChange(of: conversationViewModel.selectedFilter) { _, _ in
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                hideSearchBar = false
-                isScrollingDown = false
-            }
-        }
-        // Show search bar when Feed is closed (user comes back from Feed)
-        .onChange(of: feedIsVisible) { wasVisible, isVisible in
-            if wasVisible && !isVisible {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    hideSearchBar = false
-                    isScrollingDown = false
-                }
-            }
-        }
-        .sheet(item: $lockSheetConversation) { conversation in
-            ConversationLockSheet(
-                mode: lockSheetMode,
-                conversationId: conversation.id,
-                conversationName: conversation.name,
-                onSuccess: {
-                    if case .openConversation = lockSheetMode {
-                        onSelect(conversation)
-                    }
-                }
-            )
-            .environmentObject(theme)
-        }
-        .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
-            Button("Configurer", role: .none) {}
-            Button("Annuler", role: .cancel) {}
-        } message: {
-            Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
-        }
-        .sheet(isPresented: $showWidgetPreview) {
-            WidgetPreviewView()
-                .environmentObject(conversationViewModel)
-                .environmentObject(router)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $showGlobalSearch) {
-            GlobalSearchView()
-                .environmentObject(conversationViewModel)
-                .environmentObject(router)
-        }
-        .confirmationDialog(
-            String(localized: "block.confirm.title", defaultValue: "Bloquer cet utilisateur ?"),
-            isPresented: $showBlockConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "action.block", defaultValue: "Bloquer"), role: .destructive) {
-                guard let conv = blockTargetConversation,
-                      let targetUserId = conv.participantUserId else { return }
-                Task {
-                    try? await BlockService.shared.blockUser(userId: targetUserId)
-                    await conversationViewModel.archiveConversation(conversationId: conv.id)
-                    HapticFeedback.success()
-                }
-            }
-            Button(String(localized: "action.cancel", defaultValue: "Annuler"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "block.confirm.message", defaultValue: "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."))
+            .offset(y: isScrollingDown ? 150 : 0)
+            .opacity(isScrollingDown ? 0 : 1)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
         }
     }
 

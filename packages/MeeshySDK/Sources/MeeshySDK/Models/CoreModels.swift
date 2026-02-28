@@ -165,6 +165,28 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
         return "Vu il y a \(Int(interval / 86400))j"
     }
 
+    /// Hash des champs visuels — utilisé dans ThemedConversationRow.== pour détecter les changements de contenu.
+    /// Mettre à jour ce hash quand un nouveau champ est affiché dans ThemedConversationRow.
+    public var renderFingerprint: Int {
+        var h = Hasher()
+        h.combine(lastMessagePreview)
+        h.combine(unreadCount)
+        h.combine(lastMessageAt)
+        h.combine(lastMessageSenderName)
+        h.combine(lastMessageAttachmentCount)
+        h.combine(lastMessageAttachments.first?.id)
+        h.combine(lastMessageIsBlurred)
+        h.combine(lastMessageIsViewOnce)
+        h.combine(lastMessageExpiresAt)
+        h.combine(name)
+        h.combine(isMuted)
+        h.combine(isPinned)
+        h.combine(avatar)
+        h.combine(participantAvatarURL)
+        h.combine(tags)
+        return h.finalize()
+    }
+
     public init(id: String = UUID().uuidString, identifier: String, type: ConversationType = .direct,
                 title: String? = nil, description: String? = nil, avatar: String? = nil, banner: String? = nil,
                 communityId: String? = nil, isActive: Bool = true, memberCount: Int = 2,

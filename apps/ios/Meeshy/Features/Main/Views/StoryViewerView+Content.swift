@@ -1,6 +1,29 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
+
+// MARK: - Reveal Circle Shape
+
+/// Shape animable pour l'effet de révélation circulaire.
+struct RevealCircleShape: Shape {
+    var progress: CGFloat  // 0 = cercle invisible, 1 = plein écran
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let maxRadius = sqrt(rect.width * rect.width + rect.height * rect.height)
+        let radius = maxRadius * progress
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        return Path(ellipseIn: CGRect(
+            x: center.x - radius, y: center.y - radius,
+            width: radius * 2, height: radius * 2
+        ))
+    }
+}
 
 // MARK: - Extracted from StoryViewerView.swift
 
@@ -97,29 +120,13 @@ extension StoryViewerView {
 
     func mediaOverlay(media: FeedMedia, geometry: GeometryProxy) -> some View {
         Group {
-            if let urlString = media.url, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                    case .failure:
-                        // Fallback: colored gradient
-                        coloredMediaFallback(media: media)
-                    case .empty:
-                        // Loading: subtle shimmer on gradient bg
-                        coloredMediaFallback(media: media)
-                            .overlay(
-                                ProgressView()
-                                    .tint(.white)
-                            )
-                    @unknown default:
-                        coloredMediaFallback(media: media)
-                    }
+            if media.url != nil {
+                CachedAsyncImage(url: media.url) {
+                    coloredMediaFallback(media: media)
                 }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
             } else {
                 coloredMediaFallback(media: media)
             }
@@ -350,31 +357,80 @@ extension StoryViewerView {
     /// True cross-dissolve for stories within the same user.
     /// Old content stays visible (outgoing layer) while new content fades in on top —
     /// eliminates the flash caused by AsyncImage reloading between swaps.
-    /// Text gets a subtle parallax slide-up for cinematic depth.
+    /// Supports StoryTransitionEffect: fade, zoom, slide, reveal.
     private func crossFadeStory(update: @escaping () -> Void) {
         isTransitioning = true
 
         // 1. Snapshot current story as outgoing (already rendered, no reload needed)
         outgoingStory = currentStory
         outgoingOpacity = 1
+        closingScale = 1.0
         contentOpacity = 0
-        textSlideOffset = 14 // Start text slightly below for parallax entrance
 
-        // 2. Instantly swap to the new story
+        // Read closing effect from the OUTGOING story before swapping
+        let closingEffect = currentStory?.storyEffects?.closing
+
+        // 2. Swap to the incoming story (invisible because contentOpacity = 0)
         update()
         markCurrentViewed()
+        prefetchStory(at: currentStoryIndex + 1)
 
-        // 3. Simultaneously cross-dissolve with text parallax
-        withAnimation(.easeOut(duration: 0.35)) {
+        // Read opening effect from the INCOMING story (currentStory is now the new one)
+        let incomingEffect = currentStory?.storyEffects?.opening
+
+        // Set initial animation state for incoming content
+        switch incomingEffect {
+        case .zoom:
+            openingScale = 0.88
+            textSlideOffset = 0
+            isRevealActive = false
+        case .slide:
+            textSlideOffset = 30
+            openingScale = 1.0
+            isRevealActive = false
+        case .reveal:
+            openingScale = 1.0
+            textSlideOffset = 0
+            isRevealActive = false   // start collapsed
+        default: // fade ou nil
+            textSlideOffset = 14
+            openingScale = 1.0
+            isRevealActive = false
+        }
+
+        let animDuration: Double
+        let animation: Animation
+        switch incomingEffect {
+        case .zoom:
+            animDuration = 0.4
+            animation = .spring(response: 0.4, dampingFraction: 0.75)
+        case .slide:
+            animDuration = 0.38
+            animation = .spring(response: 0.38, dampingFraction: 0.82)
+        case .reveal:
+            animDuration = 0.4
+            animation = .easeOut(duration: 0.4)
+        default:
+            animDuration = 0.35
+            animation = .easeOut(duration: 0.35)
+        }
+
+        // 3. Animate incoming in + outgoing out with closing effect applied
+        withAnimation(animation) {
             outgoingOpacity = 0
             contentOpacity = 1
+            openingScale = 1.0
             textSlideOffset = 0
+            if incomingEffect == .reveal { isRevealActive = true }
+            if closingEffect == .zoom { closingScale = 1.08 }
         }
 
         restartTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
             outgoingStory = nil
             isTransitioning = false
+            closingScale = 1.0
+            // isRevealActive is reset at the start of each new transition (switch incomingEffect above)
         }
     }
 
@@ -489,14 +545,8 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendReply(text: String) {
-        guard !text.isEmpty, let story = currentStory, let group = currentGroup else { return }
-        let context = ReplyContext.story(
-            storyId: story.id,
-            authorId: group.id,
-            authorName: group.username,
-            preview: story.content ?? "Story"
-        )
+    func sendComment(text: String) {
+        guard !text.isEmpty, let story = currentStory else { return }
 
         // Fire & forget comment
         Task {
@@ -507,10 +557,11 @@ extension StoryViewerView {
             )
         }
 
-        // Navigate to DM
-        dismissViewer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            onReplyToStory?(context)
+        // Just dismiss composer and give feedback
+        DispatchQueue.main.async {
+            HapticFeedback.success()
+            self.dismissComposer()
+            self.storyDrafts.removeValue(forKey: story.id)
         }
     }
 
@@ -595,6 +646,28 @@ extension StoryViewerView {
     func markCurrentViewed() {
         if let story = currentStory {
             viewModel.markViewed(storyId: story.id)
+        }
+    }
+
+    // MARK: - Prefetch
+
+    /// Précharge l'image de la story à l'index donné dans le groupe actuel.
+    func prefetchStory(at index: Int) {
+        guard currentGroupIndex < groups.count else { return }
+        let stories = groups[currentGroupIndex].stories
+        guard index >= 0, index < stories.count else { return }
+        stories[index].media.compactMap(\.url).forEach {
+            MediaCacheManager.shared.prefetch($0)
+        }
+    }
+
+    /// Précharge toutes les stories du groupe actuel (appelé à l'ouverture du viewer).
+    func prefetchCurrentGroup() {
+        guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
+        groups[currentGroupIndex].stories.forEach { story in
+            story.media.compactMap(\.url).forEach {
+                MediaCacheManager.shared.prefetch($0)
+            }
         }
     }
 }

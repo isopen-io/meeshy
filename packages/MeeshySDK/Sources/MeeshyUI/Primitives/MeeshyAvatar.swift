@@ -31,8 +31,8 @@ public enum AvatarMode {
 
     public var showsMoodBadge: Bool {
         switch self {
-        case .conversationList, .conversationHeader, .messageBubble: return true
-        default: return false
+        case .callNotification: return false
+        default: return true
         }
     }
 
@@ -171,6 +171,7 @@ public struct MeeshyAvatar: View {
 
     @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
+    @State private var moodScale: CGFloat = 1.0
     @ObservedObject private var theme = ThemeManager.shared
 
     private var resolvedAccent: String {
@@ -364,11 +365,21 @@ public struct MeeshyAvatar: View {
             Text(emoji)
                 .font(.system(size: mode.badgeSize * 0.65))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scaleEffect(moodScale)
                 .contentShape(Circle())
                 .onTapGesture {
                     HapticFeedback.light()
                     let f = geo.frame(in: .global)
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
+                }
+                .onAppear {
+                    withAnimation(
+                        .spring(response: 0.5, dampingFraction: 0.4)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double.random(in: 0...1.5))
+                    ) {
+                        moodScale = 1.18
+                    }
                 }
         }
         .frame(width: mode.badgeSize, height: mode.badgeSize)

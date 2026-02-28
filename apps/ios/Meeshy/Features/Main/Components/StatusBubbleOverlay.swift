@@ -22,8 +22,9 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 48, 210)
-            let bubbleX = min(max(anchor.x, bubbleW / 2 + 16), bounds.width - bubbleW / 2 - 16)
+            let bubbleW: CGFloat = min(screenWidth - 48, 250)
+            // Décalé à droite de l'avatar : bord gauche de la bulle à anchor.x + 12
+            let bubbleX = min(anchor.x + 12 + bubbleW / 2, bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
             let dx = bubbleX - anchor.x
 
@@ -39,7 +40,6 @@ struct StatusBubbleOverlay: View {
                     )
                     .allowsHitTesting(appearAnimation)
 
-                // Thought trail circles
                 thoughtCircle(size: 4)
                     .position(x: anchor.x + dx * 0.08, y: anchor.y + dir * 7)
                     .opacity(appearAnimation ? 1 : 0)
@@ -55,12 +55,11 @@ struct StatusBubbleOverlay: View {
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.06), value: appearAnimation)
 
-                // Main bubble
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
-                    .position(x: bubbleX, y: anchor.y + dir * 62)
-                    .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottom : .top)
+                    .position(x: bubbleX, y: anchor.y + dir * 52)
+                    .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottomLeading : .topLeading)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.28, dampingFraction: 0.72).delay(0.05), value: appearAnimation)
             }
@@ -86,36 +85,32 @@ struct StatusBubbleOverlay: View {
 
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                // Audio : date sur sa propre ligne + player
+            HStack(spacing: 6) {
+                Text(status.moodEmoji)
+                    .font(.system(size: 18))
+                Spacer()
                 Text(status.timeAgo)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                audioPlayerView(urlString: audioUrl)
-            } else {
-                // Date + contenu directement à la suite, multilignes
-                let content = status.content ?? ""
-                if content.isEmpty {
-                    Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                } else {
-                    (Text(status.timeAgo + "  ")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                    + Text(content)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textPrimary))
-                }
+            }
+
+            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
+                audioPlayerRow(urlString: audioUrl)
+            } else if let content = status.content, !content.isEmpty {
+                Text(content)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             LinearGradient(
                                 colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
@@ -131,35 +126,26 @@ struct StatusBubbleOverlay: View {
 
     // MARK: - Audio Player
 
-    private func audioPlayerView(urlString: String) -> some View {
+    private func audioPlayerRow(urlString: String) -> some View {
         HStack(spacing: 6) {
             Button {
-                if audioPlayer.isPlaying {
-                    audioPlayer.togglePlayPause()
-                } else if audioPlayer.progress > 0 {
-                    audioPlayer.togglePlayPause()
-                } else {
-                    audioPlayer.play(urlString: urlString)
-                }
+                audioPlayer.togglePlayPause()
             } label: {
-                Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 10, weight: .bold))
+                Image(systemName: audioPlayer.isPlaying ? "stop.fill" : "play.fill")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(hex: status.avatarColor).opacity(0.2))
-                        .frame(height: 3)
-                    Capsule()
-                        .fill(Color(hex: status.avatarColor))
-                        .frame(width: geo.size.width * audioPlayer.progress, height: 3)
-                }
-            }
-            .frame(height: 3)
+            ProgressView(value: audioPlayer.progress)
+                .progressViewStyle(.linear)
+                .tint(Color(hex: status.avatarColor))
+                .frame(maxWidth: .infinity)
+                .scaleEffect(y: 0.6, anchor: .center)
+        }
+        .onAppear {
+            audioPlayer.play(urlString: urlString)
         }
     }
 

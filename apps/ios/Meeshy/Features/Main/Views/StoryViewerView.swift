@@ -3,8 +3,13 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+struct SharedContentWrapper: Identifiable {
+    let id = UUID()
+    let content: SharedContentType
+}
+
 /// Draft state for a single story's composer
-private struct StoryDraft {
+struct StoryDraft {
     var text: String = ""
     var attachments: [ComposerAttachment] = []
 }
@@ -25,7 +30,7 @@ struct StoryViewerView: View {
     @State var hasComposerContent = false // internal for cross-file extension access
 
     // Per-story draft storage
-    @State private var storyDrafts: [String: StoryDraft] = [:]
+    @State var storyDrafts: [String: StoryDraft] = [:]
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -67,6 +72,11 @@ struct StoryViewerView: View {
 
     // Text parallax offset (slides up during cross-dissolve for depth)
     @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
+
+    // Opening effect animation states
+    @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
+    @State var isRevealActive: Bool = false       // internal for cross-file extension access
+    @State var closingScale: CGFloat = 1.0        // internal for cross-file extension access
 
     // Horizontal swipe (group ↔ group)
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
@@ -122,6 +132,7 @@ struct StoryViewerView: View {
         .onAppear {
             startTimer()
             markCurrentViewed()
+            prefetchCurrentGroup()
             // Entrance: scale up from small card to fullscreen
             withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
                 appearScale = 1.0
@@ -138,6 +149,16 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
             }
+        }
+        .sheet(item: $sharedContentWrapper, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            SharePickerView(
+                sharedContent: wrapper.content,
+                onDismiss: { sharedContentWrapper = nil },
+                onShareToConversation: nil
+            )
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -166,6 +187,7 @@ struct StoryViewerView: View {
     @State var showEmojiStrip = false // internal for cross-file extension access
     @State private var bigReactionEmoji: String?
     @State private var bigReactionPhase: Int = 0
+    @State private var sharedContentWrapper: SharedContentWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -181,6 +203,7 @@ struct StoryViewerView: View {
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
                 StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage)
                     .opacity(outgoingOpacity)
+                    .scaleEffect(closingScale)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -190,6 +213,10 @@ struct StoryViewerView: View {
                 StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
+                    .scaleEffect(openingScale)
+                    .clipShape(
+                        RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
+                    )
             }
 
             // === Voice caption overlay (transcription voix) ===
@@ -433,7 +460,10 @@ struct StoryViewerView: View {
                 label: "Envoyer"
             ) {
                 HapticFeedback.light()
-                shareStory()
+                pauseTimer()
+                if let story = currentStory, let group = currentGroup {
+                    sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
+                }
             }
 
             // 3. Reshare (republish to own story) — hidden for own stories
@@ -655,8 +685,8 @@ struct StoryViewerView: View {
     private var storyComposerBar: some View {
         UniversalComposerBar(
             style: .dark,
-            placeholder: "Répondre...",
-            onSend: { text in sendReply(text: text) },
+            placeholder: "Commenter...",
+            onSend: { text in sendComment(text: text) },
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true
