@@ -91,6 +91,8 @@ public struct StoryComposerView: View {
     @State private var photoPickerItem: PhotosPickerItem? = nil
     @State private var showRestoreDraftAlert = false
     @State private var pendingDraft: StoryComposerDraft? = nil
+    @State private var pendingAudioEditorURL: URL? = nil
+    @State private var showAudioEditor = false
 
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
@@ -133,6 +135,23 @@ public struct StoryComposerView: View {
             VStack(spacing: 0) {
                 Spacer()
                 bottomOverlay
+            }
+        }
+        .fullScreenCover(isPresented: $showAudioEditor) {
+            if let url = pendingAudioEditorURL {
+                StoryAudioEditorView(
+                    url: url,
+                    onConfirm: { confirmedURL, _ in
+                        selectedAudioId = confirmedURL.lastPathComponent
+                        selectedAudioTitle = "Enregistrement"
+                        showAudioEditor = false
+                        pendingAudioEditorURL = nil
+                    },
+                    onDismiss: {
+                        showAudioEditor = false
+                        pendingAudioEditorURL = nil
+                    }
+                )
             }
         }
         .statusBarHidden()
@@ -594,7 +613,11 @@ public struct StoryComposerView: View {
             StoryAudioPanel(
                 selectedAudioId: $selectedAudioId,
                 selectedAudioTitle: $selectedAudioTitle,
-                audioVolume: $audioVolume
+                audioVolume: $audioVolume,
+                onRecordingReady: { url in
+                    pendingAudioEditorURL = url
+                    showAudioEditor = true
+                }
             )
 
         case .background:

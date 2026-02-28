@@ -48,6 +48,8 @@ public struct StoryAudioPanel: View {
     @Binding var selectedAudioId: String?
     @Binding var selectedAudioTitle: String?
     @Binding var audioVolume: Float
+    /// Appelé quand un enregistrement est prêt — le parent gère la présentation de l'éditeur
+    var onRecordingReady: ((URL) -> Void)? = nil
 
     @State private var activeTab: AudioPanelTab = .library
     @State private var searchQuery = ""
@@ -55,13 +57,12 @@ public struct StoryAudioPanel: View {
     @State private var isLoading = false
     @State private var previewingId: String?
     @State private var previewPlayer: AudioPlayerManager = AudioPlayerManager()
-    @State private var pendingRecordingURL: URL? = nil
-    @State private var showAudioEditor = false
 
-    public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>) {
+    public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>, onRecordingReady: ((URL) -> Void)? = nil) {
         _selectedAudioId = selectedAudioId
         _selectedAudioTitle = selectedAudioTitle
         _audioVolume = audioVolume
+        self.onRecordingReady = onRecordingReady
     }
 
     public var body: some View {
@@ -73,23 +74,6 @@ public struct StoryAudioPanel: View {
         .background(Color.black.opacity(0.5))
         .onAppear { fetchLibrary() }
         .onDisappear { previewPlayer.stop() }
-        .fullScreenCover(isPresented: $showAudioEditor) {
-            if let recordURL = pendingRecordingURL {
-                StoryAudioEditorView(
-                    url: recordURL,
-                    onConfirm: { url, _ in
-                        selectedAudioId = url.lastPathComponent
-                        selectedAudioTitle = "Enregistrement"
-                        showAudioEditor = false
-                        pendingRecordingURL = nil
-                    },
-                    onDismiss: {
-                        showAudioEditor = false
-                        pendingRecordingURL = nil
-                    }
-                )
-            }
-        }
     }
 
     // MARK: - Tab Selector
@@ -137,8 +121,7 @@ public struct StoryAudioPanel: View {
             StoryVoiceRecorder(
                 onRecordComplete: { url in
                     previewPlayer.stop()
-                    pendingRecordingURL = url
-                    showAudioEditor = true
+                    onRecordingReady?(url)
                 }
             )
         }
