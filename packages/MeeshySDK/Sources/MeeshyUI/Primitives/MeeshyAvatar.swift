@@ -343,12 +343,12 @@ public struct MeeshyAvatar: View {
     /// en tenant compte du fait que le glow story-unread agrandit le ZStack à (size+20).
     private func badgeOffset(badgeHalfSize: CGFloat) -> CGSize {
         guard effectiveStoryState != .none else { return .zero }
-        let r = mode.ringSize / 2
         let avatarR = mode.size / 2
         // Le glow Circle (size+20) agrandit le ZStack au-delà du ring quand story unread
         let zstackSize: CGFloat = effectiveStoryState == .unread ? (mode.size + 20) : mode.ringSize
-        // Cible : centre du badge sur le bord de l'avatar à 45° (dans les coords du ZStack)
-        let target = r + avatarR * cos(.pi / 4)
+        let zstackCenter = zstackSize / 2
+        // Cible : badge centré sur le bord de l'avatar à 45° dans les coords du ZStack
+        let target = zstackCenter + avatarR * cos(.pi / 4)
         let current = zstackSize - badgeHalfSize
         let delta = target - current
         return CGSize(width: delta, height: delta)

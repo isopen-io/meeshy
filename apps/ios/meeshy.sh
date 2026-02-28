@@ -122,6 +122,7 @@ do_device_deploy() {
         -skipMacroValidation \
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
+        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
     set -e
