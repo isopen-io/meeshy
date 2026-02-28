@@ -157,16 +157,16 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        GeometryReader { proxy in
-            let rowWidth = proxy.size.width - 32 - 52 - 28 - 24
-            VStack(spacing: 0) {
-                ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
-                    conversationRow(for: conversation, rowWidth: rowWidth)
-                        .staggeredAppear(index: index, baseDelay: 0.04)
-                        .onAppear {
-                            triggerLoadMoreIfNeeded(conversation: conversation)
-                        }
-                }
+        // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
+        // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
+        let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
+        VStack(spacing: 0) {
+            ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
+                conversationRow(for: conversation, rowWidth: rowWidth)
+                    .staggeredAppear(index: index, baseDelay: 0.04)
+                    .onAppear {
+                        triggerLoadMoreIfNeeded(conversation: conversation)
+                    }
             }
         }
     }
