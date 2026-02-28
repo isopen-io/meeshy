@@ -57,7 +57,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              translations: { isSet: true },
+              NOT: { translations: null },
             },
           }),
           fastify.prisma.friendRequest.count({
@@ -68,7 +68,6 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              originalLanguage: { not: null },
             },
           }),
           fastify.prisma.user.findUnique({
@@ -225,7 +224,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              translations: { isSet: true },
+              NOT: { translations: null },
             },
           }),
           fastify.prisma.friendRequest.count({
@@ -236,7 +235,6 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             where: {
               senderId: userId,
               isDeleted: false,
-              originalLanguage: { not: null },
             },
           }),
           fastify.prisma.user.findUnique({

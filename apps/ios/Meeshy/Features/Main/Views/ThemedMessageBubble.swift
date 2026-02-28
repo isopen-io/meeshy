@@ -499,7 +499,10 @@ struct ThemedMessageBubble: View {
                         }
                     }
                     .blur(radius: shouldBlur ? 20 : 0)
-                    .clipped()
+                    .mask(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .blur(radius: shouldBlur ? 5 : 0)
+                    )
 
                     // Fog condensation effect (appears when blur returns)
                     if fogOpacity > 0 {
