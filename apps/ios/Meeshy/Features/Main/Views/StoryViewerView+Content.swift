@@ -348,6 +348,7 @@ extension StoryViewerView {
         // 2. Instantly swap to the new story
         update()
         markCurrentViewed()
+        prefetchStory(at: currentStoryIndex + 1)
 
         // 3. Simultaneously cross-dissolve with text parallax
         withAnimation(.easeOut(duration: 0.35)) {
@@ -580,6 +581,28 @@ extension StoryViewerView {
     func markCurrentViewed() {
         if let story = currentStory {
             viewModel.markViewed(storyId: story.id)
+        }
+    }
+
+    // MARK: - Prefetch
+
+    /// Précharge l'image de la story à l'index donné dans le groupe actuel.
+    func prefetchStory(at index: Int) {
+        guard currentGroupIndex < groups.count else { return }
+        let stories = groups[currentGroupIndex].stories
+        guard index >= 0, index < stories.count else { return }
+        stories[index].media.compactMap(\.url).forEach {
+            MediaCacheManager.shared.prefetch($0)
+        }
+    }
+
+    /// Précharge toutes les stories du groupe actuel (appelé à l'ouverture du viewer).
+    func prefetchCurrentGroup() {
+        guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
+        groups[currentGroupIndex].stories.forEach { story in
+            story.media.compactMap(\.url).forEach {
+                MediaCacheManager.shared.prefetch($0)
+            }
         }
     }
 }

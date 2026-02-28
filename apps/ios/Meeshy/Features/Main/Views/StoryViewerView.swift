@@ -122,6 +122,7 @@ struct StoryViewerView: View {
         .onAppear {
             startTimer()
             markCurrentViewed()
+            prefetchCurrentGroup()
             // Entrance: scale up from small card to fullscreen
             withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
                 appearScale = 1.0
