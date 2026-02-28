@@ -111,6 +111,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
     public var lastMessageAttachmentCount: Int = 0
     public var lastMessageId: String? = nil
     public var lastMessageSenderName: String? = nil
+    public var lastMessageIsBlurred: Bool = false
+    public var lastMessageIsViewOnce: Bool = false
+    public var lastMessageExpiresAt: Date? = nil
     public var recentMessages: [RecentMessagePreview] = []
     public var tags: [MeeshyConversationTag] = []
 
@@ -172,6 +175,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
                 lastMessageAttachmentCount: Int = 0,
                 lastMessageId: String? = nil,
                 lastMessageSenderName: String? = nil,
+                lastMessageIsBlurred: Bool = false,
+                lastMessageIsViewOnce: Bool = false,
+                lastMessageExpiresAt: Date? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
@@ -192,6 +198,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
         self.lastMessageId = lastMessageId
         self.lastMessageSenderName = lastMessageSenderName
+        self.lastMessageIsBlurred = lastMessageIsBlurred
+        self.lastMessageIsViewOnce = lastMessageIsViewOnce
+        self.lastMessageExpiresAt = lastMessageExpiresAt
         self.recentMessages = recentMessages
         self.tags = tags
         self.language = language; self.theme = theme
