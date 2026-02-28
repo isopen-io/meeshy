@@ -180,6 +180,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
         h.combine(name)
         h.combine(isMuted)
         h.combine(isPinned)
+        h.combine(avatar)
+        h.combine(participantAvatarURL)
+        h.combine(tags)
         return h.finalize()
     }
 
