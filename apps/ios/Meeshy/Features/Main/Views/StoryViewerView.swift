@@ -68,6 +68,10 @@ struct StoryViewerView: View {
     // Text parallax offset (slides up during cross-dissolve for depth)
     @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
 
+    // Opening effect animation states
+    @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
+    @State var isRevealActive: Bool = false       // internal for cross-file extension access
+
     // Horizontal swipe (group ↔ group)
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
@@ -191,6 +195,10 @@ struct StoryViewerView: View {
                 StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
+                    .scaleEffect(openingScale)
+                    .clipShape(
+                        RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
+                    )
             }
 
             // === Voice caption overlay (transcription voix) ===

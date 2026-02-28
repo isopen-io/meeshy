@@ -3,6 +3,28 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Reveal Circle Shape
+
+/// Shape animable pour l'effet de révélation circulaire.
+struct RevealCircleShape: Shape {
+    var progress: CGFloat  // 0 = cercle invisible, 1 = plein écran
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let maxRadius = sqrt(rect.width * rect.width + rect.height * rect.height)
+        let radius = maxRadius * progress
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        return Path(ellipseIn: CGRect(
+            x: center.x - radius, y: center.y - radius,
+            width: radius * 2, height: radius * 2
+        ))
+    }
+}
+
 // MARK: - Extracted from StoryViewerView.swift
 
 extension StoryViewerView {
@@ -335,7 +357,7 @@ extension StoryViewerView {
     /// True cross-dissolve for stories within the same user.
     /// Old content stays visible (outgoing layer) while new content fades in on top —
     /// eliminates the flash caused by AsyncImage reloading between swaps.
-    /// Text gets a subtle parallax slide-up for cinematic depth.
+    /// Supports StoryTransitionEffect: fade, zoom, slide, reveal.
     private func crossFadeStory(update: @escaping () -> Void) {
         isTransitioning = true
 
@@ -343,24 +365,66 @@ extension StoryViewerView {
         outgoingStory = currentStory
         outgoingOpacity = 1
         contentOpacity = 0
-        textSlideOffset = 14 // Start text slightly below for parallax entrance
+
+        // Lire l'effet AVANT le swap (currentStory va changer après update())
+        let incomingEffect = currentStory?.storyEffects?.opening
+
+        // État initial selon l'effet entrant
+        switch incomingEffect {
+        case .zoom:
+            openingScale = 0.88
+            textSlideOffset = 0
+            isRevealActive = false
+        case .slide:
+            textSlideOffset = 30
+            openingScale = 1.0
+            isRevealActive = false
+        case .reveal:
+            openingScale = 1.0
+            textSlideOffset = 0
+            isRevealActive = false   // start collapsed
+        default: // fade ou nil
+            textSlideOffset = 14
+            openingScale = 1.0
+            isRevealActive = false
+        }
 
         // 2. Instantly swap to the new story
         update()
         markCurrentViewed()
         prefetchStory(at: currentStoryIndex + 1)
 
-        // 3. Simultaneously cross-dissolve with text parallax
-        withAnimation(.easeOut(duration: 0.35)) {
+        let animDuration: Double
+        let animation: Animation
+        switch incomingEffect {
+        case .zoom:
+            animDuration = 0.4
+            animation = .spring(response: 0.4, dampingFraction: 0.75)
+        case .slide:
+            animDuration = 0.38
+            animation = .spring(response: 0.38, dampingFraction: 0.82)
+        case .reveal:
+            animDuration = 0.4
+            animation = .easeOut(duration: 0.4)
+        default:
+            animDuration = 0.35
+            animation = .easeOut(duration: 0.35)
+        }
+
+        // 3. Simultaneously cross-dissolve with effect-specific animation
+        withAnimation(animation) {
             outgoingOpacity = 0
             contentOpacity = 1
+            openingScale = 1.0
             textSlideOffset = 0
+            if incomingEffect == .reveal { isRevealActive = true }
         }
 
         restartTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
             outgoingStory = nil
             isTransitioning = false
+            isRevealActive = false
         }
     }
 
