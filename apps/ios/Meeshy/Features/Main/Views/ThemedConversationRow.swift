@@ -418,9 +418,7 @@ struct ThemedConversationRow: View {
         case .none:
             let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let attachments = conversation.lastMessageAttachments
-            if !hasText && !attachments.isEmpty {
-                standardMessageContent(showEphemeralIcon: false)
-            } else if hasText {
+            if hasText || !attachments.isEmpty {
                 standardMessageContent(showEphemeralIcon: false)
             } else {
                 Text("")
