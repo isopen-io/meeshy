@@ -6,6 +6,7 @@ import MeeshySDK
 // MARK: - Themed Conversation Row
 struct ThemedConversationRow: View {
     let conversation: Conversation
+    var community: MeeshyCommunity? = nil
     var availableWidth: CGFloat = 200 // Default width for tags calculation
     var isDragging: Bool = false
     /// Présence pré-calculée par le parent — évite que chaque ligne observe PresenceManager
@@ -15,6 +16,7 @@ struct ThemedConversationRow: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
     var onCreateShareLink: (() -> Void)? = nil
+    var onCommunityTap: (() -> Void)? = nil
 
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none

@@ -3,8 +3,13 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+struct SharedContentWrapper: Identifiable {
+    let id = UUID()
+    let content: SharedContentType
+}
+
 /// Draft state for a single story's composer
-private struct StoryDraft {
+struct StoryDraft {
     var text: String = ""
     var attachments: [ComposerAttachment] = []
 }
@@ -25,7 +30,7 @@ struct StoryViewerView: View {
     @State var hasComposerContent = false // internal for cross-file extension access
 
     // Per-story draft storage
-    @State private var storyDrafts: [String: StoryDraft] = [:]
+    @State var storyDrafts: [String: StoryDraft] = [:]
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -145,6 +150,16 @@ struct StoryViewerView: View {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
             }
         }
+        .sheet(item: $sharedContentWrapper, onDismiss: {
+            resumeTimer()
+        }) { wrapper in
+            SharePickerView(
+                sharedContent: wrapper.content,
+                onDismiss: { sharedContentWrapper = nil },
+                onShareToConversation: nil
+            )
+            .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Computed Card Transforms
@@ -172,6 +187,7 @@ struct StoryViewerView: View {
     @State var showEmojiStrip = false // internal for cross-file extension access
     @State private var bigReactionEmoji: String?
     @State private var bigReactionPhase: Int = 0
+    @State private var sharedContentWrapper: SharedContentWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -444,7 +460,10 @@ struct StoryViewerView: View {
                 label: "Envoyer"
             ) {
                 HapticFeedback.light()
-                shareStory()
+                pauseTimer()
+                if let story = currentStory, let group = currentGroup {
+                    sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
+                }
             }
 
             // 3. Reshare (republish to own story) — hidden for own stories

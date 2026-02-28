@@ -40,7 +40,6 @@ struct StatusBubbleOverlay: View {
                     )
                     .allowsHitTesting(appearAnimation)
 
-                // Thought trail circles
                 thoughtCircle(size: 4)
                     .position(x: anchor.x + dx * 0.08, y: anchor.y + dir * 7)
                     .opacity(appearAnimation ? 1 : 0)
@@ -56,7 +55,6 @@ struct StatusBubbleOverlay: View {
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.06), value: appearAnimation)
 
-                // Main bubble
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
@@ -87,27 +85,23 @@ struct StatusBubbleOverlay: View {
 
     private var bubbleContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                // Audio : date sur sa propre ligne + player
+            HStack(spacing: 6) {
+                Text(status.moodEmoji)
+                    .font(.system(size: 18))
+                Spacer()
                 Text(status.timeAgo)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                audioPlayerView(urlString: audioUrl)
-            } else {
-                // Date + contenu directement à la suite, multilignes
-                let content = status.content ?? ""
-                if content.isEmpty {
-                    Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                } else {
-                    (Text(status.timeAgo + "  ")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                    + Text(content)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textPrimary))
-                }
+            }
+
+            if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
+                audioPlayerRow(urlString: audioUrl)
+            } else if let content = status.content, !content.isEmpty {
+                Text(content)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 12)
