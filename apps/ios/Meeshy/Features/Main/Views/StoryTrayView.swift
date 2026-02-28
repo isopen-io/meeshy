@@ -34,11 +34,10 @@ struct StoryTrayView: View {
         }
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             StoryComposerView(
-                onPublish: { effects, content, image in
-                    Task {
-                        await viewModel.publishStory(effects: effects, content: content, image: image)
-                    }
+                onPublishSlide: { slide, image in
+                    await viewModel.publishStory(effects: slide.effects, content: slide.content, image: image)
                 },
+                onPreview: { _, _ in },
                 onDismiss: {
                     viewModel.showStoryComposer = false
                 }
