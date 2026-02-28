@@ -109,7 +109,6 @@ public struct StoryComposerView: View {
                 if !isDrawingActive {
                     toolBar
                     activeToolPanel
-                        .frame(maxWidth: UIScreen.main.bounds.width)
                         .frame(maxHeight: 200)
                         .clipped()
                 }
