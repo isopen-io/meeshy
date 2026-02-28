@@ -505,6 +505,91 @@ export async function communityRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Route pour obtenir les communautes de l'utilisateur courant
+  fastify.get('/communities/mine', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      description: "Returns communities where the authenticated user is a member. Optionally filter by role (comma-separated: admin,moderator,member).",
+      tags: ['communities'],
+      summary: "Get current user's communities",
+      querystring: {
+        type: 'object',
+        properties: {
+          role: {
+            type: 'string',
+            description: 'Comma-separated list of roles to filter by (admin,moderator,member)'
+          }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  identifier: { type: 'string', nullable: true },
+                  avatar: { type: 'string', nullable: true },
+                  isPrivate: { type: 'boolean' },
+                  role: { type: 'string' }
+                }
+              }
+            }
+          }
+        },
+        401: { description: 'User not authenticated', ...errorResponseSchema },
+        500: { description: 'Internal server error', ...errorResponseSchema }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as any).authContext;
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'User must be authenticated' });
+      }
+
+      const userId = authContext.userId;
+      const { role } = request.query as { role?: string };
+
+      const roleFilter = role
+        ? role.split(',').map(r => r.trim()).filter(r => Object.values(CommunityRole).includes(r as CommunityRole))
+        : undefined;
+
+      const memberships = await fastify.prisma.communityMember.findMany({
+        where: {
+          userId,
+          ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
+        },
+        include: {
+          community: {
+            select: {
+              id: true,
+              name: true,
+              identifier: true,
+              avatar: true,
+              isPrivate: true
+            }
+          }
+        }
+      });
+
+      const data = memberships.map(m => ({
+        ...m.community,
+        role: m.role
+      }));
+
+      return reply.send({ success: true, data });
+    } catch (error) {
+      console.error('Error fetching community:', error);
+      return reply.status(500).send({ success: false, error: 'Failed to fetch user communities' });
+    }
+  });
+
   // Route pour obtenir une communaute par ID ou identifier
   fastify.get('/communities/:id', {
     onRequest: [fastify.authenticate],

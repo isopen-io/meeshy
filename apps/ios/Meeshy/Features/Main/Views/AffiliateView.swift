@@ -87,15 +87,15 @@ struct AffiliateView: View {
             )
             affiliateStatCard(
                 value: "\(viewModel.tokens.reduce(0) { $0 + $1.referralCount })",
-                label: "Parrainages",
-                color: "9B59B6",
-                icon: "person.2.fill"
+                label: "Inscrits",
+                color: accentColor,
+                icon: "person.fill.checkmark"
             )
             affiliateStatCard(
-                value: "\(viewModel.tokens.reduce(0) { $0 + $1.currentUses })",
-                label: "Utilisations",
-                color: "3498DB",
-                icon: "chart.bar.fill"
+                value: "\(viewModel.tokens.reduce(0) { $0 + $1.clickCount })",
+                label: "Clics",
+                color: accentColor,
+                icon: "cursorarrow.click"
             )
         }
     }
@@ -198,9 +198,16 @@ struct AffiliateView: View {
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
-                Text("\(token.referralCount) parrainages - \(token.currentUses) clics")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                HStack(spacing: 8) {
+                    Label("\(token.clickCount) clics", systemImage: "cursorarrow.click")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textMuted)
+                    Text("·")
+                        .foregroundColor(theme.textMuted)
+                    Label("\(token.referralCount) inscrit(s)", systemImage: "person.fill.checkmark")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "2ECC71"))
+                }
             }
 
             Spacer()
@@ -214,6 +221,21 @@ struct AffiliateView: View {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
+            }
+
+            // Partager
+            Button {
+                guard let link = token.affiliateLink, let url = URL(string: link) else { return }
+                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = scene.windows.first,
+                   let root = window.rootViewController {
+                    root.present(av, animated: true)
+                }
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "2ECC71"))
             }
 
             Button {

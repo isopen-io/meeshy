@@ -5,6 +5,24 @@ public final class ShareLinkService {
     private init() {}
     private var api: APIClient { APIClient.shared }
 
+    // MARK: - User's Own Links (authenticated)
+
+    /// Liste les liens de partage créés par l'utilisateur connecté
+    public func listMyLinks(offset: Int = 0, limit: Int = 50) async throws -> [MyShareLink] {
+        let response: APIResponse<[MyShareLink]> = try await api.request(
+            endpoint: "/links?offset=\(offset)&limit=\(limit)"
+        )
+        return response.data
+    }
+
+    /// Stats globales pour les liens de l'utilisateur
+    public func fetchMyStats() async throws -> MyShareLinkStats {
+        let response: APIResponse<MyShareLinkStats> = try await api.request(
+            endpoint: "/links/stats"
+        )
+        return response.data
+    }
+
     // MARK: - Get Link Info (public, no auth required)
 
     public func getLinkInfo(identifier: String) async throws -> ShareLinkInfo {
@@ -46,10 +64,11 @@ public final class ShareLinkService {
 
     // MARK: - Toggle Link Active/Inactive (authenticated)
 
-    public func toggleLink(linkId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(
-            endpoint: "/links/\(linkId)/toggle",
-            method: "PATCH"
+    public func toggleLink(linkId: String, isActive: Bool) async throws {
+        struct ToggleBody: Encodable { let isActive: Bool }
+        let _: APIResponse<MyShareLink> = try await api.patch(
+            endpoint: "/links/\(linkId)",
+            body: ToggleBody(isActive: isActive)
         )
     }
 

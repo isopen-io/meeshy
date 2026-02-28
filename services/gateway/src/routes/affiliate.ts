@@ -759,6 +759,80 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * POST /affiliate/click/:token
+   * Track a click on an affiliate link (no auth required)
+   */
+  fastify.post('/affiliate/click/:token', {
+    schema: {
+      description: 'Record a click on a public affiliate link. Increments the click counter for the token. No authentication required (public endpoint for landing pages).',
+      tags: ['affiliate'],
+      summary: 'Track affiliate link click',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            description: 'Affiliate token code'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Click tracked successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                tracked: { type: 'boolean', example: true }
+              }
+            }
+          }
+        },
+        404: {
+          description: 'Affiliate token not found or inactive',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const params = z.object({ token: z.string() }).parse(request.params);
+      const { token } = params;
+
+      const affiliateToken = await fastify.prisma.affiliateToken.findFirst({
+        where: { token, isActive: true },
+      });
+
+      if (!affiliateToken) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Token d\'affiliation non trouvé ou inactif'
+        });
+      }
+
+      await fastify.prisma.affiliateToken.update({
+        where: { id: affiliateToken.id },
+        data: { clickCount: { increment: 1 } },
+      });
+
+      return reply.send({ success: true, data: { tracked: true } });
+    } catch (error) {
+      console.error('Erreur tracking clic affiliation:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors du tracking du clic'
+      });
+    }
+  });
+
+  /**
    * DELETE /affiliate/tokens/:id
    * Delete an affiliate token
    */

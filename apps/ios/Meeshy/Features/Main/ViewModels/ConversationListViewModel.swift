@@ -17,11 +17,13 @@ struct APICategory: Decodable {
 
 @MainActor
 class ConversationListViewModel: ObservableObject {
-    @Published var conversations: [Conversation] = []
+    @Published var conversations: [Conversation] = [] {
+        didSet { _convIdIndex = nil }
+    }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
-    @Published var isLoadingMore = false
-    @Published var hasMore = true
+    @Published private(set) var isLoadingMore = false
+    private var hasMore = true
 
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
@@ -34,9 +36,22 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private let api = APIClient.shared
-    private let limit = 30
+    private let pageLimit = 100
+    /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
+    private let autoLoadCap = 1000
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
+
+    // O(1) conversation lookup by ID
+    private var _convIdIndex: [String: Int]?
+    private func convIndex(for id: String) -> Int? {
+        if _convIdIndex == nil {
+            var index = [String: Int](minimumCapacity: conversations.count)
+            for (i, c) in conversations.enumerated() { index[c.id] = i }
+            _convIdIndex = index
+        }
+        return _convIdIndex![id]
+    }
 
     private var lastFetchedAt: Date? = nil
     private let cacheTTL: TimeInterval = 30
@@ -90,17 +105,23 @@ class ConversationListViewModel: ObservableObject {
             .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
                 var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
-                // Pinned section
-                let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
-                if !pinnedOnly.isEmpty {
-                    result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                // O(1) lookup sets
+                let categoryIds = Set(categories.map(\.id))
+
+                // Groupement O(n) unique — remplace les k passes filter O(n×k)
+                let bySection = Dictionary(grouping: filtered) { conv -> String in
+                    if conv.isPinned && conv.sectionId == nil { return "__pinned__" }
+                    return conv.sectionId ?? "__other__"
                 }
 
-                // User categories
-                let categoryIds = Set(categories.map(\.id))
+                // Pinned section
+                if let pinned = bySection["__pinned__"], !pinned.isEmpty {
+                    result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                // User categories (order preserved)
                 for category in categories {
-                    let sectionConvs = filtered.filter { $0.sectionId == category.id }
-                    if !sectionConvs.isEmpty {
+                    if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
                         let sorted = sectionConvs.sorted { a, b in
                             if a.isPinned != b.isPinned { return a.isPinned }
                             return a.lastMessageAt > b.lastMessageAt
@@ -109,26 +130,20 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
-                // Orphaned and uncategorized
-                let orphaned = filtered.filter { conv in
+                // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
+                let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
                     guard let sid = conv.sectionId else { return false }
-                    return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
+                    return !categoryIds.contains(sid)
                 }
-                let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
-                let allUncategorized = uncategorized + orphaned
-                if !allUncategorized.isEmpty {
-                    result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                if !otherConvs.isEmpty {
+                    result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
                 }
 
                 return result
             }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newGroups in
-                // Wraps the background-calculated grouping in a smooth animation
-                // This will dynamically animate the lists and sorting natively!
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    self?.groupedConversations = newGroups
-                }
+                self?.groupedConversations = newGroups
             }
             .store(in: &cancellables)
     }
@@ -159,8 +174,16 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 invalidateCache()
-                if let idx = self.conversations.firstIndex(where: { $0.id == event.conversationId }) {
-                    self.conversations[idx].unreadCount = event.unreadCount
+                guard let idx = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[idx].unreadCount = event.unreadCount
+                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
+                let cid = event.conversationId
+                let newCount = event.unreadCount
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
+                        self.groupedConversations[i].conversations[rowIdx].unreadCount = newCount
+                        break
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -172,16 +195,34 @@ class ConversationListViewModel: ObservableObject {
                 guard let self else { return }
                 invalidateCache()
                 let convId = apiMsg.conversationId
-                guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
+                guard let idx = self.convIndex(for: convId) else { return }
 
-                self.conversations[idx].lastMessagePreview = apiMsg.content
-                self.conversations[idx].lastMessageSenderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
-                self.conversations[idx].lastMessageAt = apiMsg.createdAt
+                let preview = apiMsg.content
+                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
+                let msgDate = apiMsg.createdAt
+
+                self.conversations[idx].lastMessagePreview = preview
+                self.conversations[idx].lastMessageSenderName = senderName
+                self.conversations[idx].lastMessageAt = msgDate
 
                 // Move conversation to top if not already
                 if idx > 0 {
                     let conv = self.conversations.remove(at: idx)
                     self.conversations.insert(conv, at: 0)
+                }
+
+                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
+                for i in 0..<self.groupedConversations.count {
+                    guard let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) else { continue }
+                    self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = preview
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageSenderName = senderName
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageAt = msgDate
+                    // Remonter en tête de section (sauf pinned)
+                    if rowIdx > 0 && self.groupedConversations[i].section.id != "pinned" {
+                        let conv = self.groupedConversations[i].conversations.remove(at: rowIdx)
+                        self.groupedConversations[i].conversations.insert(conv, at: 0)
+                    }
+                    break
                 }
             }
             .store(in: &cancellables)
@@ -241,7 +282,7 @@ class ConversationListViewModel: ObservableObject {
         isLoading = true
         currentOffset = 0
 
-        // Show cached conversations immediately while fetching from API
+        // Afficher le cache immédiatement
         if conversations.isEmpty {
             let cached = await LocalStore.shared.loadConversations()
             if !cached.isEmpty {
@@ -255,7 +296,7 @@ class ConversationListViewModel: ObservableObject {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
                 endpoint: "/conversations",
                 offset: 0,
-                limit: limit
+                limit: pageLimit
             )
 
             if response.success {
@@ -266,13 +307,17 @@ class ConversationListViewModel: ObservableObject {
                 currentOffset = conversations.count
                 lastFetchedAt = Date()
 
-                // Update cache in background
                 Task.detached(priority: .utility) { [conversations] in
                     await LocalStore.shared.saveConversations(conversations)
                     await LocalStore.shared.cleanupStaleMessageCaches()
                 }
 
                 prefetchMessages(for: response.data, userId: userId)
+
+                // Charger les pages suivantes silencieusement en arrière-plan
+                if hasMore {
+                    Task { await self.loadAllRemainingBackground() }
+                }
             }
         } catch { }
 
@@ -281,6 +326,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Force Refresh (pull-to-refresh)
+    // Recharge les conversations depuis l'API puis continue en arrière-plan
 
     func forceRefresh() async {
         isLoading = false
@@ -290,25 +336,69 @@ class ConversationListViewModel: ObservableObject {
         await loadConversations()
     }
 
-    // MARK: - Load More
+    // MARK: - Refresh
+
+    func refresh() async {
+        currentOffset = 0
+        hasMore = true
+        await loadConversations()
+    }
+
+    // MARK: - Background full load (pages 2+, silencieux, cap = autoLoadCap)
+    // Au-delà du cap, loadMore() public prend le relais (scroll infini pour power users)
+
+    private func loadAllRemainingBackground() async {
+        while hasMore && !isLoadingMore && conversations.count < autoLoadCap {
+            isLoadingMore = true
+            do {
+                let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
+                    endpoint: "/conversations",
+                    offset: currentOffset,
+                    limit: pageLimit
+                )
+
+                if response.success {
+                    let userId = currentUserId
+                    PresenceManager.shared.seed(from: response.data, currentUserId: userId)
+                    let incoming = response.data.map { $0.toConversation(currentUserId: userId) }
+                    let deduplicated = incoming.filter { convIndex(for: $0.id) == nil }
+                    if !deduplicated.isEmpty {
+                        conversations.append(contentsOf: deduplicated)
+                    }
+                    hasMore = response.pagination?.hasMore ?? false
+                    currentOffset += deduplicated.count
+
+                    Task.detached(priority: .background) { [snapshot = self.conversations] in
+                        await LocalStore.shared.saveConversations(snapshot)
+                    }
+                } else {
+                    hasMore = false
+                }
+            } catch {
+                hasMore = false
+            }
+            isLoadingMore = false
+        }
+    }
+
+    // MARK: - Load More (scroll infini — uniquement pour users avec >1000 conversations)
 
     func loadMore() async {
-        guard hasMore, !isLoadingMore, !isLoading else { return }
+        guard hasMore, !isLoadingMore, !isLoading, conversations.count >= autoLoadCap else { return }
         isLoadingMore = true
 
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
                 endpoint: "/conversations",
                 offset: currentOffset,
-                limit: limit
+                limit: pageLimit
             )
 
             if response.success {
                 let userId = currentUserId
                 PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                 let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
-                let existingIds = Set(conversations.map(\.id))
-                let deduplicated = newConversations.filter { !existingIds.contains($0.id) }
+                let deduplicated = newConversations.filter { convIndex(for: $0.id) == nil }
                 conversations.append(contentsOf: deduplicated)
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset += deduplicated.count
@@ -316,14 +406,6 @@ class ConversationListViewModel: ObservableObject {
         } catch { }
 
         isLoadingMore = false
-    }
-
-    // MARK: - Refresh
-
-    func refresh() async {
-        currentOffset = 0
-        hasMore = true
-        await loadConversations()
     }
 
     // MARK: - Persist Category Expansion
@@ -340,7 +422,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Toggle Pin
 
     func togglePin(for conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].isPinned
 
         // Optimistic local update
@@ -359,7 +441,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Toggle Mute
 
     func toggleMute(for conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].isMuted
 
         conversations[index].isMuted = newValue
@@ -377,7 +459,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousCount = conversations[index].unreadCount
 
         conversations[index].unreadCount = 0
@@ -395,7 +477,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Unread
 
     func markAsUnread(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousCount = conversations[index].unreadCount
 
         // Optimistic update
@@ -416,7 +498,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Archive Conversation
 
     func archiveConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let wasActive = conversations[index].isActive
 
         conversations[index].isActive = false
@@ -434,7 +516,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Unarchive Conversation
 
     func unarchiveConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let wasActive = conversations[index].isActive
 
         conversations[index].isActive = true
@@ -452,7 +534,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Delete Conversation
 
     func deleteConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let removed = conversations.remove(at: index)
 
         do {
@@ -467,7 +549,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Move to Section
 
     func moveToSection(conversationId: String, sectionId: String) {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousSectionId = conversations[index].sectionId
         let newSectionId: String? = sectionId.isEmpty ? nil : sectionId
         conversations[index].sectionId = newSectionId

@@ -22,9 +22,9 @@ extension ConversationView {
         }
         let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
-        pendingAudioURL = url
+        composerState.pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
-        pendingAttachments.append(audioAttachment)
+        composerState.pendingAttachments.append(audioAttachment)
         HapticFeedback.light()
     }
 
@@ -35,33 +35,33 @@ extension ConversationView {
         }
         let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
-        pendingAudioURL = url
+        composerState.pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
-        pendingAttachments.append(audioAttachment)
+        composerState.pendingAttachments.append(audioAttachment)
         sendMessageWithAttachments()
     }
 
     func sendMessageWithAttachments() {
-        guard !isUploading else { return }
+        guard !composerState.isUploading else { return }
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else { return }
 
-        let replyId = pendingReplyReference?.messageId.isEmpty == false ? pendingReplyReference?.messageId : nil
+        let replyId = composerState.pendingReplyReference?.messageId.isEmpty == false ? composerState.pendingReplyReference?.messageId : nil
         let content = text
 
-        let attachments = pendingAttachments
-        let audioURL = pendingAudioURL
-        let mediaFiles = pendingMediaFiles
+        let attachments = composerState.pendingAttachments
+        let audioURL = composerState.pendingAudioURL
+        let mediaFiles = composerState.pendingMediaFiles
 
         let hasFiles = audioURL != nil || !mediaFiles.isEmpty
         if !hasFiles || attachments.isEmpty {
             // Text-only send: clear UI immediately
-            pendingAttachments.removeAll()
-            pendingAudioURL = nil
-            pendingMediaFiles.removeAll()
-            pendingThumbnails.removeAll()
+            composerState.pendingAttachments.removeAll()
+            composerState.pendingAudioURL = nil
+            composerState.pendingMediaFiles.removeAll()
+            composerState.pendingThumbnails.removeAll()
             messageText = ""
-            pendingReplyReference = nil
+            composerState.pendingReplyReference = nil
             viewModel.stopTypingEmission()
             HapticFeedback.light()
             Task { await viewModel.sendMessage(content: content, replyToId: replyId) }
@@ -70,9 +70,9 @@ extension ConversationView {
 
         // File upload flow: keep attachments visible, show progress
         messageText = ""
-        pendingReplyReference = nil
+        composerState.pendingReplyReference = nil
         viewModel.stopTypingEmission()
-        isUploading = true
+        composerState.isUploading = true
         HapticFeedback.light()
 
         Task {
@@ -86,7 +86,7 @@ extension ConversationView {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
                       let token = APIClient.shared.authToken else {
-                    await MainActor.run { isUploading = false }
+                    await MainActor.run { composerState.isUploading = false }
                     return
                 }
 
@@ -98,7 +98,7 @@ extension ConversationView {
                     .receive(on: DispatchQueue.main)
                     .sink { [progressCancellable] progress in
                         _ = progressCancellable
-                        uploadProgress = progress
+                        composerState.uploadProgress = progress
                     }
 
                 var uploadedIds: [String] = []
@@ -147,12 +147,12 @@ extension ConversationView {
 
                 // Clear UI after upload+send
                 await MainActor.run {
-                    pendingAttachments.removeAll()
-                    pendingAudioURL = nil
-                    pendingMediaFiles.removeAll()
-                    pendingThumbnails.removeAll()
-                    uploadProgress = nil
-                    isUploading = false
+                    composerState.pendingAttachments.removeAll()
+                    composerState.pendingAudioURL = nil
+                    composerState.pendingMediaFiles.removeAll()
+                    composerState.pendingThumbnails.removeAll()
+                    composerState.uploadProgress = nil
+                    composerState.isUploading = false
                     if sendSuccess {
                         HapticFeedback.success()
                     } else {
@@ -161,12 +161,12 @@ extension ConversationView {
                 }
             } catch {
                 await MainActor.run {
-                    pendingAttachments.removeAll()
-                    pendingAudioURL = nil
-                    pendingMediaFiles.removeAll()
-                    pendingThumbnails.removeAll()
-                    uploadProgress = nil
-                    isUploading = false
+                    composerState.pendingAttachments.removeAll()
+                    composerState.pendingAudioURL = nil
+                    composerState.pendingMediaFiles.removeAll()
+                    composerState.pendingThumbnails.removeAll()
+                    composerState.uploadProgress = nil
+                    composerState.isUploading = false
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     viewModel.error = "Echec de l'envoi du media: \(error.localizedDescription)"
@@ -186,8 +186,8 @@ extension ConversationView {
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         let itemsCopy = items
-        selectedPhotoItems.removeAll()
-        isLoadingMedia = true
+        composerState.selectedPhotoItems.removeAll()
+        composerState.isLoadingMedia = true
         HapticFeedback.light()
 
         Task {
@@ -223,9 +223,9 @@ extension ConversationView {
                         let thumb = await generateVideoThumbnail(url: compressedURL)
 
                         await MainActor.run {
-                            pendingMediaFiles[attachmentId] = compressedURL
-                            if let thumb { pendingThumbnails[attachmentId] = thumb }
-                            pendingAttachments.append(attachment)
+                            composerState.pendingMediaFiles[attachmentId] = compressedURL
+                            if let thumb { composerState.pendingThumbnails[attachmentId] = thumb }
+                            composerState.pendingAttachments.append(attachment)
                         }
                     }
                 } else {
@@ -250,14 +250,14 @@ extension ConversationView {
                         )
 
                         await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
-                            pendingThumbnails[attachmentId] = uiImage
-                            pendingAttachments.append(attachment)
+                            composerState.pendingMediaFiles[attachmentId] = tempURL
+                            composerState.pendingThumbnails[attachmentId] = uiImage
+                            composerState.pendingAttachments.append(attachment)
                         }
                     }
                 }
             }
-            await MainActor.run { isLoadingMedia = false }
+            await MainActor.run { composerState.isLoadingMedia = false }
         }
     }
 
@@ -299,12 +299,12 @@ extension ConversationView {
                     fileUrl: tempURL.absoluteString,
                     thumbnailColor: "45B7D1"
                 )
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingAttachments.append(attachment)
+                composerState.pendingMediaFiles[attachmentId] = tempURL
+                composerState.pendingAttachments.append(attachment)
             }
             HapticFeedback.light()
         case .failure:
-            actionAlert = "Erreur lors de l'import"
+            composerState.actionAlert = "Erreur lors de l'import"
         }
     }
 
@@ -337,7 +337,7 @@ extension ConversationView {
     }
 
     func addCurrentLocation() {
-        showLocationPicker = true
+        composerState.showLocationPicker = true
     }
 
     func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
@@ -347,7 +347,7 @@ extension ConversationView {
             color: "2ECC71"
         )
         withAnimation {
-            pendingAttachments.append(attachment)
+            composerState.pendingAttachments.append(attachment)
         }
         HapticFeedback.light()
     }
@@ -376,9 +376,9 @@ extension ConversationView {
 
             let thumb = await generateVideoThumbnail(url: compressedURL)
             await MainActor.run {
-                pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { pendingThumbnails[attachmentId] = thumb }
-                pendingAttachments.append(attachment)
+                composerState.pendingMediaFiles[attachmentId] = compressedURL
+                if let thumb { composerState.pendingThumbnails[attachmentId] = thumb }
+                composerState.pendingAttachments.append(attachment)
                 HapticFeedback.success()
             }
         }
@@ -403,9 +403,9 @@ extension ConversationView {
                 thumbnailColor: accentColor
             )
             await MainActor.run {
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingThumbnails[attachmentId] = image
-                pendingAttachments.append(attachment)
+                composerState.pendingMediaFiles[attachmentId] = tempURL
+                composerState.pendingThumbnails[attachmentId] = image
+                composerState.pendingAttachments.append(attachment)
                 HapticFeedback.success()
             }
         }

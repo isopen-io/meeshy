@@ -10,12 +10,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/socketio/socket.io-client-swift", from: "16.1.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
     ],
     targets: [
         .target(
             name: "MeeshySDK",
             dependencies: [
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
+                .product(name: "GRDB", package: "GRDB.swift"),
             ]
         ),
         .target(

@@ -159,33 +159,61 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         logger.warn('[TUS] Thumbnail generation failed:', err);
       }
 
-      const attachment = await prisma.messageAttachment.create({
-        data: {
-          fileName: storedName,
-          originalName: filename,
-          mimeType,
-          fileSize,
-          filePath: relPath,
-          fileUrl,
-          thumbnailPath: thumbnailRelPath || null,
-          thumbnailUrl: thumbnailUrl || null,
-          width: metadata.width || null,
-          height: metadata.height || null,
-          duration: metadata.duration || null,
-          bitrate: metadata.bitrate || null,
-          sampleRate: metadata.sampleRate || null,
-          codec: metadata.codec || null,
-          channels: metadata.channels || null,
-          fps: metadata.fps || null,
-          videoCodec: metadata.videoCodec || null,
-          pageCount: metadata.pageCount || null,
-          lineCount: metadata.lineCount || null,
-          uploadedBy: userId,
-          isAnonymous,
-        },
-      });
+      const uploadContext = upload.metadata?.uploadcontext;
+      const isPostMedia = uploadContext === 'post' || uploadContext === 'story' || uploadContext === 'status';
 
-      logger.info(`[TUS] Upload complete: ${storedName} (${fileSize} bytes)`);
+      let recordId: string;
+      if (isPostMedia) {
+        // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
+        const postMedia = await prisma.postMedia.create({
+          data: {
+            postId: null,
+            fileName: storedName,
+            originalName: filename,
+            mimeType,
+            fileSize,
+            filePath: relPath,
+            fileUrl,
+            thumbnailPath: thumbnailRelPath || null,
+            thumbnailUrl: thumbnailUrl || null,
+            width: metadata.width || null,
+            height: metadata.height || null,
+            duration: metadata.duration || null,
+            codec: metadata.codec || null,
+          },
+        });
+        recordId = postMedia.id;
+        logger.info(`[TUS] PostMedia created: ${storedName} (${fileSize} bytes, postId=null pending)`);
+      } else {
+        // Upload destiné à un message : créer MessageAttachment
+        const attachment = await prisma.messageAttachment.create({
+          data: {
+            fileName: storedName,
+            originalName: filename,
+            mimeType,
+            fileSize,
+            filePath: relPath,
+            fileUrl,
+            thumbnailPath: thumbnailRelPath || null,
+            thumbnailUrl: thumbnailUrl || null,
+            width: metadata.width || null,
+            height: metadata.height || null,
+            duration: metadata.duration || null,
+            bitrate: metadata.bitrate || null,
+            sampleRate: metadata.sampleRate || null,
+            codec: metadata.codec || null,
+            channels: metadata.channels || null,
+            fps: metadata.fps || null,
+            videoCodec: metadata.videoCodec || null,
+            pageCount: metadata.pageCount || null,
+            lineCount: metadata.lineCount || null,
+            uploadedBy: userId,
+            isAnonymous,
+          },
+        });
+        recordId = attachment.id;
+        logger.info(`[TUS] MessageAttachment created: ${storedName} (${fileSize} bytes)`);
+      }
 
       return {
         status_code: 200,
@@ -194,7 +222,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           success: true,
           data: {
             attachment: {
-              id: attachment.id,
+              id: recordId,
               fileName: storedName,
               originalName: filename,
               mimeType,

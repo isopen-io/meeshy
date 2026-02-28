@@ -18,14 +18,14 @@ extension ConversationView {
 
     /// True when there are unread messages to show in the button
     var hasUnreadContent: Bool {
-        unreadBadgeCount > 0 || hasTypingIndicator
+        scrollState.unreadBadgeCount > 0 || hasTypingIndicator
     }
 
     var scrollToBottomButton: some View {
         Button {
             HapticFeedback.light()
-            scrollToBottomTrigger += 1
-            unreadBadgeCount = 0
+            scrollState.scrollToBottomTrigger += 1
+            scrollState.unreadBadgeCount = 0
             viewModel.lastUnreadMessage = nil
         } label: {
             Group {
@@ -59,8 +59,8 @@ extension ConversationView {
     }
 
     private var scrollToBottomAccessibilityLabel: String {
-        if unreadBadgeCount > 0 {
-            return "\(unreadBadgeCount) messages non lus, defiler vers le bas"
+        if scrollState.unreadBadgeCount > 0 {
+            return "\(scrollState.unreadBadgeCount) messages non lus, defiler vers le bas"
         }
         if hasTypingIndicator {
             return "\(typingLabel), defiler vers le bas"
@@ -70,7 +70,7 @@ extension ConversationView {
 
     var unreadPreviewContent: some View {
         HStack(spacing: 10) {
-            if unreadBadgeCount > 1 {
+            if scrollState.unreadBadgeCount > 1 {
                 // Multiple messages: prominent count display
                 multipleUnreadContent
             } else {
@@ -96,7 +96,7 @@ extension ConversationView {
                 }
             } else {
                 HStack(spacing: 6) {
-                    Text("\(unreadBadgeCount)")
+                    Text("\(scrollState.unreadBadgeCount)")
                         .font(.system(size: 16, weight: .heavy))
                     Text("messages")
                         .font(.system(size: 12, weight: .medium))
@@ -144,8 +144,8 @@ extension ConversationView {
 
             // Right: chevron + unread count badge
             VStack(spacing: 2) {
-                if unreadBadgeCount > 0 {
-                    Text("\(unreadBadgeCount)")
+                if scrollState.unreadBadgeCount > 0 {
+                    Text("\(scrollState.unreadBadgeCount)")
                         .font(.system(size: 10, weight: .heavy))
                         .frame(width: 20, height: 20)
                         .background(Circle().fill(Color.white.opacity(0.3)))
@@ -161,27 +161,20 @@ extension ConversationView {
         switch attachment.type {
         case .image, .video:
             // Thumbnail
-            if let thumbUrl = attachment.thumbnailUrl ?? (attachment.type == .image ? attachment.fileUrl : nil),
-               let url = URL(string: thumbUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 36, height: 36)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    default:
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: attachment.type == .video ? "video.fill" : "photo.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
-                            )
-                    }
+            if let thumbUrl = attachment.thumbnailUrl ?? (attachment.type == .image ? attachment.fileUrl : nil) {
+                CachedAsyncImage(url: thumbUrl) {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: attachment.type == .video ? "video.fill" : "photo.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                        )
                 }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         case .audio:
             // Independently tappable play button (downloads + plays audio without scrolling)
@@ -231,16 +224,18 @@ extension ConversationView {
                 Circle()
                     .fill(Color.white)
                     .frame(width: 5, height: 5)
-                    .offset(y: typingDotPhase == i ? -3 : 0)
+                    .offset(y: headerState.typingDotPhase == i ? -3 : 0)
                     .animation(
                         .spring(response: 0.3, dampingFraction: 0.5)
                             .delay(Double(i) * 0.1),
-                        value: typingDotPhase
+                        value: headerState.typingDotPhase
                     )
             }
         }
         .onReceive(typingDotTimer) { _ in
-            typingDotPhase = (typingDotPhase + 1) % 3
+            if !viewModel.typingUsernames.isEmpty {
+                headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
+            }
         }
     }
 
@@ -255,13 +250,13 @@ extension ConversationView {
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .fill(accent.opacity(inlineTypingDotPhase == i ? 1.0 : 0.35))
+                        .fill(accent.opacity(headerState.inlineTypingDotPhase == i ? 1.0 : 0.35))
                         .frame(width: 6, height: 6)
-                        .offset(y: inlineTypingDotPhase == i ? -4 : 0)
+                        .offset(y: headerState.inlineTypingDotPhase == i ? -4 : 0)
                         .animation(
                             .spring(response: 0.3, dampingFraction: 0.5)
                                 .delay(Double(i) * 0.1),
-                            value: inlineTypingDotPhase
+                            value: headerState.inlineTypingDotPhase
                         )
                 }
             }
@@ -276,7 +271,9 @@ extension ConversationView {
                     )
             )
             .onReceive(typingDotTimer) { _ in
-                inlineTypingDotPhase = (inlineTypingDotPhase + 1) % 3
+                if !viewModel.typingUsernames.isEmpty {
+                    headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
+                }
             }
 
             // Typing label

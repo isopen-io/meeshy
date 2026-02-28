@@ -16,6 +16,7 @@ struct FeedPostCard: View {
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
 
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
     @State private var showCommentsSheet = false
@@ -69,10 +70,15 @@ struct FeedPostCard: View {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        .withStatusBubble()
     }
 
     // MARK: - Author Header
@@ -83,7 +89,9 @@ struct FeedPostCard: View {
                 name: post.author,
                 mode: .custom(44),
                 accentColor: accentColor,
+                moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
+                onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                         selectedProfileUser = .from(feedPost: post)
@@ -356,7 +364,9 @@ struct FeedPostCard: View {
                     name: comment.author,
                     mode: .messageBubble,
                     accentColor: comment.authorColor,
+                    moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
+                    onMoodTap: statusViewModel.moodTapHandler(for: comment.authorId),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                             selectedProfileUser = .from(feedComment: comment)

@@ -608,6 +608,177 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * 6. Statistiques agrégées des liens de tracking de l'utilisateur connecté
+   * GET /api/tracking-links/stats
+   */
+  fastify.get('/tracking-links/stats', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get aggregated statistics for all tracking links created by the authenticated user. Returns total link counts, active link counts, and summed click metrics.',
+      tags: ['tracking-links'],
+      summary: 'Get user tracking link stats',
+      response: {
+        200: {
+          description: 'Statistics retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                totalLinks: { type: 'number', description: 'Total number of tracking links created by user' },
+                activeLinks: { type: 'number', description: 'Number of currently active links' },
+                totalClicks: { type: 'number', description: 'Sum of all clicks across user links' },
+                uniqueClicks: { type: 'number', description: 'Sum of unique clicks across user links' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Registered user required',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
+    try {
+      if (!isRegisteredUser(request.authContext)) {
+        return reply.status(403).send({ success: false, error: 'Utilisateur enregistré requis' });
+      }
+
+      const userId = request.authContext.registeredUser!.id;
+
+      const [totalLinks, activeLinks, clickAgg, uniqueAgg] = await Promise.all([
+        fastify.prisma.trackingLink.count({ where: { createdBy: userId } }),
+        fastify.prisma.trackingLink.count({ where: { createdBy: userId, isActive: true } }),
+        fastify.prisma.trackingLink.aggregate({
+          where: { createdBy: userId },
+          _sum: { totalClicks: true },
+        }),
+        fastify.prisma.trackingLink.aggregate({
+          where: { createdBy: userId },
+          _sum: { uniqueClicks: true },
+        }),
+      ]);
+
+      return reply.send({
+        success: true,
+        data: {
+          totalLinks,
+          activeLinks,
+          totalClicks: clickAgg._sum.totalClicks ?? 0,
+          uniqueClicks: uniqueAgg._sum.uniqueClicks ?? 0,
+        },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Get user tracking link stats error:', error);
+      return reply.status(500).send({ success: false, error: 'Erreur interne du serveur' });
+    }
+  });
+
+  /**
+   * 7. Liste des clics individuels d'un lien de tracking (user-scoped)
+   * GET /api/tracking-links/:token/clicks
+   */
+  fastify.get('/tracking-links/:token/clicks', {
+    onRequest: [authRequired],
+    schema: {
+      description: 'Get individual click records for a tracking link owned by the authenticated user. Only the creator of the link can access its click details. Supports pagination.',
+      tags: ['tracking-links'],
+      summary: 'Get click details for user tracking link',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: {
+            type: 'string',
+            pattern: '^[a-zA-Z0-9_-]{2,50}$',
+            description: 'Unique alphanumeric tracking token (2-50 chars)'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 50 },
+          offset: { type: 'number', minimum: 0, default: 0 }
+        }
+      },
+      response: {
+        200: {
+          description: 'Click details retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                link: { type: 'object', additionalProperties: true },
+                clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                total: { type: 'number' }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number' },
+                limit: { type: 'number' },
+                offset: { type: 'number' }
+              }
+            }
+          }
+        },
+        403: {
+          description: 'Access denied — only the creator can view clicks',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Tracking link not found or not owned by user',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
+    try {
+      if (!isRegisteredUser(request.authContext)) {
+        return reply.status(403).send({ success: false, error: 'Utilisateur enregistré requis' });
+      }
+
+      const userId = request.authContext.registeredUser!.id;
+      const { token } = request.params as { token: string };
+      const limit = Math.min(parseInt((request.query as any).limit || '50', 10), 100);
+      const offset = parseInt((request.query as any).offset || '0', 10);
+
+      const link = await fastify.prisma.trackingLink.findFirst({
+        where: { token, createdBy: userId },
+      });
+
+      if (!link) {
+        return reply.status(404).send({ success: false, error: 'Lien de tracking non trouvé' });
+      }
+
+      const result = await trackingLinkService.getTrackingLinkClicks(link.id, limit, offset);
+
+      return reply.send({
+        success: true,
+        data: { link, clicks: result.clicks, total: result.total },
+        pagination: { total: result.total, limit, offset },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Get tracking link clicks error:', error);
+      return reply.status(500).send({ success: false, error: 'Erreur interne du serveur' });
+    }
+  });
+
+  /**
    * ADMIN: Liste tous les tracking links avec pagination et recherche
    * GET /api/v1/tracking-links/admin/all
    */

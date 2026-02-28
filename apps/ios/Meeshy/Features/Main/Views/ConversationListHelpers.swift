@@ -323,8 +323,15 @@ struct ThemedCommunityCard: View {
     var action: (() -> Void)? = nil
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
-    @State private var displayColor: String = "4ECDC4"
-    @State private var displayEmoji: String = ""
+    @State private var displayColor: String
+    @State private var displayEmoji: String
+
+    init(community: Community, action: (() -> Void)? = nil) {
+        self.community = community
+        self.action = action
+        _displayColor = State(initialValue: UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color)
+        _displayEmoji = State(initialValue: UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? community.emoji)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -382,10 +389,6 @@ struct ThemedCommunityCard: View {
         }
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .onAppear {
-            displayColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color
-            displayEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? community.emoji
-        }
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {

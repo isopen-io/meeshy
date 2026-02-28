@@ -86,20 +86,28 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Ligne 1 : temps seulement (emoji déjà visible sur le badge avatar)
-            Text(status.timeAgo)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
-
-            // Ligne(s) suivante(s) : contenu texte ou audio
+        VStack(alignment: .leading, spacing: 6) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                audioPlayerRow(urlString: audioUrl)
-            } else if let content = status.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Audio : date sur sa propre ligne + player
+                Text(status.timeAgo)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                audioPlayerView(urlString: audioUrl)
+            } else {
+                // Date + contenu directement à la suite, multilignes
+                let content = status.content ?? ""
+                if content.isEmpty {
+                    Text(status.timeAgo)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                } else {
+                    (Text(status.timeAgo + "  ")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    + Text(content)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textPrimary))
+                }
             }
         }
         .padding(.horizontal, 12)

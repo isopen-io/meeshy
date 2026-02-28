@@ -7,9 +7,12 @@ struct StoryTrayView: View {
     var onViewStory: (Int) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
-    @ObservedObject private var presenceManager = PresenceManager.shared
-    @State private var addButtonGlow = false
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
+    private var presenceManager: PresenceManager { PresenceManager.shared }
+    @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State private var showStatusComposer = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,9 +24,13 @@ struct StoryTrayView: View {
         }
         .frame(height: 108)
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             StoryComposerView(
@@ -37,22 +44,30 @@ struct StoryTrayView: View {
                 }
             )
         }
+        .sheet(isPresented: $showStatusComposer) {
+            StatusComposerView(viewModel: statusViewModel)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .withStatusBubble()
     }
 
     // MARK: - Story Scroll View
 
     private var storyScrollView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                addStoryButton
+                myStoryButton
                     .bounceOnAppear(delay: 0)
 
-                ForEach(Array(viewModel.storyGroups.enumerated()), id: \.element.id) { index, group in
-                    storyRing(group: group, index: index)
-                        .staggeredAppear(index: index, baseDelay: 0.05)
+                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId }.enumerated()), id: \.element.id) { visibleIndex, group in
+                    let originalIndex = viewModel.groupIndex(forUserId: group.id) ?? visibleIndex
+                    storyRing(group: group, index: originalIndex)
+                        .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
                         .onTapGesture {
                             HapticFeedback.medium()
-                            onViewStory(index)
+                            onViewStory(originalIndex)
                         }
                 }
             }
@@ -61,58 +76,14 @@ struct StoryTrayView: View {
         }
     }
 
-    // MARK: - Add Story Button
+    // MARK: - My Story Button (utilisateur connecté)
 
-    private var addStoryButton: some View {
-        Button {
-            viewModel.showStoryComposer = true
-            HapticFeedback.medium()
-        } label: {
-            VStack(spacing: 5) {
-                ZStack {
-                    // Radial ambient glow
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [Color(hex: "FF2E63").opacity(0.3), Color.clear],
-                                center: .center,
-                                startRadius: 22,
-                                endRadius: 44
-                            )
-                        )
-                        .frame(width: 84, height: 84)
-                        .opacity(addButtonGlow ? 1 : 0.4)
-
-                    // Main gradient circle
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "E94057"), Color(hex: "08D9D6")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 62, height: 62)
-                        .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 12, y: 4)
-
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
-                }
-                .scaleEffect(addButtonGlow ? 1.04 : 1.0)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                        addButtonGlow = true
-                    }
-                }
-
-                Text("Story")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-        }
-        .accessibilityLabel("Create new story")
+    private var myStoryButton: some View {
+        MyStoryButton(
+            viewModel: viewModel,
+            onViewStory: onViewStory,
+            showStatusComposer: $showStatusComposer
+        )
     }
 
     // MARK: - Story Ring
@@ -126,7 +97,9 @@ struct StoryTrayView: View {
                     accentColor: group.avatarColor,
                     avatarURL: group.avatarURL,
                     storyState: group.hasUnviewed ? .unread : .read,
+                    moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                     presenceState: presenceManager.presenceState(for: group.id),
+                    onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                             onViewStory(index)
@@ -194,5 +167,85 @@ struct StoryTrayView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
+    }
+}
+
+// MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)
+
+private struct MyStoryButton: View {
+    let viewModel: StoryViewModel
+    let onViewStory: (Int) -> Void
+    @Binding var showStatusComposer: Bool
+
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let currentUser = AuthManager.shared.currentUser
+        let userId = currentUser?.id ?? ""
+        let myGroup = viewModel.storyGroupForUser(userId: userId)
+        let myGroupIndex = viewModel.groupIndex(forUserId: userId)
+        let hasMyStory = myGroup != nil
+        let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
+        let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
+        let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji ?? "💭"
+
+        VStack(spacing: 5) {
+            ZStack {
+                MeeshyAvatar(
+                    name: userName,
+                    mode: .storyTray,
+                    accentColor: accentColor,
+                    avatarURL: currentUser?.avatar,
+                    storyState: storyState,
+                    presenceState: .offline,
+                    onTap: {
+                        viewModel.showStoryComposer = true
+                        HapticFeedback.medium()
+                    },
+                    contextMenuItems: hasMyStory ? [
+                        AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
+                            if let idx = myGroupIndex { onViewStory(idx) }
+                            HapticFeedback.medium()
+                        }
+                    ] : nil
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    // 💭 status badge — remplace le dot de présence (inutile pour soi-même)
+                    Button {
+                        HapticFeedback.light()
+                        showStatusComposer = true
+                    } label: {
+                        Text(myMoodEmoji)
+                            .font(.system(size: 14))
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(theme.backgroundPrimary.opacity(0.9)))
+                    }
+                }
+
+                // Story count dots (si plusieurs stories)
+                if let group = myGroup, group.stories.count > 1 {
+                    HStack(spacing: 3) {
+                        ForEach(0..<min(group.stories.count, 5), id: \.self) { _ in
+                            Circle()
+                                .fill(group.hasUnviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                                .frame(width: 4, height: 4)
+                        }
+                        if group.stories.count > 5 {
+                            Text("+")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+                    .offset(y: 38)
+                }
+            }
+
+            Text("Moi")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .accessibilityLabel(hasMyStory ? "Ma story" : "Créer une story")
     }
 }

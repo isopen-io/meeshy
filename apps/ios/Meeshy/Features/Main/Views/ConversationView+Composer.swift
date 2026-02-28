@@ -18,23 +18,23 @@ extension ConversationView {
             onFocusChange: { focused in
                 isTyping = focused
                 if focused {
-                    withAnimation { showOptions = false }
+                    withAnimation { composerState.showOptions = false }
                 }
             },
-            onLocationRequest: { showLocationPicker = true },
+            onLocationRequest: { composerState.showLocationPicker = true },
             textBinding: $messageText,
-            editBanner: editingMessageId != nil
+            editBanner: composerState.editingMessageId != nil
                 ? AnyView(composerEditBanner)
                 : nil,
-            replyBanner: pendingReplyReference != nil && editingMessageId == nil
-                ? AnyView(composerReplyBanner(pendingReplyReference!))
+            replyBanner: composerState.pendingReplyReference != nil && composerState.editingMessageId == nil
+                ? AnyView(composerReplyBanner(composerState.pendingReplyReference!))
                 : nil,
-            customAttachmentsPreview: (!pendingAttachments.isEmpty || isLoadingMedia)
+            customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty || composerState.isLoadingMedia)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
-            isEditMode: editingMessageId != nil,
+            isEditMode: composerState.editingMessageId != nil,
             onCustomSend: {
-                if editingMessageId != nil {
+                if composerState.editingMessageId != nil {
                     submitEdit()
                 } else if audioRecorder.isRecording {
                     stopAndSendRecording()
@@ -48,82 +48,82 @@ extension ConversationView {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !pendingAttachments.isEmpty || audioRecorder.isRecording,
-            onPhotoLibrary: { showPhotoPicker = true },
-            onCamera: { showCamera = true },
-            onFilePicker: { showFilePicker = true },
+            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { composerState.showPhotoPicker = true },
+            onCamera: { composerState.showCamera = true },
+            onFilePicker: { composerState.showFilePicker = true },
             onRequestTextEmoji: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showTextEmojiPicker.toggle()
+                    composerState.showTextEmojiPicker.toggle()
                 }
             },
-            injectedEmoji: $emojiToInject,
+            injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
-            hideEphemeral: editingMessageId != nil,
+            hideEphemeral: composerState.editingMessageId != nil,
             isBlurEnabled: $viewModel.isBlurEnabled,
-            hideBlur: editingMessageId != nil
+            hideBlur: composerState.editingMessageId != nil
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
-        .fullScreenCover(isPresented: $showCamera) {
+        .fullScreenCover(isPresented: $composerState.showCamera) {
             CameraView { result in
                 switch result {
                 case .photo(let image):
-                    imageToPreview = image
+                    scrollState.imageToPreview = image
                 case .video(let url):
-                    videoToPreview = url
+                    scrollState.videoToPreview = url
                 }
             }
             .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: Binding(
-            get: { imageToPreview != nil },
-            set: { if !$0 { imageToPreview = nil } }
+            get: { scrollState.imageToPreview != nil },
+            set: { if !$0 { scrollState.imageToPreview = nil } }
         )) {
-            if let image = imageToPreview {
+            if let image = scrollState.imageToPreview {
                 ImageEditView(image: image) { editedImage in
                     handleCameraCapture(editedImage)
                 }
             }
         }
         .fullScreenCover(isPresented: Binding(
-            get: { videoToPreview != nil },
-            set: { if !$0 { videoToPreview = nil } }
+            get: { scrollState.videoToPreview != nil },
+            set: { if !$0 { scrollState.videoToPreview = nil } }
         )) {
-            if let url = videoToPreview {
+            if let url = scrollState.videoToPreview {
                 VideoPreviewView(url: url) {
                     handleCameraVideo(url)
                 }
             }
         }
-        .sheet(isPresented: $showLocationPicker) {
+        .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { coordinate, address in
                 handleLocationSelection(coordinate: coordinate, address: address)
             }
         }
-        .sheet(isPresented: $showContactPicker) {
+        .sheet(isPresented: $composerState.showContactPicker) {
             ContactPickerView(
                 onSelect: { contact in
                     handleContactSelection(contact)
-                    showContactPicker = false
+                    composerState.showContactPicker = false
                 },
-                onCancel: { showContactPicker = false }
+                onCancel: { composerState.showContactPicker = false }
             )
         }
-        .onChange(of: selectedPhotoItems) { _, items in
+        .onChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         .fullScreenCover(isPresented: Binding(
-            get: { previewingPendingImage != nil },
-            set: { if !$0 { previewingPendingImage = nil } }
+            get: { scrollState.previewingPendingImage != nil },
+            set: { if !$0 { scrollState.previewingPendingImage = nil } }
         )) {
-            if let image = previewingPendingImage {
+            if let image = scrollState.previewingPendingImage {
                 PendingImagePreview(image: image) {
-                    previewingPendingImage = nil
+                    scrollState.previewingPendingImage = nil
                 }
             }
         }
@@ -147,20 +147,20 @@ extension ConversationView {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 pendingAttachmentsPreview
-                if isLoadingMedia {
+                if composerState.isLoadingMedia {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                         .padding(.horizontal, 12)
                 }
             }
-            if isUploading, let progress = uploadProgress {
+            if composerState.isUploading, let progress = composerState.uploadProgress {
                 UploadProgressBar(progress: progress, accentColor: accentColor)
                     .padding(.horizontal, 8)
                     .padding(.bottom, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isUploading)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.isUploading)
     }
 
     // MARK: - Composer Reply Banner
@@ -197,7 +197,7 @@ extension ConversationView {
 
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    pendingReplyReference = nil
+                    composerState.pendingReplyReference = nil
                 }
             } label: {
                 Image(systemName: "xmark")
@@ -238,7 +238,7 @@ extension ConversationView {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: "F8B500"))
 
-                Text(editingOriginalContent ?? "")
+                Text(composerState.editingOriginalContent ?? "")
                     .font(.system(size: 12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
@@ -272,12 +272,12 @@ extension ConversationView {
     }
 
     func submitEdit() {
-        guard let messageId = editingMessageId else { return }
+        guard let messageId = composerState.editingMessageId else { return }
         let newContent = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newContent.isEmpty else { return }
 
         // Don't send if content unchanged
-        if newContent == editingOriginalContent {
+        if newContent == composerState.editingOriginalContent {
             cancelEdit()
             return
         }
@@ -291,8 +291,8 @@ extension ConversationView {
 
     func cancelEdit() {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-            editingMessageId = nil
-            editingOriginalContent = nil
+            composerState.editingMessageId = nil
+            composerState.editingOriginalContent = nil
             messageText = ""
         }
     }
@@ -423,7 +423,7 @@ extension ConversationView {
     var pendingAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(pendingAttachments) { attachment in
+                ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
                 }
             }
@@ -450,11 +450,11 @@ extension ConversationView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     let id = attachment.id
                     if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
-                    pendingAttachments.removeAll { $0.id == id }
-                    if let url = pendingMediaFiles.removeValue(forKey: id) {
+                    composerState.pendingAttachments.removeAll { $0.id == id }
+                    if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
                         try? FileManager.default.removeItem(at: url)
                     }
-                    pendingThumbnails.removeValue(forKey: id)
+                    composerState.pendingThumbnails.removeValue(forKey: id)
                 }
             } label: {
                 Image(systemName: "xmark")
@@ -477,7 +477,7 @@ extension ConversationView {
             } label: {
                 VStack(spacing: 4) {
                     ZStack {
-                        if let thumb = pendingThumbnails[attachment.id] {
+                        if let thumb = composerState.pendingThumbnails[attachment.id] {
                             Image(uiImage: thumb)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -536,16 +536,16 @@ extension ConversationView {
         case .audio:
             if pendingAudioPlayer.isPlaying {
                 pendingAudioPlayer.stop()
-            } else if let url = pendingMediaFiles[attachment.id] ?? pendingAudioURL {
+            } else if let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL {
                 pendingAudioPlayer.playLocalFile(url: url)
             }
         case .image:
-            if let thumb = pendingThumbnails[attachment.id] {
-                previewingPendingImage = thumb
+            if let thumb = composerState.pendingThumbnails[attachment.id] {
+                scrollState.previewingPendingImage = thumb
             }
         case .video:
-            if let thumb = pendingThumbnails[attachment.id] {
-                previewingPendingImage = thumb
+            if let thumb = composerState.pendingThumbnails[attachment.id] {
+                scrollState.previewingPendingImage = thumb
             }
         default:
             break

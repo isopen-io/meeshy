@@ -48,10 +48,19 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Recalculate every 60s (online -> away after 5min idle)
+        // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
+        // passe de online → away dans cette fenêtre (lastActiveAt entre 300 et 360s)
         recalcTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.objectWillChange.send()
+                guard let self else { return }
+                let hasTransition = self.presenceMap.values.contains { presence in
+                    guard presence.isOnline, let last = presence.lastActiveAt else { return false }
+                    let elapsed = Date().timeIntervalSince(last)
+                    return elapsed > 300 && elapsed <= 360
+                }
+                if hasTransition {
+                    self.objectWillChange.send()
+                }
             }
         }
     }

@@ -13,6 +13,7 @@ struct ParticipantsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var presenceManager = PresenceManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     @State private var participants: [ConversationParticipant] = []
     @State private var isLoading = false
@@ -29,9 +30,16 @@ struct ParticipantsView: View {
         return ["ADMIN", "CREATOR", "BIGBOSS"].contains(role)
     }
 
+    private var isCreator: Bool {
+        (currentUserRole?.uppercased() ?? "") == "CREATOR"
+    }
+
+    private var isConvAdmin: Bool {
+        (currentUserRole?.uppercased() ?? "") == "ADMIN"
+    }
+
     private var isModerator: Bool {
-        let role = currentUserRole?.uppercased() ?? ""
-        return ["MODERATOR"].contains(role)
+        (currentUserRole?.uppercased() ?? "") == "MODERATOR"
     }
 
     private var canManageMembers: Bool { isAdmin || isModerator }
@@ -137,6 +145,7 @@ struct ParticipantsView: View {
                 Text("Vous ne pourrez plus voir les messages de ce groupe.")
             }
         }
+        .withStatusBubble()
     }
 
     // MARK: - Member Count Header
@@ -195,27 +204,20 @@ struct ParticipantsView: View {
     // MARK: - Participant Row
 
     private func participantRow(_ participant: ConversationParticipant) -> some View {
-        let isOnline = presenceManager.presenceState(for: participant.id) == .online
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
+        let presence = presenceManager.presenceState(for: participant.id)
 
         return HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                MeeshyAvatar(
-                    name: participant.name,
-                    size: .small,
-                    accentColor: color,
-                    avatarURL: participant.avatar
-                )
-
-                if isOnline {
-                    Circle()
-                        .fill(Color(hex: "4ECDC4"))
-                        .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
-                        .offset(x: 2, y: 2)
-                }
-            }
+            MeeshyAvatar(
+                name: participant.name,
+                mode: .messageBubble,
+                accentColor: color,
+                avatarURL: participant.avatar,
+                moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
+                presenceState: presence,
+                onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -239,14 +241,15 @@ struct ParticipantsView: View {
 
             Spacer()
 
-            if isOnline {
-                Text("En ligne")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
-            } else if let lastActive = participant.lastActiveAt {
-                Text(relativeTime(from: lastActive))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+            if let joinedAt = participant.joinedAt {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("Depuis")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                    Text(shortDate(joinedAt))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -272,32 +275,61 @@ struct ParticipantsView: View {
         let isCurrentUser = participant.id == currentUserId
         let participantRole = participant.conversationRole?.uppercased() ?? "MEMBER"
 
-        if isAdmin && !isCurrentUser && participantRole != "CREATOR" {
-            if participantRole != "MODERATOR" {
-                Button {
-                    roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
-                } label: {
-                    Label("Promouvoir Moderateur", systemImage: "shield.fill")
+        if !isCurrentUser && participantRole != "CREATOR" {
+            if isCreator {
+                // Créateur : peut gérer tout le monde (MEMBER, MODERATOR, ADMIN)
+                if participantRole == "MEMBER" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                    } label: {
+                        Label("Promouvoir Moderateur", systemImage: "shield.fill")
+                    }
                 }
-            }
-
-            if participantRole != "ADMIN" {
+                if participantRole != "ADMIN" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
+                    } label: {
+                        Label("Promouvoir Admin", systemImage: "crown.fill")
+                    }
+                }
+                if participantRole == "ADMIN" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                    } label: {
+                        Label("Retrograder en Moderateur", systemImage: "shield")
+                    }
+                }
+                if participantRole == "MODERATOR" || participantRole == "ADMIN" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
+                    } label: {
+                        Label("Retrograder en Membre", systemImage: "person.fill")
+                    }
+                }
+                Divider()
+            } else if isConvAdmin && participantRole != "ADMIN" {
+                // Admin : peut gérer MEMBER et MODERATOR uniquement (pas les autres admins)
+                if participantRole == "MEMBER" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                    } label: {
+                        Label("Promouvoir Moderateur", systemImage: "shield.fill")
+                    }
+                }
                 Button {
                     roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
                 } label: {
                     Label("Promouvoir Admin", systemImage: "crown.fill")
                 }
-            }
-
-            if participantRole != "MEMBER" {
-                Button {
-                    roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
-                } label: {
-                    Label("Retrograder en Membre", systemImage: "person.fill")
+                if participantRole == "MODERATOR" {
+                    Button {
+                        roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
+                    } label: {
+                        Label("Retrograder en Membre", systemImage: "person.fill")
+                    }
                 }
+                Divider()
             }
-
-            Divider()
         }
 
         if canRemoveParticipant(participant) {
@@ -412,6 +444,14 @@ struct ParticipantsView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM"
+        return formatter.string(from: date)
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
         return formatter.string(from: date)
     }
 

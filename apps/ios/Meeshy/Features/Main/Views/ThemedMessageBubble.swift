@@ -16,6 +16,7 @@ struct ThemedMessageBubble: View {
     var preferredTranslation: MessageTranslation? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState = .offline
+    var senderMoodEmoji: String? = nil
     var onAddReaction: ((String) -> Void)? = nil
     var onToggleReaction: ((String) -> Void)? = nil
     var onOpenReactPicker: ((String) -> Void)? = nil
@@ -116,10 +117,11 @@ struct ThemedMessageBubble: View {
         return hasText || hasNonMedia
     }
 
-    // Computed reaction summaries for display
+    // Computed reaction summaries for display — order is stable (first-seen per emoji)
     private var reactionSummaries: [ReactionSummary] {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
+        var emojiOrder: [String] = []
         for reaction in message.reactions {
             let isMe = reaction.userId == currentUserId
             if var existing = emojiCounts[reaction.emoji] {
@@ -128,9 +130,13 @@ struct ThemedMessageBubble: View {
                 emojiCounts[reaction.emoji] = existing
             } else {
                 emojiCounts[reaction.emoji] = (count: 1, includesMe: isMe)
+                emojiOrder.append(reaction.emoji)
             }
         }
-        return emojiCounts.map { ReactionSummary(emoji: $0.key, count: $0.value.count, includesMe: $0.value.includesMe) }
+        return emojiOrder.compactMap { emoji in
+            guard let data = emojiCounts[emoji] else { return nil }
+            return ReactionSummary(emoji: emoji, count: data.count, includesMe: data.includesMe)
+        }
     }
 
     private var messageAccessibilityLabel: String {
@@ -338,6 +344,7 @@ struct ThemedMessageBubble: View {
                         mode: .messageBubble,
                         accentColor: message.senderColor ?? contactColor,
                         avatarURL: message.senderAvatarURL,
+                        moodEmoji: senderMoodEmoji,
                         presenceState: presenceState,
                         onViewProfile: { selectedProfileUser = .from(message: message) },
                         contextMenuItems: [
