@@ -24,7 +24,7 @@ extension ConversationView {
     // MARK: - Header Avatar (morphs from trigger to participant display)
     @ViewBuilder
     var headerAvatarView: some View {
-        if showOptions {
+        if composerState.showOptions {
             // Expanded: participant avatar(s) — tap collapses band
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
@@ -38,13 +38,13 @@ extension ConversationView {
                     onTap: {
                         HapticFeedback.light()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            showOptions = false
+                            composerState.showOptions = false
                         }
                     },
                     onViewStory: {
                         if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                            storyGroupIndexForHeader = groupIndex
-                            showStoryViewerFromHeader = true
+                            headerState.storyGroupIndexForHeader = groupIndex
+                            headerState.showStoryViewerFromHeader = true
                         }
                     },
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
@@ -64,13 +64,13 @@ extension ConversationView {
                             onTap: {
                                 HapticFeedback.light()
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    showOptions = false
+                                    composerState.showOptions = false
                                 }
                             },
                             onViewStory: {
                                 if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
-                                    storyGroupIndexForHeader = groupIndex
-                                    showStoryViewerFromHeader = true
+                                    headerState.storyGroupIndexForHeader = groupIndex
+                                    headerState.showStoryViewerFromHeader = true
                                 }
                             },
                             onMoodTap: statusViewModel.moodTapHandler(for: member.id),
@@ -82,7 +82,7 @@ extension ConversationView {
                 Button {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showOptions = false
+                        composerState.showOptions = false
                     }
                 } label: {
                     HStack(spacing: 3) {
@@ -107,7 +107,7 @@ extension ConversationView {
                 onTap: {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showOptions = true
+                        composerState.showOptions = true
                     }
                 },
                 contextMenuItems: collapsedAvatarContextMenu
@@ -252,13 +252,13 @@ extension ConversationView {
         if storyViewModel.hasStories(forUserId: userId) {
             items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
                 if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                    storyGroupIndexForHeader = groupIndex
-                    showStoryViewerFromHeader = true
+                    headerState.storyGroupIndexForHeader = groupIndex
+                    headerState.showStoryViewerFromHeader = true
                 }
             })
         }
         items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            showConversationInfo = true
+            composerState.showConversationInfo = true
         })
         items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
             Task { await self.navigateToDM(with: userId, name: name) }
@@ -273,16 +273,16 @@ extension ConversationView {
             items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
                 if let uid = self.conversation?.participantUserId,
                    let groupIndex = self.storyViewModel.groupIndex(forUserId: uid) {
-                    self.storyGroupIndexForHeader = groupIndex
-                    self.showStoryViewerFromHeader = true
+                    self.headerState.storyGroupIndexForHeader = groupIndex
+                    self.headerState.showStoryViewerFromHeader = true
                 }
             })
         }
         items.append(.init(label: "Voir le profil", icon: "person.fill") {
-            self.showConversationInfo = true
+            self.composerState.showConversationInfo = true
         })
         items.append(.init(label: "Infos conversation", icon: "info.circle.fill") {
-            self.showConversationInfo = true
+            self.composerState.showConversationInfo = true
         })
         return items
     }

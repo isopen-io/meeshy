@@ -102,6 +102,7 @@ struct ConversationListView: View {
 
     // Communities data (replaces SampleData)
     @State var userCommunities: [MeeshyCommunity] = []
+    @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
     // Alternative init without binding for backward compatibility
     init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
@@ -156,19 +157,24 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
-            conversationRow(for: conversation)
-                .staggeredAppear(index: index, baseDelay: 0.04)
-                .onAppear {
-                    triggerLoadMoreIfNeeded(conversation: conversation)
+        GeometryReader { proxy in
+            let rowWidth = proxy.size.width - 32 - 52 - 28 - 24
+            VStack(spacing: 0) {
+                ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
+                    conversationRow(for: conversation, rowWidth: rowWidth)
+                        .staggeredAppear(index: index, baseDelay: 0.04)
+                        .onAppear {
+                            triggerLoadMoreIfNeeded(conversation: conversation)
+                        }
                 }
+            }
         }
     }
 
     private func enrichedConversation(_ conversation: Conversation) -> Conversation {
         guard conversation.type == .community || conversation.communityId != nil,
               let communityId = conversation.communityId,
-              let community = userCommunities.first(where: { $0.id == communityId })
+              let community = userCommunityLookup[communityId]
         else { return conversation }
 
         var result = conversation
@@ -182,8 +188,7 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func conversationRow(for conversation: Conversation) -> some View {
-        let rowWidth = UIScreen.main.bounds.width - 32 - 52 - 28 - 24
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
         let displayConversation = enrichedConversation(conversation)
 
         SwipeableRow(
@@ -709,6 +714,7 @@ struct ConversationListView: View {
         do {
             let response = try await CommunityService.shared.list(offset: 0, limit: 10)
             userCommunities = response.data.map { $0.toCommunity() }
+            userCommunityLookup = Dictionary(uniqueKeysWithValues: userCommunities.map { ($0.id, $0) })
         } catch {
             print("[ConversationListView] Error loading communities: \(error)")
         }

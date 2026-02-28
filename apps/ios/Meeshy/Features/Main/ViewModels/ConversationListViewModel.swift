@@ -17,7 +17,9 @@ struct APICategory: Decodable {
 
 @MainActor
 class ConversationListViewModel: ObservableObject {
-    @Published var conversations: [Conversation] = []
+    @Published var conversations: [Conversation] = [] {
+        didSet { _convIdIndex = nil }
+    }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
@@ -37,6 +39,17 @@ class ConversationListViewModel: ObservableObject {
     private let limit = 30
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
+
+    // O(1) conversation lookup by ID
+    private var _convIdIndex: [String: Int]?
+    private func convIndex(for id: String) -> Int? {
+        if _convIdIndex == nil {
+            var index = [String: Int](minimumCapacity: conversations.count)
+            for (i, c) in conversations.enumerated() { index[c.id] = i }
+            _convIdIndex = index
+        }
+        return _convIdIndex![id]
+    }
 
     private var lastFetchedAt: Date? = nil
     private let cacheTTL: TimeInterval = 30
@@ -159,7 +172,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 invalidateCache()
-                if let idx = self.conversations.firstIndex(where: { $0.id == event.conversationId }) {
+                if let idx = self.convIndex(for: event.conversationId) {
                     self.conversations[idx].unreadCount = event.unreadCount
                 }
             }
@@ -172,7 +185,7 @@ class ConversationListViewModel: ObservableObject {
                 guard let self else { return }
                 invalidateCache()
                 let convId = apiMsg.conversationId
-                guard let idx = self.conversations.firstIndex(where: { $0.id == convId }) else { return }
+                guard let idx = self.convIndex(for: convId) else { return }
 
                 self.conversations[idx].lastMessagePreview = apiMsg.content
                 self.conversations[idx].lastMessageSenderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
@@ -340,7 +353,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Toggle Pin
 
     func togglePin(for conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].isPinned
 
         // Optimistic local update
@@ -359,7 +372,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Toggle Mute
 
     func toggleMute(for conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].isMuted
 
         conversations[index].isMuted = newValue
@@ -377,7 +390,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousCount = conversations[index].unreadCount
 
         conversations[index].unreadCount = 0
@@ -395,7 +408,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Unread
 
     func markAsUnread(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousCount = conversations[index].unreadCount
 
         // Optimistic update
@@ -416,7 +429,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Archive Conversation
 
     func archiveConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let wasActive = conversations[index].isActive
 
         conversations[index].isActive = false
@@ -434,7 +447,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Unarchive Conversation
 
     func unarchiveConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let wasActive = conversations[index].isActive
 
         conversations[index].isActive = true
@@ -452,7 +465,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Delete Conversation
 
     func deleteConversation(conversationId: String) async {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let removed = conversations.remove(at: index)
 
         do {
@@ -467,7 +480,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Move to Section
 
     func moveToSection(conversationId: String, sectionId: String) {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let index = convIndex(for: conversationId) else { return }
         let previousSectionId = conversations[index].sectionId
         let newSectionId: String? = sectionId.isEmpty ? nil : sectionId
         conversations[index].sectionId = newSectionId

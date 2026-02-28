@@ -23,7 +23,17 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Published State
 
-    @Published var messages: [Message] = []
+    @Published var messages: [Message] = [] {
+        didSet {
+            _messageIdIndex = nil
+            _topActiveMembers = nil
+            _mediaSenderInfoMap = nil
+            _allVisualAttachments = nil
+            _mediaCaptionMap = nil
+            _allAudioItems = nil
+            _replyCountMap = nil
+        }
+    }
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false
@@ -98,8 +108,10 @@ class ConversationViewModel: ObservableObject {
         let sentAt: Date
     }
 
+    private var _mediaSenderInfoMap: [String: MediaSenderInfo]?
     var mediaSenderInfoMap: [String: MediaSenderInfo] {
-        var map: [String: MediaSenderInfo] = [:]
+        if let cached = _mediaSenderInfoMap { return cached }
+        var map = [String: MediaSenderInfo](minimumCapacity: messages.count)
         for msg in messages {
             let info = MediaSenderInfo(
                 senderName: msg.senderName ?? "?",
@@ -111,14 +123,19 @@ class ConversationViewModel: ObservableObject {
                 map[att.id] = info
             }
         }
+        _mediaSenderInfoMap = map
         return map
     }
 
     /// All visual attachments (images + videos) across every loaded message, in chronological order.
+    private var _allVisualAttachments: [MessageAttachment]?
     var allVisualAttachments: [MessageAttachment] {
-        messages.flatMap { msg in
+        if let cached = _allVisualAttachments { return cached }
+        let result = messages.flatMap { msg in
             msg.attachments.filter { [.image, .video].contains($0.type) }
         }
+        _allVisualAttachments = result
+        return result
     }
 
     // MARK: - Audio Items for Fullscreen Gallery
@@ -131,8 +148,10 @@ class ConversationViewModel: ObservableObject {
         let translatedAudios: [MessageTranslatedAudio]
     }
 
+    private var _allAudioItems: [AudioItem]?
     var allAudioItems: [AudioItem] {
-        messages.flatMap { msg in
+        if let cached = _allAudioItems { return cached }
+        let result = messages.flatMap { msg in
             msg.attachments
                 .filter { $0.type == .audio }
                 .map { att in
@@ -145,11 +164,15 @@ class ConversationViewModel: ObservableObject {
                     )
                 }
         }
+        _allAudioItems = result
+        return result
     }
 
     /// Maps attachment.id -> caption text for the fullscreen gallery.
     /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
+    private var _mediaCaptionMap: [String: String]?
     var mediaCaptionMap: [String: String] {
+        if let cached = _mediaCaptionMap { return cached }
         var map: [String: String] = [:]
         for msg in messages {
             let visuals = msg.attachments.filter { [.image, .video].contains($0.type) }
@@ -168,7 +191,52 @@ class ConversationViewModel: ObservableObject {
                 }
             }
         }
+        _mediaCaptionMap = map
         return map
+    }
+
+    // MARK: - Reply Count Map (cached, O(1) lookup per message)
+
+    private var _replyCountMap: [String: Int]?
+    var replyCountMap: [String: Int] {
+        if let cached = _replyCountMap { return cached }
+        var map = [String: Int]()
+        for msg in messages {
+            if let parentId = msg.replyToId {
+                map[parentId, default: 0] += 1
+            }
+        }
+        _replyCountMap = map
+        return map
+    }
+
+    // MARK: - Top Active Members (cached)
+
+    private var _topActiveMembers: [ConversationActiveMember]?
+
+    func topActiveMembersList(accentColor: String) -> [ConversationActiveMember] {
+        if let cached = _topActiveMembers { return cached }
+        var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
+        for msg in messages where !msg.isMe {
+            guard let id = msg.senderId else { continue }
+            if var existing = counts[id] {
+                existing.count += 1
+                counts[id] = existing
+            } else {
+                counts[id] = (
+                    name: msg.senderName ?? "?",
+                    color: msg.senderColor ?? accentColor,
+                    avatarURL: msg.senderAvatarURL,
+                    count: 1
+                )
+            }
+        }
+        let result = counts
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(3)
+            .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
+        _topActiveMembers = result
+        return result
     }
 
     // MARK: - Private
@@ -190,81 +258,62 @@ class ConversationViewModel: ObservableObject {
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
 
-    // Typing emission state
-    private var typingTimer: Timer?
-    private var isEmittingTyping = false
-    private static let typingDebounceInterval: TimeInterval = 3.0
-    private static let typingSafetyTimeout: TimeInterval = 15.0
+    // Socket handler (owns all real-time subscriptions)
+    private var socketHandler: ConversationSocketHandler?
 
-    // Safety timers for stuck typing indicators
-    private var typingSafetyTimers: [String: Timer] = [:]
+    // O(1) message lookup index — invalidated on any messages mutation
+    private var _messageIdIndex: [String: Int]?
+    private func rebuildIndexIfNeeded() -> [String: Int] {
+        if let cached = _messageIdIndex { return cached }
+        var index = [String: Int](minimumCapacity: messages.count)
+        for (i, msg) in messages.enumerated() {
+            index[msg.id] = i
+        }
+        _messageIdIndex = index
+        return index
+    }
+
+    /// O(1) index lookup by message ID
+    func messageIndex(for id: String) -> Int? {
+        rebuildIndexIfNeeded()[id]
+    }
+
+    /// O(1) membership check
+    func containsMessage(id: String) -> Bool {
+        rebuildIndexIfNeeded()[id] != nil
+    }
+
+    /// Call after any mutation to the messages array
+    func invalidateMessageIndex() {
+        _messageIdIndex = nil
+    }
 
     // MARK: - Init
 
     init(conversationId: String, unreadCount: Int = 0) {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
-        subscribeToSocket()
-        subscribeToReconnect()
-        joinRoom()
+        let handler = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+        )
+        handler.delegate = self
+        self.socketHandler = handler
     }
 
     deinit {
-        leaveRoom()
-        MessageSocketManager.shared.activeConversationId = nil
-        // Direct cleanup -- can't call @MainActor methods from deinit
-        typingTimer?.invalidate()
-        if isEmittingTyping {
-            MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
-        }
-        typingSafetyTimers.values.forEach { $0.invalidate() }
+        // socketHandler deinit handles room leave & typing cleanup
+        socketHandler = nil
     }
 
-    // MARK: - Room Management
-
-    private func joinRoom() {
-        MessageSocketManager.shared.activeConversationId = conversationId
-        MessageSocketManager.shared.joinConversation(conversationId)
-    }
-
-    private nonisolated func leaveRoom() {
-        MessageSocketManager.shared.leaveConversation(conversationId)
-    }
-
-    // MARK: - Typing Emission
+    // MARK: - Typing Emission (delegated to socketHandler)
 
     func onTextChanged(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            startTypingEmission()
-        } else {
-            stopTypingEmission()
-        }
-    }
-
-    private func startTypingEmission() {
-        typingTimer?.invalidate()
-
-        if !isEmittingTyping {
-            isEmittingTyping = true
-            MessageSocketManager.shared.emitTypingStart(conversationId: conversationId)
-        }
-
-        // Auto-stop after debounce interval of no typing
-        typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingDebounceInterval, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.stopTypingEmission()
-            }
-        }
+        socketHandler?.onTextChanged(text)
     }
 
     func stopTypingEmission() {
-        typingTimer?.invalidate()
-        typingTimer = nil
-
-        guard isEmittingTyping else { return }
-        isEmittingTyping = false
-        MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
+        socketHandler?.stopTypingEmission()
     }
 
     // MARK: - Programmatic Scroll Guard
@@ -392,7 +441,7 @@ class ConversationViewModel: ObservableObject {
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
         // Stop typing emission on send
-        stopTypingEmission()
+        socketHandler?.stopTypingEmission()
 
         // Resolve ephemeral: use explicit param or ViewModel state
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
@@ -477,7 +526,7 @@ class ConversationViewModel: ObservableObject {
             )
 
             // Replace temp message with server version
-            if let idx = messages.firstIndex(where: { $0.id == tempId }) {
+            if let idx = messageIndex(for: tempId) {
                 messages[idx] = Message(
                     id: responseData.id,
                     conversationId: conversationId,
@@ -509,7 +558,7 @@ class ConversationViewModel: ObservableObject {
             return true
         } catch {
             // Mark optimistic message as failed (keep in list for retry)
-            if let idx = messages.firstIndex(where: { $0.id == tempId }) {
+            if let idx = messageIndex(for: tempId) {
                 messages[idx].deliveryStatus = .failed
             }
             self.error = error.localizedDescription
@@ -521,7 +570,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Retry Failed Message
 
     func retryMessage(messageId: String) async {
-        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard let idx = messageIndex(for: messageId) else { return }
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
@@ -550,7 +599,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {
-        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard let idx = messageIndex(for: messageId) else { return }
 
         let userId = currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.userId == userId }
@@ -590,7 +639,7 @@ class ConversationViewModel: ObservableObject {
 
     func deleteMessage(messageId: String) async {
         // Optimistic: mark as deleted locally
-        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+        if let idx = messageIndex(for: messageId) {
             messages[idx].isDeleted = true
             messages[idx].content = ""
         }
@@ -599,7 +648,7 @@ class ConversationViewModel: ObservableObject {
             try await MessageService.shared.delete(conversationId: conversationId, messageId: messageId)
         } catch {
             // Revert on failure
-            if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            if let idx = messageIndex(for: messageId) {
                 messages[idx].isDeleted = false
             }
             self.error = error.localizedDescription
@@ -609,7 +658,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Pin / Unpin Message
 
     func togglePin(messageId: String) async {
-        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard let idx = messageIndex(for: messageId) else { return }
         let wasPinned = messages[idx].pinnedAt != nil
 
         if wasPinned {
@@ -648,7 +697,7 @@ class ConversationViewModel: ObservableObject {
             let result = try await MessageService.shared.consumeViewOnce(
                 conversationId: conversationId, messageId: messageId
             )
-            if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            if let idx = messageIndex(for: messageId) {
                 messages[idx].viewOnceCount = result.viewOnceCount
             }
             return true
@@ -671,7 +720,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     func markMessageAsConsumed(messageId: String) {
-        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard let idx = messageIndex(for: messageId) else { return }
         messages[idx].isBlurred = true
         messages[idx].content = "[Message vu]"
     }
@@ -684,7 +733,7 @@ class ConversationViewModel: ObservableObject {
 
         // Optimistic update
         var originalContent: String?
-        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+        if let idx = messageIndex(for: messageId) {
             originalContent = messages[idx].content
             messages[idx].content = trimmed
             messages[idx].isEdited = true
@@ -694,7 +743,7 @@ class ConversationViewModel: ObservableObject {
             _ = try await MessageService.shared.edit(messageId: messageId, content: trimmed)
         } catch {
             // Revert on failure
-            if let idx = messages.firstIndex(where: { $0.id == messageId }),
+            if let idx = messageIndex(for: messageId),
                let original = originalContent {
                 messages[idx].content = original
                 messages[idx].isEdited = false
@@ -723,346 +772,10 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Typing Safety Timeout
 
-    private func resetTypingSafetyTimer(for username: String) {
-        typingSafetyTimers[username]?.invalidate()
-        typingSafetyTimers[username] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.typingUsernames.removeAll { $0 == username }
-                self?.typingSafetyTimers.removeValue(forKey: username)
-            }
-        }
-    }
+    // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
-    private func clearTypingSafetyTimer(for username: String) {
-        typingSafetyTimers[username]?.invalidate()
-        typingSafetyTimers.removeValue(forKey: username)
-    }
-
-    // MARK: - Socket Subscriptions
-
-    private func subscribeToSocket() {
-        let socketManager = MessageSocketManager.shared
-        let convId = conversationId
-        let userId = currentUserId
-
-        // New messages
-        socketManager.messageReceived
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                guard let self else { return }
-                // Skip if already in list (e.g. our own optimistic message)
-                guard !self.messages.contains(where: { $0.id == apiMsg.id }) else { return }
-                // Skip own messages (already added optimistically)
-                if apiMsg.senderId == userId { return }
-                let msg = apiMsg.toMessage(currentUserId: userId)
-                self.messages.append(msg)
-                self.lastUnreadMessage = msg
-                self.newMessageAppended += 1
-
-                // Clear typing for the sender (they just sent a message)
-                if let sender = apiMsg.sender {
-                    let senderName = sender.displayName ?? sender.username
-                    self.typingUsernames.removeAll { $0 == senderName }
-                    self.clearTypingSafetyTimer(for: senderName)
-                }
-            }
-            .store(in: &cancellables)
-
-        // Edited messages
-        socketManager.messageEdited
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiMsg in
-                guard let self else { return }
-                if let idx = self.messages.firstIndex(where: { $0.id == apiMsg.id }) {
-                    self.messages[idx].content = apiMsg.content ?? ""
-                    self.messages[idx].isEdited = true
-                }
-            }
-            .store(in: &cancellables)
-
-        // Deleted messages
-        socketManager.messageDeleted
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
-                    self.messages[idx].isDeleted = true
-                    self.messages[idx].content = ""
-                }
-            }
-            .store(in: &cancellables)
-
-        // Reactions added (with deduplication)
-        socketManager.reactionAdded
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
-                    // Deduplicate: don't add if same user+emoji already exists
-                    let exists = self.messages[idx].reactions.contains {
-                        $0.emoji == event.emoji && $0.userId == event.userId
-                    }
-                    if !exists {
-                        let reaction = Reaction(messageId: event.messageId, userId: event.userId, emoji: event.emoji)
-                        self.messages[idx].reactions.append(reaction)
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Reactions removed
-        socketManager.reactionRemoved
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
-                    self.messages[idx].reactions.removeAll {
-                        $0.emoji == event.emoji && $0.userId == event.userId
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Typing started (with safety timeout)
-        socketManager.typingStarted
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if event.userId != userId, !self.typingUsernames.contains(event.username) {
-                    self.typingUsernames.append(event.username)
-                }
-                // Reset safety timer (even if already in list -- they're still typing)
-                if event.userId != userId {
-                    self.resetTypingSafetyTimer(for: event.username)
-                }
-            }
-            .store(in: &cancellables)
-
-        // Typing stopped
-        socketManager.typingStopped
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                self.typingUsernames.removeAll { $0 == event.username }
-                self.clearTypingSafetyTimer(for: event.username)
-            }
-            .store(in: &cancellables)
-
-        // Read status updated (delivered / read)
-        socketManager.readStatusUpdated
-            .filter { $0.conversationId == convId }
-            .filter { $0.userId != userId } // Only care about OTHER users reading/receiving
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let newStatus: Message.DeliveryStatus = event.type == "read" ? .read : .delivered
-                // Update all own messages that were created before the read/delivered timestamp
-                for i in self.messages.indices.reversed() {
-                    guard self.messages[i].isMe else { continue }
-                    guard self.messages[i].deliveryStatus.rawValue != Message.DeliveryStatus.read.rawValue else { continue }
-                    if self.messages[i].createdAt <= event.updatedAt {
-                        // Only upgrade status (sent -> delivered -> read), never downgrade
-                        let current = self.messages[i].deliveryStatus
-                        if newStatus == .read || (newStatus == .delivered && current != .read) {
-                            self.messages[i].deliveryStatus = newStatus
-                        }
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // View-once consumed
-        socketManager.messageConsumed
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let idx = self.messages.firstIndex(where: { $0.id == event.messageId }) {
-                    self.messages[idx].viewOnceCount = event.viewOnceCount
-                    if event.isFullyConsumed {
-                        self.evictViewOnceMedia(message: self.messages[idx])
-                        self.markMessageAsConsumed(messageId: event.messageId)
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Translation received
-        socketManager.translationReceived
-            .filter { [weak self] event in
-                self?.messages.contains { $0.id == event.messageId } ?? false
-            }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let msgId = event.messageId
-                let newTranslations = event.translations.map { t in
-                    MessageTranslation(
-                        id: t.id,
-                        messageId: t.messageId,
-                        sourceLanguage: t.sourceLanguage,
-                        targetLanguage: t.targetLanguage,
-                        translatedContent: t.translatedContent,
-                        translationModel: t.translationModel,
-                        confidenceScore: t.confidenceScore
-                    )
-                }
-                var existing = self.messageTranslations[msgId] ?? []
-                for translation in newTranslations {
-                    if let idx = existing.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
-                        existing[idx] = translation
-                    } else {
-                        existing.append(translation)
-                    }
-                }
-                self.messageTranslations[msgId] = existing
-            }
-            .store(in: &cancellables)
-
-        // Transcription ready
-        socketManager.transcriptionReady
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let segments = (event.transcription.segments ?? []).map { s in
-                    MessageTranscriptionSegment(
-                        text: s.text,
-                        startTime: s.startTime,
-                        endTime: s.endTime,
-                        speakerId: s.speakerId
-                    )
-                }
-                self.messageTranscriptions[event.messageId] = MessageTranscription(
-                    attachmentId: event.attachmentId,
-                    text: event.transcription.text,
-                    language: event.transcription.language,
-                    confidence: event.transcription.confidence,
-                    durationMs: event.transcription.durationMs,
-                    segments: segments,
-                    speakerCount: event.transcription.speakerCount
-                )
-            }
-            .store(in: &cancellables)
-
-        // Audio translation (all 3 events use same handler)
-        let audioHandler: (AudioTranslationEvent) -> Void = { [weak self] event in
-            guard let self else { return }
-            guard event.conversationId == convId else { return }
-            let msgId = event.messageId
-            let segments = (event.translatedAudio.segments ?? []).map { s in
-                MessageTranscriptionSegment(
-                    text: s.text,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    speakerId: s.speakerId
-                )
-            }
-            let audio = MessageTranslatedAudio(
-                id: event.translatedAudio.id,
-                attachmentId: event.attachmentId,
-                targetLanguage: event.translatedAudio.targetLanguage,
-                url: event.translatedAudio.url,
-                transcription: event.translatedAudio.transcription,
-                durationMs: event.translatedAudio.durationMs,
-                format: event.translatedAudio.format,
-                cloned: event.translatedAudio.cloned,
-                quality: event.translatedAudio.quality,
-                ttsModel: event.translatedAudio.ttsModel,
-                segments: segments
-            )
-            var existing = self.messageTranslatedAudios[msgId] ?? []
-            if let idx = existing.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
-                existing[idx] = audio
-            } else {
-                existing.append(audio)
-            }
-            self.messageTranslatedAudios[msgId] = existing
-        }
-
-        socketManager.audioTranslationReady
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
-            .store(in: &cancellables)
-
-        socketManager.audioTranslationProgressive
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
-            .store(in: &cancellables)
-
-        socketManager.audioTranslationCompleted
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
-            .store(in: &cancellables)
-
-        // Live location started
-        socketManager.liveLocationStarted
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let session = ActiveLiveLocation(
-                    userId: event.userId,
-                    username: event.username,
-                    latitude: event.latitude,
-                    longitude: event.longitude,
-                    expiresAt: event.expiresAt ?? Date().addingTimeInterval(TimeInterval(event.durationMinutes * 60)),
-                    startedAt: event.startedAt ?? Date()
-                )
-                self.activeLiveLocations.removeAll { $0.userId == event.userId }
-                self.activeLiveLocations.append(session)
-            }
-            .store(in: &cancellables)
-
-        // Live location updated
-        socketManager.liveLocationUpdated
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                if let idx = self.activeLiveLocations.firstIndex(where: { $0.userId == event.userId }) {
-                    self.activeLiveLocations[idx].latitude = event.latitude
-                    self.activeLiveLocations[idx].longitude = event.longitude
-                    self.activeLiveLocations[idx].speed = event.speed
-                    self.activeLiveLocations[idx].heading = event.heading
-                    self.activeLiveLocations[idx].lastUpdated = event.timestamp ?? Date()
-                }
-            }
-            .store(in: &cancellables)
-
-        // Live location stopped
-        socketManager.liveLocationStopped
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                self.activeLiveLocations.removeAll { $0.userId == event.userId }
-            }
-            .store(in: &cancellables)
-    }
-
-    // MARK: - Reconnection Sync
-
-    private func subscribeToReconnect() {
-        MessageSocketManager.shared.didReconnect
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                Task { [weak self] in
-                    await self?.syncMissedMessages()
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    private func syncMissedMessages() async {
+    func syncMissedMessages() async {
         guard !messages.isEmpty else { return }
         guard let lastMessage = messages.last else { return }
 
@@ -1082,7 +795,6 @@ class ConversationViewModel: ObservableObject {
 
             if !newMessages.isEmpty {
                 messages.append(contentsOf: newMessages)
-                messages.sort { $0.createdAt < $1.createdAt }
                 newMessageAppended += 1
                 Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
             }
@@ -1226,8 +938,9 @@ class ConversationViewModel: ObservableObject {
                 let genuinelyNew = newMessages.filter { !existingIds.contains($0.id) }
 
                 if !genuinelyNew.isEmpty {
+                    // Data is already chronologically sorted by the reversed() map and strictly newer,
+                    // so purely appending maintains order optimally in O(k).
                     messages.append(contentsOf: genuinelyNew)
-                    messages.sort { $0.createdAt < $1.createdAt }
                 }
 
                 hasNewerMessages = response.hasNewer ?? false
@@ -1436,3 +1149,7 @@ class ConversationViewModel: ObservableObject {
         )
     }
 }
+
+// MARK: - ConversationSocketDelegate Conformance
+
+extension ConversationViewModel: ConversationSocketDelegate {}

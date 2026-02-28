@@ -77,6 +77,12 @@ strip_entitlements() {
     cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.bak"
     /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+    # Remove cached app bundle + signing intermediates + provisioning profiles so Xcode
+    # regenerates everything fresh without the stripped capabilities
+    rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
+    rm -rf "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
+    grep -rl "me.meeshy.app" ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | xargs rm -f 2>/dev/null || true
     ok "Entitlements stripped (backup at ${ENTITLEMENTS_FILE}.bak)"
 }
 
@@ -139,7 +145,8 @@ do_device_deploy() {
 
         if [ "$build_rc" -ne 0 ]; then
             err "Build FAILED even after stripping capabilities"
-            tail -10 "$build_log"
+            grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
+            cp "$build_log" /tmp/meeshy_device_last_failure.log
             rm -f "$build_log"
             exit 1
         fi
@@ -147,7 +154,8 @@ do_device_deploy() {
         rm -f "$build_log"
     else
         err "Build FAILED (not a provisioning issue)"
-        tail -10 "$build_log"
+        grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib" | head -30 || tail -20 "$build_log"
+        cp "$build_log" /tmp/meeshy_device_last_failure.log
         rm -f "$build_log"
         exit 1
     fi

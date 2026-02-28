@@ -17,17 +17,17 @@ extension ConversationView {
 
         // Swipe direction: reply = swipe toward center (right for other, left for own)
         let replyDirection: CGFloat = msg.isMe ? -1 : 1
-        let isActiveSwipe = swipedMessageId == msg.id
+        let isActiveSwipe = scrollState.swipedMessageId == msg.id
 
         ZStack {
             // Icône répondre/transférer révélée élastiquement derrière la bulle
             if isActiveSwipe {
-                let progress = min(abs(swipeOffset) / 72.0, 1.0)
-                let isReplyDir = swipeOffset * replyDirection > 0
+                let progress = min(abs(scrollState.swipeOffset) / 72.0, 1.0)
+                let isReplyDir = scrollState.swipeOffset * replyDirection > 0
                 let iconColor = isReplyDir ? "4ECDC4" : "F8B500"
                 HStack {
                     // L'icône se place du côté révélé (opposé au déplacement de la bulle)
-                    if swipeOffset <= 0 { Spacer() }
+                    if scrollState.swipeOffset <= 0 { Spacer() }
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color(hex: iconColor))
@@ -35,7 +35,7 @@ extension ConversationView {
                         .background(Circle().fill(Color(hex: iconColor).opacity(0.15)))
                         .scaleEffect(0.4 + 0.6 * progress)
                         .opacity(min(progress * 2.5, 1.0))
-                    if swipeOffset > 0 { Spacer() }
+                    if scrollState.swipeOffset > 0 { Spacer() }
                 }
                 .padding(.horizontal, 16)
             }
@@ -53,8 +53,8 @@ extension ConversationView {
                     senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId ?? "")?.moodEmoji,
                     onAddReaction: { messageId in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            emojiOnlyMode = true
-                            quickReactionMessageId = messageId
+                            overlayState.emojiOnlyMode = true
+                            overlayState.quickReactionMessageId = messageId
                         }
                         HapticFeedback.light()
                     },
@@ -62,30 +62,30 @@ extension ConversationView {
                         viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                     },
                     onOpenReactPicker: { messageId in
-                        let target = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
-                        detailSheetMessage = target
-                        detailSheetInitialTab = .react
-                        showMessageDetailSheet = true
+                        let target = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
+                        overlayState.detailSheetMessage = target
+                        overlayState.detailSheetInitialTab = .react
+                        overlayState.showMessageDetailSheet = true
                     },
                     onShowInfo: {
-                        detailSheetMessage = msg
-                        detailSheetInitialTab = .views
-                        showMessageDetailSheet = true
+                        overlayState.detailSheetMessage = msg
+                        overlayState.detailSheetInitialTab = .views
+                        overlayState.showMessageDetailSheet = true
                     },
                     onShowReactions: { messageId in
-                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
-                        detailSheetInitialTab = .reactions
-                        showMessageDetailSheet = true
+                        overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
+                        overlayState.detailSheetInitialTab = .reactions
+                        overlayState.showMessageDetailSheet = true
                     },
                     onReplyTap: { messageId in
-                        scrollToMessageId = messageId
+                        scrollState.scrollToMessageId = messageId
                     },
                     onMediaTap: { attachment in
                         // User explicitly tapped media -> always cache (not conditional)
                         if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
                             Task { await MediaCacheManager.shared.prefetch(resolved) }
                         }
-                        galleryStartAttachment = attachment
+                        scrollState.galleryStartAttachment = attachment
                     },
                     onConsumeViewOnce: { messageId, completion in
                         Task {
@@ -97,24 +97,23 @@ extension ConversationView {
                         MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                     },
                     onShowTranslationDetail: { messageId in
-                        detailSheetMessage = viewModel.messages.first(where: { $0.id == messageId }) ?? msg
-                        detailSheetInitialTab = .language
-                        showMessageDetailSheet = true
+                        overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
+                        overlayState.detailSheetInitialTab = .language
+                        overlayState.showMessageDetailSheet = true
                     },
                     allAudioItems: viewModel.allAudioItems,
                     onScrollToMessage: { messageId in
-                        scrollToMessageId = messageId
+                        scrollState.scrollToMessageId = messageId
                     },
                     activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil
                 )
                 .onLongPressGesture(minimumDuration: 0.5) {
-                    guard longPressEnabled else { return }
+                    guard overlayState.longPressEnabled else { return }
                     // Removed overlayMessageFrame (GeometryReader dependency)
                     // We will center the overlay menu in screen if needed, 
                     // or rely on native Menu in future iterations. 
-                    overlayMessageFrame = .zero
-                    overlayMessage = msg
-                    showOverlayMenu = true
+                    overlayState.overlayMessage = msg
+                    overlayState.showOverlayMenu = true
                     HapticFeedback.medium()
                 }
                 .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
@@ -130,7 +129,7 @@ extension ConversationView {
                 }
 
                 // Quick reaction bar (below message)
-                if quickReactionMessageId == msg.id {
+                if overlayState.quickReactionMessageId == msg.id {
                     HStack {
                         if msg.isMe { Spacer() }
                         quickReactionBar(for: msg.id)
@@ -146,41 +145,41 @@ extension ConversationView {
                     failedMessageBar(for: msg)
                 }
             }
-            .offset(x: isActiveSwipe ? swipeOffset : 0)
+            .offset(x: isActiveSwipe ? scrollState.swipeOffset : 0)
             .simultaneousGesture(
-                DragGesture(minimumDistance: quickReactionMessageId != nil ? 10000 : 15)
+                DragGesture(minimumDistance: overlayState.quickReactionMessageId != nil ? 10000 : 15)
                     .onChanged { value in
                         let h = value.translation.width
                         let v = abs(value.translation.height)
                         // Geste clairement horizontal (ratio 2:1)
                         guard abs(h) > v * 2 else { return }
                         guard abs(h) > 12 else { return }
-                        swipedMessageId = msg.id
+                        scrollState.swipedMessageId = msg.id
                         // Rubber-band : libre jusqu'à 72 pt, résistance 15 % au-delà
                         let zone: CGFloat = 72
                         let absH = abs(h)
                         let sign: CGFloat = h > 0 ? 1 : -1
                         if absH > zone {
-                            swipeOffset = sign * (zone + (absH - zone) * 0.15)
+                            scrollState.swipeOffset = sign * (zone + (absH - zone) * 0.15)
                         } else {
-                            swipeOffset = h
+                            scrollState.swipeOffset = h
                         }
                     }
                     .onEnded { value in
-                        let directed = swipeOffset * replyDirection
+                        let directed = scrollState.swipeOffset * replyDirection
                         // Déclenchement à ≥ 92 % de la zone (≈ 66 pt sur 72 pt)
                         if directed >= 66 {
                             triggerReply(for: msg)
                             HapticFeedback.success()
                         } else if directed <= -66 {
-                            forwardMessage = msg
+                            composerState.forwardMessage = msg
                             HapticFeedback.success()
-                        } else if abs(swipeOffset) > 15 {
+                        } else if abs(scrollState.swipeOffset) > 15 {
                             HapticFeedback.light()
                         }
                         withAnimation(.spring(response: 0.42, dampingFraction: 0.62, blendDuration: 0.04)) {
-                            swipeOffset = 0
-                            swipedMessageId = nil
+                            scrollState.swipeOffset = 0
+                            scrollState.swipedMessageId = nil
                         }
                     }
             )
@@ -188,12 +187,12 @@ extension ConversationView {
         .id(msg.id)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.25 : 0))
+                .fill(Color(hex: "F8B500").opacity(scrollState.highlightedMessageId == msg.id ? 0.25 : 0))
                 .shadow(
-                    color: Color(hex: "F8B500").opacity(highlightedMessageId == msg.id ? 0.4 : 0),
-                    radius: highlightedMessageId == msg.id ? 12 : 0
+                    color: Color(hex: "F8B500").opacity(scrollState.highlightedMessageId == msg.id ? 0.4 : 0),
+                    radius: scrollState.highlightedMessageId == msg.id ? 12 : 0
                 )
-                .animation(.easeInOut(duration: 0.3), value: highlightedMessageId)
+                .animation(.easeInOut(duration: 0.3), value: scrollState.highlightedMessageId)
                 .allowsHitTesting(false)
         )
         .transition(
@@ -204,7 +203,7 @@ extension ConversationView {
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: msg.content)
         .onTapGesture {
-            if quickReactionMessageId != nil && quickReactionMessageId != msg.id {
+            if overlayState.quickReactionMessageId != nil && overlayState.quickReactionMessageId != msg.id {
                 closeReactionBar()
             }
         }
@@ -248,7 +247,7 @@ extension ConversationView {
             : msg.content
         let attType = firstAttachment?.type.rawValue
         let attThumb = firstAttachment?.thumbnailUrl ?? (firstAttachment?.type == .image ? firstAttachment?.fileUrl : nil)
-        pendingReplyReference = ReplyReference(
+        composerState.pendingReplyReference = ReplyReference(
             messageId: msg.id,
             authorName: msg.senderName ?? "?",
             previewText: preview,
@@ -273,11 +272,11 @@ extension ConversationView {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             withAnimation(.easeIn(duration: 0.2)) {
-                highlightedMessageId = targetId
+                scrollState.highlightedMessageId = targetId
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 withAnimation(.easeOut(duration: 0.5)) {
-                    highlightedMessageId = nil
+                    scrollState.highlightedMessageId = nil
                 }
             }
         }
@@ -294,7 +293,7 @@ extension ConversationView {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                TextField("Rechercher dans la conversation...", text: $searchQuery)
+                TextField("Rechercher dans la conversation...", text: $headerState.searchQuery)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
@@ -302,11 +301,11 @@ extension ConversationView {
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
                     .onSubmit { triggerBackendSearch() }
-                    .onChange(of: searchQuery) { _, _ in debounceSearch() }
+                    .onChange(of: headerState.searchQuery) { _, _ in debounceSearch() }
 
-                if !searchQuery.isEmpty {
+                if !headerState.searchQuery.isEmpty {
                     Button {
-                        searchQuery = ""
+                        headerState.searchQuery = ""
                         viewModel.searchResults = []
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -353,7 +352,7 @@ extension ConversationView {
 
     var searchResultsOverlay: some View {
         VStack(spacing: 0) {
-            if viewModel.searchResults.isEmpty && !viewModel.isSearching && searchQuery.count >= 2 {
+            if viewModel.searchResults.isEmpty && !viewModel.isSearching && headerState.searchQuery.count >= 2 {
                 VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 36, weight: .light))
@@ -373,7 +372,7 @@ extension ConversationView {
                                 }
                                 .onAppear {
                                     if result.id == viewModel.searchResults.last?.id && viewModel.searchHasMore {
-                                        Task { await viewModel.loadMoreSearchResults(query: searchQuery) }
+                                        Task { await viewModel.loadMoreSearchResults(query: headerState.searchQuery) }
                                     }
                                 }
                         }
@@ -421,7 +420,7 @@ extension ConversationView {
                             .foregroundColor(Color(hex: accentColor).opacity(0.7))
                     }
 
-                    Text(highlightedText(result.matchedText, query: searchQuery))
+                    Text(highlightedText(result.matchedText, query: headerState.searchQuery))
                         .font(.system(size: 13))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
@@ -454,25 +453,33 @@ extension ConversationView {
         return attributed
     }
 
+    private static let searchTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private static let searchDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yy"
+        return f
+    }()
+
     private func formatSearchDate(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            return formatter.string(from: date)
+            return Self.searchTimeFormatter.string(from: date)
         }
         if calendar.isDateInYesterday(date) {
             return "Hier"
         }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd/MM/yy"
-        return formatter.string(from: date)
+        return Self.searchDateFormatter.string(from: date)
     }
 
     // MARK: - Search Actions
 
     func triggerBackendSearch() {
-        Task { await viewModel.searchMessages(query: searchQuery) }
+        Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }
 
     private var searchDebounceTask: Task<Void, Never>? {
@@ -482,7 +489,7 @@ extension ConversationView {
 
     func debounceSearch() {
         searchDebounceTask?.cancel()
-        let query = searchQuery
+        let query = headerState.searchQuery
         searchDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled, query.count >= 2 else { return }
@@ -492,7 +499,7 @@ extension ConversationView {
 
     func jumpToSearchResult(_ result: SearchResultItem) async {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            showSearch = false
+            headerState.showSearch = false
         }
         isSearchFocused = false
         HapticFeedback.medium()
@@ -500,14 +507,14 @@ extension ConversationView {
         await viewModel.loadMessagesAround(messageId: result.id)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
-        scrollToMessageId = result.id
+        scrollState.scrollToMessageId = result.id
     }
 
     func dismissSearch() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            showSearch = false
-            searchQuery = ""
-            highlightedMessageId = nil
+            headerState.showSearch = false
+            headerState.searchQuery = ""
+            scrollState.highlightedMessageId = nil
         }
         viewModel.searchResults = [SearchResultItem]()
         viewModel.searchHasMore = false
@@ -528,7 +535,7 @@ extension ConversationView {
 
     @ViewBuilder
     var searchResultsBlurOverlay: some View {
-        if showSearch && searchQuery.count >= 2 {
+        if headerState.showSearch && headerState.searchQuery.count >= 2 {
             Color.black.opacity(0.001)
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea()
@@ -536,7 +543,7 @@ extension ConversationView {
                 .transition(.opacity)
 
             VStack(spacing: 0) {
-                Color.clear.frame(height: showOptions ? 140 : 100)
+                Color.clear.frame(height: composerState.showOptions ? 140 : 100)
                 searchResultsOverlay
             }
             .zIndex(81)
@@ -548,7 +555,7 @@ extension ConversationView {
 
     @ViewBuilder
     var returnToLatestButton: some View {
-        if viewModel.isInJumpedState && !showSearch {
+        if viewModel.isInJumpedState && !headerState.showSearch {
             VStack {
                 Spacer()
                 HStack {
@@ -591,7 +598,7 @@ extension ConversationView {
         return VStack(spacing: 6) {
             quickReactionEmojiStrip(messageId: messageId, emojis: topReactions)
 
-            if !emojiOnlyMode {
+            if !overlayState.emojiOnlyMode {
                 quickReactionActionsRow(messageId: messageId)
             }
         }
@@ -608,7 +615,7 @@ extension ConversationView {
                             EmojiUsageTracker.recordUsage(emoji: emoji)
                             HapticFeedback.light()
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                quickReactionMessageId = nil
+                                overlayState.quickReactionMessageId = nil
                             }
                         } label: {
                             Text(emoji)
@@ -642,12 +649,12 @@ extension ConversationView {
 
     private func quickReactionPlusButton(messageId: String, accent: Color) -> some View {
         Button {
-            let msg = viewModel.messages.first(where: { $0.id == messageId }) ?? viewModel.messages.first!
+            let msg = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first!
             closeReactionBar()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                detailSheetMessage = msg
-                detailSheetInitialTab = .react
-                showMessageDetailSheet = true
+                overlayState.detailSheetMessage = msg
+                overlayState.detailSheetInitialTab = .react
+                overlayState.showMessageDetailSheet = true
             }
         } label: {
             Image(systemName: "plus")
@@ -665,23 +672,23 @@ extension ConversationView {
     private func quickReactionActionsRow(messageId: String) -> some View {
         HStack(spacing: 8) {
             messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: "4ECDC4") {
-                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     triggerReply(for: msg)
                 }
                 closeReactionBar()
             }
             messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: "9B59B6") {
-                if let msg = viewModel.messages.first(where: { $0.id == messageId }) {
+                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     UIPasteboard.general.string = msg.content
                 }
                 closeReactionBar()
             }
             messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: "F8B500") {
-                forwardMessage = viewModel.messages.first(where: { $0.id == messageId })
+                composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                 closeReactionBar()
             }
             messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: "FF6B6B") {
-                deleteConfirmMessageId = messageId
+                overlayState.deleteConfirmMessageId = messageId
                 closeReactionBar()
             }
         }
@@ -712,7 +719,7 @@ extension ConversationView {
 
     func closeReactionBar() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            quickReactionMessageId = nil
+            overlayState.quickReactionMessageId = nil
         }
     }
 
@@ -762,7 +769,7 @@ extension ConversationView {
     // MARK: - Reply Count
 
     func replyCountFor(messageId: String) -> Int? {
-        let count = viewModel.messages.filter { $0.replyToId == messageId }.count
+        let count = viewModel.replyCountMap[messageId] ?? 0
         return count > 0 ? count : nil
     }
 
@@ -772,7 +779,7 @@ extension ConversationView {
         return Button {
             HapticFeedback.light()
             if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
-                scrollToMessageId = firstReply.id
+                scrollState.scrollToMessageId = firstReply.id
             }
         } label: {
             HStack(spacing: 4) {

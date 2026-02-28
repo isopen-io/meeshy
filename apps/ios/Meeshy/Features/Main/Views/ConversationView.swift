@@ -23,21 +23,83 @@ private struct InteractivePopEnabler: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Message Frame PreferenceKey
-
-struct MessageFrameKey: PreferenceKey {
-    static var defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue()) { $1 }
-    }
-}
-
 // MARK: - Active Member (for conversation detail header)
 struct ConversationActiveMember: Identifiable { // internal for cross-file extension access
     let id: String
     let name: String
     let color: String
     let avatarURL: String?
+}
+
+struct ConversationOverlayState {
+    var overlayMessage: Message? = nil
+    var showOverlayMenu = false
+    var longPressEnabled = false
+    var showMessageDetailSheet = false
+    var detailSheetMessage: Message? = nil
+    var detailSheetInitialTab: DetailTab? = nil
+    var quickReactionMessageId: String? = nil
+    var emojiOnlyMode = false
+    var deleteConfirmMessageId: String? = nil
+}
+
+struct ConversationScrollState {
+    var isNearBottom: Bool = true
+    var unreadBadgeCount: Int = 0
+    var scrollToBottomTrigger: Int = 0
+    var scrollToMessageId: String? = nil
+    var highlightedMessageId: String? = nil
+    var swipedMessageId: String? = nil
+    var swipeOffset: CGFloat = 0
+    var galleryStartAttachment: MessageAttachment? = nil
+    var previewingPendingImage: UIImage? = nil
+    var imageToPreview: UIImage? = nil
+    var videoToPreview: URL? = nil
+}
+
+struct ConversationComposerState {
+    var showOptions = false
+    var actionAlert: String? = nil
+    var forwardMessage: Message? = nil
+    var showConversationInfo = false
+    
+    // Attachment state
+    var pendingAttachments: [MessageAttachment] = []
+    var pendingAudioURL: URL? = nil
+    var pendingMediaFiles: [String: URL] = [:]
+    var pendingThumbnails: [String: UIImage] = [:]
+    var isLoadingMedia = false
+    
+    // Pickers
+    var showPhotoPicker = false
+    var showCamera = false
+    var showFilePicker = false
+    var selectedPhotoItems: [PhotosPickerItem] = []
+    
+    // Location & Upload
+    var isLoadingLocation = false
+    var isUploading = false
+    var uploadProgress: UploadQueueProgress? = nil
+    var showLocationPicker = false
+    
+    // Reply & Edit
+    var pendingReplyReference: ReplyReference? = nil
+    var editingMessageId: String? = nil
+    var editingOriginalContent: String? = nil
+    
+    // Misc Pickers
+    var showContactPicker = false
+    var showTextEmojiPicker = false
+    var emojiToInject = ""
+}
+
+struct ConversationHeaderState {
+    var showStoryViewerFromHeader = false
+    var storyGroupIndexForHeader = 0
+    var showSearch = false
+    var searchQuery = ""
+    var typingDotPhase: Int = 0
+    var inlineTypingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -57,84 +119,24 @@ struct ConversationView: View {
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
     @State var messageText = ""
-    @State var showOptions = false
-    @State var actionAlert: String? = nil
-    @State var forwardMessage: Message? = nil
-    @State var showConversationInfo = false
     @StateObject var audioRecorder = AudioRecorderManager()
-    @State var pendingAttachments: [MessageAttachment] = []
-    @State var pendingAudioURL: URL? = nil
-    @State var pendingMediaFiles: [String: URL] = [:]
-    @State var pendingThumbnails: [String: UIImage] = [:]
-    @State var isLoadingMedia = false
-    @State var showPhotoPicker = false
-    @State var showCamera = false
-    @State var showFilePicker = false
-    @State var selectedPhotoItems: [PhotosPickerItem] = []
-    @State var isLoadingLocation = false
-    @State var isUploading = false
-    @State var uploadProgress: UploadQueueProgress?
-    @State var showLocationPicker = false
-    @FocusState var isTyping: Bool
-    @State var pendingReplyReference: ReplyReference?
-    @State var editingMessageId: String?
-    @State var editingOriginalContent: String?
-    @State var showStoryViewerFromHeader = false
-    @State var storyGroupIndexForHeader = 0
-
-    // Overlay menu state
-    @State var overlayMessage: Message? = nil
-    @State var showOverlayMenu = false
-    @State var overlayMessageFrame: CGRect = .zero
-    @State var messageFrames: [String: CGRect] = [:]
-    @State var longPressEnabled = false
-
-    // Detail sheet state
-    @State var showMessageDetailSheet = false
-    @State var detailSheetMessage: Message? = nil
-    @State var detailSheetInitialTab: DetailTab? = nil
-
-    // Reaction bar state
-    @State var quickReactionMessageId: String? = nil
-    @State var emojiOnlyMode: Bool = false
-    @State var deleteConfirmMessageId: String? = nil
-
-    // Scroll state
-    @State var isNearBottom: Bool = true
-    @State var unreadBadgeCount: Int = 0
-    @State var scrollToBottomTrigger: Int = 0
-    @State var scrollToMessageId: String? = nil
-    @State var highlightedMessageId: String? = nil
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
     @StateObject var pendingAudioPlayer = AudioPlayerManager()
-    @State var previewingPendingImage: UIImage? = nil
-    @State var imageToPreview: UIImage? = nil
-    @State var videoToPreview: URL? = nil
-
-    // Search state
-    @State var showSearch = false
-    @State var searchQuery = ""
-    // searchResultIds and searchCurrentIndex removed — backend search uses viewModel.searchResults
+    
+    @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
 
-    // Conversation-level media gallery
-    @State var galleryStartAttachment: MessageAttachment? = nil
+    @State var composerState = ConversationComposerState()
+    @State var headerState = ConversationHeaderState()
 
-    // Swipe state
-    @State var swipedMessageId: String? = nil
-    @State var swipeOffset: CGFloat = 0
+    // Overlay & Detail state
+    @State var overlayState = ConversationOverlayState()
 
-    // Contact picker state
-    @State var showContactPicker = false
+    // Scroll, Media & Swipe state
+    @State var scrollState = ConversationScrollState()
 
-    // Emoji picker state
-    @State var showTextEmojiPicker = false
-    @State var emojiToInject = ""
-
-    // Typing dot state
-    @State var typingDotPhase: Int = 0
     let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
-    @State var inlineTypingDotPhase: Int = 0
+
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
 
@@ -169,29 +171,21 @@ struct ConversationView: View {
 
     var conversationSection: ConversationSection? {
         guard let sectionId = conversation?.sectionId else { return nil }
-        return ConversationSection.allSections.first { $0.id == sectionId }
+        // ConversationSection.allSections should be accessed via a fast dictionary in production apps,
+        // but since we only have the Array here, we can lazily build a static dictionary.
+        return Self.sectionLookup[sectionId]
+    }
+
+    private static var _sectionLookup: [String: ConversationSection]?
+    private static var sectionLookup: [String: ConversationSection] {
+        if let cached = _sectionLookup { return cached }
+        let dict = Dictionary(uniqueKeysWithValues: ConversationSection.allSections.map { ($0.id, $0) })
+        _sectionLookup = dict
+        return dict
     }
 
     var topActiveMembers: [ConversationActiveMember] {
-        var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
-        for msg in viewModel.messages where !msg.isMe {
-            guard let id = msg.senderId else { continue }
-            if var existing = counts[id] {
-                existing.count += 1
-                counts[id] = existing
-            } else {
-                counts[id] = (
-                    name: msg.senderName ?? "?",
-                    color: msg.senderColor ?? accentColor,
-                    avatarURL: msg.senderAvatarURL,
-                    count: 1
-                )
-            }
-        }
-        return counts
-            .sorted { $0.value.count > $1.value.count }
-            .prefix(3)
-            .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
+        viewModel.topActiveMembersList(accentColor: accentColor)
     }
 
     private var isCurrentUserAdminOrMod: Bool {
@@ -201,9 +195,9 @@ struct ConversationView: View {
 
     var composerHeight: CGFloat {
         var height: CGFloat = 130 // UCB base + topToolbar
-        if !pendingAttachments.isEmpty { height += 110 }
-        if editingMessageId != nil { height += 52 }
-        if pendingReplyReference != nil && editingMessageId == nil { height += 52 }
+        if !composerState.pendingAttachments.isEmpty { height += 110 }
+        if composerState.editingMessageId != nil { height += 52 }
+        if composerState.pendingReplyReference != nil && composerState.editingMessageId == nil { height += 52 }
         return height
     }
 
@@ -217,12 +211,31 @@ struct ConversationView: View {
 
     // MARK: - Date Sections
 
-    private func shouldShowDateSection(at index: Int) -> Bool {
-        guard index > 0 else { return true }
-        let current = viewModel.messages[index].createdAt
-        let previous = viewModel.messages[index - 1].createdAt
-        return current.timeIntervalSince(previous) > 3600
+    private func shouldShowDateSection(currentDate: Date, previousDate: Date?) -> Bool {
+        guard let previous = previousDate else { return true }
+        return currentDate.timeIntervalSince(previous) > 3600
     }
+
+    private static let dateSectionDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "EEEE"
+        return f
+    }()
+
+    private static let dateSectionDayMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "EEEE d MMM"
+        return f
+    }()
+
+    private static let dateSectionFullFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        f.dateFormat = "EEEE d MMM yyyy"
+        return f
+    }()
 
     private func formatDateSection(for date: Date) -> String {
         let calendar = Calendar.current
@@ -238,21 +251,12 @@ struct ConversationView: View {
             return "\(String(localized: "date.yesterday", defaultValue: "Hier")) \(timeStr)"
         }
         if let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now), date > sevenDaysAgo {
-            let formatter = DateFormatter()
-            formatter.locale = Locale.current
-            formatter.dateFormat = "EEEE"
-            return "\(formatter.string(from: date).capitalized) \(timeStr)"
+            return "\(Self.dateSectionDayFormatter.string(from: date).capitalized) \(timeStr)"
         }
         if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
-            let formatter = DateFormatter()
-            formatter.locale = Locale.current
-            formatter.dateFormat = "EEEE d MMM"
-            return formatter.string(from: date).capitalized
+            return Self.dateSectionDayMonthFormatter.string(from: date).capitalized
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.dateFormat = "EEEE d MMM yyyy"
-        return formatter.string(from: date).capitalized
+        return Self.dateSectionFullFormatter.string(from: date).capitalized
     }
 
     private func dateSectionView(for date: Date) -> some View {
@@ -325,44 +329,48 @@ struct ConversationView: View {
             .background(InteractivePopEnabler())
             .task { await viewModel.loadMessages(); MessageSocketManager.shared.connect() }
             .onAppear {
-                if let context = replyContext { pendingReplyReference = context.toReplyReference }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { longPressEnabled = true }
+                if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
             }
-            .onChange(of: isNearBottom) { _, _ in
-                if showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+            .onChange(of: scrollState.isNearBottom) { _, _ in
+                if composerState.showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
             .onChange(of: isTyping) { _, focused in
-                if focused && showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showTextEmojiPicker = false }
+                if focused && composerState.showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
-            .fullScreenCover(isPresented: $showStoryViewerFromHeader) {
-                if storyGroupIndexForHeader < storyViewModel.storyGroups.count {
-                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[storyGroupIndexForHeader]], currentGroupIndex: 0, isPresented: $showStoryViewerFromHeader)
+            .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
+                if headerState.storyGroupIndexForHeader < storyViewModel.storyGroups.count {
+                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[headerState.storyGroupIndexForHeader]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
                 }
             }
-            .sheet(isPresented: $showConversationInfo) {
+            .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
             }
-            .alert("Action sélectionnée", isPresented: Binding(get: { actionAlert != nil }, set: { if !$0 { actionAlert = nil } })) {
-                Button("OK") { actionAlert = nil }
-            } message: { Text(actionAlert ?? "") }
-            .alert("Supprimer ce message ?", isPresented: Binding(get: { deleteConfirmMessageId != nil }, set: { if !$0 { deleteConfirmMessageId = nil } })) {
-                Button("Annuler", role: .cancel) { deleteConfirmMessageId = nil }
+            .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
+                Button("OK") { composerState.actionAlert = nil }
+            } message: { Text(composerState.actionAlert ?? "") }
+            .alert("Supprimer ce message ?", isPresented: Binding(get: { 
+                overlayState.deleteConfirmMessageId != nil 
+            }, set: { 
+                if !$0 { overlayState.deleteConfirmMessageId = nil } 
+            })) {
+                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
                 Button("Supprimer", role: .destructive) {
-                    if let msgId = deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
-                    deleteConfirmMessageId = nil
+                    if let msgId = overlayState.deleteConfirmMessageId { Task { await viewModel.deleteMessage(messageId: msgId) } }
+                    overlayState.deleteConfirmMessageId = nil
                 }
             } message: { Text("Cette action est irréversible.") }
-            .sheet(item: $forwardMessage) { msgToForward in
-                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { forwardMessage = nil }
+            .sheet(item: $composerState.forwardMessage) { msgToForward in
+                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
             }
-            .onPreferenceChange(MessageFrameKey.self) { frames in messageFrames = frames }
+
             .overlay { overlayMenuContent }
-            .fullScreenCover(item: $galleryStartAttachment) { startAttachment in
+            .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
                 ConversationMediaGalleryView(
                     allAttachments: viewModel.allVisualAttachments,
                     startAttachmentId: startAttachment.id,
@@ -371,13 +379,13 @@ struct ConversationView: View {
                     senderInfoMap: viewModel.mediaSenderInfoMap
                 )
             }
-            .sheet(isPresented: $showMessageDetailSheet) {
-                if let msg = detailSheetMessage {
+            .sheet(isPresented: $overlayState.showMessageDetailSheet) {
+                if let msg = overlayState.detailSheetMessage {
                     MessageDetailSheet(
                         message: msg,
                         contactColor: conversation?.accentColor ?? "#FF2E63",
                         conversationId: viewModel.conversationId,
-                        initialTab: detailSheetInitialTab,
+                        initialTab: overlayState.detailSheetInitialTab,
                         canDelete: msg.isMe || isCurrentUserAdminOrMod,
                         textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                         transcription: viewModel.messageTranscriptions[msg.id],
@@ -423,7 +431,7 @@ struct ConversationView: View {
 
             // Connection status banner
             VStack {
-                Color.clear.frame(height: showOptions ? 72 : 56)
+                Color.clear.frame(height: composerState.showOptions ? 72 : 56)
                 ConnectionBanner()
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: socketManager.isConnected)
                 Spacer()
@@ -450,21 +458,21 @@ struct ConversationView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
 
-            if !isNearBottom {
+            if !scrollState.isNearBottom {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
                     .zIndex(60)
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isNearBottom)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
             }
 
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    if showTextEmojiPicker {
+                    if composerState.showTextEmojiPicker {
                         EmojiKeyboardPanel(
                             style: theme.mode.isDark ? .dark : .light,
                             onSelect: { emoji in
-                                emojiToInject = emoji
+                                composerState.emojiToInject = emoji
                             }
                         )
                         .frame(height: 260)
@@ -481,7 +489,7 @@ struct ConversationView: View {
                 .ignoresSafeArea(.container, edges: .bottom)
             }
             .zIndex(50)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
 
             searchResultsBlurOverlay
             returnToLatestButton
@@ -524,8 +532,9 @@ struct ConversationView: View {
                     }
 
                     ForEach(viewModel.messages) { msg in
-                        let index = viewModel.messages.firstIndex(where: { $0.id == msg.id }) ?? 0
-                        if shouldShowDateSection(at: index) { dateSectionView(for: msg.createdAt) }
+                        let index = viewModel.messageIndex(for: msg.id) ?? 0
+                        let previousDate: Date? = index > 0 ? viewModel.messages[index - 1].createdAt : nil
+                        if shouldShowDateSection(currentDate: msg.createdAt, previousDate: previousDate) { dateSectionView(for: msg.createdAt) }
                         if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
                         messageRow(index: index, msg: msg)
                     }
@@ -547,12 +556,12 @@ struct ConversationView: View {
 
                     Color.clear.frame(height: 1).id("near_bottom_anchor")
                         .onAppear {
-                            isNearBottom = true; unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
+                            scrollState.isNearBottom = true; scrollState.unreadBadgeCount = 0; viewModel.lastUnreadMessage = nil
                             if viewModel.firstUnreadMessageId != nil {
                                 withAnimation(.easeOut(duration: 0.3)) { viewModel.firstUnreadMessageId = nil }
                             }
                         }
-                        .onDisappear { isNearBottom = false }
+                        .onDisappear { scrollState.isNearBottom = false }
 
                     Color.clear.frame(height: composerHeight).id("bottom_spacer")
                 }
@@ -568,10 +577,10 @@ struct ConversationView: View {
             }
             .onChange(of: viewModel.newMessageAppended) { _, _ in
                 guard let lastMsg = viewModel.messages.last else { return }
-                if isNearBottom || lastMsg.isMe {
+                if scrollState.isNearBottom || lastMsg.isMe {
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
-                } else { unreadBadgeCount += 1 }
+                } else { scrollState.unreadBadgeCount += 1 }
             }
             .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in
                 if wasLoading && !isLoading, let anchorId = viewModel.scrollAnchorId {
@@ -580,19 +589,19 @@ struct ConversationView: View {
                     }
                 }
             }
-            .onChange(of: pendingAttachments.count) { _, _ in
-                if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+            .onChange(of: composerState.pendingAttachments.count) { _, _ in
+                if scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
             .onChange(of: audioRecorder.isRecording) { _, _ in
-                if isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                if scrollState.isNearBottom, let last = viewModel.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
             }
-            .onChange(of: scrollToBottomTrigger) { _, _ in
+            .onChange(of: scrollState.scrollToBottomTrigger) { _, _ in
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { proxy.scrollTo("bottom_spacer", anchor: .bottom) }
             }
-            .onChange(of: scrollToMessageId) { _, targetId in
+            .onChange(of: scrollState.scrollToMessageId) { _, targetId in
                 guard let targetId else { return }
-                scrollToMessageId = nil
+                scrollState.scrollToMessageId = nil
                 scrollToAndHighlight(targetId, proxy: proxy)
             }
         }
@@ -614,7 +623,7 @@ struct ConversationView: View {
                         presenceState: headerPresenceState
                     ) {
                         isTyping = false
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showOptions = true }
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
                     }
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
@@ -623,29 +632,29 @@ struct ConversationView: View {
                 expandedHeaderBand
             }
 
-            if showSearch {
+            if headerState.showSearch {
                 searchBar.transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Spacer()
         }
         .zIndex(100)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSearch)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
     }
 
     @ViewBuilder
     private var expandedHeaderBand: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                ThemedBackButton(color: accentColor, compactMode: showOptions) { HapticFeedback.light(); dismiss() }
+                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions) { HapticFeedback.light(); dismiss() }
 
-                if showOptions {
+                if composerState.showOptions {
                     // Title row: name + tags scroll + call buttons + search icon
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 4) {
-                            Button { showConversationInfo = true } label: {
+                            Button { composerState.showConversationInfo = true } label: {
                                 Text(conversation?.name ?? "Conversation")
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundColor(.white).lineLimit(1)
@@ -657,7 +666,7 @@ struct ConversationView: View {
                             Spacer(minLength: 4)
                             headerCallButtons
                             Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showSearch = true }
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
                                 isSearchFocused = true
                             } label: {
                                 Image(systemName: "magnifyingglass")
@@ -688,11 +697,11 @@ struct ConversationView: View {
                 headerAvatarView
             }
         }
-        .padding(.horizontal, showOptions ? 10 : 0)
-        .padding(.vertical, showOptions ? 6 : 0)
+        .padding(.horizontal, composerState.showOptions ? 10 : 0)
+        .padding(.vertical, composerState.showOptions ? 6 : 0)
         .background(
             Group {
-                if showOptions {
+                if composerState.showOptions {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(.ultraThinMaterial)
                         .overlay(
@@ -707,26 +716,26 @@ struct ConversationView: View {
                 }
             }
         )
-        .padding(.horizontal, showOptions ? 8 : 16).padding(.top, 8)
+        .padding(.horizontal, composerState.showOptions ? 8 : 16).padding(.top, 8)
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
 
     @ViewBuilder
     private var overlayMenuContent: some View {
-        if showOverlayMenu, let msg = overlayMessage {
+        if overlayState.showOverlayMenu, let msg = overlayState.overlayMessage {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
                 conversationId: viewModel.conversationId,
-                messageBubbleFrame: overlayMessageFrame,
-                isPresented: $showOverlayMenu,
+                messageBubbleFrame: .zero,
+                isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
                 onEdit: {
-                    editingMessageId = msg.id
-                    editingOriginalContent = msg.content
+                    composerState.editingMessageId = msg.id
+                    composerState.editingOriginalContent = msg.content
                     messageText = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
