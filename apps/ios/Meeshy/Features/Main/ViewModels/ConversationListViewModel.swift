@@ -139,11 +139,7 @@ class ConversationListViewModel: ObservableObject {
             }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newGroups in
-                // Wraps the background-calculated grouping in a smooth animation
-                // This will dynamically animate the lists and sorting natively!
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    self?.groupedConversations = newGroups
-                }
+                self?.groupedConversations = newGroups
             }
             .store(in: &cancellables)
     }

@@ -166,7 +166,6 @@ struct ConversationListView: View {
         VStack(spacing: 0) {
             ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
-                    .staggeredAppear(index: index, baseDelay: 0.04)
                     .onAppear {
                         // Scroll infini uniquement pour les users avec >1000 conversations
                         // (loadMore() est no-op sinon)
