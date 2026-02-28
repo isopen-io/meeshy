@@ -326,12 +326,20 @@ extension StoryViewerView {
                 progress = 0
             }
         } else if currentGroupIndex < groups.count - 1 {
+            if isPreviewMode {
+                isPresented = false
+                return
+            }
             groupTransition(forward: true) {
                 currentGroupIndex += 1
                 currentStoryIndex = 0
                 progress = 0
             }
         } else {
+            if isPreviewMode {
+                isPresented = false
+                return
+            }
             dismissViewer()
         }
     }

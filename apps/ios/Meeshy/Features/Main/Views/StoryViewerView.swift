@@ -19,6 +19,7 @@ struct StoryViewerView: View {
     let groups: [StoryGroup]
     @State var currentGroupIndex: Int
     @Binding var isPresented: Bool
+    var isPreviewMode: Bool = false
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
@@ -123,6 +124,27 @@ struct StoryViewerView: View {
                         color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
                         radius: 40, y: 15
                     )
+
+                // Bouton ✕ uniquement en preview mode
+                if isPreviewMode {
+                    VStack {
+                        HStack {
+                            Button {
+                                isPresented = false
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color.black.opacity(0.5)))
+                            }
+                            .padding(.leading, 16)
+                            .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                }
 
             }
         }
