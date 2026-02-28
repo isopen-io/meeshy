@@ -7,9 +7,10 @@ struct StoryTrayView: View {
     var onViewStory: (Int) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
-    @ObservedObject private var presenceManager = PresenceManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
+    private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @State private var addButtonGlow = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     var body: some View {
@@ -76,7 +77,7 @@ struct StoryTrayView: View {
         } label: {
             VStack(spacing: 5) {
                 ZStack {
-                    // Radial ambient glow
+                    // Radial ambient glow — statique pour éviter le recalcul GPU par frame
                     Circle()
                         .fill(
                             RadialGradient(
@@ -87,7 +88,7 @@ struct StoryTrayView: View {
                             )
                         )
                         .frame(width: 84, height: 84)
-                        .opacity(addButtonGlow ? 1 : 0.4)
+                        .opacity(0.6)
 
                     // Main gradient circle
                     Circle()
@@ -105,12 +106,6 @@ struct StoryTrayView: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
-                }
-                .scaleEffect(addButtonGlow ? 1.04 : 1.0)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                        addButtonGlow = true
-                    }
                 }
 
                 Text("Story")
