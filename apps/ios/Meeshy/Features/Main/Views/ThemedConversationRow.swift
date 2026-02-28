@@ -8,13 +8,14 @@ struct ThemedConversationRow: View {
     let conversation: Conversation
     var availableWidth: CGFloat = 200 // Default width for tags calculation
     var isDragging: Bool = false
+    /// Présence pré-calculée par le parent — évite que chaque ligne observe PresenceManager
+    var presenceState: PresenceState = .offline
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
-    @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
 
@@ -262,7 +263,7 @@ struct ThemedConversationRow: View {
                 avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: avatarStoryState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceManager.presenceState(for: conversation.participantUserId ?? "") : .offline,
+                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceState : .offline,
                 onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
                 onViewStory: onViewStory,
                 onMoodTap: onMoodBadgeTap,
@@ -345,7 +346,6 @@ struct ThemedConversationRow: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
-        .pulse(intensity: 0.08)
     }
 
     private func timeAgo(_ date: Date) -> String {

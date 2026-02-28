@@ -60,6 +60,7 @@ struct ConversationListView: View {
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
+    @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -199,6 +200,7 @@ struct ConversationListView: View {
                 conversation: displayConversation,
                 availableWidth: rowWidth,
                 isDragging: draggingConversation?.id == displayConversation.id,
+                presenceState: presenceManager.presenceState(for: displayConversation.participantUserId ?? ""),
                 onViewStory: {
                     handleStoryView(displayConversation)
                 },

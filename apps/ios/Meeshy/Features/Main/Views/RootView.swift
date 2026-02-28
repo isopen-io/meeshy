@@ -504,19 +504,25 @@ struct RootView: View {
         ZStack {
             theme.backgroundGradient
 
-            // Animated ambient orbs - now with floating motion
+            // Static blurred orbs — rendered once and cached by Metal (no per-frame blur)
             ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
                 Circle()
                     .fill(Color(hex: orb.color).opacity(orb.opacity))
                     .frame(width: orb.size, height: orb.size)
                     .blur(radius: orb.size * 0.25)
                     .offset(x: orb.offset.x, y: orb.offset.y)
+            }
+
+            // Lightweight animated accent (small, no blur — cheap to animate)
+            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { index, orb in
+                Circle()
+                    .fill(Color(hex: orb.color).opacity(orb.opacity * 0.35))
+                    .frame(width: orb.size * 0.25, height: orb.size * 0.25)
+                    .offset(x: orb.offset.x, y: orb.offset.y)
                     .floating(
                         range: CGFloat(15 + index * 8),
                         duration: Double(4.0 + Double(index) * 1.2)
                     )
-                    .scaleEffect(1.0)
-                    .pulse(intensity: 0.06)
             }
         }
         .ignoresSafeArea()
