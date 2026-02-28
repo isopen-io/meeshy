@@ -77,7 +77,6 @@ public struct StoryComposerView: View {
     // Preview + contextual menu
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
-    @State private var showContextMenu = false
     // Dismiss alert
     @State private var showDiscardAlert = false
     // Multi-slide publish (seront utilisées dans Task 2)
@@ -273,6 +272,11 @@ public struct StoryComposerView: View {
     private func slideThumb(slide: StorySlide, index: Int) -> some View {
         let isSelected = slideManager.currentSlideIndex == index
         return Button {
+            let currentIdx = slideManager.currentSlideIndex
+            if currentIdx < slideManager.slides.count {
+                slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+                slideManager.slides[currentIdx].effects = buildEffects()
+            }
             withAnimation(.spring(response: 0.25)) {
                 slideManager.selectSlide(at: index)
             }
@@ -594,9 +598,12 @@ public struct StoryComposerView: View {
 
     private func handleDismiss() {
         let hasContent = slideManager.slides.contains {
-            $0.content != nil || slideManager.slideImages[$0.id] != nil ||
-            $0.effects.background != nil
-        }
+            let slideId = $0.id
+            return $0.content != nil
+                || slideManager.slideImages[slideId] != nil
+                || $0.effects.background != nil
+        } || !stickerObjects.isEmpty
+          || drawingData != nil
         if hasContent {
             showDiscardAlert = true
         } else {
