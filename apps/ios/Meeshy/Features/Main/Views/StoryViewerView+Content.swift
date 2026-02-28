@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from StoryViewerView.swift
 
@@ -97,29 +98,13 @@ extension StoryViewerView {
 
     func mediaOverlay(media: FeedMedia, geometry: GeometryProxy) -> some View {
         Group {
-            if let urlString = media.url, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                    case .failure:
-                        // Fallback: colored gradient
-                        coloredMediaFallback(media: media)
-                    case .empty:
-                        // Loading: subtle shimmer on gradient bg
-                        coloredMediaFallback(media: media)
-                            .overlay(
-                                ProgressView()
-                                    .tint(.white)
-                            )
-                    @unknown default:
-                        coloredMediaFallback(media: media)
-                    }
+            if media.url != nil {
+                CachedAsyncImage(url: media.url) {
+                    coloredMediaFallback(media: media)
                 }
+                .aspectRatio(contentMode: .fill)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
             } else {
                 coloredMediaFallback(media: media)
             }
