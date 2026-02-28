@@ -94,6 +94,32 @@ struct ThemedConversationRow: View {
         return (visibleTags, remaining)
     }
 
+    // MARK: - Last Message Effect State
+
+    private enum LastMessageEffect {
+        case expired
+        case blurred
+        case viewOnce
+        case ephemeralActive
+        case none
+    }
+
+    private var lastMessageEffect: LastMessageEffect {
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt <= Date() {
+            return .expired
+        }
+        if conversation.lastMessageIsBlurred {
+            return .blurred
+        }
+        if conversation.lastMessageIsViewOnce {
+            return .viewOnce
+        }
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt > Date() {
+            return .ephemeralActive
+        }
+        return .none
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             // Dynamic Avatar
@@ -301,38 +327,106 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private var lastMessagePreviewView: some View {
-        let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let attachments = conversation.lastMessageAttachments
-        let totalCount = conversation.lastMessageAttachmentCount
-
-        if !hasText && !attachments.isEmpty {
+        switch lastMessageEffect {
+        case .expired:
             HStack(spacing: 4) {
-                senderLabel
-                let att = attachments[0]
-                attachmentIcon(for: att.mimeType)
-                attachmentMeta(for: att)
-                if totalCount > 1 {
-                    Text("+\(totalCount - 1)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
-                }
+                Image(systemName: "timer.badge.xmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(textMuted)
+                Text(String(localized: "message.expired", defaultValue: "Message expiré"))
+                    .font(.system(size: 13).italic())
+                    .foregroundColor(textMuted)
+                    .lineLimit(1)
             }
-        } else if hasText {
+
+        case .blurred:
             HStack(spacing: 4) {
                 senderLabel
-                if !attachments.isEmpty {
-                    attachmentIcon(for: attachments[0].mimeType)
-                        .font(.system(size: 11))
-                }
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(textSecondary)
                 Text(conversation.lastMessagePreview ?? "")
                     .font(.system(size: 13))
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
+                    .blur(radius: 4)
             }
-        } else {
-            Text("")
-                .font(.system(size: 13))
-                .foregroundColor(textSecondary)
+
+        case .viewOnce:
+            HStack(spacing: 4) {
+                senderLabel
+                Image(systemName: "flame")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: accentColor))
+                    .lineLimit(1)
+            }
+
+        case .ephemeralActive:
+            let hasTextEph = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let attachmentsEph = conversation.lastMessageAttachments
+            let totalCountEph = conversation.lastMessageAttachmentCount
+            HStack(spacing: 4) {
+                Image(systemName: "timer")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                senderLabel
+                if !hasTextEph && !attachmentsEph.isEmpty {
+                    let att = attachmentsEph[0]
+                    attachmentIcon(for: att.mimeType)
+                    attachmentMeta(for: att)
+                    if totalCountEph > 1 {
+                        Text("+\(totalCountEph - 1)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: accentColor))
+                    }
+                } else if hasTextEph {
+                    if !attachmentsEph.isEmpty {
+                        attachmentIcon(for: attachmentsEph[0].mimeType)
+                            .font(.system(size: 11))
+                    }
+                    Text(conversation.lastMessagePreview ?? "")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                        .lineLimit(1)
+                }
+            }
+
+        case .none:
+            let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let attachments = conversation.lastMessageAttachments
+            let totalCount = conversation.lastMessageAttachmentCount
+            if !hasText && !attachments.isEmpty {
+                HStack(spacing: 4) {
+                    senderLabel
+                    let att = attachments[0]
+                    attachmentIcon(for: att.mimeType)
+                    attachmentMeta(for: att)
+                    if totalCount > 1 {
+                        Text("+\(totalCount - 1)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(hex: accentColor))
+                    }
+                }
+            } else if hasText {
+                HStack(spacing: 4) {
+                    senderLabel
+                    if !attachments.isEmpty {
+                        attachmentIcon(for: attachments[0].mimeType)
+                            .font(.system(size: 11))
+                    }
+                    Text(conversation.lastMessagePreview ?? "")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                        .lineLimit(1)
+                }
+            } else {
+                Text("")
+                    .font(.system(size: 13))
+                    .foregroundColor(textSecondary)
+            }
         }
     }
 
