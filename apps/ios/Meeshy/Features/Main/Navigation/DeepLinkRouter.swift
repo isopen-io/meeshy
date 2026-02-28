@@ -10,6 +10,7 @@ enum DeepLinkDestination {
     case conversation(id: String)
     case magicLink(token: String)
     case share(text: String?, url: String?)
+    case userLinks
     case external(URL)
 }
 
@@ -65,6 +66,10 @@ enum DeepLinkParser {
             return .ownProfile
         }
 
+        if path == "links" || components.first == "links" {
+            return .userLinks
+        }
+
         // meeshy://share?text=...&url=...
         if path == "share" || components.first == "share" {
             return parseShareQuery(url)
@@ -96,6 +101,10 @@ enum DeepLinkParser {
 
         if components.first == "me" {
             return .ownProfile
+        }
+
+        if components.first == "links" {
+            return .userLinks
         }
 
         // https://meeshy.me/share?text=...&url=...

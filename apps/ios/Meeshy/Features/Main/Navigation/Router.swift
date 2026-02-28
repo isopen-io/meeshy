@@ -16,6 +16,7 @@ enum Route: Hashable {
     case communityInvite(String)
     case notifications
     case userStats
+    case links
     case affiliate
     case trackingLinks
     case shareLinks
@@ -82,6 +83,12 @@ final class Router: ObservableObject {
             case .share(let text, let urlString):
                 Self.logger.info("Deep link share received")
                 handleShareDeepLink(text: text, urlString: urlString)
+
+            case .userLinks:
+                popToRoot()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.push(.links)
+                }
 
             case .external:
                 break // handled by DeepLinkRouter.open before calling this closure

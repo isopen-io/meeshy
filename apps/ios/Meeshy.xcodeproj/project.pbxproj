@@ -25,6 +25,7 @@
 		771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */; };
 		8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */; };
 		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
+		LH6001A001A001A001A00001 /* LinksHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH6002A002A002A002A00002 /* LinksHubView.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SL6002A002A002A002A00002 /* ShareLinksView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
@@ -224,6 +225,7 @@
 		8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementBadgeView.swift; sourceTree = "<group>"; };
 		B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateView.swift; sourceTree = "<group>"; };
 		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
+		LH6002A002A002A002A00002 /* LinksHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinksHubView.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		SL6002A002A002A002A00002 /* ShareLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinksView.swift; sourceTree = "<group>"; };
 		CL6002A002A002A002A00002 /* CommunityLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinksView.swift; sourceTree = "<group>"; };
@@ -549,6 +551,7 @@
 				8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */,
 				B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */,
 				0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */,
+				LH6002A002A002A002A00002 /* LinksHubView.swift */,
 				TL6002A002A002A002A00002 /* TrackingLinksView.swift */,
 				SL6002A002A002A002A00002 /* ShareLinksView.swift */,
 				CL6002A002A002A002A00002 /* CommunityLinksView.swift */,
@@ -985,6 +988,7 @@
 				771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */,
 				8AF0F137E5C7A17E8D3F6963 /* AffiliateView.swift in Sources */,
 				E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */,
+				LH6001A001A001A001A00001 /* LinksHubView.swift in Sources */,
 				TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */,
 				SL6001A001A001A001A00001 /* ShareLinksView.swift in Sources */,
 				CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */,
