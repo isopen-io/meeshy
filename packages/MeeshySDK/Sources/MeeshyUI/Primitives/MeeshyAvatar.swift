@@ -372,7 +372,7 @@ public struct MeeshyAvatar: View {
                 }
         }
         .frame(width: mode.badgeSize, height: mode.badgeSize)
-        .pulse(intensity: 0.15)
+        // .pulse retiré : animation repeatForever inutile sur chaque avatar de la liste
     }
 
     private var dotColor: Color {
