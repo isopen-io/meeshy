@@ -115,6 +115,19 @@ public struct StoryComposerView: View {
         .onChange(of: photoPickerItem) { newItem in
             loadPhoto(from: newItem)
         }
+        .alert("Erreur de publication", isPresented: .constant(slidePublishError != nil)) {
+            Button("Réessayer") {
+                slidePublishContinuation?.resume(returning: .retry)
+            }
+            Button("Ignorer") {
+                slidePublishContinuation?.resume(returning: .skip)
+            }
+            Button("Annuler tout", role: .destructive) {
+                slidePublishContinuation?.resume(returning: .cancel)
+            }
+        } message: {
+            Text(slidePublishError ?? "")
+        }
         .statusBarHidden()
     }
 
@@ -612,8 +625,52 @@ public struct StoryComposerView: View {
         }
     }
 
-    // Stub — sera implémenté dans Task 2
-    private func publishAllSlides() { }
+    private func publishAllSlides() {
+        Task {
+            let (slides, images) = allSlidesSnapshot()
+            isPublishingAll = true
+
+            var index = 0
+            while index < slides.count {
+                let slide = slides[index]
+                let image = images[slide.id]
+                publishProgressText = "Publier \(index + 1)/\(slides.count)..."
+
+                var retrying = true
+                while retrying {
+                    do {
+                        try await onPublishSlide(slide, image)
+                        retrying = false
+                        index += 1
+                    } catch {
+                        let action = await withCheckedContinuation { continuation in
+                            slidePublishContinuation = continuation
+                            slidePublishError = "Erreur slide \(index + 1)/\(slides.count) : \(error.localizedDescription)"
+                        }
+                        slidePublishContinuation = nil
+                        slidePublishError = nil
+                        switch action {
+                        case .retry:
+                            break
+                        case .skip:
+                            retrying = false
+                            index += 1
+                        case .cancel:
+                            isPublishingAll = false
+                            publishProgressText = nil
+                            return
+                        }
+                    }
+                }
+            }
+
+            clearDraft()
+            isPublishingAll = false
+            publishProgressText = nil
+            HapticFeedback.success()
+            onDismiss()
+        }
+    }
 
     // Stubs — seront implémentés dans Task 5
     private func saveDraft() { }
