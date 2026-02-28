@@ -190,6 +190,37 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - Story Transition Effects
+
+public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
+    /// Fondu : opacité 0 → 1 (0.3s easeOut) à l'entrée
+    case fade
+    /// Zoom doux : scale 0.92 + opacité 0 → 1 (spring) à l'entrée
+    case zoom
+    /// Glissement vertical : décalage Y+30 + opacité 0 → position normale (spring) à l'entrée
+    case slide
+    /// Révélation circulaire : clipShape cercle qui s'élargit (0.4s easeOut) à l'entrée
+    case reveal
+
+    public var label: String {
+        switch self {
+        case .fade:   return "Fondu"
+        case .zoom:   return "Zoom"
+        case .slide:  return "Glissement"
+        case .reveal: return "Révélation"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .fade:   return "sun.max"
+        case .zoom:   return "arrow.up.left.and.arrow.down.right"
+        case .slide:  return "arrow.up"
+        case .reveal: return "circle.dashed"
+        }
+    }
+}
+
 // MARK: - Story Effects
 
 public struct StoryEffects: Codable, Sendable {
@@ -215,6 +246,10 @@ public struct StoryEffects: Codable, Sendable {
     public var voiceAttachmentId: String?
     public var voiceTranscriptions: [StoryVoiceTranscription]?
 
+    // Effets de transition (entrée / sortie du slide)
+    public var opening: StoryTransitionEffect?
+    public var closing: StoryTransitionEffect?
+
     // Deprecated — conservé pour compatibilité ascendante
     @available(*, deprecated, renamed: "backgroundAudioId")
     public var musicTrackId: String?
@@ -230,7 +265,8 @@ public struct StoryEffects: Codable, Sendable {
                 drawingData: Data? = nil,
                 backgroundAudioId: String? = nil, backgroundAudioVolume: Float? = nil,
                 backgroundAudioStart: TimeInterval? = nil,
-                voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil) {
+                voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
+                opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
@@ -241,6 +277,8 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioStart = backgroundAudioStart
         self.voiceAttachmentId = voiceAttachmentId
         self.voiceTranscriptions = voiceTranscriptions
+        self.opening = opening
+        self.closing = closing
     }
 
     public var parsedTextStyle: StoryTextStyle? {
