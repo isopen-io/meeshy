@@ -109,6 +109,9 @@ public struct StoryComposerView: View {
                 if !isDrawingActive {
                     toolBar
                     activeToolPanel
+                        .frame(maxWidth: UIScreen.main.bounds.width)
+                        .frame(maxHeight: 200)
+                        .clipped()
                 }
             }
         }
@@ -345,21 +348,35 @@ public struct StoryComposerView: View {
     // MARK: - Canvas Area
 
     private var canvasArea: some View {
-        StoryCanvasView(
-            text: $text,
-            textStyle: $textStyle,
-            textColor: $textColor,
-            textSize: $textSize,
-            textBgEnabled: $textBgEnabled,
-            textAlignment: $textAlignment,
-            textPosition: $textPosition,
-            stickerObjects: $stickerObjects,
-            selectedFilter: $selectedFilter,
-            drawingData: $drawingData,
-            isDrawingActive: $isDrawingActive,
-            backgroundColor: $backgroundColor,
-            selectedImage: $selectedImage
-        )
+        ZStack {
+            StoryCanvasView(
+                text: $text,
+                textStyle: $textStyle,
+                textColor: $textColor,
+                textSize: $textSize,
+                textBgEnabled: $textBgEnabled,
+                textAlignment: $textAlignment,
+                textPosition: $textPosition,
+                stickerObjects: $stickerObjects,
+                selectedFilter: $selectedFilter,
+                drawingData: $drawingData,
+                isDrawingActive: $isDrawingActive,
+                backgroundColor: $backgroundColor,
+                selectedImage: $selectedImage
+            )
+
+            // Overlay transparent : ferme le panel actif si on tape le canvas
+            if activePanel != .none {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            activePanel = .none
+                            isDrawingActive = false
+                        }
+                    }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 8)
     }
@@ -432,7 +449,6 @@ public struct StoryComposerView: View {
                 stickerObjects.append(sticker)
                 HapticFeedback.medium()
             }
-            .frame(height: 320)
             .transition(.move(edge: .bottom).combined(with: .opacity))
 
         case .drawing:
