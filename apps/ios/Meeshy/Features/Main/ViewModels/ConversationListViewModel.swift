@@ -105,17 +105,23 @@ class ConversationListViewModel: ObservableObject {
             .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
                 var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
-                // Pinned section
-                let pinnedOnly = filtered.filter { $0.isPinned && $0.sectionId == nil }
-                if !pinnedOnly.isEmpty {
-                    result.append((ConversationSection.pinned, pinnedOnly.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                // O(1) lookup sets
+                let categoryIds = Set(categories.map(\.id))
+
+                // Groupement O(n) unique — remplace les k passes filter O(n×k)
+                let bySection = Dictionary(grouping: filtered) { conv -> String in
+                    if conv.isPinned && conv.sectionId == nil { return "__pinned__" }
+                    return conv.sectionId ?? "__other__"
                 }
 
-                // User categories
-                let categoryIds = Set(categories.map(\.id))
+                // Pinned section
+                if let pinned = bySection["__pinned__"], !pinned.isEmpty {
+                    result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                }
+
+                // User categories (order preserved)
                 for category in categories {
-                    let sectionConvs = filtered.filter { $0.sectionId == category.id }
-                    if !sectionConvs.isEmpty {
+                    if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
                         let sorted = sectionConvs.sorted { a, b in
                             if a.isPinned != b.isPinned { return a.isPinned }
                             return a.lastMessageAt > b.lastMessageAt
@@ -124,15 +130,13 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
-                // Orphaned and uncategorized
-                let orphaned = filtered.filter { conv in
+                // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
+                let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
                     guard let sid = conv.sectionId else { return false }
-                    return !categoryIds.contains(sid) && !(conv.isPinned && conv.sectionId == nil)
+                    return !categoryIds.contains(sid)
                 }
-                let uncategorized = filtered.filter { $0.sectionId == nil && !$0.isPinned }
-                let allUncategorized = uncategorized + orphaned
-                if !allUncategorized.isEmpty {
-                    result.append((ConversationSection.other, allUncategorized.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+                if !otherConvs.isEmpty {
+                    result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
                 }
 
                 return result
@@ -170,8 +174,16 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 invalidateCache()
-                if let idx = self.convIndex(for: event.conversationId) {
-                    self.conversations[idx].unreadCount = event.unreadCount
+                guard let idx = self.convIndex(for: event.conversationId) else { return }
+                self.conversations[idx].unreadCount = event.unreadCount
+                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
+                let cid = event.conversationId
+                let newCount = event.unreadCount
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
+                        self.groupedConversations[i].conversations[rowIdx].unreadCount = newCount
+                        break
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -185,14 +197,32 @@ class ConversationListViewModel: ObservableObject {
                 let convId = apiMsg.conversationId
                 guard let idx = self.convIndex(for: convId) else { return }
 
-                self.conversations[idx].lastMessagePreview = apiMsg.content
-                self.conversations[idx].lastMessageSenderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
-                self.conversations[idx].lastMessageAt = apiMsg.createdAt
+                let preview = apiMsg.content
+                let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username
+                let msgDate = apiMsg.createdAt
+
+                self.conversations[idx].lastMessagePreview = preview
+                self.conversations[idx].lastMessageSenderName = senderName
+                self.conversations[idx].lastMessageAt = msgDate
 
                 // Move conversation to top if not already
                 if idx > 0 {
                     let conv = self.conversations.remove(at: idx)
                     self.conversations.insert(conv, at: 0)
+                }
+
+                // Fast-path: mise à jour directe de groupedConversations (pas d'attente pipeline 150ms)
+                for i in 0..<self.groupedConversations.count {
+                    guard let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == convId }) else { continue }
+                    self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = preview
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageSenderName = senderName
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageAt = msgDate
+                    // Remonter en tête de section (sauf pinned)
+                    if rowIdx > 0 && self.groupedConversations[i].section.id != "pinned" {
+                        let conv = self.groupedConversations[i].conversations.remove(at: rowIdx)
+                        self.groupedConversations[i].conversations.insert(conv, at: 0)
+                    }
+                    break
                 }
             }
             .store(in: &cancellables)
@@ -331,8 +361,7 @@ class ConversationListViewModel: ObservableObject {
                     let userId = currentUserId
                     PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                     let incoming = response.data.map { $0.toConversation(currentUserId: userId) }
-                    let existingIds = Set(conversations.map(\.id))
-                    let deduplicated = incoming.filter { !existingIds.contains($0.id) }
+                    let deduplicated = incoming.filter { convIndex(for: $0.id) == nil }
                     if !deduplicated.isEmpty {
                         conversations.append(contentsOf: deduplicated)
                     }
@@ -369,8 +398,7 @@ class ConversationListViewModel: ObservableObject {
                 let userId = currentUserId
                 PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                 let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
-                let existingIds = Set(conversations.map(\.id))
-                let deduplicated = newConversations.filter { !existingIds.contains($0.id) }
+                let deduplicated = newConversations.filter { convIndex(for: $0.id) == nil }
                 conversations.append(contentsOf: deduplicated)
                 hasMore = response.pagination?.hasMore ?? false
                 currentOffset += deduplicated.count

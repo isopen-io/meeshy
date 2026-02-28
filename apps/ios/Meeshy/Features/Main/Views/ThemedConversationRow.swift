@@ -15,13 +15,15 @@ struct ThemedConversationRow: View {
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
-    @EnvironmentObject var storyViewModel: StoryViewModel
-    @EnvironmentObject var statusViewModel: StatusViewModel
-
-    @State private var showLastSeenTooltip = false
+    var isDark: Bool = false
+    var storyRingState: StoryRingState = .none
+    var moodStatus: StatusEntry? = nil
 
     private var accentColor: String { conversation.accentColor }
+    private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
+    private var textSecondary: Color { isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6) }
+    private var textMuted: Color { isDark ? Color(hex: "F5F5F0").opacity(0.5) : Color(hex: "1C1917").opacity(0.4) }
+    private var backgroundSecondary: Color { isDark ? Color(hex: "191920") : Color(hex: "FFFFFF") }
 
     // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
     private var conversationHeat: CGFloat {
@@ -45,7 +47,6 @@ struct ThemedConversationRow: View {
     /// Gradient de fond calibré sur l'activité : pastel (faible) → vibrant (forte)
     private var heatBackground: LinearGradient {
         let heat = conversationHeat
-        let isDark = theme.mode.isDark
         let topOpacity = isDark ? (0.05 + heat * 0.23) : (0.03 + heat * 0.16)
         let botOpacity = topOpacity * 0.30
         return LinearGradient(
@@ -104,13 +105,14 @@ struct ThemedConversationRow: View {
                     tagsRow
                 }
 
-                HStack {
+                HStack(alignment: .top) {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.name)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(1)
+                            .foregroundColor(textPrimary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         // Type badge
                         if conversation.type != .direct {
@@ -121,15 +123,18 @@ struct ThemedConversationRow: View {
 
                     Spacer()
 
-                    // Timestamp
+                    // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: accentColor))
+                        .layoutPriority(1)
+                        .padding(.top, 2)
                 }
 
                 // Last message with attachment indicators
                 lastMessagePreviewView
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Unread badge
             if conversation.unreadCount > 0 {
@@ -142,7 +147,7 @@ struct ThemedConversationRow: View {
         .background(
             ZStack {
                 // Base opaque : empêche les couleurs des actions de swipe de transparaître
-                theme.backgroundSecondary
+                backgroundSecondary
                 heatBackground
                 if isDragging {
                     Color(hex: accentColor).opacity(0.07)
@@ -188,106 +193,30 @@ struct ThemedConversationRow: View {
             if tagInfo.remaining > 0 {
                 Text("+\(tagInfo.remaining)")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(textMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                            .fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
                     )
             }
         }
     }
 
-    // MARK: - Avatar
-
-    private var hasStoryRing: Bool {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return false }
-        return storyViewModel.hasStories(forUserId: userId)
-    }
-
-    private var hasUnviewedStoryRing: Bool {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return false }
-        return storyViewModel.hasUnviewedStories(forUserId: userId)
-    }
-
-    private var moodStatus: StatusEntry? {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
-        return statusViewModel.statusForUser(userId: userId)
-    }
-
-    private var avatarStoryState: StoryRingState {
-        if hasUnviewedStoryRing { return .unread }
-        if hasStoryRing { return .read }
-        return .none
-    }
-
-    private var avatarContextMenuItems: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-
-        // Story en premier si disponible
-        if hasStoryRing {
-            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                onViewStory?()
-            })
-        }
-
-        // Profil utilisateur (toujours disponible)
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            onViewProfile?()
-        })
-
-        // Infos conversation (toujours disponible)
-        items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
-            onViewConversationInfo?()
-        })
-
-        return items
-    }
+    // MARK: - Avatar (extracted struct to avoid PAC issues with @State + escaping closures)
 
     private var avatarView: some View {
-        ZStack {
-            MeeshyAvatar(
-                name: conversation.name,
-                mode: .conversationList,
-                accentColor: accentColor,
-                secondaryColor: conversation.colorPalette.secondary,
-                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                storyState: avatarStoryState,
-                moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceState : .offline,
-                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
-                onViewStory: onViewStory,
-                onMoodTap: onMoodBadgeTap,
-                onOnlineTap: {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        showLastSeenTooltip = true
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showLastSeenTooltip = false
-                        }
-                    }
-                },
-                contextMenuItems: avatarContextMenuItems
-            )
-
-            // Last seen tooltip
-            if showLastSeenTooltip, let text = conversation.lastSeenText {
-                Text(text)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.75))
-                    )
-                    .offset(x: 0, y: -34)
-                    .transition(.scale.combined(with: .opacity))
-                    .accessibilityHidden(true)
-            }
-        }
+        ConversationAvatarView(
+            conversation: conversation,
+            presenceState: presenceState,
+            storyRingState: storyRingState,
+            moodStatus: moodStatus,
+            onViewStory: onViewStory,
+            onViewProfile: onViewProfile,
+            onViewConversationInfo: onViewConversationInfo,
+            onMoodBadgeTap: onMoodBadgeTap
+        )
     }
 
     // MARK: - Type Badge
@@ -305,7 +234,7 @@ struct ThemedConversationRow: View {
         .padding(.vertical, 2)
         .background(
             Capsule()
-                .fill(Color(hex: accentColor).opacity(theme.mode.isDark ? 0.2 : 0.15))
+                .fill(Color(hex: accentColor).opacity(isDark ? 0.2 : 0.15))
         )
     }
 
@@ -395,13 +324,13 @@ struct ThemedConversationRow: View {
                 }
                 Text(conversation.lastMessagePreview ?? "")
                     .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(textSecondary)
                     .lineLimit(1)
             }
         } else {
             Text("")
                 .font(.system(size: 13))
-                .foregroundColor(theme.textSecondary)
+                .foregroundColor(textSecondary)
         }
     }
 
@@ -457,7 +386,7 @@ struct ThemedConversationRow: View {
 
         return Text(meta)
             .font(.system(size: 13))
-            .foregroundColor(theme.textSecondary)
+            .foregroundColor(textSecondary)
             .lineLimit(1)
     }
 
@@ -466,5 +395,95 @@ struct ThemedConversationRow: View {
         let mins = totalSec / 60
         let secs = totalSec % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+}
+
+// MARK: - Equatable (permet .equatable() pour éviter les re-renders superflus)
+extension ThemedConversationRow: Equatable {
+    static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
+        lhs.conversation == rhs.conversation &&
+        lhs.availableWidth == rhs.availableWidth &&
+        lhs.isDragging == rhs.isDragging &&
+        lhs.isDark == rhs.isDark &&
+        lhs.storyRingState == rhs.storyRingState &&
+        lhs.moodStatus?.id == rhs.moodStatus?.id &&
+        lhs.presenceState == rhs.presenceState
+    }
+}
+
+// MARK: - Conversation Avatar View (extracted struct to avoid PAC issues with @State + escaping closures)
+
+private struct ConversationAvatarView: View {
+    let conversation: Conversation
+    let presenceState: PresenceState
+    let storyRingState: StoryRingState
+    let moodStatus: StatusEntry?
+    var onViewStory: (() -> Void)? = nil
+    var onViewProfile: (() -> Void)? = nil
+    var onViewConversationInfo: (() -> Void)? = nil
+    var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
+
+    @State private var showLastSeenTooltip = false
+
+    private var avatarContextMenuItems: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if storyRingState != .none {
+            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                onViewStory?()
+            })
+        }
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+            onViewProfile?()
+        })
+        items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
+            onViewConversationInfo?()
+        })
+        return items
+    }
+
+    var body: some View {
+        ZStack {
+            MeeshyAvatar(
+                name: conversation.name,
+                mode: .conversationList,
+                accentColor: conversation.accentColor,
+                secondaryColor: conversation.colorPalette.secondary,
+                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                storyState: storyRingState,
+                moodEmoji: moodStatus?.moodEmoji,
+                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceState : .offline,
+                enablePulse: false,
+                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
+                onViewStory: onViewStory,
+                onMoodTap: onMoodBadgeTap,
+                onOnlineTap: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showLastSeenTooltip = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showLastSeenTooltip = false
+                        }
+                    }
+                },
+                contextMenuItems: avatarContextMenuItems
+            )
+
+            // Last seen tooltip
+            if showLastSeenTooltip, let text = conversation.lastSeenText {
+                Text(text)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(0.75))
+                    )
+                    .offset(x: 0, y: -34)
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }

@@ -163,8 +163,8 @@ struct ConversationListView: View {
         // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
         // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
         let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
-        VStack(spacing: 0) {
-            ForEach(Array(conversations.enumerated()), id: \.element.id) { index, conversation in
+        LazyVStack(spacing: 0) {
+            ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
                     .onAppear {
                         // Scroll infini uniquement pour les users avec >1000 conversations
@@ -173,6 +173,18 @@ struct ConversationListView: View {
                     }
             }
         }
+    }
+
+    private func storyRingState(for conversation: Conversation) -> StoryRingState {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
+        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
+        if storyViewModel.hasStories(forUserId: userId) { return .read }
+        return .none
+    }
+
+    private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
+        return statusViewModel.statusForUser(userId: userId)
     }
 
     private func enrichedConversation(_ conversation: Conversation) -> Conversation {
@@ -215,8 +227,12 @@ struct ConversationListView: View {
                 },
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(displayConversation, at: anchor)
-                }
+                },
+                isDark: theme.mode.isDark,
+                storyRingState: storyRingState(for: displayConversation),
+                moodStatus: conversationMoodStatus(for: displayConversation)
             )
+            .equatable()
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()

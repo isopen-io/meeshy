@@ -147,17 +147,17 @@ struct StatusComposerView: View {
                     )
             )
             .onChange(of: statusText) { _, newValue in
-                if newValue.count > 140 {
-                    statusText = String(newValue.prefix(140))
+                if newValue.count > 122 {
+                    statusText = String(newValue.prefix(122))
                 }
             }
 
         // Character count
             .overlay(alignment: .bottomTrailing) {
                 if !statusText.isEmpty {
-                    Text("\(statusText.count)/140")
+                    Text("\(statusText.count)/122")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(statusText.count > 120 ? MeeshyColors.coral : theme.textMuted)
+                        .foregroundColor(statusText.count > 100 ? MeeshyColors.coral : theme.textMuted)
                         .padding(.trailing, 14)
                         .padding(.bottom, -18)
                 }
@@ -168,21 +168,52 @@ struct StatusComposerView: View {
 
     private func previewPill(emoji: String) -> some View {
         VStack(spacing: 8) {
-            Text("Apercu")
+            Text("Aperçu")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            HStack(spacing: 6) {
-                Text(emoji)
-                    .font(.system(size: 22))
-                Text(statusText.isEmpty ? "Moi" : statusText)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+            // Rendu fidèle : avatar + badge emoji + nom + texte de statut
+            HStack(spacing: 12) {
+                // Avatar avec badge emoji en bas à droite (comme dans la liste de conversations)
+                ZStack(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(MeeshyColors.primaryGradient)
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Text(viewModel.currentUserInitial)
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+
+                    Text(emoji)
+                        .font(.system(size: 13))
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(theme.backgroundPrimary))
+                        .offset(x: 2, y: 2)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(viewModel.currentUserDisplayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+
+                    if !statusText.isEmpty {
+                        HStack(spacing: 4) {
+                            Text(emoji)
+                                .font(.system(size: 11))
+                            Text(statusText)
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
+                Spacer()
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassCard(cornerRadius: 20)
+            .padding(.vertical, 10)
+            .glassCard(cornerRadius: 14)
         }
         .transition(.scale.combined(with: .opacity))
     }

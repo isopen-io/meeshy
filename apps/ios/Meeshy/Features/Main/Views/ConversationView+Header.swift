@@ -21,98 +21,22 @@ extension ConversationView {
         )
     }
 
-    // MARK: - Header Avatar (morphs from trigger to participant display)
-    @ViewBuilder
+    // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
     var headerAvatarView: some View {
-        if composerState.showOptions {
-            // Expanded: participant avatar(s) — tap collapses band
-            if isDirect, let userId = conversation?.participantUserId {
-                MeeshyAvatar(
-                    name: conversation?.name ?? "?",
-                    mode: .custom(44),
-                    accentColor: accentColor,
-                    avatarURL: conversation?.participantAvatarURL,
-                    storyState: memberStoryState(for: userId),
-                    moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
-                    presenceState: presenceManager.presenceState(for: userId),
-                    onTap: {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            composerState.showOptions = false
-                        }
-                    },
-                    onViewStory: {
-                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                            headerState.storyGroupIndexForHeader = groupIndex
-                            headerState.showStoryViewerFromHeader = true
-                        }
-                    },
-                    onMoodTap: statusViewModel.moodTapHandler(for: userId),
-                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
-                )
-            } else if !topActiveMembers.isEmpty {
-                HStack(spacing: -6) {
-                    ForEach(topActiveMembers) { member in
-                        MeeshyAvatar(
-                            name: member.name,
-                            mode: .custom(28),
-                            accentColor: member.color,
-                            avatarURL: member.avatarURL,
-                            storyState: memberStoryState(for: member.id),
-                            moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
-                            presenceState: presenceManager.presenceState(for: member.id),
-                            onTap: {
-                                HapticFeedback.light()
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    composerState.showOptions = false
-                                }
-                            },
-                            onViewStory: {
-                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
-                                    headerState.storyGroupIndexForHeader = groupIndex
-                                    headerState.showStoryViewerFromHeader = true
-                                }
-                            },
-                            onMoodTap: statusViewModel.moodTapHandler(for: member.id),
-                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
-                        )
-                    }
-                }
-            } else if let conv = conversation, conv.memberCount > 2 {
-                Button {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        composerState.showOptions = false
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 9))
-                        Text("\(conv.memberCount)")
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                    .foregroundColor(.white.opacity(0.5))
-                }
+        ConversationHeaderAvatarView(
+            composerState: $composerState,
+            headerState: $headerState,
+            conversation: conversation,
+            topActiveMembers: topActiveMembers,
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            headerHasStoryRing: headerHasStoryRing,
+            headerMoodEmoji: headerMoodEmoji,
+            headerPresenceState: headerPresenceState,
+            onNavigateToDM: { userId, name in
+                Task { await self.navigateToDM(with: userId, name: name) }
             }
-        } else {
-            // Collapsed: avatar trigger — tap expands band, long press shows context menu
-            MeeshyAvatar(
-                name: conversation?.name ?? "?",
-                mode: .conversationHeader,
-                accentColor: accentColor,
-                secondaryColor: secondaryColor,
-                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                storyState: headerHasStoryRing ? .unread : .none,
-                presenceState: headerPresenceState,
-                onTap: {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        composerState.showOptions = true
-                    }
-                },
-                contextMenuItems: collapsedAvatarContextMenu
-            )
-        }
+        )
     }
 
     // MARK: - Header Call Buttons (audio + video)
@@ -239,54 +163,6 @@ extension ConversationView {
         }
     }
 
-    // Helper: story state for a member
-    func memberStoryState(for userId: String) -> StoryRingState {
-        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
-        if storyViewModel.hasStories(forUserId: userId) { return .read }
-        return .none
-    }
-
-    // Helper: context menu items for participant avatars in header band
-    func headerAvatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        if storyViewModel.hasStories(forUserId: userId) {
-            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                    headerState.storyGroupIndexForHeader = groupIndex
-                    headerState.showStoryViewerFromHeader = true
-                }
-            })
-        }
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            composerState.showConversationInfo = true
-        })
-        items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
-            Task { await self.navigateToDM(with: userId, name: name) }
-        })
-        return items
-    }
-
-    // Helper: context menu items for the collapsed avatar (before header is opened)
-    var collapsedAvatarContextMenu: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        if let userId = conversation?.participantUserId, storyViewModel.hasStories(forUserId: userId) {
-            items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
-                if let uid = self.conversation?.participantUserId,
-                   let groupIndex = self.storyViewModel.groupIndex(forUserId: uid) {
-                    self.headerState.storyGroupIndexForHeader = groupIndex
-                    self.headerState.showStoryViewerFromHeader = true
-                }
-            })
-        }
-        items.append(.init(label: "Voir le profil", icon: "person.fill") {
-            self.composerState.showConversationInfo = true
-        })
-        items.append(.init(label: "Infos conversation", icon: "info.circle.fill") {
-            self.composerState.showConversationInfo = true
-        })
-        return items
-    }
-
     // MARK: - Navigate to DM
 
     func navigateToDM(with userId: String, name: String) async {
@@ -316,5 +192,169 @@ extension ConversationView {
                 router.navigateToConversation(newConv)
             }
         } catch { }
+    }
+}
+
+// MARK: - Conversation Header Avatar View
+// Extracted struct to avoid PAC (Pointer Authentication Code) crashes on ARM64e:
+// @ViewBuilder computed properties capturing @EnvironmentObject + @State in @escaping closures
+// cause EXC_BAD_ACCESS in swift_retain. Using a dedicated struct gives SwiftUI proper ownership.
+
+private struct ConversationHeaderAvatarView: View {
+    @Binding var composerState: ConversationComposerState
+    @Binding var headerState: ConversationHeaderState
+
+    let conversation: Conversation?
+    let topActiveMembers: [ConversationActiveMember]
+    let accentColor: String
+    let secondaryColor: String
+    let headerHasStoryRing: Bool
+    let headerMoodEmoji: String?
+    let headerPresenceState: PresenceState
+    var onNavigateToDM: (String, String) -> Void
+
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+
+    private var isDirect: Bool { conversation?.type == .direct }
+
+    private func memberStoryState(for userId: String) -> StoryRingState {
+        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
+        if storyViewModel.hasStories(forUserId: userId) { return .read }
+        return .none
+    }
+
+    private func headerAvatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if storyViewModel.hasStories(forUserId: userId) {
+            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                    headerState.storyGroupIndexForHeader = groupIndex
+                    headerState.showStoryViewerFromHeader = true
+                }
+            })
+        }
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+            composerState.showConversationInfo = true
+        })
+        items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
+            onNavigateToDM(userId, name)
+        })
+        return items
+    }
+
+    private var collapsedAvatarContextMenu: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        if let userId = conversation?.participantUserId, storyViewModel.hasStories(forUserId: userId) {
+            items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
+                if let uid = conversation?.participantUserId,
+                   let groupIndex = storyViewModel.groupIndex(forUserId: uid) {
+                    headerState.storyGroupIndexForHeader = groupIndex
+                    headerState.showStoryViewerFromHeader = true
+                }
+            })
+        }
+        items.append(.init(label: "Voir le profil", icon: "person.fill") {
+            composerState.showConversationInfo = true
+        })
+        items.append(.init(label: "Infos conversation", icon: "info.circle.fill") {
+            composerState.showConversationInfo = true
+        })
+        return items
+    }
+
+    var body: some View {
+        if composerState.showOptions {
+            // Expanded: participant avatar(s) — tap collapses band
+            if isDirect, let userId = conversation?.participantUserId {
+                MeeshyAvatar(
+                    name: conversation?.name ?? "?",
+                    mode: .custom(44),
+                    accentColor: accentColor,
+                    avatarURL: conversation?.participantAvatarURL,
+                    storyState: memberStoryState(for: userId),
+                    moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                    presenceState: PresenceManager.shared.presenceState(for: userId),
+                    onTap: {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            composerState.showOptions = false
+                        }
+                    },
+                    onViewStory: {
+                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
+                            headerState.storyGroupIndexForHeader = groupIndex
+                            headerState.showStoryViewerFromHeader = true
+                        }
+                    },
+                    onMoodTap: statusViewModel.moodTapHandler(for: userId),
+                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
+                )
+            } else if !topActiveMembers.isEmpty {
+                HStack(spacing: -6) {
+                    ForEach(topActiveMembers) { member in
+                        MeeshyAvatar(
+                            name: member.name,
+                            mode: .custom(28),
+                            accentColor: member.color,
+                            avatarURL: member.avatarURL,
+                            storyState: memberStoryState(for: member.id),
+                            moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
+                            presenceState: PresenceManager.shared.presenceState(for: member.id),
+                            onTap: {
+                                HapticFeedback.light()
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    composerState.showOptions = false
+                                }
+                            },
+                            onViewStory: {
+                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
+                                    headerState.storyGroupIndexForHeader = groupIndex
+                                    headerState.showStoryViewerFromHeader = true
+                                }
+                            },
+                            onMoodTap: statusViewModel.moodTapHandler(for: member.id),
+                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
+                        )
+                    }
+                }
+            } else if let conv = conversation, conv.memberCount > 2 {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        composerState.showOptions = false
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 9))
+                        Text("\(conv.memberCount)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white.opacity(0.5))
+                }
+            }
+        } else {
+            // Collapsed: avatar trigger — tap expands band, long press shows context menu
+            MeeshyAvatar(
+                name: conversation?.name ?? "?",
+                mode: .conversationHeader,
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                storyState: headerHasStoryRing ? .unread : .none,
+                moodEmoji: headerMoodEmoji,
+                presenceState: headerPresenceState,
+                enablePulse: true,
+                onTap: {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        composerState.showOptions = true
+                    }
+                },
+                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "") : nil,
+                contextMenuItems: collapsedAvatarContextMenu
+            )
+        }
     }
 }

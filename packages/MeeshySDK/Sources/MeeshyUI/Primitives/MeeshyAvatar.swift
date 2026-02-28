@@ -96,7 +96,7 @@ public enum AvatarSize {
 
 // MARK: - Story Ring State
 
-public enum StoryRingState {
+public enum StoryRingState: Equatable {
     case none, unread, read
 }
 
@@ -131,12 +131,15 @@ public struct MeeshyAvatar: View {
     public var onMoodTap: ((CGPoint) -> Void)? = nil
     public var onOnlineTap: (() -> Void)? = nil
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
+    /// Contrôle si le badge mood et le dot de présence animent un pulse.
+    /// Mettre à `false` dans les listes pour éviter N animations simultanées.
+    public var enablePulse: Bool = true
 
     // Legacy init (AvatarSize)
     public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
                 avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline,
-                onOnlineTap: (() -> Void)? = nil) {
+                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool = true) {
         self.name = name
         switch size {
         case .small: self.mode = .messageBubble
@@ -148,18 +151,20 @@ public struct MeeshyAvatar: View {
         self.accentColor = accentColor; self.secondaryColor = secondaryColor
         self.avatarURL = avatarURL; self.storyState = storyState; self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap; self.presenceState = presenceState; self.onOnlineTap = onOnlineTap
+        self.enablePulse = enablePulse
     }
 
     // Primary init (AvatarMode)
     public init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil,
                 avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState = .offline, onTap: (() -> Void)? = nil,
-                onViewProfile: (() -> Void)? = nil, onViewStory: (() -> Void)? = nil,
-                onMoodTap: ((CGPoint) -> Void)? = nil, onOnlineTap: (() -> Void)? = nil,
-                contextMenuItems: [AvatarContextMenuItem]? = nil) {
+                presenceState: PresenceState = .offline, enablePulse: Bool = true,
+                onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
+                onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
+                onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name; self.mode = mode; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
+        self.enablePulse = enablePulse
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
     }
@@ -367,7 +372,7 @@ public struct MeeshyAvatar: View {
                 }
         }
         .frame(width: mode.badgeSize, height: mode.badgeSize)
-        .pulse(intensity: 0.12)
+        .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 
     private var dotColor: Color {
@@ -389,8 +394,8 @@ public struct MeeshyAvatar: View {
                 onOnlineTap?()
             }
 
-        // Pulse actif uniquement quand en ligne ET qu'un story ring est visible
-        if effectivePresence == .online && effectiveStoryState != .none {
+        // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
+        if enablePulse && effectivePresence == .online && effectiveStoryState != .none {
             dot.pulse(intensity: 0.12)
         } else {
             dot

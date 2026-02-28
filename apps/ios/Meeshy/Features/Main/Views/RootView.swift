@@ -253,6 +253,7 @@ struct RootView: View {
         .task {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
+            statusViewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()

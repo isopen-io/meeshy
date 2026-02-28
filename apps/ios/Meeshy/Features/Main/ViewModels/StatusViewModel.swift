@@ -160,6 +160,20 @@ class StatusViewModel: ObservableObject {
         myStatus = nil
     }
 
+    // MARK: - Current User Info (for preview)
+
+    var currentUserDisplayName: String {
+        let user = AuthManager.shared.currentUser
+        return user?.displayName ?? user?.username ?? "Moi"
+    }
+
+    var currentUserInitial: String {
+        let user = AuthManager.shared.currentUser
+        return user?.firstName?.prefix(1).uppercased()
+            ?? user?.username.prefix(1).uppercased()
+            ?? "M"
+    }
+
     // MARK: - Lookup Methods
 
     func statusForUser(userId: String) -> StatusEntry? {

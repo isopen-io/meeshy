@@ -164,7 +164,7 @@ struct ConversationView: View {
         return presenceManager.presenceState(for: userId)
     }
 
-    private var headerMoodEmoji: String? {
+    var headerMoodEmoji: String? {
         guard isDirect, let userId = conversation?.participantUserId else { return nil }
         return statusViewModel.statusForUser(userId: userId)?.moodEmoji
     }
@@ -620,7 +620,8 @@ struct ConversationView: View {
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
                         isExpanded: false, hasStoryRing: headerHasStoryRing,
                         avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                        presenceState: headerPresenceState
+                        presenceState: headerPresenceState,
+                        moodEmoji: headerMoodEmoji
                     ) {
                         isTyping = false
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
@@ -653,18 +654,20 @@ struct ConversationView: View {
                 if composerState.showOptions {
                     // Title row: name + tags scroll + call buttons + search icon
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 4) {
+                        HStack(alignment: .top, spacing: 4) {
                             Button { composerState.showConversationInfo = true } label: {
                                 Text(conversation?.name ?? "Conversation")
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white).lineLimit(1)
-                                    .fixedSize()
+                                    .foregroundColor(.white)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .multilineTextAlignment(.leading)
                             }
                             .accessibilityLabel(conversation?.name ?? "Conversation")
                             .accessibilityHint("Ouvre les informations de la conversation")
-                            if let mood = headerMoodEmoji { Text(mood).font(.system(size: 14)) }
+
                             Spacer(minLength: 4)
-                            headerCallButtons
+                            headerCallButtons.layoutPriority(1)
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
                                 isSearchFocused = true
