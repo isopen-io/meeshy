@@ -30,6 +30,8 @@ struct ThemedMessageBubble: View {
     var allAudioItems: [ConversationViewModel.AudioItem] = []
     var onScrollToMessage: ((String) -> Void)? = nil
     var activeAudioLanguage: String? = nil
+    /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
+    var isLastReceivedMessage: Bool = false
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -203,9 +205,16 @@ struct ThemedMessageBubble: View {
         return "\(seconds)s"
     }
 
+    // Vrai quand le message view-once a été consommé et n'est plus en cours de révélation
+    private var isViewOnceBurned: Bool {
+        message.isViewOnce && message.viewOnceCount > 0 && !isBlurRevealed
+    }
+
     var body: some View {
         if message.isDeleted {
             deletedMessageView
+        } else if isViewOnceBurned {
+            burnedMessageView
         } else if isEphemeralExpired {
             EmptyView()
         } else {
@@ -325,6 +334,38 @@ struct ThemedMessageBubble: View {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Message supprime")
+
+            if !message.isMe { Spacer(minLength: 50) }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 2)
+    }
+
+    private var burnedMessageView: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if message.isMe { Spacer(minLength: 50) }
+
+            HStack(spacing: 6) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.orange)
+                Text("Vu et effacé")
+                    .font(.system(size: 13, weight: .regular))
+                    .italic()
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.orange.opacity(0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Message vu et effacé")
 
             if !message.isMe { Spacer(minLength: 50) }
         }
@@ -458,6 +499,7 @@ struct ThemedMessageBubble: View {
                         }
                     }
                     .blur(radius: shouldBlur ? 20 : 0)
+                    .clipped()
 
                     // Fog condensation effect (appears when blur returns)
                     if fogOpacity > 0 {
@@ -1188,7 +1230,7 @@ struct ThemedMessageBubble: View {
             HStack(spacing: 3) {
                 if overflowCount > 0 {
                     overflowPill(count: overflowCount, isDark: isDark, accent: accent)
-                } else {
+                } else if isLastReceivedMessage {
                     addReactionButton(isDark: isDark, accent: accent)
                 }
 

@@ -30,10 +30,14 @@ public struct APIConversationLastMessage: Decodable {
     public let sender: APIConversationUser?
     public let attachments: [APIMessageAttachment]?
     public let _count: APIMessageCount?
+    public let isBlurred: Bool?
+    public let isViewOnce: Bool?
+    public let expiresAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
+        case isBlurred, isViewOnce, expiresAt
     }
 }
 
@@ -150,6 +154,9 @@ extension APIConversation {
             lastMessageAttachmentCount: lastMsgAttCount,
             lastMessageId: lastMessage?.id,
             lastMessageSenderName: lastMsgSenderName,
+            lastMessageIsBlurred: lastMessage?.isBlurred ?? false,
+            lastMessageIsViewOnce: lastMessage?.isViewOnce ?? false,
+            lastMessageExpiresAt: lastMessage?.expiresAt,
             recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
             isPinned: prefs?.isPinned ?? false,

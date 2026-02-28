@@ -14,10 +14,12 @@ struct ThemedConversationRow: View {
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
+    var onCreateShareLink: (() -> Void)? = nil
 
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
+    var isTyping: Bool = false
 
     private var accentColor: String { conversation.accentColor }
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
@@ -91,6 +93,33 @@ struct ThemedConversationRow: View {
 
         let remaining = conversation.tags.count - visibleTags.count
         return (visibleTags, remaining)
+    }
+
+    // MARK: - Last Message Effect State
+
+    private enum LastMessageEffect {
+        case expired
+        case blurred
+        case viewOnce
+        case ephemeralActive
+        case none
+    }
+
+    private var lastMessageEffect: LastMessageEffect {
+        let now = Date()
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt <= now {
+            return .expired
+        }
+        if conversation.lastMessageIsBlurred {
+            return .blurred
+        }
+        if conversation.lastMessageIsViewOnce {
+            return .viewOnce
+        }
+        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt > now {
+            return .ephemeralActive
+        }
+        return .none
     }
 
     var body: some View {
@@ -168,8 +197,21 @@ struct ThemedConversationRow: View {
     private var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append("Conversation avec \(conversation.name)")
-        if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append("dernier message: \(preview)")
+        switch lastMessageEffect {
+        case .expired:
+            parts.append("dernier message expiré")
+        case .blurred:
+            parts.append("dernier message flouté")
+        case .viewOnce:
+            parts.append("dernier message : voir une fois")
+        case .ephemeralActive:
+            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                parts.append("dernier message éphémère : \(preview)")
+            }
+        case .none:
+            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                parts.append("dernier message: \(preview)")
+            }
         }
         parts.append(timeAgo(conversation.lastMessageAt))
         if conversation.unreadCount > 0 {
@@ -215,7 +257,8 @@ struct ThemedConversationRow: View {
             onViewStory: onViewStory,
             onViewProfile: onViewProfile,
             onViewConversationInfo: onViewConversationInfo,
-            onMoodBadgeTap: onMoodBadgeTap
+            onMoodBadgeTap: onMoodBadgeTap,
+            onCreateShareLink: onCreateShareLink
         )
     }
 
@@ -295,17 +338,59 @@ struct ThemedConversationRow: View {
         return "\(seconds / 86400)d"
     }
 
+    // MARK: - Typing Indicator
+
+    private struct TypingDotsView: View {
+        let accentColor: String
+        @State private var isAnimating = false
+
+        var body: some View {
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color(hex: accentColor))
+                        .frame(width: 5, height: 5)
+                        .scaleEffect(isAnimating ? 1.0 : 0.5)
+                        .opacity(isAnimating ? 1.0 : 0.4)
+                        .animation(
+                            .easeInOut(duration: 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.18),
+                            value: isAnimating
+                        )
+                }
+            }
+            .onAppear { isAnimating = true }
+            .onDisappear { isAnimating = false }
+        }
+    }
+
+    @ViewBuilder
+    private var typingIndicatorView: some View {
+        HStack(spacing: 5) {
+            TypingDotsView(accentColor: accentColor)
+            Text(String(localized: "typing.in_progress", defaultValue: "est en train d'écrire"))
+                .font(.system(size: 13).italic())
+                .foregroundColor(Color(hex: accentColor))
+                .lineLimit(1)
+        }
+    }
+
     // MARK: - Last Message Preview
 
     @ViewBuilder
-    private var lastMessagePreviewView: some View {
+    private func standardMessageContent(showEphemeralIcon: Bool) -> some View {
         let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let attachments = conversation.lastMessageAttachments
         let totalCount = conversation.lastMessageAttachmentCount
-
-        if !hasText && !attachments.isEmpty {
-            HStack(spacing: 4) {
-                senderLabel
+        HStack(spacing: 4) {
+            if showEphemeralIcon {
+                Image(systemName: "timer")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+            senderLabel
+            if !hasText && !attachments.isEmpty {
                 let att = attachments[0]
                 attachmentIcon(for: att.mimeType)
                 attachmentMeta(for: att)
@@ -314,10 +399,7 @@ struct ThemedConversationRow: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 }
-            }
-        } else if hasText {
-            HStack(spacing: 4) {
-                senderLabel
+            } else if hasText {
                 if !attachments.isEmpty {
                     attachmentIcon(for: attachments[0].mimeType)
                         .font(.system(size: 11))
@@ -327,10 +409,65 @@ struct ThemedConversationRow: View {
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var lastMessagePreviewView: some View {
+        if isTyping {
+            typingIndicatorView
         } else {
-            Text("")
-                .font(.system(size: 13))
-                .foregroundColor(textSecondary)
+            switch lastMessageEffect {
+            case .expired:
+                HStack(spacing: 4) {
+                    Image(systemName: "timer.badge.xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(textMuted)
+                    Text(String(localized: "message.expired", defaultValue: "Message expiré"))
+                        .font(.system(size: 13).italic())
+                        .foregroundColor(textMuted)
+                        .lineLimit(1)
+                }
+
+            case .blurred:
+                HStack(spacing: 4) {
+                    senderLabel
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(textSecondary)
+                    Text(conversation.lastMessagePreview ?? "")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                        .lineLimit(1)
+                        .blur(radius: 4)
+                }
+
+            case .viewOnce:
+                HStack(spacing: 4) {
+                    senderLabel
+                    Image(systemName: "flame")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: accentColor))
+                    Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: accentColor))
+                        .lineLimit(1)
+                }
+
+            case .ephemeralActive:
+                standardMessageContent(showEphemeralIcon: true)
+
+            case .none:
+                let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let attachments = conversation.lastMessageAttachments
+                if hasText || !attachments.isEmpty {
+                    standardMessageContent(showEphemeralIcon: false)
+                } else {
+                    Text("")
+                        .font(.system(size: 13))
+                        .foregroundColor(textSecondary)
+                }
+            }
         }
     }
 
@@ -401,7 +538,9 @@ struct ThemedConversationRow: View {
 // MARK: - Equatable (permet .equatable() pour éviter les re-renders superflus)
 extension ThemedConversationRow: Equatable {
     static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
-        lhs.conversation == rhs.conversation &&
+        lhs.conversation.id == rhs.conversation.id &&
+        lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&
+        lhs.isTyping == rhs.isTyping &&
         lhs.availableWidth == rhs.availableWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.isDark == rhs.isDark &&
@@ -422,22 +561,24 @@ private struct ConversationAvatarView: View {
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
     var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
+    var onCreateShareLink: (() -> Void)? = nil
 
     @State private var showLastSeenTooltip = false
 
-    private var avatarContextMenuItems: [AvatarContextMenuItem] {
+    private var isDirect: Bool { conversation.type == .direct }
+
+    /// Menu long-press pour les conversations non-DM (groupe, public, global, etc.)
+    private var groupContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
-        if storyRingState != .none {
-            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                onViewStory?()
-            })
-        }
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-            onViewProfile?()
-        })
         items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
+        let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global]
+        if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
+            items.append(AvatarContextMenuItem(label: "Créer un lien de partage", icon: "link.badge.plus") {
+                handler()
+            })
+        }
         return items
     }
 
@@ -448,13 +589,16 @@ private struct ConversationAvatarView: View {
                 mode: .conversationList,
                 accentColor: conversation.accentColor,
                 secondaryColor: conversation.colorPalette.secondary,
-                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (conversation.type == .direct && moodStatus == nil) ? presenceState : .offline,
+                presenceState: (isDirect && moodStatus == nil) ? presenceState : .offline,
                 enablePulse: false,
-                onViewProfile: conversation.type == .direct ? onViewProfile : onViewConversationInfo,
-                onViewStory: onViewStory,
+                // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
+                // Groupe : tap → infos conversation directement via onTap
+                onTap: isDirect ? nil : onViewConversationInfo,
+                onViewProfile: isDirect ? onViewProfile : nil,
+                onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -466,7 +610,9 @@ private struct ConversationAvatarView: View {
                         }
                     }
                 },
-                contextMenuItems: avatarContextMenuItems
+                // DM : MeeshyAvatar génère automatiquement "Voir le profil" + "Voir la story"
+                // Groupe : menu personnalisé avec infos + lien de partage
+                contextMenuItems: isDirect ? [] : groupContextMenuItems
             )
 
             // Last seen tooltip

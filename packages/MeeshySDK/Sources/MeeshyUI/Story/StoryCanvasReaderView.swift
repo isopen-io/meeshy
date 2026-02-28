@@ -56,20 +56,11 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var mediaLayer: some View {
         if let media = story.media.first,
-           let urlStr = media.url,
-           let url = URL(string: urlStr) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                default:
-                    Color.clear
-                }
+           let urlStr = media.url {
+            CachedAsyncImage(url: urlStr) {
+                Color.clear
             }
+            .scaledToFill()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }

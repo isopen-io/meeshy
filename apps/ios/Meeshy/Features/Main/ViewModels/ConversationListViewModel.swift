@@ -30,6 +30,8 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+    @Published var typingConversationIds: Set<String> = []
+    private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.unreadCount }
@@ -226,6 +228,40 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Typing indicator — affiche "est en train d'écrire" dans le row
+        socketManager.typingStarted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                typingConversationIds.insert(event.conversationId)
+                scheduleTypingCleanup(for: event.conversationId)
+            }
+            .store(in: &cancellables)
+
+        socketManager.typingStopped
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.clearTyping(for: event.conversationId)
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Typing Cleanup
+
+    private func scheduleTypingCleanup(for conversationId: String) {
+        typingTimers[conversationId]?.invalidate()
+        typingTimers[conversationId] = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.clearTyping(for: conversationId)
+            }
+        }
+    }
+
+    private func clearTyping(for conversationId: String) {
+        typingTimers[conversationId]?.invalidate()
+        typingTimers[conversationId] = nil
+        typingConversationIds.remove(conversationId)
     }
 
     // MARK: - Badge Sync

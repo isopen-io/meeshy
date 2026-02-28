@@ -227,9 +227,13 @@ struct ConversationListView: View {
                 onMoodBadgeTap: { anchor in
                     handleMoodBadgeTap(displayConversation, at: anchor)
                 },
+                onCreateShareLink: canCreateShareLink(for: displayConversation) ? {
+                    Task { await shareConversationLink(for: displayConversation) }
+                } : nil,
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: displayConversation),
-                moodStatus: conversationMoodStatus(for: displayConversation)
+                moodStatus: conversationMoodStatus(for: displayConversation),
+                isTyping: conversationViewModel.typingConversationIds.contains(displayConversation.id)
             )
             .equatable()
             .contentShape(Rectangle())
@@ -268,10 +272,20 @@ struct ConversationListView: View {
 
     func shareConversationLink(for conversation: Conversation) async {
         do {
+            let linkName = "Rejoins la conversation \"\(conversation.name)\""
+            let welcome = "Rejoins moi pour échanger sans filtre ni barrière..."
             let request = CreateShareLinkRequest(
                 conversationId: conversation.id,
-                name: conversation.name,
-                allowAnonymousMessages: true
+                name: linkName,
+                description: welcome,
+                allowAnonymousMessages: true,
+                allowAnonymousFiles: false,
+                allowAnonymousImages: true,
+                allowViewHistory: true,
+                requireAccount: false,
+                requireNickname: true,
+                requireEmail: false,
+                requireBirthday: false
             )
             let result = try await ShareLinkService.shared.createShareLink(request: request)
             let shareURL = "https://meeshy.me/join/\(result.linkId)"
