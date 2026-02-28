@@ -84,6 +84,8 @@ public struct StoryComposerView: View {
     @State private var publishProgressText: String? = nil
     @State private var slidePublishError: String? = nil
     @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>? = nil
+    @State private var showPublishError = false
+    @State private var publishTask: Task<Void, Never>? = nil
 
     public var onPublishSlide: (StorySlide, UIImage?) async throws -> Void
     public var onPreview: ([StorySlide], [String: UIImage]) -> Void
@@ -115,15 +117,21 @@ public struct StoryComposerView: View {
         .onChange(of: photoPickerItem) { newItem in
             loadPhoto(from: newItem)
         }
-        .alert("Erreur de publication", isPresented: .constant(slidePublishError != nil)) {
+        .alert("Erreur de publication", isPresented: $showPublishError) {
             Button("Réessayer") {
-                slidePublishContinuation?.resume(returning: .retry)
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .retry)
             }
-            Button("Ignorer") {
-                slidePublishContinuation?.resume(returning: .skip)
+            Button("Ignorer", role: .cancel) {
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .skip)
             }
             Button("Annuler tout", role: .destructive) {
-                slidePublishContinuation?.resume(returning: .cancel)
+                let cont = slidePublishContinuation
+                slidePublishContinuation = nil
+                cont?.resume(returning: .cancel)
             }
         } message: {
             Text(slidePublishError ?? "")
@@ -243,7 +251,7 @@ public struct StoryComposerView: View {
         .background(Color.black.opacity(0.3))
         .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
             Button("Sauvegarder") { saveDraft(); onDismiss() }
-            Button("Quitter", role: .destructive) { clearDraft(); onDismiss() }
+            Button("Quitter", role: .destructive) { cancelPublishIfNeeded(); clearDraft(); onDismiss() }
             Button("Annuler", role: .cancel) { }
         }
     }
@@ -620,18 +628,33 @@ public struct StoryComposerView: View {
         if hasContent {
             showDiscardAlert = true
         } else {
+            cancelPublishIfNeeded()
             clearDraft()
             onDismiss()
         }
     }
 
+    private func cancelPublishIfNeeded() {
+        if let cont = slidePublishContinuation {
+            slidePublishContinuation = nil
+            slidePublishError = nil
+            showPublishError = false
+            cont.resume(returning: .cancel)
+        }
+        publishTask?.cancel()
+        publishTask = nil
+        isPublishingAll = false
+        publishProgressText = nil
+    }
+
     private func publishAllSlides() {
-        Task {
+        publishTask = Task {
             let (slides, images) = allSlidesSnapshot()
             isPublishingAll = true
 
             var index = 0
             while index < slides.count {
+                guard !Task.isCancelled else { break }
                 let slide = slides[index]
                 let image = images[slide.id]
                 publishProgressText = "Publier \(index + 1)/\(slides.count)..."
@@ -643,12 +666,13 @@ public struct StoryComposerView: View {
                         retrying = false
                         index += 1
                     } catch {
-                        let action = await withCheckedContinuation { continuation in
+                        let action = await withCheckedContinuation { (continuation: CheckedContinuation<SlidePublishAction, Never>) in
                             slidePublishContinuation = continuation
                             slidePublishError = "Erreur slide \(index + 1)/\(slides.count) : \(error.localizedDescription)"
+                            showPublishError = true
                         }
-                        slidePublishContinuation = nil
                         slidePublishError = nil
+                        showPublishError = false
                         switch action {
                         case .retry:
                             break
@@ -662,6 +686,12 @@ public struct StoryComposerView: View {
                         }
                     }
                 }
+            }
+
+            guard !Task.isCancelled else {
+                isPublishingAll = false
+                publishProgressText = nil
+                return
             }
 
             clearDraft()
