@@ -241,7 +241,13 @@ public struct MeeshyAvatar: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            badge.offset(badgeOffsetWhenRingVisible)
+            if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+                moodBadge(emoji: emoji)
+                    .offset(badgeOffset(badgeHalfSize: mode.badgeSize / 2))
+            } else if effectivePresence != .offline {
+                onlineDot
+                    .offset(badgeOffset(badgeHalfSize: mode.onlineDotSize / 2))
+            }
         }
         .scaleEffect(tapScale)
         .onAppear {
@@ -333,30 +339,19 @@ public struct MeeshyAvatar: View {
         }
     }
 
-    /// When a story ring is visible, shift the badge so its center lands on
-    /// the ring circumference at the 45° bottom-right angle instead of the
-    /// bounding-box corner (which sits just outside the ring).
-    private var badgeOffsetWhenRingVisible: CGSize {
+    /// Calcule l'offset pour positionner le badge sur le bord de l'avatar à 45°,
+    /// en tenant compte du fait que le glow story-unread agrandit le ZStack à (size+20).
+    private func badgeOffset(badgeHalfSize: CGFloat) -> CGSize {
         guard effectiveStoryState != .none else { return .zero }
-        let r = mode.ringSize / 2          // ring frame half-width
-        let avatarR = mode.size / 2        // avatar outer edge from ring frame center
-        let dot = mode.onlineDotSize / 2
-        // target: dot center at avatar's outer edge at 45° (on the ring border)
+        let r = mode.ringSize / 2
+        let avatarR = mode.size / 2
+        // Le glow Circle (size+20) agrandit le ZStack au-delà du ring quand story unread
+        let zstackSize: CGFloat = effectiveStoryState == .unread ? (mode.size + 20) : mode.ringSize
+        // Cible : centre du badge sur le bord de l'avatar à 45° (dans les coords du ZStack)
         let target = r + avatarR * cos(.pi / 4)
-        let current = mode.ringSize - dot
+        let current = zstackSize - badgeHalfSize
         let delta = target - current
         return CGSize(width: delta, height: delta)
-    }
-
-    // MARK: - Badge
-
-    @ViewBuilder
-    private var badge: some View {
-        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
-            moodBadge(emoji: emoji)
-        } else if effectivePresence != .offline {
-            onlineDot
-        }
     }
 
     private func moodBadge(emoji: String) -> some View {
@@ -372,7 +367,7 @@ public struct MeeshyAvatar: View {
                 }
         }
         .frame(width: mode.badgeSize, height: mode.badgeSize)
-        // .pulse retiré : animation repeatForever inutile sur chaque avatar de la liste
+        .pulse(intensity: 0.12)
     }
 
     private var dotColor: Color {
@@ -394,8 +389,12 @@ public struct MeeshyAvatar: View {
                 onOnlineTap?()
             }
 
-        // .pulse retiré : animation repeatForever inutile sur chaque avatar de la liste
-        dot
+        // Pulse actif uniquement quand en ligne ET qu'un story ring est visible
+        if effectivePresence == .online && effectiveStoryState != .none {
+            dot.pulse(intensity: 0.12)
+        } else {
+            dot
+        }
     }
 
     // MARK: - Helpers
