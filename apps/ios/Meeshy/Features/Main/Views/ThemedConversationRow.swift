@@ -19,6 +19,7 @@ struct ThemedConversationRow: View {
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
+    var isTyping: Bool = false
 
     private var accentColor: String { conversation.accentColor }
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
@@ -495,7 +496,9 @@ struct ThemedConversationRow: View {
 // MARK: - Equatable (permet .equatable() pour éviter les re-renders superflus)
 extension ThemedConversationRow: Equatable {
     static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
-        lhs.conversation == rhs.conversation &&
+        lhs.conversation.id == rhs.conversation.id &&
+        lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&
+        lhs.isTyping == rhs.isTyping &&
         lhs.availableWidth == rhs.availableWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.isDark == rhs.isDark &&
