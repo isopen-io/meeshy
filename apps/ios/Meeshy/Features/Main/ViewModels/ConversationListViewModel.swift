@@ -22,8 +22,8 @@ class ConversationListViewModel: ObservableObject {
     }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
-    @Published var isLoadingMore = false
-    @Published var hasMore = true
+    @Published private(set) var isLoadingMore = false
+    private var hasMore = true
 
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
@@ -36,7 +36,9 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private let api = APIClient.shared
-    private let limit = 30
+    private let pageLimit = 100
+    /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
+    private let autoLoadCap = 1000
     private var currentOffset = 0
     private var cancellables = Set<AnyCancellable>()
 
@@ -254,7 +256,7 @@ class ConversationListViewModel: ObservableObject {
         isLoading = true
         currentOffset = 0
 
-        // Show cached conversations immediately while fetching from API
+        // Afficher le cache immédiatement
         if conversations.isEmpty {
             let cached = await LocalStore.shared.loadConversations()
             if !cached.isEmpty {
@@ -268,7 +270,7 @@ class ConversationListViewModel: ObservableObject {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
                 endpoint: "/conversations",
                 offset: 0,
-                limit: limit
+                limit: pageLimit
             )
 
             if response.success {
@@ -279,13 +281,17 @@ class ConversationListViewModel: ObservableObject {
                 currentOffset = conversations.count
                 lastFetchedAt = Date()
 
-                // Update cache in background
                 Task.detached(priority: .utility) { [conversations] in
                     await LocalStore.shared.saveConversations(conversations)
                     await LocalStore.shared.cleanupStaleMessageCaches()
                 }
 
                 prefetchMessages(for: response.data, userId: userId)
+
+                // Charger les pages suivantes silencieusement en arrière-plan
+                if hasMore {
+                    Task { await self.loadAllRemainingBackground() }
+                }
             }
         } catch { }
 
@@ -294,6 +300,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Force Refresh (pull-to-refresh)
+    // Recharge les conversations depuis l'API puis continue en arrière-plan
 
     func forceRefresh() async {
         isLoading = false
@@ -303,17 +310,63 @@ class ConversationListViewModel: ObservableObject {
         await loadConversations()
     }
 
-    // MARK: - Load More
+    // MARK: - Refresh
+
+    func refresh() async {
+        currentOffset = 0
+        hasMore = true
+        await loadConversations()
+    }
+
+    // MARK: - Background full load (pages 2+, silencieux, cap = autoLoadCap)
+    // Au-delà du cap, loadMore() public prend le relais (scroll infini pour power users)
+
+    private func loadAllRemainingBackground() async {
+        while hasMore && !isLoadingMore && conversations.count < autoLoadCap {
+            isLoadingMore = true
+            do {
+                let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
+                    endpoint: "/conversations",
+                    offset: currentOffset,
+                    limit: pageLimit
+                )
+
+                if response.success {
+                    let userId = currentUserId
+                    PresenceManager.shared.seed(from: response.data, currentUserId: userId)
+                    let incoming = response.data.map { $0.toConversation(currentUserId: userId) }
+                    let existingIds = Set(conversations.map(\.id))
+                    let deduplicated = incoming.filter { !existingIds.contains($0.id) }
+                    if !deduplicated.isEmpty {
+                        conversations.append(contentsOf: deduplicated)
+                    }
+                    hasMore = response.pagination?.hasMore ?? false
+                    currentOffset += deduplicated.count
+
+                    Task.detached(priority: .background) { [snapshot = self.conversations] in
+                        await LocalStore.shared.saveConversations(snapshot)
+                    }
+                } else {
+                    hasMore = false
+                }
+            } catch {
+                hasMore = false
+            }
+            isLoadingMore = false
+        }
+    }
+
+    // MARK: - Load More (scroll infini — uniquement pour users avec >1000 conversations)
 
     func loadMore() async {
-        guard hasMore, !isLoadingMore, !isLoading else { return }
+        guard hasMore, !isLoadingMore, !isLoading, conversations.count >= autoLoadCap else { return }
         isLoadingMore = true
 
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
                 endpoint: "/conversations",
                 offset: currentOffset,
-                limit: limit
+                limit: pageLimit
             )
 
             if response.success {
@@ -329,14 +382,6 @@ class ConversationListViewModel: ObservableObject {
         } catch { }
 
         isLoadingMore = false
-    }
-
-    // MARK: - Refresh
-
-    func refresh() async {
-        currentOffset = 0
-        hasMore = true
-        await loadConversations()
     }
 
     // MARK: - Persist Category Expansion

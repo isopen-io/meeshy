@@ -60,7 +60,9 @@ struct ConversationListView: View {
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
     @ObservedObject var lockManager = ConversationLockManager.shared
-    @ObservedObject private var presenceManager = PresenceManager.shared
+    // Lecture directe sans @ObservedObject — évite que chaque event presence force
+    // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
+    private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -166,6 +168,8 @@ struct ConversationListView: View {
                 conversationRow(for: conversation, rowWidth: rowWidth)
                     .staggeredAppear(index: index, baseDelay: 0.04)
                     .onAppear {
+                        // Scroll infini uniquement pour les users avec >1000 conversations
+                        // (loadMore() est no-op sinon)
                         triggerLoadMoreIfNeeded(conversation: conversation)
                     }
             }
@@ -382,6 +386,9 @@ struct ConversationListView: View {
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
+        // Scroll infini uniquement au-delà de 1000 conversations chargées
+        // (en dessous, loadAllRemainingBackground() a tout chargé)
+        guard all.count >= 1000 else { return }
         guard let idx = all.firstIndex(where: { $0.id == conversation.id }) else { return }
         let threshold = max(0, all.count - 5)
         if idx >= threshold {
