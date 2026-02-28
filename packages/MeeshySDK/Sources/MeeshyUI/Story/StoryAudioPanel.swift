@@ -55,6 +55,8 @@ public struct StoryAudioPanel: View {
     @State private var isLoading = false
     @State private var previewingId: String?
     @State private var previewPlayer: AudioPlayerManager = AudioPlayerManager()
+    @State private var pendingRecordingURL: URL? = nil
+    @State private var showAudioEditor = false
 
     public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>) {
         _selectedAudioId = selectedAudioId
@@ -71,6 +73,23 @@ public struct StoryAudioPanel: View {
         .background(Color.black.opacity(0.5))
         .onAppear { fetchLibrary() }
         .onDisappear { previewPlayer.stop() }
+        .fullScreenCover(isPresented: $showAudioEditor) {
+            if let recordURL = pendingRecordingURL {
+                StoryAudioEditorView(
+                    url: recordURL,
+                    onConfirm: { url, _ in
+                        selectedAudioId = url.lastPathComponent
+                        selectedAudioTitle = "Enregistrement"
+                        showAudioEditor = false
+                        pendingRecordingURL = nil
+                    },
+                    onDismiss: {
+                        showAudioEditor = false
+                        pendingRecordingURL = nil
+                    }
+                )
+            }
+        }
     }
 
     // MARK: - Tab Selector
@@ -117,9 +136,9 @@ public struct StoryAudioPanel: View {
         case .record:
             StoryVoiceRecorder(
                 onRecordComplete: { url in
-                    selectedAudioId = url.lastPathComponent
-                    selectedAudioTitle = "Enregistrement"
                     previewPlayer.stop()
+                    pendingRecordingURL = url
+                    showAudioEditor = true
                 }
             )
         }
