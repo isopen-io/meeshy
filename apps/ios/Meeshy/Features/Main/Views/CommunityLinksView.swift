@@ -5,21 +5,64 @@ struct CommunityLinksView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = CommunityLinksViewModel()
 
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var router: Router
+
+    private let accentColor = "F8B500"
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 20) {
-                    communityStatsOverview.padding(.horizontal, 16)
-                    communityLinksSection.padding(.horizontal, 16)
+            
+            VStack(spacing: 0) {
+                header
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        communityStatsOverview.padding(.horizontal, 16)
+                        communityLinksSection.padding(.horizontal, 16)
+                    }
+                    .padding(.top, 8).padding(.bottom, 40)
                 }
-                .padding(.top, 16).padding(.bottom, 40)
+                .refreshable { await viewModel.load() }
             }
-            .refreshable { await viewModel.load() }
         }
-        .navigationTitle("Liens communauté")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .task { await viewModel.load() }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            Button {
+                HapticFeedback.light()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+
+            Spacer()
+
+            Text("Liens communauté")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            Button {
+                HapticFeedback.light()
+                router.push(.communityCreate)
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var communityStatsOverview: some View {

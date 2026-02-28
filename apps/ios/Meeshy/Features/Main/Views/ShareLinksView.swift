@@ -9,39 +9,35 @@ struct ShareLinksView: View {
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var showCreate = false
 
+    @Environment(\.dismiss) private var dismiss
+
+    private let accentColor = "08D9D6"
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let stats = viewModel.stats {
-                        shareLinkStatsOverview(stats)
+            VStack(spacing: 0) {
+                header
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        if let stats = viewModel.stats {
+                            shareLinkStatsOverview(stats)
+                                .padding(.horizontal, 16)
+                        }
+                        linksSection
                             .padding(.horizontal, 16)
                     }
-                    linksSection
-                        .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
                 }
-                .padding(.top, 16)
-                .padding(.bottom, 40)
-            }
-            .refreshable {
-                await viewModel.load()
-            }
-        }
-        .navigationTitle("Liens de partage")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showCreate = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "08D9D6"))
+                .refreshable {
+                    await viewModel.load()
                 }
             }
         }
+        .navigationBarHidden(true)
         .task { await viewModel.load() }
         .sheet(isPresented: $showCreate) {
             CreateShareLinkView { _ in
@@ -49,6 +45,40 @@ struct ShareLinksView: View {
             }
             .environmentObject(conversationListViewModel)
         }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            Button {
+                HapticFeedback.light()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+
+            Spacer()
+
+            Text("Liens de partage")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            Button {
+                HapticFeedback.light()
+                showCreate = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Stats overview

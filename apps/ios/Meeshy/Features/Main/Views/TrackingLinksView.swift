@@ -6,31 +6,30 @@ struct TrackingLinksView: View {
     @StateObject private var viewModel = TrackingLinksViewModel()
     @State private var showCreate = false
 
+    @Environment(\.dismiss) private var dismiss
+
+    private let accentColor = "A855F7"
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let stats = viewModel.stats {
-                        trackingStatsOverview(stats).padding(.horizontal, 16)
+            
+            VStack(spacing: 0) {
+                header
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        if let stats = viewModel.stats {
+                            trackingStatsOverview(stats).padding(.horizontal, 16)
+                        }
+                        linksSection.padding(.horizontal, 16)
                     }
-                    linksSection.padding(.horizontal, 16)
+                    .padding(.top, 8).padding(.bottom, 40)
                 }
-                .padding(.top, 16).padding(.bottom, 40)
-            }
-            .refreshable { await viewModel.load() }
-        }
-        .navigationTitle("Liens de tracking")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showCreate = true } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "A855F7"))
-                }
+                .refreshable { await viewModel.load() }
             }
         }
+        .navigationBarHidden(true)
         .task { await viewModel.load() }
         .sheet(isPresented: $showCreate) {
             CreateTrackingLinkView { link in
@@ -38,6 +37,40 @@ struct TrackingLinksView: View {
                 Task { await viewModel.loadStats() }
             }
         }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            Button {
+                HapticFeedback.light()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+
+            Spacer()
+
+            Text("Liens de tracking")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Spacer()
+
+            Button {
+                HapticFeedback.light()
+                showCreate = true
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Color(hex: accentColor))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
