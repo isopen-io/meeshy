@@ -137,27 +137,19 @@ struct ThemedConversationRow: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                // Base opaque : empêche les couleurs des actions de swipe de transpa­raître
-                .fill(theme.backgroundSecondary)
-                .overlay(RoundedRectangle(cornerRadius: 18).fill(heatBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(
-                            isDragging ?
-                            LinearGradient(colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            theme.border(tint: accentColor, intensity: 0.18 + Double(conversationHeat) * 0.44),
-                            lineWidth: isDragging ? 2 : 1
-                        )
-                )
-                .shadow(
-                    color: Color(hex: accentColor).opacity(isDragging ? 0.4 : (0.04 + Double(conversationHeat) * (theme.mode.isDark ? 0.20 : 0.14))),
-                    radius: isDragging ? 16 : (6 + conversationHeat * 6),
-                    y: isDragging ? 8 : (3 + conversationHeat * 3)
-                )
+            ZStack {
+                // Base opaque : empêche les couleurs des actions de swipe de transparaître
+                theme.backgroundSecondary
+                heatBackground
+                if isDragging {
+                    Color(hex: accentColor).opacity(0.07)
+                }
+            }
         )
+        .overlay(alignment: .bottom) { separatorLine }
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
@@ -346,6 +338,24 @@ struct ThemedConversationRow: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
+    }
+
+    // MARK: - Separator
+
+    /// Ligne de séparation stylisée : gradient accent → secondaire → transparent
+    /// Décalée après l'avatar (padding 14 + avatar 52 + spacing 14 = 80pt)
+    private var separatorLine: some View {
+        LinearGradient(
+            colors: [
+                Color(hex: accentColor).opacity(0.18 + Double(conversationHeat) * 0.27),
+                Color(hex: conversation.colorPalette.secondary).opacity(0.10 + Double(conversationHeat) * 0.15),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(height: 0.5)
+        .padding(.leading, 80)
     }
 
     private func timeAgo(_ date: Date) -> String {
