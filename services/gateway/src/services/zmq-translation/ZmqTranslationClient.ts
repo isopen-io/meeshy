@@ -30,6 +30,14 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 const logger = enhancedLogger.child({ module: 'ZmqTranslationClient' });
 
 
+export interface TranslateTextObjectParams {
+  postId: string;
+  textObjectIndex: number;
+  text: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+}
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
@@ -363,6 +371,16 @@ export class ZmqTranslationClient extends EventEmitter {
     };
 
     return await this.sendTranslationRequest(request);
+  }
+
+  /**
+   * Envoie un textObject de story au pipeline de traduction.
+   * Fire-and-forget: n'attend pas la réponse (gérée par Task 15 handler).
+   */
+  translateTextObject(params: TranslateTextObjectParams): void {
+    this.requestSender.sendStoryTextObjectRequest(params).catch((err) => {
+      logger.warn('translateTextObject: ZMQ send failed', { err, postId: params.postId, index: params.textObjectIndex });
+    });
   }
 
   /**

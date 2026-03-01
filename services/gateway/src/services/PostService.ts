@@ -321,19 +321,16 @@ export class PostService {
         return;
       }
 
-      const storyMessageId = `story_text_object:${postId}:${index}`;
       const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
 
       log.info('StoryTextObjectTranslation: sending ZMQ request', { postId, index, sourceLanguage, targetLanguages });
 
-      zmqClient.translateToMultipleLanguages(
+      zmqClient.translateTextObject({
+        postId,
+        textObjectIndex: index,
         text,
         sourceLanguage,
         targetLanguages,
-        storyMessageId,
-        `story_text_object_context:${postId}:${index}`,
-      ).catch((err: unknown) => {
-        log.warn('StoryTextObjectTranslation: ZMQ send failed', { err, postId, index });
       });
     });
   }

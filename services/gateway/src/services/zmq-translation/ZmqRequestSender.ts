@@ -386,6 +386,37 @@ export class ZmqRequestSender {
   }
 
   /**
+   * Envoie une requête de traduction pour un textObject de story.
+   * Utilisé par le pipeline story_text_object_translation (Task 14/15).
+   */
+  async sendStoryTextObjectRequest(params: {
+    postId: string;
+    textObjectIndex: number;
+    text: string;
+    sourceLanguage: string;
+    targetLanguages: string[];
+  }): Promise<void> {
+    const requestMessage = {
+      type: 'story_text_object_translation',
+      postId: params.postId,
+      textObjectIndex: params.textObjectIndex,
+      text: params.text,
+      sourceLanguage: params.sourceLanguage,
+      targetLanguages: params.targetLanguages,
+      timestamp: Date.now(),
+    };
+
+    logger.info('📤 StoryTextObject: sending ZMQ request', {
+      postId: params.postId,
+      index: params.textObjectIndex,
+      sourceLanguage: params.sourceLanguage,
+      targetLanguages: params.targetLanguages.length,
+    });
+
+    await this.connectionManager.send(requestMessage);
+  }
+
+  /**
    * Retire une requête du cache des requêtes en cours
    */
   removePendingRequest(taskId: string): void {
