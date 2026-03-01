@@ -110,7 +110,7 @@ public struct DraggableMediaView: View {
                     x: currentX * canvasWidth + dragOffset.width,
                     y: currentY * canvasHeight + dragOffset.height
                 )
-                .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
+                .highPriorityGesture(TapGesture().onEnded { _ in onTapToFront?() })
                 .gesture(dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight))
                 .simultaneousGesture(pinchGesture)
                 .simultaneousGesture(rotateGesture)

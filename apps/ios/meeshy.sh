@@ -82,7 +82,9 @@ strip_entitlements() {
     rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
     rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
     rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
-    grep -rl "me.meeshy.app" ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | xargs rm -f 2>/dev/null || true
+    # NOTE: Do NOT delete provisioning profiles — they contain the registered device UDID.
+    # Deleting them forces Xcode to re-download, which can fail silently and leave the
+    # app unsigned. The .xcent removal above is sufficient to force re-signing.
     ok "Entitlements stripped (backup at ${ENTITLEMENTS_FILE}.bak)"
 }
 

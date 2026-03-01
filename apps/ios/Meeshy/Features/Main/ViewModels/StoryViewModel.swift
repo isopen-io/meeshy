@@ -178,34 +178,74 @@ class StoryViewModel: ObservableObject {
     // MARK: - Publish Single Story (throws)
 
     @MainActor
-    func publishStorySingle(effects: StoryEffects, content: String?, image: UIImage?) async throws {
+    func publishStorySingle(
+        effects: StoryEffects,
+        content: String?,
+        image: UIImage?,
+        loadedImages: [String: UIImage] = [:],
+        loadedVideoURLs: [String: URL] = [:]
+    ) async throws {
+        let serverOrigin = MeeshyConfig.shared.serverOrigin
+        guard let baseURL = URL(string: serverOrigin),
+              let token = APIClient.shared.authToken else {
+            throw URLError(.userAuthenticationRequired)
+        }
+        let uploader = TusUploadManager(baseURL: baseURL)
+
+        // 1. Upload background thumbnail (image de fond du slide)
         var uploadResult: TusUploadResult? = nil
-
         if let image {
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else {
-                throw URLError(.userAuthenticationRequired)
-            }
-
             let compressed = await MediaCompressor.shared.compressImage(image)
             let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             try compressed.data.write(to: tempURL)
             defer { try? FileManager.default.removeItem(at: tempURL) }
-
-            let uploader = TusUploadManager(baseURL: baseURL)
             uploadResult = try await uploader.uploadFile(
                 fileURL: tempURL, mimeType: compressed.mimeType,
                 token: token, uploadContext: "story"
             )
         }
 
+        // 2. Upload médias foreground (image/vidéo posés sur le canvas)
+        var updatedEffects = effects
+        var foregroundMediaIds: [String] = []
+        if var mediaObjects = updatedEffects.mediaObjects {
+            for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
+                let obj = mediaObjects[i]
+                if obj.mediaType == "video", let videoURL = loadedVideoURLs[obj.id] {
+                    let result = try await uploader.uploadFile(
+                        fileURL: videoURL, mimeType: "video/mp4",
+                        token: token, uploadContext: "story"
+                    )
+                    mediaObjects[i].postMediaId = result.id
+                    foregroundMediaIds.append(result.id)
+                } else if obj.mediaType == "image", let uiImage = loadedImages[obj.id] {
+                    let compressed = await MediaCompressor.shared.compressImage(uiImage)
+                    let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                    try compressed.data.write(to: tempURL)
+                    defer { try? FileManager.default.removeItem(at: tempURL) }
+                    let result = try await uploader.uploadFile(
+                        fileURL: tempURL, mimeType: compressed.mimeType,
+                        token: token, uploadContext: "story"
+                    )
+                    mediaObjects[i].postMediaId = result.id
+                    foregroundMediaIds.append(result.id)
+                }
+            }
+            updatedEffects.mediaObjects = mediaObjects
+        }
+
+        // 3. Composer la liste complète des mediaIds (thumbnail + foreground)
+        var allMediaIds: [String] = []
+        if let id = uploadResult?.id { allMediaIds.append(id) }
+        allMediaIds.append(contentsOf: foregroundMediaIds)
+
         let post = try await postService.createStory(
             content: content,
-            storyEffects: effects,
+            storyEffects: updatedEffects,
             visibility: "PUBLIC",
-            mediaIds: uploadResult.map { [$0.id] }
+            mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
         )
 
         let media: [FeedMedia]
@@ -219,7 +259,7 @@ class StoryViewModel: ObservableObject {
             }
         }
         let newItem = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: effects, createdAt: post.createdAt, isViewed: true)
+                                 storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true)
 
         if let idx = storyGroups.firstIndex(where: { $0.id == post.author.id }) {
             var updated = storyGroups[idx].stories

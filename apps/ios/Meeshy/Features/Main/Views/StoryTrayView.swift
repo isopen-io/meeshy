@@ -38,11 +38,13 @@ struct StoryTrayView: View {
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             ZStack {
                 StoryComposerView(
-                    onPublishSlide: { slide, image in
+                    onPublishSlide: { slide, image, loadedImages, loadedVideoURLs in
                         try await viewModel.publishStorySingle(
                             effects: slide.effects,
                             content: slide.content,
-                            image: image
+                            image: image,
+                            loadedImages: loadedImages,
+                            loadedVideoURLs: loadedVideoURLs
                         )
                     },
                     onPreview: { slides, images in

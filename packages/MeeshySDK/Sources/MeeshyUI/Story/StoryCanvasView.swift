@@ -276,7 +276,7 @@ public struct StoryCanvasView: View {
             if obj.placement == "foreground" {
                 DraggableMediaView(
                     mediaObject: $obj,
-                    image: loadedImages[obj.id],
+                    image: obj.mediaType == "video" ? nil : loadedImages[obj.id],
                     videoURL: loadedVideoURLs[obj.id],
                     isEditing: !isDrawingActive,
                     onDragEnd: {},

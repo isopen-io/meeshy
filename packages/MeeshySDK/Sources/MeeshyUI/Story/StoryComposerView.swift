@@ -142,11 +142,11 @@ public struct StoryComposerView: View {
     @State private var showPublishError = false
     @State private var publishTask: Task<Void, Never>? = nil
 
-    public var onPublishSlide: (StorySlide, UIImage?) async throws -> Void
+    public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void
     public var onPreview: ([StorySlide], [String: UIImage]) -> Void
     public var onDismiss: () -> Void
 
-    public init(onPublishSlide: @escaping (StorySlide, UIImage?) async throws -> Void,
+    public init(onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void,
                 onPreview: @escaping ([StorySlide], [String: UIImage]) -> Void,
                 onDismiss: @escaping () -> Void) {
         self.onPublishSlide = onPublishSlide
@@ -386,45 +386,6 @@ public struct StoryComposerView: View {
 
             // Actions groupées
             HStack(spacing: 8) {
-                // [⋯] Menu contextuel
-                Menu {
-                    Button { saveDraft() } label: {
-                        Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
-                    }
-                    Menu {
-                        Button { visibility = "PUBLIC" } label: {
-                            Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
-                        }
-                        Button { visibility = "FRIENDS" } label: {
-                            Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
-                        }
-                        Button { visibility = "PRIVATE" } label: {
-                            Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
-                        }
-                    } label: {
-                        Label("Visibilité", systemImage: "eye")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        slideManager.slides = [StorySlide()]
-                        slideManager.currentSlideIndex = 0
-                    } label: {
-                        Label("Supprimer tous les slides", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(.black.opacity(0.55))
-                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                        )
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
-
                 // [▶] Preview
                 Button {
                     let (slides, images) = allSlidesSnapshot()
@@ -481,6 +442,45 @@ public struct StoryComposerView: View {
                     )
                 }
                 .disabled(isPublishingAll)
+
+                // [⋯] Menu contextuel
+                Menu {
+                    Button { saveDraft() } label: {
+                        Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
+                    }
+                    Menu {
+                        Button { visibility = "PUBLIC" } label: {
+                            Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
+                        }
+                        Button { visibility = "FRIENDS" } label: {
+                            Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                        }
+                        Button { visibility = "PRIVATE" } label: {
+                            Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                        }
+                    } label: {
+                        Label("Visibilité", systemImage: "eye")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        slideManager.slides = [StorySlide()]
+                        slideManager.currentSlideIndex = 0
+                    } label: {
+                        Label("Supprimer tous les slides", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(.black.opacity(0.55))
+                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                        )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
             }
             .padding(.trailing, 16)
         }
@@ -517,7 +517,7 @@ public struct StoryComposerView: View {
                     } label: {
                         RoundedRectangle(cornerRadius: 5)
                             .fill(Color.white.opacity(0.06))
-                            .frame(width: 34, height: 46)
+                            .frame(width: 34, height: 40)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 5)
                                     .stroke(Color.white.opacity(0.2),
@@ -561,13 +561,13 @@ public struct StoryComposerView: View {
                     Color(hex: "1A1A2E")
                 }
             }
-            .frame(width: 34, height: 46)
+            .frame(width: 34, height: 40)
             .clipShape(RoundedRectangle(cornerRadius: 5))
             .overlay(
                 RoundedRectangle(cornerRadius: 5)
                     .stroke(
                         isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
-                        lineWidth: isSelected ? 2 : 0.5
+                        lineWidth: isSelected ? 0.5 : 0.2
                     )
             )
             .scaleEffect(isSelected ? 1.08 : 1.0)
@@ -1282,12 +1282,12 @@ public struct StoryComposerView: View {
                 guard !Task.isCancelled else { break }
                 let slide = slides[index]
                 let image = images[slide.id]
-                publishProgressText = "\(index + 1)/\(slides.count)..."
+                publishProgressText = slides.count > 1 ? "\(index + 1)/\(slides.count)..." : "Publication..."
 
                 var retrying = true
                 while retrying {
                     do {
-                        try await onPublishSlide(slide, image)
+                        try await onPublishSlide(slide, image, loadedImages, loadedVideoURLs)
                         retrying = false
                         index += 1
                     } catch {
