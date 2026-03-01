@@ -274,32 +274,30 @@ wait_for_existing_build() {
         log "Still building... (10s check $check/5)"
     done
 
-    # Phase 2: every 30s, 4 checks
+    # Phase 2: every 30s, 10 checks
     warn "Switching to 30s polling..."
     check=0
-    while [ "$check" -lt 4 ]; do
+    while [ "$check" -lt 10 ]; do
         sleep 30
         check=$((check + 1))
         if ! is_build_running; then
-            ok "Previous build finished (after 30s check $check/4)"
+            ok "Previous build finished (after 30s check $check/10)"
             return 0
         fi
-        log "Still building... (30s check $check/4)"
+        log "Still building... (30s check $check/10)"
     done
 
-    # Phase 3: every 60s, 3 checks — if all fail, kill
-    warn "Switching to 60s polling (will force-kill after 3 failures)..."
-    local failures=0
+    # Phase 3: every 60s, 5 checks — if all fail, kill
+    warn "Switching to 60s polling (will force-kill after 5 failures)..."
     check=0
-    while [ "$check" -lt 3 ]; do
+    while [ "$check" -lt 5 ]; do
         sleep 60
         check=$((check + 1))
         if ! is_build_running; then
-            ok "Previous build finished (after 60s check $check/3)"
+            ok "Previous build finished (after 60s check $check/5)"
             return 0
         fi
-        failures=$((failures + 1))
-        warn "Still building after 60s check $check/3 (failure $failures/3)"
+        warn "Still building after 60s check $check/5"
     done
 
     # All 3 x 60s checks failed — force kill
