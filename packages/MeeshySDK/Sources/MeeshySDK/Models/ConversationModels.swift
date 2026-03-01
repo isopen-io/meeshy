@@ -75,6 +75,7 @@ public struct APIConversation: Decodable {
     public let userPreferences: [APIConversationPreferences]?
     public let unreadCount: Int?
     public let updatedAt: Date?
+    public let encryptionMode: String?
     public let createdAt: Date
 }
 
@@ -148,6 +149,7 @@ extension APIConversation {
             isActive: isActive ?? true,
             memberCount: memberCount ?? members?.count ?? 2,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
+            encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content,
             lastMessageAttachments: lastMsgAttachments,

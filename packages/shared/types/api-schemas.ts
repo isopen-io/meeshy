@@ -1251,9 +1251,9 @@ export const sendMessageRequestSchema = {
   properties: {
     content: {
       type: 'string',
-      minLength: 1,
+      minLength: 0,
       maxLength: 10000,
-      description: 'Message content'
+      description: 'Message content (can be empty if encryptedPayload or attachments are provided)'
     },
     originalLanguage: {
       type: 'string',
@@ -1271,6 +1271,12 @@ export const sendMessageRequestSchema = {
     replyToId: {
       type: 'string',
       description: 'ID of message to reply to'
+    },
+    encryptedPayload: {
+      type: 'object',
+      nullable: true,
+      description: 'E2EE encrypted payload containing ciphertext and metadata',
+      additionalProperties: true // Allows dynamic encryption properties
     }
   }
 } as const;
@@ -1284,15 +1290,21 @@ export const editMessageRequestSchema = {
   properties: {
     content: {
       type: 'string',
-      minLength: 1,
+      minLength: 0,
       maxLength: 10000,
-      description: 'New message content'
+      description: 'New message content (can be empty if encryptedPayload is provided)'
     },
     originalLanguage: {
       type: 'string',
       minLength: 2,
       maxLength: 5,
       description: 'Message language if changed'
+    },
+    encryptedPayload: {
+      type: 'object',
+      nullable: true,
+      description: 'E2EE encrypted payload containing ciphertext and metadata',
+      additionalProperties: true
     }
   }
 } as const;
@@ -3136,13 +3148,25 @@ export const signalPreKeyBundleSchema = {
 } as const;
 
 /**
- * Request body for generating pre-key bundle
- * Empty body - keys are generated server-side for the authenticated user
+ * Request body for uploading pre-key bundle from client
  */
 export const generatePreKeyBundleRequestSchema = {
   type: 'object',
-  description: 'Request to generate a new pre-key bundle (empty body)',
-  properties: {}
+  description: 'Request to upload a new pre-key bundle',
+  required: ['identityKey', 'registrationId', 'deviceId', 'signedPreKeyId', 'signedPreKeyPublic', 'signedPreKeySignature'],
+  properties: {
+    identityKey: { type: 'string' },
+    registrationId: { type: 'number' },
+    deviceId: { type: 'number' },
+    preKeyId: { type: 'number', nullable: true },
+    preKeyPublic: { type: 'string', nullable: true },
+    signedPreKeyId: { type: 'number' },
+    signedPreKeyPublic: { type: 'string' },
+    signedPreKeySignature: { type: 'string' },
+    kyberPreKeyId: { type: 'number', nullable: true },
+    kyberPreKeyPublic: { type: 'string', nullable: true },
+    kyberPreKeySignature: { type: 'string', nullable: true }
+  }
 } as const;
 
 /**

@@ -22,11 +22,11 @@ export class MessageValidator {
     const errors: MessageValidationResult['errors'] = [];
     const warnings: MessageValidationResult['warnings'] = [];
 
-    // Validation du contenu - permettre les messages sans contenu si il y a des attachements
-    if ((!request.content || request.content.trim().length === 0) && (!request.attachments || request.attachments.length === 0)) {
+    // Validation du contenu - permettre les messages sans contenu si il y a des attachements ou un payload chiffré
+    if ((!request.content || request.content.trim().length === 0) && (!request.attachments || request.attachments.length === 0) && !request.encryptedPayload) {
       errors.push({
         field: 'content',
-        message: 'Message content cannot be empty (unless attachments are included)',
+        message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',
         code: 'CONTENT_EMPTY'
       });
     }

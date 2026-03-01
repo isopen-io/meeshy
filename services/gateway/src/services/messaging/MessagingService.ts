@@ -99,7 +99,13 @@ export class MessagingService {
         conversationId,
         senderId: actualSenderId,
         anonymousSenderId: actualAnonymousSenderId,
-        mentionedUserIds: request.mentionedUserIds
+        mentionedUserIds: request.mentionedUserIds,
+        // Map E2EE encrypted payload to DB fields if present
+        encryptedContent: request.encryptedPayload?.ciphertext,
+        encryptionMetadata: request.encryptedPayload ? {
+          mode: 'e2ee',
+          ...request.encryptedPayload
+        } as any : undefined
       });
 
       // 8. Mise à jour de la conversation

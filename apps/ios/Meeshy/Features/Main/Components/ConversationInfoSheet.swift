@@ -59,6 +59,7 @@ struct ConversationInfoSheet: View {
     @State private var createdShareLinkId: String?
     @State private var showShareSheet = false
     @State private var showLeaveConfirmation = false
+    @State private var showSecurityVerification = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
@@ -100,6 +101,7 @@ struct ConversationInfoSheet: View {
                 blockUserButton
             }
             actionButtons
+            securitySection
             tabSelector
             tabContent
         }
@@ -134,7 +136,24 @@ struct ConversationInfoSheet: View {
         } message: {
             Text("Vous ne recevrez plus de messages de cette conversation.")
         }
+        .sheet(isPresented: $showSecurityVerification) {
+            SecurityVerificationView(
+                conversationName: conversation.name,
+                safetyNumber: generateDummySafetyNumber(userId: conversation.participantUserId ?? "unknown")
+            )
+        }
         .withStatusBubble()
+    }
+
+    // MARK: - Dummy Safety Number Generator (Placeholder for real implementation)
+    private func generateDummySafetyNumber(userId: String) -> String {
+        let hash = abs(userId.hashValue)
+        let strHash = String(hash).padding(toLength: 12, withPad: "0", startingAt: 0)
+        let secondPart = abs(AuthManager.shared.currentUserId?.hashValue ?? 0)
+        let strSecond = String(secondPart).padding(toLength: 12, withPad: "0", startingAt: 0)
+        let combined = strHash + strSecond
+        // Ensure strictly 20-30 digits (e.g. padding to 30)
+        return String(combined.padding(toLength: 30, withPad: "0", startingAt: 0).prefix(30))
     }
 
     // MARK: - Sheet Background
@@ -618,6 +637,52 @@ struct ConversationInfoSheet: View {
         .padding(.vertical, 12)
         .opacity(appearAnimation ? 1 : 0)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.03), value: appearAnimation)
+    }
+
+    // MARK: - Security Section
+
+    @ViewBuilder
+    private var securitySection: some View {
+        if conversation.encryptionMode != nil {
+            Button {
+                HapticFeedback.light()
+                showSecurityVerification = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Chiffrement de bout en bout")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                        
+                        Text("Appuyez pour vérifier le numéro de sécurité")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.mode.isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .opacity(appearAnimation ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
+        }
     }
 
     private func actionButton(

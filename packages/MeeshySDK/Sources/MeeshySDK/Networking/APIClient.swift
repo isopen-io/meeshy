@@ -172,7 +172,21 @@ public final class APIClient {
         } catch let error as MeeshyError {
             throw error
         } catch let error as DecodingError {
-            throw MeeshyError.server(statusCode: 0, message: "Erreur de decodage des donnees: \(error.localizedDescription)")
+            var debugInfo = "Erreur de decodage: "
+            switch error {
+            case .typeMismatch(let type, let context):
+                debugInfo += "Type mismatch for type \(type) at path \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .valueNotFound(let type, let context):
+                debugInfo += "Value not found for type \(type) at path \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .keyNotFound(let key, let context):
+                debugInfo += "Key '\(key.stringValue)' not found at path \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .dataCorrupted(let context):
+                debugInfo += "Data corrupted at path \(context.codingPath.map { $0.stringValue }.joined(separator: ".")) - \(context.debugDescription)"
+            @unknown default:
+                debugInfo += error.localizedDescription
+            }
+            print("APIClient DecodingError:", debugInfo)
+            throw MeeshyError.server(statusCode: 0, message: debugInfo)
         } catch let error as URLError {
             switch error.code {
             case .notConnectedToInternet, .networkConnectionLost:

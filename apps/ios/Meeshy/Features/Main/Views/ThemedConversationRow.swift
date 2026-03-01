@@ -132,7 +132,7 @@ struct ThemedConversationRow: View {
             // Content
             VStack(alignment: .leading, spacing: 4) {
                 // Tags row (if any)
-                if !conversation.tags.isEmpty {
+                if !conversation.tags.isEmpty || conversation.encryptionMode != nil {
                     tagsRow
                 }
 
@@ -228,6 +228,23 @@ struct ThemedConversationRow: View {
     private var tagsRow: some View {
         let tagInfo = visibleTagsInfo
         return HStack(spacing: 6) {
+            if conversation.encryptionMode != nil {
+                HStack(spacing: 2) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 7, weight: .bold))
+                    Text("E2EE")
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .foregroundColor(Color(hex: "4ECDC4"))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(Color(hex: "4ECDC4").opacity(isDark ? 0.2 : 0.15))
+                        .overlay(Capsule().stroke(Color(hex: "4ECDC4").opacity(0.3), lineWidth: 0.5))
+                )
+            }
+
             // Show dynamically calculated visible tags
             ForEach(tagInfo.tags) { tag in
                 TagChip(tag: tag)
