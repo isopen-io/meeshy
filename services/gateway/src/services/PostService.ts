@@ -330,7 +330,8 @@ export class PostService {
     // Envoie les textObjects au pipeline de traduction.
     // La persistence des résultats est gérée par le handler ZMQ Task 15
     // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    const targetLanguages = this.getActiveTargetLanguages();
+    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
+    const allTargetLanguages = this.getActiveTargetLanguages();
 
     textObjects.forEach((obj, index) => {
       const text = obj.content?.trim();
@@ -343,6 +344,12 @@ export class PostService {
       }
 
       const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
+
+      if (targetLanguages.length === 0) {
+        log.info('StoryTextObjectTranslation: no target languages after filtering source', { postId, index, sourceLanguage });
+        return;
+      }
 
       log.info('StoryTextObjectTranslation: sending ZMQ request', { postId, index, sourceLanguage, targetLanguages });
 

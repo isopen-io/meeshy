@@ -32,10 +32,12 @@ public actor WaveformGenerator {
             try Task.checkCancellation()
             guard let blockBuffer = CMSampleBufferGetDataBuffer(buffer) else { continue }
             let length = CMBlockBufferGetDataLength(blockBuffer)
+            guard length > 0 else { continue }
             var data = Data(count: length)
             _ = data.withUnsafeMutableBytes { ptr in
-                CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0,
-                                           dataLength: length, destination: ptr.baseAddress!)
+                guard let base = ptr.baseAddress else { return OSStatus(0) }
+                return CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0,
+                                           dataLength: length, destination: base)
             }
             let samples = data.withUnsafeBytes { ptr -> [Float] in
                 let int16Ptr = ptr.bindMemory(to: Int16.self)

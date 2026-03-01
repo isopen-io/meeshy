@@ -284,6 +284,7 @@ public struct StoryCanvasReaderView: View {
 
 // MARK: - ReaderState (gestion lifecycle, audio de fond, socket updates)
 
+@MainActor
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
     let canvas = PKCanvasView()

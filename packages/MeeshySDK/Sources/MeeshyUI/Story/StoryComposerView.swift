@@ -355,7 +355,7 @@ public struct StoryComposerView: View {
             }
         }
         .allowsHitTesting(false)
-        .opacity(activePanel == .none ? 0 : 0) // masqué par défaut, visible en mode édition
+        .opacity(activePanel == .none ? 0 : 1) // masqué par défaut, visible en mode édition
     }
 
     // MARK: - Top Bar (moderne, overlay)
@@ -1072,6 +1072,10 @@ public struct StoryComposerView: View {
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
 
+    // NOTE: Draft restore does not persist loadedImages or loadedVideoURLs.
+    // Foreground media (images/videos placed on the canvas) will not be visually
+    // displayed after restoring a draft. The StoryMediaObject metadata is preserved
+    // in slide effects, but the actual image/video data is transient (in-memory only).
     private func applyDraft(_ draft: StoryComposerDraft) {
         slideManager.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
         slideManager.currentSlideIndex = 0
@@ -1104,14 +1108,21 @@ public struct StoryComposerView: View {
             )
             if mediaType == "video" {
                 if let data = try? await item.loadTransferable(type: Data.self) {
+                    let ext = item.supportedContentTypes
+                        .first { $0.conforms(to: .audiovisualContent) }?
+                        .preferredFilenameExtension ?? "mp4"
                     let tempURL = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(objectId + ".mp4")
-                    try? data.write(to: tempURL)
-                    await MainActor.run {
-                        loadedVideoURLs[objectId] = tempURL
-                        var effects = currentSlideEffects ?? buildEffects()
-                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                        setCurrentSlideEffects(effects)
+                        .appendingPathComponent(objectId + "." + ext)
+                    do {
+                        try data.write(to: tempURL)
+                        await MainActor.run {
+                            loadedVideoURLs[objectId] = tempURL
+                            var effects = currentSlideEffects ?? buildEffects()
+                            effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                            setCurrentSlideEffects(effects)
+                        }
+                    } catch {
+                        print("[StoryComposer] Failed to write video to temp file: \(error)")
                     }
                 }
             } else {
@@ -1179,6 +1190,7 @@ public struct StoryComposerView: View {
             backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
             opening: openingEffect,
             closing: closingEffect,
+            textObjects: currentSlideEffects?.textObjects,
             mediaObjects: currentSlideEffects?.mediaObjects,
             audioPlayerObjects: currentSlideEffects?.audioPlayerObjects
         )
