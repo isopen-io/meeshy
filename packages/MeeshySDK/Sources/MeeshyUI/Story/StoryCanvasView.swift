@@ -1,4 +1,5 @@
 import SwiftUI
+import PencilKit
 import MeeshySDK
 
 // MARK: - Story Canvas View
@@ -17,6 +18,22 @@ public struct StoryCanvasView: View {
     @Binding public var isDrawingActive: Bool
     @Binding public var backgroundColor: Color
     @Binding public var selectedImage: UIImage?
+    // Drawing state (géré par le parent)
+    @Binding public var drawingCanvas: PKCanvasView
+    @Binding public var drawingColor: Color
+    @Binding public var drawingWidth: CGFloat
+    @Binding public var drawingTool: DrawingTool
+    // Media objects (foreground)
+    @Binding public var mediaObjects: [StoryMediaObject]
+    @Binding public var audioPlayerObjects: [StoryAudioPlayerObject]
+    // Médias chargés localement (en attente d'upload)
+    @Binding public var loadedImages: [String: UIImage]
+    @Binding public var loadedVideoURLs: [String: URL]
+    // Image manipulation — état local (UX preview)
+    @State private var imageScale: CGFloat = 1.0
+    @State private var imageOffset: CGSize = .zero
+    @GestureState private var dragDelta: CGSize = .zero
+    @GestureState private var pinchDelta: CGFloat = 1.0
 
     public init(text: Binding<String>, textStyle: Binding<StoryTextStyle>,
                 textColor: Binding<Color>, textSize: Binding<CGFloat>,
@@ -24,7 +41,13 @@ public struct StoryCanvasView: View {
                 textPosition: Binding<StoryTextPosition>, stickerObjects: Binding<[StorySticker]>,
                 selectedFilter: Binding<StoryFilter?>, drawingData: Binding<Data?>,
                 isDrawingActive: Binding<Bool>, backgroundColor: Binding<Color>,
-                selectedImage: Binding<UIImage?>) {
+                selectedImage: Binding<UIImage?>, drawingCanvas: Binding<PKCanvasView>,
+                drawingColor: Binding<Color>, drawingWidth: Binding<CGFloat>,
+                drawingTool: Binding<DrawingTool>,
+                mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
+                audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
+                loadedImages: Binding<[String: UIImage]> = .constant([:]),
+                loadedVideoURLs: Binding<[String: URL]> = .constant([:])) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -32,6 +55,14 @@ public struct StoryCanvasView: View {
         self._selectedFilter = selectedFilter; self._drawingData = drawingData
         self._isDrawingActive = isDrawingActive; self._backgroundColor = backgroundColor
         self._selectedImage = selectedImage
+        self._drawingCanvas = drawingCanvas
+        self._drawingColor = drawingColor
+        self._drawingWidth = drawingWidth
+        self._drawingTool = drawingTool
+        self._mediaObjects = mediaObjects
+        self._audioPlayerObjects = audioPlayerObjects
+        self._loadedImages = loadedImages
+        self._loadedVideoURLs = loadedVideoURLs
     }
 
     public var body: some View {
@@ -46,9 +77,18 @@ public struct StoryCanvasView: View {
                 textLayer(canvasSize: geo.size)
 
                 stickerLayer(canvasSize: geo.size)
+
+                foregroundMediaLayer
+
+                foregroundAudioLayer
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 0))
+        }
+        .onChange(of: selectedImage) { _ in
+            withAnimation(.spring(response: 0.3)) {
+                imageScale = 1.0
+                imageOffset = .zero
+            }
         }
     }
 
@@ -77,7 +117,7 @@ public struct StoryCanvasView: View {
         )
     }
 
-    // MARK: - Media Layer
+    // MARK: - Media Layer (image interactive avec pinch + drag)
 
     @ViewBuilder
     private var mediaLayer: some View {
@@ -86,15 +126,48 @@ public struct StoryCanvasView: View {
             Image(uiImage: filtered)
                 .resizable()
                 .scaledToFill()
+                .scaleEffect(imageScale * pinchDelta)
+                .offset(
+                    x: imageOffset.width + dragDelta.width,
+                    y: imageOffset.height + dragDelta.height
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .gesture(isDrawingActive ? nil : imageGesture)
         }
+    }
+
+    private var imageGesture: some Gesture {
+        SimultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .updating($dragDelta) { value, state, _ in
+                    state = value.translation
+                }
+                .onEnded { value in
+                    imageOffset.width += value.translation.width
+                    imageOffset.height += value.translation.height
+                },
+            MagnificationGesture()
+                .updating($pinchDelta) { value, state, _ in
+                    state = value
+                }
+                .onEnded { value in
+                    imageScale = max(1.0, imageScale * value)
+                }
+        )
     }
 
     // MARK: - Drawing Layer
 
     private var drawingLayer: some View {
-        DrawingOverlayView(drawingData: $drawingData, isActive: $isDrawingActive)
+        DrawingOverlayView(
+            drawingData: $drawingData,
+            isActive: $isDrawingActive,
+            canvasView: $drawingCanvas,
+            toolColor: $drawingColor,
+            toolWidth: $drawingWidth,
+            toolType: $drawingTool
+        )
     }
 
     // MARK: - Text Layer
@@ -157,6 +230,44 @@ public struct StoryCanvasView: View {
                     stickerObjects.remove(at: index)
                 }
             )
+        }
+    }
+
+    // MARK: - Foreground Media Layer
+
+    @ViewBuilder
+    private var foregroundMediaLayer: some View {
+        ForEach(Array(mediaObjects.enumerated()), id: \.element.id) { index, obj in
+            if obj.placement == "foreground" {
+                DraggableMediaView(
+                    mediaObject: Binding(
+                        get: { mediaObjects[index] },
+                        set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
+                    ),
+                    image: loadedImages[obj.id],
+                    videoURL: loadedVideoURLs[obj.id],
+                    isEditing: !isDrawingActive,
+                    onDragEnd: {}
+                )
+            }
+        }
+    }
+
+    // MARK: - Foreground Audio Layer
+
+    @ViewBuilder
+    private var foregroundAudioLayer: some View {
+        ForEach(Array(audioPlayerObjects.enumerated()), id: \.element.id) { index, obj in
+            if obj.placement == "foreground" {
+                StoryAudioPlayerView(
+                    audioObject: Binding(
+                        get: { audioPlayerObjects[index] },
+                        set: { guard index < audioPlayerObjects.count else { return }; audioPlayerObjects[index] = $0 }
+                    ),
+                    isEditing: !isDrawingActive,
+                    onDragEnd: {}
+                )
+            }
         }
     }
 }

@@ -7,6 +7,14 @@ import { ZMQSingleton } from './ZmqSingleton';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
+interface StoryTextObjectRaw {
+  id?: string;
+  content: string;
+  sourceLanguage?: string;
+  translations?: Record<string, string>;
+  [key: string]: unknown;
+}
+
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
 
@@ -180,6 +188,27 @@ export class PostService {
       this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
     }
 
+    // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
+    const effects = data.storyEffects as Record<string, unknown> | undefined;
+    const rawTextObjects = effects?.textObjects;
+    const textObjects = Array.isArray(rawTextObjects) ? (rawTextObjects as StoryTextObjectRaw[]) : undefined;
+
+    if (textObjects?.length) {
+      const searchContent = textObjects
+        .map((t) => t.content)
+        .filter(Boolean)
+        .join(' ');
+
+      if (searchContent && !data.content) {
+        await this.prisma.post.update({
+          where: { id: post.id },
+          data: { content: searchContent },
+        });
+      }
+
+      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+    }
+
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
@@ -224,8 +253,20 @@ export class PostService {
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
       // 3. Listener pour recevoir les résultats un par un
-      const handleResult = async (event: { messageId: string; translatedText: string; targetLanguage: string; confidenceScore?: number; translatorModel?: string; }) => {
-        if (event.messageId !== storyMessageId) return;
+      let receivedCount = 0;
+      const expectedCount = targetLanguages.length;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+      const removeListener = () => {
+        zmqClient.off('translationCompleted', handleResult);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+      };
+
+      const handleResult = async (event: { taskId: string; result: { messageId: string; translatedText: string; confidenceScore?: number; translatorModel?: string }; targetLanguage: string; metadata: Record<string, unknown> }) => {
+        if (event.result.messageId !== storyMessageId) return;
 
         try {
           await (this.prisma as any).$runCommandRaw({
@@ -233,9 +274,9 @@ export class PostService {
             updates: [{
               q: { _id: { $oid: postId } },
               u: { $set: { [`translations.${event.targetLanguage}`]: {
-                text: event.translatedText,
-                translationModel: event.translatorModel ?? 'nllb',
-                confidenceScore: event.confidenceScore ?? 1,
+                text: event.result.translatedText,
+                translationModel: event.result.translatorModel ?? 'nllb',
+                confidenceScore: event.result.confidenceScore ?? 1,
                 createdAt: new Date().toISOString(),
               }}},
             }],
@@ -244,6 +285,12 @@ export class PostService {
           log.info('StoryTranslation: saved', { postId, lang: event.targetLanguage });
         } catch (err) {
           log.warn('StoryTranslation: save failed', { err, postId });
+        }
+
+        receivedCount++;
+        if (receivedCount >= expectedCount) {
+          log.info('StoryTranslation: all languages received, removing listener', { postId, receivedCount });
+          removeListener();
         }
       };
 
@@ -259,18 +306,65 @@ export class PostService {
           `story_context:${postId}`,
         );
       } catch (sendError) {
-        zmqClient.off('translationCompleted', handleResult);
+        removeListener();
         throw sendError;
       }
 
-      // 5. Cleanup du listener après timeout (évite les memory leaks)
-      setTimeout(() => {
-        zmqClient.off('translationCompleted', handleResult);
+      // 5. Cleanup du listener après timeout (fallback si certaines langues échouent)
+      timeoutHandle = setTimeout(() => {
+        if (receivedCount < expectedCount) {
+          log.warn('StoryTranslation: timeout, removing listener', { postId, receivedCount, expectedCount });
+        }
+        removeListener();
       }, 60_000);
 
     } catch (error) {
       log.warn('StoryTranslation failed', { err: error, postId });
     }
+  }
+
+  private triggerStoryTextObjectTranslation(
+    postId: string,
+    textObjects: StoryTextObjectRaw[]
+  ): void {
+    // Envoie les textObjects au pipeline de traduction.
+    // La persistence des résultats est gérée par le handler ZMQ Task 15
+    // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
+    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
+    const allTargetLanguages = this.getActiveTargetLanguages();
+
+    textObjects.forEach((obj, index) => {
+      const text = obj.content?.trim();
+      if (!text) return;
+
+      const zmqClient = ZMQSingleton.getInstanceSync();
+      if (!zmqClient) {
+        log.warn('StoryTextObjectTranslation: ZMQ client not available', { postId, index });
+        return;
+      }
+
+      const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
+
+      if (targetLanguages.length === 0) {
+        log.info('StoryTextObjectTranslation: no target languages after filtering source', { postId, index, sourceLanguage });
+        return;
+      }
+
+      log.info('StoryTextObjectTranslation: sending ZMQ request', { postId, index, sourceLanguage, targetLanguages });
+
+      zmqClient.translateTextObject({
+        postId,
+        textObjectIndex: index,
+        text,
+        sourceLanguage,
+        targetLanguages,
+      });
+    });
+  }
+
+  private getActiveTargetLanguages(): string[] {
+    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
   }
 
   async getPostById(postId: string, viewerUserId?: string) {

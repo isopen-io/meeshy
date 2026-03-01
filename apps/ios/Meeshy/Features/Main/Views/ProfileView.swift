@@ -327,40 +327,44 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     fieldIcon("envelope.fill")
-
+                    
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Email")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
-
+                        
                         Text(user?.email ?? "—")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
-
+                    
                     Spacer()
-
-                    verificationBadge(verified: user?.emailVerifiedAt != nil)
+                    
+                    if let email = user?.email, !email.isEmpty {
+                        verificationBadge(verified: user?.emailVerifiedAt != nil)
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
                 HStack(spacing: 12) {
                     fieldIcon("phone.fill")
-
+                    
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Telephone")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
-
+                        
                         Text(user?.phoneNumber ?? "—")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }
-
+                    
                     Spacer()
-
-                    verificationBadge(verified: user?.phoneVerifiedAt != nil)
+                    
+                    if let phone = user?.phoneNumber, !phone.isEmpty {
+                        verificationBadge(verified: user?.phoneVerifiedAt != nil)
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)

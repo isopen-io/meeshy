@@ -31,7 +31,8 @@ import type {
   AudioTranslationsCompletedEvent,
   TranscriptionErrorEvent,
   VoiceTranslationCompletedEvent,
-  VoiceTranslationFailedEvent
+  VoiceTranslationFailedEvent,
+  StoryTextObjectTranslationCompletedEvent
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 // Logger dédié pour ZmqMessageHandler
@@ -50,6 +51,7 @@ export interface MessageHandlerStats {
   multipartMessages: number;
   voiceTranslationCompleted: number;
   voiceTranslationFailed: number;
+  storyTextObjectTranslationCompleted: number;
 }
 
 export class ZmqMessageHandler extends EventEmitter {
@@ -66,7 +68,8 @@ export class ZmqMessageHandler extends EventEmitter {
     transcriptionErrors: 0,
     multipartMessages: 0,
     voiceTranslationCompleted: 0,
-    voiceTranslationFailed: 0
+    voiceTranslationFailed: 0,
+    storyTextObjectTranslationCompleted: 0,
   };
 
   /**
@@ -204,6 +207,10 @@ export class ZmqMessageHandler extends EventEmitter {
 
       case 'voice_translation_failed':
         this.handleVoiceTranslationFailed(event as unknown as VoiceTranslationFailedEvent);
+        break;
+
+      case 'story_text_object_translation_completed':
+        this.handleStoryTextObjectTranslationCompleted(event as unknown as StoryTextObjectTranslationCompletedEvent);
         break;
 
       case 'pong':
@@ -722,6 +729,21 @@ export class ZmqMessageHandler extends EventEmitter {
   }
 
   /**
+   * Gère un événement de traduction de textObject de story terminée
+   */
+  private handleStoryTextObjectTranslationCompleted(event: StoryTextObjectTranslationCompletedEvent): void {
+    logger.info(`📖 StoryTextObject translation completed: postId=${event.postId}, index=${event.textObjectIndex}`);
+
+    this.stats.storyTextObjectTranslationCompleted++;
+
+    this.emit('storyTextObjectTranslationCompleted', {
+      postId: event.postId,
+      textObjectIndex: event.textObjectIndex,
+      translations: event.translations,
+    });
+  }
+
+  /**
    * Récupère les statistiques du handler
    */
   getStats(): MessageHandlerStats {
@@ -743,7 +765,8 @@ export class ZmqMessageHandler extends EventEmitter {
       transcriptionErrors: 0,
       multipartMessages: 0,
       voiceTranslationCompleted: 0,
-      voiceTranslationFailed: 0
+      voiceTranslationFailed: 0,
+      storyTextObjectTranslationCompleted: 0,
     };
   }
 

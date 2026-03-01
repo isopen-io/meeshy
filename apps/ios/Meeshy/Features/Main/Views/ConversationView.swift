@@ -206,7 +206,12 @@ struct ConversationView: View {
     init(conversation: Conversation?, replyContext: ReplyContext? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
-        _viewModel = StateObject(wrappedValue: ConversationViewModel(conversationId: conversation?.id ?? "", unreadCount: conversation?.unreadCount ?? 0))
+        _viewModel = StateObject(wrappedValue: ConversationViewModel(
+            conversationId: conversation?.id ?? "",
+            unreadCount: conversation?.unreadCount ?? 0,
+            isDirect: conversation?.type == .direct,
+            participantUserId: conversation?.participantUserId
+        ))
     }
 
     // MARK: - Date Sections
@@ -293,6 +298,36 @@ struct ConversationView: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: - Encryption Disclaimer
+
+    @ViewBuilder
+    private var encryptionDisclaimer: some View {
+        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.isLoadingInitial {
+            VStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .padding(8)
+                    .background(Circle().fill(Color(hex: "4ECDC4").opacity(0.15)))
+
+                Text("Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.mode.isDark ? Color.black.opacity(0.4) : Color(UIColor.systemBackground).opacity(0.6))
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+        }
     }
 
     // MARK: - Unread Separator
@@ -529,6 +564,8 @@ struct ConversationView: View {
                                 .staggeredAppear(index: index, baseDelay: 0.04)
                         }
                         .transition(.opacity)
+                    } else {
+                        encryptionDisclaimer
                     }
 
                     ForEach(viewModel.messages) { msg in

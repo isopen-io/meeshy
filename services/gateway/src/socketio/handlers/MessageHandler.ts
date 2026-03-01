@@ -73,6 +73,7 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
+      encryptedPayload?: any; // EncryptedPayload type from shared types
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -87,7 +88,8 @@ export class MessageHandler {
 
       // Validation longueur du message
       const validation = validateMessageLength(data.content);
-      if (!validation.isValid) {
+      if (!validation.isValid && !data.encryptedPayload) {
+        // En E2EE pur, content peut être vide
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
@@ -130,6 +132,7 @@ export class MessageHandler {
         replyToId: data.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
+        encryptedPayload: data.encryptedPayload,
         isAnonymous,
         anonymousDisplayName,
         metadata: {
@@ -518,6 +521,15 @@ export class MessageHandler {
       replyTo: (message as never)['replyTo'],
       forwardedFromId: message.forwardedFromId || undefined,
       forwardedFromConversationId: message.forwardedFromConversationId || undefined,
+      isEncrypted: message.isEncrypted,
+      encryptionMode: message.encryptionMode,
+      encryptedContent: message.encryptedContent,
+      encryptionMetadata: message.encryptionMetadata,
+      // Pass the fully structured encryptedPayload for Signal/E2EE modes
+      encryptedPayload: message.isEncrypted && message.encryptionMode === 'e2ee' && message.encryptedContent ? {
+        ciphertext: message.encryptedContent,
+        ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
+      } : undefined,
       meta: { conversationStats: stats }
     };
   }

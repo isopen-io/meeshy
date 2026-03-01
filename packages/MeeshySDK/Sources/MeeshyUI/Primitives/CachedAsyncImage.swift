@@ -16,6 +16,8 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        } else {
+            _image = State(initialValue: nil)
         }
     }
 
@@ -45,19 +47,39 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                     .overlay { if isLoading { ProgressView().tint(.white.opacity(0.6)) } }
             }
         }
-        .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage() }
+        .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage(for: urlString) }
+        .onChange(of: urlString) { newUrl in
+            // Clear image if no URL
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                hasFailed = false
+                return
+            }
+            // Check cache synchronously
+            let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
+            if let cached = MediaCacheManager.cachedImage(for: resolved) {
+                image = cached
+                hasFailed = false
+            } else {
+                image = nil // Show placeholder while loading new image
+                hasFailed = false
+            }
+        }
     }
 
-    private func loadImage() async {
-        guard let urlString, !urlString.isEmpty else { return }
-        if image != nil { return }
+    private func loadImage(for currentUrlString: String?) async {
+        guard let currentUrlString, !currentUrlString.isEmpty else { return }
+        let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
+        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
+        
         isLoading = true; hasFailed = false
-        let resolved: String
-        if let url = MeeshyConfig.resolveMediaURL(urlString) { resolved = url.absoluteString } else { resolved = urlString }
         do {
             let loaded = try await MediaCacheManager.shared.image(for: resolved)
             if !Task.isCancelled {
-                withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
+                // Only update if the URL hasn't changed while loading
+                if self.urlString == currentUrlString {
+                    withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
+                }
             }
         } catch is CancellationError {
             // View scrolled out of LazyVStack — don't mark as failed,
@@ -88,6 +110,8 @@ public struct CachedAvatarImage: View {
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        } else {
+            _image = State(initialValue: nil)
         }
     }
 
@@ -98,7 +122,21 @@ public struct CachedAvatarImage: View {
             } else { initialsFallback }
         }
         .frame(width: size, height: size).clipShape(Circle())
-        .task(id: urlString) { await loadAvatar() }
+        .task(id: urlString) { await loadAvatar(for: urlString) }
+        .onChange(of: urlString) { newUrl in
+            // Clear image if no URL
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                return
+            }
+            // Check cache synchronously
+            let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
+            if let cached = MediaCacheManager.cachedImage(for: resolved) {
+                image = cached
+            } else {
+                image = nil // Show initials while loading new avatar
+            }
+        }
     }
 
     private var initialsFallback: some View {
@@ -112,11 +150,18 @@ public struct CachedAvatarImage: View {
         }
     }
 
-    private func loadAvatar() async {
-        guard let urlString, !urlString.isEmpty else { return }
-        if image != nil { return }
-        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        image = try? await MediaCacheManager.shared.image(for: resolved)
+    private func loadAvatar(for currentUrlString: String?) async {
+        guard let currentUrlString, !currentUrlString.isEmpty else { return }
+        let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
+        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
+        if let loaded = try? await MediaCacheManager.shared.image(for: resolved) {
+            // Only update if the URL hasn't changed while loading
+            if self.urlString == currentUrlString {
+                withAnimation(.easeIn(duration: 0.15)) {
+                    self.image = loaded
+                }
+            }
+        }
     }
 }
 
@@ -132,6 +177,8 @@ public struct CachedBannerImage: View {
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+        } else {
+            _image = State(initialValue: nil)
         }
     }
 
@@ -145,11 +192,34 @@ public struct CachedBannerImage: View {
             }
         }
         .frame(height: height).clipped()
-        .task(id: urlString) {
-            guard let urlString, !urlString.isEmpty else { return }
-            if image != nil { return }
-            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            image = try? await MediaCacheManager.shared.image(for: resolved)
+        .task(id: urlString) { await loadBanner(for: urlString) }
+        .onChange(of: urlString) { newUrl in
+            // Clear image if no URL
+            guard let newUrl, !newUrl.isEmpty else {
+                image = nil
+                return
+            }
+            // Check cache synchronously
+            let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
+            if let cached = MediaCacheManager.cachedImage(for: resolved) {
+                image = cached
+            } else {
+                image = nil // Show fallback while loading new banner
+            }
+        }
+    }
+
+    private func loadBanner(for currentUrlString: String?) async {
+        guard let currentUrlString, !currentUrlString.isEmpty else { return }
+        let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
+        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
+        if let loaded = try? await MediaCacheManager.shared.image(for: resolved) {
+            // Only update if the URL hasn't changed while loading
+            if self.urlString == currentUrlString {
+                withAnimation(.easeIn(duration: 0.15)) {
+                    self.image = loaded
+                }
+            }
         }
     }
 }

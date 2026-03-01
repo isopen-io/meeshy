@@ -117,6 +117,11 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
     this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
 
+    // Story text object translation — forward to MeeshySocketIOManager
+    this.zmqClient.on('storyTextObjectTranslationCompleted', (event: { postId: string; textObjectIndex: number; translations: Record<string, string> }) => {
+      this.emit('storyTextObjectTranslationCompleted', event);
+    });
+
     // Client initialized successfully
 
     this.isInitialized = true;

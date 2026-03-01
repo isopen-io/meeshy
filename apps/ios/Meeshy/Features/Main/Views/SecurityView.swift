@@ -195,8 +195,10 @@ struct SecurityView: View {
                     }
 
                     Spacer()
-
-                    verificationBadge(verified: user?.emailVerifiedAt != nil)
+                    
+                    if let email = user?.email, !email.isEmpty {
+                        verificationBadge(verified: user?.emailVerifiedAt != nil)
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -206,21 +208,43 @@ struct SecurityView: View {
                 } else if emailSent {
                     emailSentContent
                 } else {
-                    Button {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isEditingEmail = true
+                    HStack(spacing: 0) {
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isEditingEmail = true
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Modifier")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(Color(hex: accentColor))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Modifier")
-                                .font(.system(size: 13, weight: .semibold))
+                        
+                        if let email = user?.email, !email.isEmpty, user?.emailVerifiedAt == nil {
+                            Button {
+                                HapticFeedback.light()
+                                newEmail = email
+                                submitEmailChange()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("Vérifier")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(Color(hex: "4ADE80"))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                            }
                         }
-                        .foregroundColor(Color(hex: accentColor))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        
+                        Spacer()
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 10)
@@ -342,8 +366,10 @@ struct SecurityView: View {
                     }
 
                     Spacer()
-
-                    verificationBadge(verified: user?.phoneVerifiedAt != nil)
+                    
+                    if let phone = user?.phoneNumber, !phone.isEmpty {
+                        verificationBadge(verified: user?.phoneVerifiedAt != nil)
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -353,21 +379,43 @@ struct SecurityView: View {
                 } else if isEditingPhone {
                     phoneEditContent
                 } else {
-                    Button {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isEditingPhone = true
+                    HStack(spacing: 0) {
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isEditingPhone = true
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Modifier")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Modifier")
-                                .font(.system(size: 13, weight: .semibold))
+                        
+                        if let phone = user?.phoneNumber, !phone.isEmpty, user?.phoneVerifiedAt == nil {
+                            Button {
+                                HapticFeedback.light()
+                                newPhone = phone
+                                submitPhoneChange()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("Vérifier")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(Color(hex: "4ADE80"))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                            }
                         }
-                        .foregroundColor(Color(hex: "4ECDC4"))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        
+                        Spacer()
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 10)

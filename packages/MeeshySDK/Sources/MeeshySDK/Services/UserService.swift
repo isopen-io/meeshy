@@ -84,14 +84,14 @@ public final class UserService {
             let attachments: [UploadedAttachment]
         }
         struct UploadedAttachment: Decodable {
-            let url: String
+            let fileUrl: String
         }
 
         let decoded = try JSONDecoder().decode(UploadResponse.self, from: data)
-        guard let fileURL = decoded.data.attachments.first?.url else {
+        guard let fileURLObject = decoded.data.attachments.first?.fileUrl else {
             throw APIError.noData
         }
-        return fileURL
+        return fileURLObject
     }
 
     public func getProfile(idOrUsername: String) async throws -> MeeshyUser {

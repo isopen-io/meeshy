@@ -24,6 +24,7 @@ protocol ConversationSocketDelegate: AnyObject {
     func evictViewOnceMedia(message: Message)
     func markMessageAsConsumed(messageId: String)
     func syncMissedMessages() async
+    func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
 }
 
 // MARK: - ConversationSocketHandler
@@ -137,18 +138,28 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
-                guard let self, let delegate = self.delegate else { return }
-                guard !delegate.containsMessage(id: apiMsg.id) else { return }
-                if apiMsg.senderId == userId { return }
-                let msg = apiMsg.toMessage(currentUserId: userId)
-                delegate.messages.append(msg)
-                delegate.lastUnreadMessage = msg
-                delegate.newMessageAppended += 1
+                Task { [weak self] in
+                    guard let self, let delegate = self.delegate else { return }
+                    guard !delegate.containsMessage(id: apiMsg.id) else { return }
+                    if apiMsg.senderId == userId { return }
+                    
+                    var msg = apiMsg.toMessage(currentUserId: userId)
+                    var msgArray = [msg]
+                    await delegate.decryptMessagesIfNeeded(&msgArray)
+                    msg = msgArray[0]
+                    
+                    await MainActor.run {
+                        guard !delegate.containsMessage(id: msg.id) else { return }
+                        delegate.messages.append(msg)
+                        delegate.lastUnreadMessage = msg
+                        delegate.newMessageAppended += 1
 
-                if let sender = apiMsg.sender {
-                    let senderName = sender.displayName ?? sender.username
-                    delegate.typingUsernames.removeAll { $0 == senderName }
-                    self.clearTypingSafetyTimer(for: senderName)
+                        if let sender = apiMsg.sender {
+                            let senderName = sender.displayName ?? sender.username
+                            delegate.typingUsernames.removeAll { $0 == senderName }
+                            self.clearTypingSafetyTimer(for: senderName)
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)

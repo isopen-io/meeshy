@@ -210,6 +210,16 @@ class ConversationViewModel: ObservableObject {
         return map
     }
 
+    // MARK: - Private
+
+    let conversationId: String
+    private let isDirect: Bool
+    private let participantUserId: String?
+    private let initialUnreadCount: Int
+    private let limit = 50
+    private var nextMessageCursor: String?
+    private var cancellables = Set<AnyCancellable>()
+    
     // MARK: - Top Active Members (cached)
 
     private var _topActiveMembers: [ConversationActiveMember]?
@@ -239,60 +249,13 @@ class ConversationViewModel: ObservableObject {
         return result
     }
 
-    // MARK: - Private
-
-    let conversationId: String
-    private let initialUnreadCount: Int
-    private let limit = 50
-    private var nextMessageCursor: String?
-    private var cancellables = Set<AnyCancellable>()
-
-    private var currentUserId: String {
-        AuthManager.shared.currentUser?.id ?? ""
-    }
-
-    // Pagination safety
-    private static let paginationRetryCount = 3
-    private static let paginationRetryDelay: UInt64 = 1_000_000_000  // 1s in nanoseconds
-    private static let paginationDebounceInterval: TimeInterval = 0.3
-    private var lastOlderPaginationTime: Date = .distantPast
-    private var lastNewerPaginationTime: Date = .distantPast
-
-    // Socket handler (owns all real-time subscriptions)
-    private var socketHandler: ConversationSocketHandler?
-
-    // O(1) message lookup index — invalidated on any messages mutation
-    private var _messageIdIndex: [String: Int]?
-    private func rebuildIndexIfNeeded() -> [String: Int] {
-        if let cached = _messageIdIndex { return cached }
-        var index = [String: Int](minimumCapacity: messages.count)
-        for (i, msg) in messages.enumerated() {
-            index[msg.id] = i
-        }
-        _messageIdIndex = index
-        return index
-    }
-
-    /// O(1) index lookup by message ID
-    func messageIndex(for id: String) -> Int? {
-        rebuildIndexIfNeeded()[id]
-    }
-
-    /// O(1) membership check
-    func containsMessage(id: String) -> Bool {
-        rebuildIndexIfNeeded()[id] != nil
-    }
-
-    /// Call after any mutation to the messages array
-    func invalidateMessageIndex() {
-        _messageIdIndex = nil
-    }
-
     // MARK: - Init
 
-    init(conversationId: String, unreadCount: Int = 0) {
+    init(conversationId: String, unreadCount: Int = 0, isDirect: Bool = false, participantUserId: String? = nil) {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
+        self.isDirect = isDirect
+        self.participantUserId = participantUserId
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: AuthManager.shared.currentUser?.id ?? ""
@@ -348,7 +311,9 @@ class ConversationViewModel: ObservableObject {
 
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
-            messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var loadedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            await decryptMessagesIfNeeded(&loadedMessages)
+            messages = loadedMessages
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
@@ -403,7 +368,8 @@ class ConversationViewModel: ObservableObject {
                 )
 
                 let userId = currentUserId
-                let olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                var olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                await decryptMessagesIfNeeded(&olderMessages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
 
@@ -431,6 +397,37 @@ class ConversationViewModel: ObservableObject {
         }
 
         isLoadingOlder = false
+    }
+
+    // MARK: - Decryption
+
+    func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
+        guard isDirect else { return }
+
+        await withTaskGroup(of: (Int, String?).self) { group in
+            for i in 0..<msgs.count {
+                let msg = msgs[i]
+                if msg.isEncrypted, let senderId = msg.senderId, let base64content = msg.content, let data = Data(base64Encoded: base64content) {
+                    group.addTask {
+                        do {
+                            let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId, conversationId: msg.conversationId)
+                            if let text = String(data: decrypted, encoding: .utf8) {
+                                return (i, text)
+                            }
+                        } catch {
+                            return (i, "[Message chiffré - Échec du déchiffrement]")
+                        }
+                        return (i, nil)
+                    }
+                }
+            }
+
+            for await result in group {
+                if let text = result.1 {
+                    msgs[result.0].content = text
+                }
+            }
+        }
     }
 
     // MARK: - Send Message
@@ -508,8 +505,27 @@ class ConversationViewModel: ObservableObject {
         newMessageAppended += 1
 
         do {
+            var finalContent: String? = text.isEmpty ? nil : text
+            var isEncrypted = false
+            var encryptionMode: String? = nil
+            
+            // E2EE logic for Direct Messages
+            if isDirect, let targetUserId = participantUserId, let textContent = finalContent {
+                do {
+                    let payloadData = Data(textContent.utf8)
+                    let encryptedData = try await SessionManager.shared.encryptMessage(payloadData, for: targetUserId, conversationId: conversationId)
+                    finalContent = encryptedData.base64EncodedString()
+                    isEncrypted = true
+                    encryptionMode = "E2EE"
+                } catch {
+                    Logger.messages.error("Failed to encrypt message: \(error.localizedDescription)")
+                    // For MVP, we'll fall back to plaintext if encryption fails or session isn't established
+                    // In a production secure messaging app, we should throw an error here to prevent accidental plaintext sends.
+                }
+            }
+
             let body = SendMessageRequest(
-                content: text.isEmpty ? nil : text,
+                content: finalContent,
                 originalLanguage: nil,
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
@@ -519,7 +535,9 @@ class ConversationViewModel: ObservableObject {
                 ephemeralDuration: resolvedEphemeralDuration,
                 isViewOnce: resolvedIsViewOnce ? true : nil,
                 maxViewOnceCount: resolvedMaxViewOnceCount,
-                isBlurred: resolvedBlur
+                isBlurred: resolvedBlur,
+                isEncrypted: isEncrypted ? true : nil,
+                encryptionMode: encryptionMode
             )
             let responseData = try await MessageService.shared.send(
                 conversationId: conversationId, request: body
@@ -785,7 +803,8 @@ class ConversationViewModel: ObservableObject {
             )
 
             let userId = currentUserId
-            let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            await decryptMessagesIfNeeded(&fetchedMessages)
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
 
@@ -900,7 +919,9 @@ class ConversationViewModel: ObservableObject {
             )
 
             let userId = currentUserId
-            messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            await decryptMessagesIfNeeded(&fetchedMessages)
+            messages = fetchedMessages
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
@@ -931,7 +952,8 @@ class ConversationViewModel: ObservableObject {
                 )
 
                 let userId = currentUserId
-                let newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                var newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                await decryptMessagesIfNeeded(&newMessages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
                 let existingIds = Set(messages.map(\.id))

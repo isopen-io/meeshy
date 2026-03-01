@@ -536,7 +536,24 @@ export type VoiceEvent =
   | VoiceTranslationFailedEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// STORY TEXT OBJECT TRANSLATION TYPES
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Événement retourné par le translator quand la traduction d'un textObject de story est terminée.
+ */
+export interface StoryTextObjectTranslationCompletedEvent {
+  type: 'story_text_object_translation_completed';
+  postId: string;
+  textObjectIndex: number;
+  translations: Record<string, string>;
+  timestamp: number;
+}
+
+export type StoryEvent = StoryTextObjectTranslationCompletedEvent;
+
+// ═══════════════════════════════════════════════════════════════
 // COMBINED EVENT TYPE
 // ═══════════════════════════════════════════════════════════════
 
-export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent;
+export type ZMQEvent = TranslationEvent | AudioEvent | VoiceEvent | TranscriptionEvent | StoryEvent;

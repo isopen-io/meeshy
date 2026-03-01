@@ -145,14 +145,16 @@ public struct SendMessageRequest: Encodable {
     public var isViewOnce: Bool?
     public var maxViewOnceCount: Int?
     public var isBlurred: Bool?
+    public var isEncrypted: Bool?
+    public var encryptionMode: String?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil) {
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId; self.attachmentIds = attachmentIds
         self.expiresAt = expiresAt; self.ephemeralDuration = ephemeralDuration
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
-        self.isBlurred = isBlurred
+        self.isBlurred = isBlurred; self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
     }
 }
 

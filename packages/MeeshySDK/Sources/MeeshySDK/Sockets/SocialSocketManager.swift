@@ -89,6 +89,12 @@ public struct SocketCommentLikedData: Decodable {
     public let likeCount: Int
 }
 
+public struct SocketStoryTranslationUpdatedData: Decodable {
+    public let postId: String
+    public let textObjectIndex: Int
+    public let translations: [String: String]
+}
+
 // MARK: - Social Socket Manager
 
 public final class SocialSocketManager: ObservableObject {
@@ -111,6 +117,7 @@ public final class SocialSocketManager: ObservableObject {
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
+    public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -328,6 +335,14 @@ public final class SocialSocketManager: ObservableObject {
         socket.on("comment:liked") { [weak self] data, _ in
             self?.decode(SocketCommentLikedData.self, from: data) { payload in
                 self?.commentLiked.send(payload)
+            }
+        }
+
+        // --- Story translation events ---
+
+        socket.on("post:story-translation-updated") { [weak self] data, _ in
+            self?.decode(SocketStoryTranslationUpdatedData.self, from: data) { payload in
+                self?.storyTranslationUpdated.send(payload)
             }
         }
     }
