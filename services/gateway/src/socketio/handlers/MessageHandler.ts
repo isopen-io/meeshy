@@ -3,12 +3,14 @@
  * Gère l'envoi et le broadcast des messages
  */
 
+import * as path from 'path';
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/NotificationService';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -32,6 +34,7 @@ export interface MessageHandlerDependencies {
   io: SocketIOServer;
   prisma: PrismaClient;
   messagingService: MessagingService;
+  translationService: MessageTranslationService;
   statusService: StatusService;
   notificationService: NotificationService;
   connectedUsers: Map<string, SocketUser>;
@@ -43,6 +46,7 @@ export class MessageHandler {
   private io: SocketIOServer;
   private prisma: PrismaClient;
   private messagingService: MessagingService;
+  private translationService: MessageTranslationService;
   private statusService: StatusService;
   private notificationService: NotificationService;
   private connectedUsers: Map<string, SocketUser>;
@@ -53,6 +57,7 @@ export class MessageHandler {
     this.io = deps.io;
     this.prisma = deps.prisma;
     this.messagingService = deps.messagingService;
+    this.translationService = deps.translationService;
     this.statusService = deps.statusService;
     this.notificationService = deps.notificationService;
     this.connectedUsers = deps.connectedUsers;
@@ -599,11 +604,65 @@ export class MessageHandler {
   }
 
   /**
-   * Traiter les attachments audio
+   * Traiter les attachments audio via le pipeline Whisper → NLLB → Chatterbox
    */
   private async _processAudioAttachments(attachmentIds: string[], messageId: string): Promise<void> {
-    // Logique de traitement audio (déjà implémentée dans le fichier original)
-    // Cette méthode est un placeholder
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true, senderId: true }
+      });
+
+      if (!message || !message.senderId) return;
+
+      const attachmentsDetails = await this.prisma.messageAttachment.findMany({
+        where: { id: { in: attachmentIds } },
+        select: {
+          id: true,
+          mimeType: true,
+          fileUrl: true,
+          filePath: true,
+          duration: true,
+          metadata: true
+        }
+      });
+
+      const audioAttachments = attachmentsDetails.filter(att =>
+        att.mimeType && att.mimeType.startsWith('audio/')
+      );
+
+      if (audioAttachments.length === 0) return;
+
+      for (const audioAtt of audioAttachments) {
+        let mobileTranscription: any = undefined;
+        if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
+          const metadata = audioAtt.metadata as any;
+          if (metadata.transcription) {
+            mobileTranscription = metadata.transcription;
+          }
+        }
+
+        const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+        const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
+
+        await this.translationService.processAudioAttachment({
+          messageId,
+          attachmentId: audioAtt.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          audioUrl: audioAtt.fileUrl || '',
+          audioPath: audioPath,
+          audioDurationMs: audioAtt.duration || 0,
+          mobileTranscription: mobileTranscription,
+          generateVoiceClone: true,
+          modelType: 'medium'
+        });
+      }
+
+      console.log(`[MESSAGE_HANDLER] ${audioAttachments.length} audio(s) sent to Translator for message ${messageId}`);
+    } catch (error) {
+      console.error('[MESSAGE_HANDLER] Error processing audio attachments:', error);
+    }
   }
 
   /**

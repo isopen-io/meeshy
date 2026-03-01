@@ -119,6 +119,7 @@ export class MeeshySocketIOManager {
       io: this.io,
       prisma: this.prisma,
       messagingService: this.messagingService,
+      translationService: this.translationService,
       statusService: this.statusService,
       notificationService: this.notificationService,
       connectedUsers: this.connectedUsers,
