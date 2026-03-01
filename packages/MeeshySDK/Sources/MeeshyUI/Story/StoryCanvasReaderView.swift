@@ -87,10 +87,10 @@ public struct StoryCanvasReaderView: View {
                     .clipped()
                 }
             } else if bgMedia.mediaType == "video" {
-                // TODO: charger depuis MediaCacheManager si disponible
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
                    let url = URL(string: urlStr) {
-                    VideoPlayer(player: AVPlayer(url: url))
+                    let player = state.ensureBackgroundVideoPlayer(url: url)
+                    VideoPlayer(player: player)
                         .disabled(true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
@@ -211,7 +211,6 @@ public struct StoryCanvasReaderView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.black.opacity(0.4))
                 )
-                .scaleEffect(obj.scale)
                 .rotationEffect(.degrees(obj.rotation))
                 .position(x: obj.x * size.width, y: obj.y * size.height)
                 .allowsHitTesting(false)
@@ -290,6 +289,7 @@ private final class ReaderState: ObservableObject {
     let canvas = PKCanvasView()
 
     private var backgroundPlayer: AVPlayer?
+    private var backgroundVideoPlayer: AVPlayer?
     private var cancellables = Set<AnyCancellable>()
 
     init(story: StoryItem) {
@@ -311,6 +311,21 @@ private final class ReaderState: ObservableObject {
     func stopBackgroundAudio() {
         backgroundPlayer?.pause()
         backgroundPlayer = nil
+        backgroundVideoPlayer?.pause()
+        backgroundVideoPlayer = nil
+    }
+
+    // MARK: Background video (stored to avoid re-creation on every render)
+
+    func ensureBackgroundVideoPlayer(url: URL) -> AVPlayer {
+        if let existing = backgroundVideoPlayer {
+            return existing
+        }
+        let player = AVPlayer(url: url)
+        player.isMuted = true
+        player.play()
+        backgroundVideoPlayer = player
+        return player
     }
 
     // MARK: Langue audio de fond

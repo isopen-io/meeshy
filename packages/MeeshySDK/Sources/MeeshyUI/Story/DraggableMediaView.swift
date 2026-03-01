@@ -9,6 +9,7 @@ public struct DraggableMediaView: View {
     public let isEditing: Bool
     public let onDragEnd: () -> Void
 
+    @State private var videoPlayer: AVPlayer?
     @GestureState private var gestureScale: CGFloat = 1.0
     @GestureState private var gestureRotation: Angle = .zero
     @GestureState private var dragOffset: CGSize = .zero
@@ -43,8 +44,18 @@ public struct DraggableMediaView: View {
                 .scaledToFill()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         } else if let videoURL {
-            VideoPlayer(player: AVPlayer(url: videoURL))
+            VideoPlayer(player: videoPlayer ?? AVPlayer())
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onAppear {
+                    if videoPlayer == nil {
+                        videoPlayer = AVPlayer(url: videoURL)
+                    }
+                }
+                .onChange(of: videoURL) { newURL in
+                    if let newURL {
+                        videoPlayer = AVPlayer(url: newURL)
+                    }
+                }
         }
     }
 

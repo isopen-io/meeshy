@@ -103,6 +103,8 @@ public struct StoryComposerView: View {
     @State private var showAudioSourceSheet = false
     @State private var showMediaAudioEditor = false
     @State private var pendingAudioURL: URL? = nil
+    @State private var showAudioDocumentPicker = false
+    @State private var showAudioRecorder = false
     @State private var showVolumeMixer = false
     // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
     @State private var loadedImages: [String: UIImage] = [:]
@@ -177,11 +179,36 @@ public struct StoryComposerView: View {
             loadPhoto(from: newItem)
         }
         .sheet(isPresented: $showAudioSourceSheet) {
-            AudioSourceSheet { _ in
-                pendingMediaType = "audio"
+            AudioSourceSheet { source in
                 showAudioSourceSheet = false
+                switch source {
+                case .library:
+                    showAudioDocumentPicker = true
+                case .record:
+                    showAudioRecorder = true
+                }
+            }
+        }
+        .fileImporter(
+            isPresented: $showAudioDocumentPicker,
+            allowedContentTypes: [.audio],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                pendingAudioURL = url
+                pendingMediaType = "audio"
                 showMediaAudioEditor = true
             }
+        }
+        .sheet(isPresented: $showAudioRecorder) {
+            StoryVoiceRecorder { recordedURL in
+                showAudioRecorder = false
+                pendingAudioURL = recordedURL
+                pendingMediaType = "audio"
+                showMediaAudioEditor = true
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showMediaAudioEditor) {
             if let url = pendingAudioURL {
