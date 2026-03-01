@@ -36,15 +36,20 @@ public struct StoryCanvasReaderView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
+        .task {
+            await state.loadForegroundImages(story: story)
+        }
         .onAppear {
             state.startBackgroundAudio(
                 effects: story.storyEffects,
+                story: story,
                 userLang: preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
             )
+            state.startForegroundVideos(story: story)
             state.subscribeToTranslationUpdates(postId: story.id)
         }
         .onDisappear {
-            state.stopBackgroundAudio()
+            state.stopAllMedia()
         }
     }
 
@@ -248,12 +253,14 @@ public struct StoryCanvasReaderView: View {
 
     @ViewBuilder
     private var foregroundMediaLayer: some View {
-        // TODO: charger les UIImage/URL depuis MediaCacheManager (loadedImages[:], loadedVideoURLs[:])
         ForEach(story.storyEffects?.mediaObjects?.filter { $0.placement == "foreground" } ?? []) { media in
             DraggableMediaView(
                 mediaObject: .constant(media),
-                image: nil,
-                videoURL: nil,
+                image: state.loadedImages[media.id],
+                videoURL: media.mediaType == "video"
+                    ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
+                    : nil,
+                externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
                 isEditing: false
             )
         }
@@ -287,33 +294,115 @@ public struct StoryCanvasReaderView: View {
 @MainActor
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
+    @Published var loadedImages: [String: UIImage] = [:]
+    /// Players vidéo foreground — un par média, tous démarrés simultanément à onAppear.
+    @Published var foregroundVideoPlayers: [String: AVPlayer] = [:]
     let canvas = PKCanvasView()
 
     private var backgroundPlayer: AVPlayer?
     private var backgroundVideoPlayer: AVPlayer?
+    private var loopObserver: NSObjectProtocol?
+    private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
     private var cancellables = Set<AnyCancellable>()
 
     init(story: StoryItem) {
         self.textObjects = story.storyEffects?.textObjects ?? []
     }
 
-    // MARK: Background audio
+    // MARK: Foreground image loading
 
-    func startBackgroundAudio(effects: StoryEffects?, userLang: String) {
-        guard let effects else { return }
-        let postMediaId = resolvedBackgroundAudioPostMediaId(effects: effects, userLang: userLang)
-        guard postMediaId != nil || effects.backgroundAudioId != nil else { return }
-
-        // TODO: résoudre l'URL depuis MediaCacheManager ou l'API via postMediaId
-        // Pour l'instant, on utilise backgroundAudio.fileUrl si disponible (legacy)
-        // La résolution complète sera faite quand MediaCacheManager exposera une lookup par postMediaId
+    func loadForegroundImages(story: StoryItem) async {
+        guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
+        let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
+        for media in foregroundImages {
+            guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url else { continue }
+            guard let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
+            if let img = try? await MediaCacheManager.shared.image(for: resolved) {
+                loadedImages[media.id] = img
+            }
+        }
     }
 
-    func stopBackgroundAudio() {
+    // MARK: Background audio
+
+    func startBackgroundAudio(effects: StoryEffects?, story: StoryItem, userLang: String) {
+        guard let effects else { return }
+        let postMediaId = resolvedBackgroundAudioPostMediaId(effects: effects, userLang: userLang)
+        guard let mediaId = postMediaId ?? effects.backgroundAudioId else { return }
+
+        guard let urlString = story.media.first(where: { $0.id == mediaId })?.url,
+              let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+
+        let player = AVPlayer(url: url)
+        player.volume = effects.backgroundAudioVolume ?? 0.5
+        backgroundPlayer = player
+
+        if let startTime = effects.backgroundAudioStart {
+            player.seek(to: CMTime(seconds: startTime, preferredTimescale: 600))
+        }
+
+        player.play()
+
+        loopObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            let seekTime: CMTime
+            if let startTime = effects.backgroundAudioStart {
+                seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
+            } else {
+                seekTime = .zero
+            }
+            self.backgroundPlayer?.seek(to: seekTime)
+            self.backgroundPlayer?.play()
+        }
+    }
+
+    func stopAllMedia() {
         backgroundPlayer?.pause()
         backgroundPlayer = nil
         backgroundVideoPlayer?.pause()
         backgroundVideoPlayer = nil
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
+        for (id, player) in foregroundVideoPlayers {
+            player.pause()
+            if let obs = foregroundLoopObservers[id] {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
+        foregroundVideoPlayers = [:]
+        foregroundLoopObservers = [:]
+    }
+
+    // MARK: Foreground video players (tous démarrés simultanément)
+
+    func startForegroundVideos(story: StoryItem) {
+        guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
+        let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
+        for media in videoObjects {
+            guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
+                  let url = MeeshyConfig.resolveMediaURL(urlString) else { continue }
+
+            let player = AVPlayer(url: url)
+            player.isMuted = false
+            foregroundVideoPlayers[media.id] = player
+
+            let obs = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak player] _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
+            foregroundLoopObservers[media.id] = obs
+            player.play()
+        }
     }
 
     // MARK: Background video (stored to avoid re-creation on every render)

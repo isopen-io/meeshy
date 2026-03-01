@@ -35,6 +35,8 @@ public struct StoryCanvasView: View {
     @GestureState private var dragDelta: CGSize = .zero
     @GestureState private var pinchDelta: CGFloat = 1.0
     @State private var filteredImage: UIImage?
+    /// Dernier média tapé — affiché au premier plan (z-index le plus élevé).
+    @State private var lastTappedMediaId: String? = nil
 
     public init(text: Binding<String>, textStyle: Binding<StoryTextStyle>,
                 textColor: Binding<Color>, textSize: Binding<CGFloat>,
@@ -248,19 +250,34 @@ public struct StoryCanvasView: View {
 
     @ViewBuilder
     private var foregroundMediaLayer: some View {
-        ForEach(Array(mediaObjects.enumerated()), id: \.element.id) { index, obj in
-            if obj.placement == "foreground" {
-                DraggableMediaView(
-                    mediaObject: Binding(
-                        get: { mediaObjects[index] },
-                        set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
-                    ),
-                    image: loadedImages[obj.id],
-                    videoURL: loadedVideoURLs[obj.id],
-                    isEditing: !isDrawingActive,
-                    onDragEnd: {}
-                )
+        // Trier : le dernier tapé est rendu en dernier (le plus au-dessus)
+        let sorted: [(Int, StoryMediaObject)] = {
+            let foreground = mediaObjects.indices.map { ($0, mediaObjects[$0]) }
+                .filter { $0.1.placement == "foreground" }
+            if let tapped = lastTappedMediaId,
+               let idx = foreground.firstIndex(where: { $0.1.id == tapped }) {
+                var reordered = foreground
+                let item = reordered.remove(at: idx)
+                reordered.append(item)
+                return reordered
             }
+            return foreground
+        }()
+
+        ForEach(sorted, id: \.1.id) { index, obj in
+            DraggableMediaView(
+                mediaObject: Binding(
+                    get: { index < mediaObjects.count ? mediaObjects[index] : obj },
+                    set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
+                ),
+                image: loadedImages[obj.id],
+                videoURL: loadedVideoURLs[obj.id],
+                isEditing: !isDrawingActive,
+                onDragEnd: {},
+                onTapToFront: {
+                    lastTappedMediaId = obj.id
+                }
+            )
         }
     }
 

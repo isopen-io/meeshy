@@ -15,6 +15,8 @@ public enum StoryComposerPanel: Equatable {
     case audio
     case background
     case transition
+    case media   // +Média : images/vidéos en premier plan
+    case vocal   // +Vocal : audio player visible dans la story
 }
 
 // MARK: - Story Background Picker Palette
@@ -108,9 +110,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Media States
     @State private var pendingMediaItem: PhotosPickerItem? = nil
-    @State private var showMediaPlacementSheet = false
     @State private var pendingMediaType: String = "image"
-    @State private var showAudioSourceSheet = false
     @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
     @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
@@ -184,17 +184,6 @@ public struct StoryComposerView: View {
         .onChange(of: photoPickerItem) { newItem in
             loadPhoto(from: newItem)
         }
-        .sheet(isPresented: $showAudioSourceSheet) {
-            AudioSourceSheet { source in
-                showAudioSourceSheet = false
-                switch source {
-                case .library:
-                    showAudioDocumentPicker = true
-                case .record:
-                    showAudioRecorder = true
-                }
-            }
-        }
         .fileImporter(
             isPresented: $showAudioDocumentPicker,
             allowedContentTypes: [.audio],
@@ -220,17 +209,12 @@ public struct StoryComposerView: View {
                 onConfirm: { confirmedURL, _, _, _ in
                     confirmedMediaAudioURL = confirmedURL
                     mediaAudioEditorItem = nil
-                    showMediaPlacementSheet = true
+                    addVocalToForeground()
                 },
                 onDismiss: {
                     mediaAudioEditorItem = nil
                 }
             )
-        }
-        .sheet(isPresented: $showMediaPlacementSheet) {
-            MediaPlacementSheet(mediaType: pendingMediaType) { placement in
-                handleMediaPlacement(placement)
-            }
         }
         .sheet(isPresented: $showVolumeMixer) {
             VolumeMixerSheet(effects: Binding(
@@ -604,12 +588,19 @@ public struct StoryComposerView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .padding(.bottom, safeAreaBottomInset)
         .background(
             Color.black.opacity(0.55)
                 .background(.ultraThinMaterial.opacity(0.7))
                 .ignoresSafeArea(edges: .bottom)
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: activePanel)
+    }
+
+    private var safeAreaBottomInset: CGFloat {
+        (UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.bottom ?? 0)
     }
 
     // MARK: - Toolbar Scrollable
@@ -624,59 +615,15 @@ public struct StoryComposerView: View {
                 toolPill(icon: "music.note", label: "Fond Sonore", panel: .audio, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "paintpalette", label: "Fond", panel: .background)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
-
-                PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "photo.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Média")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.white.opacity(0.65))
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(Color.white.opacity(0.1)))
-                }
-                .accessibilityLabel("Ajouter image ou vidéo")
-                .onChange(of: pendingMediaItem) { item in
-                    guard let item else { return }
-                    let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .audiovisualContent) }
-                    pendingMediaType = isVideo ? "video" : "image"
-                    showMediaPlacementSheet = true
-                }
-
-                Button {
-                    showAudioSourceSheet = true
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "mic.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("+Vocal")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.white.opacity(0.65))
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(Color.white.opacity(0.1)))
-                }
-                .accessibilityLabel("Ajouter un vocal (player visible dans la story)")
+                toolPill(icon: "photo.badge.plus", label: "+Média",
+                         panel: .media,
+                         hasBadge: (currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
+                toolPill(icon: "mic.badge.plus", label: "+Vocal",
+                         panel: .vocal,
+                         hasBadge: (currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
 
                 if hasAudioContent {
-                    Button {
-                        showVolumeMixer = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "speaker.wave.2.fill")
-                                .font(.system(size: 14, weight: .medium))
-                            Text("Volume")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundColor(.white.opacity(0.65))
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 7)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
-                    }
-                    .accessibilityLabel("Mixage volume")
+                    toolPill(icon: "speaker.wave.2.fill", label: "Volume", panel: nil, action: { showVolumeMixer = true })
                 }
             }
             .padding(.horizontal, 14)
@@ -791,9 +738,116 @@ public struct StoryComposerView: View {
         case .transition:
             transitionPicker
 
+        case .media:
+            mediaPickerPanel
+
+        case .vocal:
+            vocalPickerPanel
+
         case .none:
             EmptyView()
         }
+    }
+
+    // MARK: - Media Panel (+Média — foreground uniquement)
+
+    private var mediaPickerPanel: some View {
+        let mediaCount = currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        return VStack(spacing: 10) {
+            HStack {
+                Text("Premier plan — photos & vidéos")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                if mediaCount > 0 {
+                    Text("\(mediaCount) élément\(mediaCount > 1 ? "s" : "")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "FF2E63"))
+                }
+            }
+            .padding(.horizontal, 16)
+
+            PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Sélectionner photo ou vidéo")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(LinearGradient(
+                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
+                            startPoint: .leading, endPoint: .trailing
+                        ))
+                )
+                .padding(.horizontal, 16)
+            }
+            .onChange(of: pendingMediaItem) { item in
+                guard let item else { return }
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .audiovisualContent) }
+                pendingMediaType = isVideo ? "video" : "image"
+                addPendingMediaToForeground()
+            }
+        }
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Vocal Panel (+Vocal — foreground uniquement)
+
+    private var vocalPickerPanel: some View {
+        let vocalCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        return VStack(spacing: 10) {
+            HStack {
+                Text("Vocal — player visible dans la story")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                if vocalCount > 0 {
+                    Text("\(vocalCount) vocal\(vocalCount > 1 ? "s" : "")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "FF2E63"))
+                }
+            }
+            .padding(.horizontal, 16)
+
+            HStack(spacing: 10) {
+                Button {
+                    showAudioDocumentPicker = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 20, weight: .medium))
+                        Text("Bibliothèque")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+
+                Button {
+                    showAudioRecorder = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 20, weight: .medium))
+                        Text("Enregistrer")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 12)
     }
 
     // MARK: - Background Picker
@@ -1228,6 +1282,84 @@ public struct StoryComposerView: View {
                 id: UUID().uuidString,
                 postMediaId: "",
                 placement: placement.rawValue,
+                x: 0.5, y: 0.3,
+                volume: 1.0,
+                waveformSamples: samples
+            )
+            await MainActor.run {
+                var effects = currentSlideEffects ?? buildEffects()
+                effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
+                setCurrentSlideEffects(effects)
+                confirmedMediaAudioURL = nil
+            }
+        }
+    }
+
+    /// Ajoute directement le media sélectionné en foreground (sans sheet de placement).
+    private func addPendingMediaToForeground() {
+        guard let item = pendingMediaItem else { return }
+        let mediaType = pendingMediaType
+        Task {
+            let objectId = UUID().uuidString
+            let obj = StoryMediaObject(
+                id: objectId,
+                postMediaId: "",
+                mediaType: mediaType,
+                placement: "foreground",
+                x: 0.5, y: 0.5,
+                scale: 1.0, rotation: 0.0,
+                volume: 1.0
+            )
+            if mediaType == "video" {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    let ext = item.supportedContentTypes
+                        .first { $0.conforms(to: .audiovisualContent) }?
+                        .preferredFilenameExtension ?? "mp4"
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(objectId + "." + ext)
+                    do {
+                        try data.write(to: tempURL)
+                        await MainActor.run {
+                            loadedVideoURLs[objectId] = tempURL
+                            var effects = currentSlideEffects ?? buildEffects()
+                            effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                            setCurrentSlideEffects(effects)
+                        }
+                    } catch {
+                        print("[StoryComposer] Erreur écriture vidéo temp: \(error)")
+                    }
+                }
+            } else {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        loadedImages[objectId] = image
+                        var effects = currentSlideEffects ?? buildEffects()
+                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                        setCurrentSlideEffects(effects)
+                    }
+                }
+            }
+            await MainActor.run {
+                pendingMediaItem = nil
+            }
+        }
+    }
+
+    /// Ajoute directement l'audio confirmé en foreground (sans sheet de placement).
+    private func addVocalToForeground() {
+        guard let url = confirmedMediaAudioURL else { return }
+        Task {
+            let samples: [Float]
+            if let generated = try? await WaveformGenerator.shared.generateSamples(from: url) {
+                samples = generated
+            } else {
+                samples = []
+            }
+            let obj = StoryAudioPlayerObject(
+                id: UUID().uuidString,
+                postMediaId: "",
+                placement: "foreground",
                 x: 0.5, y: 0.3,
                 volume: 1.0,
                 waveformSamples: samples
