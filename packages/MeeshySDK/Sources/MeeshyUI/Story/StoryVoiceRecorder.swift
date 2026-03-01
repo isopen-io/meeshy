@@ -15,7 +15,7 @@ public struct StoryVoiceRecorder: View {
     @State private var recorder: AVAudioRecorder?
     @State private var durationTimer: Timer?
     @State private var wavePhase: CGFloat = 0
-    @State private var waveTimer: Timer?
+    @State private var waveRandomOffsets: [CGFloat] = (0..<30).map { _ in CGFloat.random(in: 0...8) }
     @State private var errorMessage: String?
 
     private let maxDuration: TimeInterval = 60
@@ -58,7 +58,7 @@ public struct StoryVoiceRecorder: View {
                 ForEach(0..<30, id: \.self) { i in
                     let phase = wavePhase + CGFloat(i) * 0.4
                     let height = isRecording
-                        ? max(4, (sin(phase) * 0.5 + 0.5) * 36 + CGFloat.random(in: 0...8))
+                        ? max(4, (sin(phase) * 0.5 + 0.5) * 36 + waveRandomOffsets[i])
                         : 4
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color(hex: "FF2E63").opacity(isRecording ? 0.9 : 0.4))
@@ -140,14 +140,12 @@ public struct StoryVoiceRecorder: View {
             errorMessage = nil
             HapticFeedback.medium()
 
-            durationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [self] _ in
+            durationTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
                 Task { @MainActor in
-                    recordingDuration += 0.1
+                    recordingDuration += 0.05
+                    wavePhase += 0.15
                     if recordingDuration >= maxDuration { stopRecording() }
                 }
-            }
-            waveTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
-                Task { @MainActor in wavePhase += 0.15 }
             }
         } catch {
             errorMessage = "Erreur lors de l'enregistrement"
@@ -160,8 +158,6 @@ public struct StoryVoiceRecorder: View {
         self.recorder = nil
         durationTimer?.invalidate()
         durationTimer = nil
-        waveTimer?.invalidate()
-        waveTimer = nil
         isRecording = false
         HapticFeedback.success()
 

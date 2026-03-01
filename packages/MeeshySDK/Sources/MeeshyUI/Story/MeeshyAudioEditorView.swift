@@ -269,18 +269,22 @@ public struct MeeshyAudioEditorView: View {
                         .frame(width: max(0, ex - sx), height: 4)
                         .offset(x: sx, y: 9)
 
-                    // Left handle
+                    // Left handle — 44pt touch target (Apple HIG)
                     ZStack {
+                        Color.clear.frame(width: 44, height: 44)
                         Rectangle().fill(Color(hex: "FF2E63")).frame(width: 3, height: 22)
                         Circle().fill(Color(hex: "FF2E63")).frame(width: 13, height: 13).offset(y: 12)
                     }
+                    .contentShape(Rectangle())
                     .position(x: sx, y: 9)
 
-                    // Right handle
+                    // Right handle — 44pt touch target (Apple HIG)
                     ZStack {
+                        Color.clear.frame(width: 44, height: 44)
                         Rectangle().fill(Color(hex: "08D9D6")).frame(width: 3, height: 22)
                         Circle().fill(Color(hex: "08D9D6")).frame(width: 13, height: 13).offset(y: 12)
                     }
+                    .contentShape(Rectangle())
                     .position(x: ex, y: 9)
                 }
                 .contentShape(Rectangle())
@@ -595,8 +599,10 @@ public struct MeeshyAudioEditorView: View {
             isPlaying = false
         }
 
-        if let data = try? Data(contentsOf: url) {
-            analyzer.analyze(data: data, barCount: 100)
+        Task.detached(priority: .userInitiated) {
+            if let data = try? Data(contentsOf: url) {
+                await analyzer.analyze(data: data, barCount: 100)
+            }
         }
     }
 
@@ -632,6 +638,31 @@ public struct MeeshyAudioEditorView: View {
         currentTime = t
     }
 
+    /// Exporte le segment audio [start, end] dans un fichier temporaire pour la transcription.
+    private func exportTrimmedSegment(start: TimeInterval, end: TimeInterval) async throws -> URL {
+        let asset = AVAsset(url: url)
+        guard let exportSession = AVAssetExportSession(
+            asset: asset, presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            throw NSError(domain: "MeeshyAudioEditor", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Export session unavailable"])
+        }
+        let outURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trim_tx_\(UUID().uuidString).m4a")
+        exportSession.outputURL = outURL
+        exportSession.outputFileType = .m4a
+        exportSession.timeRange = CMTimeRange(
+            start: CMTime(seconds: start, preferredTimescale: 600),
+            end:   CMTime(seconds: end,   preferredTimescale: 600)
+        )
+        await exportSession.export()
+        guard exportSession.status == .completed else {
+            throw exportSession.error ?? NSError(domain: "MeeshyAudioEditor", code: 2,
+                                                  userInfo: nil)
+        }
+        return outURL
+    }
+
     // MARK: - Transcription
 
     private func startTranscription() {
@@ -647,7 +678,15 @@ public struct MeeshyAudioEditorView: View {
             guard let recognizer, recognizer.isAvailable else {
                 await MainActor.run { txState = .failed }; return
             }
-            let request = SFSpeechURLRecognitionRequest(url: url)
+            // Exporter uniquement le segment trimé pour la transcription
+            let transcribeURL: URL
+            do {
+                transcribeURL = try await exportTrimmedSegment(start: trimStart, end: trimEnd)
+            } catch {
+                await MainActor.run { txState = .failed }
+                return
+            }
+            let request = SFSpeechURLRecognitionRequest(url: transcribeURL)
             request.shouldReportPartialResults = false
             do {
                 let result: SFSpeechRecognitionResult = try await withCheckedThrowingContinuation { cont in

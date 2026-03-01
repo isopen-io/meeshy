@@ -52,6 +52,17 @@ public enum SlidePublishAction {
     case retry, skip, cancel
 }
 
+// Wrapper Identifiable pour fullScreenCover(item:) — élimine la race condition
+private struct AudioEditorItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct MediaAudioEditorItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 // MARK: - Story Composer View
 
 public struct StoryComposerView: View {
@@ -93,16 +104,15 @@ public struct StoryComposerView: View {
     @State private var photoPickerItem: PhotosPickerItem? = nil
     @State private var showRestoreDraftAlert = false
     @State private var pendingDraft: StoryComposerDraft? = nil
-    @State private var pendingAudioEditorURL: URL? = nil
-    @State private var showAudioEditor = false
+    @State private var audioEditorItem: AudioEditorItem? = nil
 
     // MARK: - Media States
     @State private var pendingMediaItem: PhotosPickerItem? = nil
     @State private var showMediaPlacementSheet = false
     @State private var pendingMediaType: String = "image"
     @State private var showAudioSourceSheet = false
-    @State private var showMediaAudioEditor = false
-    @State private var pendingAudioURL: URL? = nil
+    @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
+    @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
     @State private var showAudioRecorder = false
     @State private var showVolumeMixer = false
@@ -153,24 +163,20 @@ public struct StoryComposerView: View {
                 bottomOverlay
             }
         }
-        .fullScreenCover(isPresented: $showAudioEditor) {
-            if let url = pendingAudioEditorURL {
-                MeeshyAudioEditorView(
-                    url: url,
-                    onConfirm: { confirmedURL, _, trimS, trimE in
-                        selectedAudioId = confirmedURL.lastPathComponent
-                        selectedAudioTitle = "Enregistrement"
-                        audioTrimStart = trimS
-                        audioTrimEnd = trimE
-                        showAudioEditor = false
-                        pendingAudioEditorURL = nil
-                    },
-                    onDismiss: {
-                        showAudioEditor = false
-                        pendingAudioEditorURL = nil
-                    }
-                )
-            }
+        .fullScreenCover(item: $audioEditorItem) { item in
+            MeeshyAudioEditorView(
+                url: item.url,
+                onConfirm: { confirmedURL, _, trimS, trimE in
+                    selectedAudioId = confirmedURL.lastPathComponent
+                    selectedAudioTitle = "Enregistrement"
+                    audioTrimStart = trimS
+                    audioTrimEnd = trimE
+                    audioEditorItem = nil
+                },
+                onDismiss: {
+                    audioEditorItem = nil
+                }
+            )
         }
         .statusBarHidden()
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem,
@@ -195,36 +201,31 @@ public struct StoryComposerView: View {
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result, let url = urls.first {
-                pendingAudioURL = url
                 pendingMediaType = "audio"
-                showMediaAudioEditor = true
+                mediaAudioEditorItem = MediaAudioEditorItem(url: url)
             }
         }
         .sheet(isPresented: $showAudioRecorder) {
             StoryVoiceRecorder { recordedURL in
                 showAudioRecorder = false
-                pendingAudioURL = recordedURL
                 pendingMediaType = "audio"
-                showMediaAudioEditor = true
+                mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showMediaAudioEditor) {
-            if let url = pendingAudioURL {
-                MeeshyAudioEditorView(
-                    url: url,
-                    onConfirm: { confirmedURL, _, _, _ in
-                        pendingAudioURL = confirmedURL
-                        showMediaAudioEditor = false
-                        showMediaPlacementSheet = true
-                    },
-                    onDismiss: {
-                        showMediaAudioEditor = false
-                        pendingAudioURL = nil
-                    }
-                )
-            }
+        .sheet(item: $mediaAudioEditorItem) { item in
+            MeeshyAudioEditorView(
+                url: item.url,
+                onConfirm: { confirmedURL, _, _, _ in
+                    confirmedMediaAudioURL = confirmedURL
+                    mediaAudioEditorItem = nil
+                    showMediaPlacementSheet = true
+                },
+                onDismiss: {
+                    mediaAudioEditorItem = nil
+                }
+            )
         }
         .sheet(isPresented: $showMediaPlacementSheet) {
             MediaPlacementSheet(mediaType: pendingMediaType) { placement in
@@ -774,8 +775,7 @@ public struct StoryComposerView: View {
                 selectedAudioTitle: $selectedAudioTitle,
                 audioVolume: $audioVolume,
                 onRecordingReady: { url in
-                    pendingAudioEditorURL = url
-                    showAudioEditor = true
+                    audioEditorItem = AudioEditorItem(url: url)
                 }
             )
 
@@ -1143,7 +1143,7 @@ public struct StoryComposerView: View {
     }
 
     private func handleAudioPlacement(_ placement: MediaPlacement) {
-        guard let url = pendingAudioURL else { return }
+        guard let url = confirmedMediaAudioURL else { return }
         Task {
             let samples: [Float]
             if let generated = try? await WaveformGenerator.shared.generateSamples(from: url) {
@@ -1163,7 +1163,7 @@ public struct StoryComposerView: View {
                 var effects = currentSlideEffects ?? buildEffects()
                 effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
                 setCurrentSlideEffects(effects)
-                pendingAudioURL = nil
+                confirmedMediaAudioURL = nil
             }
         }
     }
