@@ -173,7 +173,7 @@ public struct MeeshyAudioEditorView: View {
                 Spacer()
                 Text(formatTime(totalDuration))
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.25))
+                    .foregroundColor(.white.opacity(0.5))
             }
             .padding(.horizontal, 24)
         }
@@ -473,9 +473,9 @@ public struct MeeshyAudioEditorView: View {
         switch txState {
         case .idle:
             VStack(spacing: 8) {
-                Image(systemName: "text.bubble").font(.system(size: 22)).foregroundColor(.white.opacity(0.14))
+                Image(systemName: "text.bubble").font(.system(size: 22)).foregroundColor(.white.opacity(0.4))
                 Text("Appuyez sur « Transcrire »")
-                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.24))
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -501,7 +501,7 @@ public struct MeeshyAudioEditorView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 20)).foregroundColor(Color(hex: "FF2E63").opacity(0.5))
                 Text("Transcription impossible")
-                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.28))
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

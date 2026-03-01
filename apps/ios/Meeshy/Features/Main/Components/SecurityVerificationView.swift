@@ -19,11 +19,11 @@ struct SecurityVerificationView: View {
                         .padding(.top, 40)
 
                     Text("Chiffrement de bout en bout")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.title2.bold())
                         .foregroundColor(theme.textPrimary)
 
                     Text("Les messages avec \(conversationName) sont chiffrés de bout en bout.")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -67,19 +67,19 @@ struct SecurityVerificationView: View {
 
         VStack(spacing: 8) {
             Text("Numéro de sécurité")
-                .font(.system(size: 13, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
 
             Text(formatSafetyNumber(safetyNumber))
-                .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                .font(.body.weight(.semibold).monospaced())
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
         }
 
         Text("Pour vérifier, comparez ce numéro avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.")
-            .font(.system(size: 13))
+            .font(.caption)
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 24)
@@ -95,11 +95,11 @@ struct SecurityVerificationView: View {
                 .foregroundColor(theme.textMuted)
 
             Text("Vérification non disponible")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.headline)
                 .foregroundColor(theme.textSecondary)
 
             Text("La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.")
-                .font(.system(size: 13))
+                .font(.caption)
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)

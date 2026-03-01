@@ -63,6 +63,8 @@ public struct StoryAudioPlayerView: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .accessibilityLabel(isPlaying ? "Pause" : "Lire")
 

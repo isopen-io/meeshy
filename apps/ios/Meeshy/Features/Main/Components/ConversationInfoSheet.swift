@@ -645,11 +645,11 @@ struct ConversationInfoSheet: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Chiffrement de bout en bout")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
-                        
+
                         Text("Appuyez pour vérifier le numéro de sécurité")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }

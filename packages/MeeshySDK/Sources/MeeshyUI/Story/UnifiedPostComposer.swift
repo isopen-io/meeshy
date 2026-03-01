@@ -278,7 +278,7 @@ public struct UnifiedPostComposer: View {
         } label: {
             Text("Post")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundColor(canPublish ? .white : .white.opacity(0.3))
+                .foregroundColor(canPublish ? .white : .white.opacity(0.5))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
                 .background(

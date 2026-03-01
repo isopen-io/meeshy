@@ -124,6 +124,7 @@ public struct StoryComposerView: View {
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
     @State private var showDiscardAlert = false
+    @State private var isLoadingMedia = false
     @State private var isPublishingAll = false
     @State private var publishProgressText: String? = nil
     @State private var slidePublishError: String? = nil
@@ -316,6 +317,17 @@ public struct StoryComposerView: View {
                 }
                 : nil
         )
+        .overlay {
+            if isLoadingMedia {
+                ZStack {
+                    Color.black.opacity(0.3)
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.2)
+                }
+                .allowsHitTesting(false)
+            }
+        }
         .ignoresSafeArea()
     }
 
@@ -358,6 +370,8 @@ public struct StoryComposerView: View {
                             .fill(.black.opacity(0.55))
                             .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
                     )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .padding(.leading, 16)
 
@@ -402,6 +416,8 @@ public struct StoryComposerView: View {
                                 .fill(.black.opacity(0.55))
                                 .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
 
                 // [▶] Preview
@@ -418,6 +434,8 @@ public struct StoryComposerView: View {
                                 .fill(.black.opacity(0.55))
                                 .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
 
                 // [Publier]
@@ -912,6 +930,8 @@ public struct StoryComposerView: View {
                                         .stroke(Color.white, lineWidth: backgroundColor == Color(hex: hex) && selectedImage == nil ? 2.5 : 0)
                                         .padding(1)
                                 )
+                                .frame(width: 44, height: 44)
+                                .contentShape(Circle())
                         }
                     }
                 }
@@ -1041,7 +1061,9 @@ public struct StoryComposerView: View {
 
     private func loadPhoto(from item: PhotosPickerItem?) {
         guard let item else { return }
+        isLoadingMedia = true
         Task {
+            defer { isLoadingMedia = false }
             guard let data = try? await item.loadTransferable(type: Data.self) else { return }
             let image = await Task.detached(priority: .userInitiated) {
                 UIImage(data: data)

@@ -56,12 +56,13 @@ public struct DrawingToolbarPanel: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             widthSlider
-            HStack(spacing: 12) {
+
+            colorPalette
+
+            HStack {
                 toolButtons
-                Spacer()
-                colorPalette
                 Spacer()
                 actionButtons
             }
@@ -87,6 +88,28 @@ public struct DrawingToolbarPanel: View {
         }
     }
 
+    private var colorPalette: some View {
+        HStack(spacing: 0) {
+            ForEach(DrawingColorOption.palette, id: \.self) { colorHex in
+                Button {
+                    toolColor = Color(hex: colorHex)
+                    HapticFeedback.light()
+                } label: {
+                    Circle()
+                        .fill(Color(hex: colorHex))
+                        .frame(width: 28, height: 28)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: Color(hex: colorHex) == toolColor ? 2.5 : 0)
+                        )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
     private var toolButtons: some View {
         HStack(spacing: 8) {
             ForEach(DrawingTool.allCases, id: \.self) { tool in
@@ -96,32 +119,13 @@ public struct DrawingToolbarPanel: View {
                 } label: {
                     Image(systemName: tool.icon)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(toolType == tool ? .white : .white.opacity(0.5))
-                        .frame(width: 36, height: 36)
+                        .foregroundColor(toolType == tool ? .white : .white.opacity(0.6))
+                        .frame(width: 44, height: 44)
                         .background(
                             Circle().fill(toolType == tool ? Color(hex: "FF2E63") : Color.white.opacity(0.1))
                         )
                 }
                 .accessibilityLabel(tool.label)
-            }
-        }
-    }
-
-    private var colorPalette: some View {
-        HStack(spacing: 6) {
-            ForEach(DrawingColorOption.palette, id: \.self) { colorHex in
-                Button {
-                    toolColor = Color(hex: colorHex)
-                    HapticFeedback.light()
-                } label: {
-                    Circle()
-                        .fill(Color(hex: colorHex))
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: Color(hex: colorHex) == toolColor ? 2 : 0)
-                        )
-                }
             }
         }
     }
@@ -135,7 +139,8 @@ public struct DrawingToolbarPanel: View {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
 
             Button {
@@ -145,7 +150,8 @@ public struct DrawingToolbarPanel: View {
                 Image(systemName: "trash")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: "FF6B6B"))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
         }
     }
@@ -202,23 +208,27 @@ public struct PencilKitCanvas: UIViewRepresentable {
             canvasView.drawing = drawing
         }
 
-        updateTool()
+        applyTool(to: canvasView)
         return canvasView
     }
 
     public func updateUIView(_ uiView: PKCanvasView, context: Context) {
         uiView.isUserInteractionEnabled = isActive
-        updateTool()
+        applyTool(to: uiView)
     }
 
-    private func updateTool() {
+    private func applyTool(to canvas: PKCanvasView) {
         switch toolType {
         case .pen:
-            canvasView.tool = PKInkingTool(.pen, color: inkColor, width: inkWidth)
+            canvas.tool = PKInkingTool(.pen, color: inkColor, width: inkWidth)
         case .marker:
-            canvasView.tool = PKInkingTool(.marker, color: inkColor, width: inkWidth * 2)
+            canvas.tool = PKInkingTool(.marker, color: inkColor, width: inkWidth * 2)
         case .eraser:
-            canvasView.tool = PKEraserTool(.bitmap)
+            if #available(iOS 16.4, *) {
+                canvas.tool = PKEraserTool(.bitmap, width: inkWidth * 3)
+            } else {
+                canvas.tool = PKEraserTool(.bitmap)
+            }
         }
     }
 
