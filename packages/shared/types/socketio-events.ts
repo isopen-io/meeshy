@@ -130,6 +130,7 @@ export const SERVER_EVENTS = {
   STORY_CREATED: 'story:created',
   STORY_VIEWED: 'story:viewed',
   STORY_REACTED: 'story:reacted',
+  STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
 
   // --- Moods/Statuses ---
   STATUS_CREATED: 'status:created',
@@ -505,6 +506,16 @@ export interface LocationLiveStoppedEventData {
   readonly stoppedAt: Date;
 }
 
+/**
+ * Données pour l'événement de mise à jour des traductions d'un textObject de story.
+ * Émis après que le pipeline ZMQ a traduit un textObject de storyEffects.
+ */
+export interface StoryTranslationUpdatedEventData {
+  readonly postId: string;
+  readonly textObjectIndex: number;
+  readonly translations: Record<string, string>;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -563,6 +574,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.STORY_CREATED]: (data: StoryCreatedEventData) => void;
   [SERVER_EVENTS.STORY_VIEWED]: (data: StoryViewedEventData) => void;
   [SERVER_EVENTS.STORY_REACTED]: (data: StoryReactedEventData) => void;
+  [SERVER_EVENTS.STORY_TRANSLATION_UPDATED]: (data: StoryTranslationUpdatedEventData) => void;
 
   // Moods/Statuses
   [SERVER_EVENTS.STATUS_CREATED]: (data: StatusCreatedEventData) => void;

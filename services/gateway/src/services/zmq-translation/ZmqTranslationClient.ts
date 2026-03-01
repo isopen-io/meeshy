@@ -207,6 +207,11 @@ export class ZmqTranslationClient extends EventEmitter {
     this.messageHandler.on('voiceTranslationFailed', (event) => {
       this.emit('voiceTranslationFailed', event);
     });
+
+    // Story text object translation events
+    this.messageHandler.on('storyTextObjectTranslationCompleted', (event) => {
+      this.emit('storyTextObjectTranslationCompleted', event);
+    });
   }
 
   /**

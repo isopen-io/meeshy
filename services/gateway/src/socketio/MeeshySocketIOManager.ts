@@ -20,6 +20,7 @@ import { EmailService } from '../services/EmailService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { PostAudioService } from '../services/posts/PostAudioService';
+import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import { validateMessageLength } from '../config/message-limits';
 import jwt from 'jsonwebtoken';
 import type {
@@ -145,6 +146,9 @@ export class MeeshySocketIOManager {
     // Initialiser le PostAudioService singleton (dépend de socialEventsHandler)
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
+    // Initialiser le StoryTextObjectTranslationService singleton
+    StoryTextObjectTranslationService.init(this.prisma, this.io as any);
+
   }
 
   /**
@@ -223,6 +227,9 @@ export class MeeshySocketIOManager {
 
       // Écouter les événements de traduction TEXTE
       this.translationService.on('translationReady', this._handleTextTranslationReady.bind(this));
+
+      // Écouter les traductions de textObjects de story
+      this.translationService.on('storyTextObjectTranslationCompleted', this._handleStoryTextObjectTranslationCompleted.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -1637,6 +1644,22 @@ export class MeeshySocketIOManager {
     } catch (error) {
       logger.error(`❌ Erreur envoi traduction: ${error}`);
       this.stats.errors++;
+    }
+  }
+
+  /**
+   * Gère la réception d'une traduction de textObject de story complétée.
+   * Délègue au StoryTextObjectTranslationService qui persiste et émet via Socket.IO.
+   */
+  private async _handleStoryTextObjectTranslationCompleted(data: {
+    postId: string;
+    textObjectIndex: number;
+    translations: Record<string, string>;
+  }): Promise<void> {
+    try {
+      await StoryTextObjectTranslationService.shared.handleTranslationCompleted(data);
+    } catch (error) {
+      logger.error(`❌ [SocketIOManager] StoryTextObject translation handler error:`, error);
     }
   }
 
