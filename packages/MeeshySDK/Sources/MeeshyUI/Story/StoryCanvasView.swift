@@ -30,6 +30,7 @@ public struct StoryCanvasView: View {
     @Binding public var loadedImages: [String: UIImage]
     @Binding public var loadedVideoURLs: [String: URL]
     @Binding public var loadedAudioURLs: [String: URL]
+    public let onSelectMedia: ((String) -> Void)?
     // Image manipulation — état local (UX preview)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -52,7 +53,8 @@ public struct StoryCanvasView: View {
                 audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
                 loadedImages: Binding<[String: UIImage]> = .constant([:]),
                 loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
-                loadedAudioURLs: Binding<[String: URL]> = .constant([:])) {
+                loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
+                onSelectMedia: ((String) -> Void)? = nil) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -69,6 +71,7 @@ public struct StoryCanvasView: View {
         self._loadedImages = loadedImages
         self._loadedVideoURLs = loadedVideoURLs
         self._loadedAudioURLs = loadedAudioURLs
+        self.onSelectMedia = onSelectMedia
     }
 
     public var body: some View {
@@ -279,6 +282,7 @@ public struct StoryCanvasView: View {
                 onDragEnd: {},
                 onTapToFront: {
                     lastTappedMediaId = obj.id
+                    onSelectMedia?(obj.id)
                 }
             )
         }

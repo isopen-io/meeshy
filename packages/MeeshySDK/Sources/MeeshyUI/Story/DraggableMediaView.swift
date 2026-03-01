@@ -41,19 +41,14 @@ public struct DraggableMediaView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            mediaContent
-                .frame(width: 160, height: 160)
-                .scaleEffect(mediaObject.scale * gestureScale)
-                .rotationEffect(.radians(mediaObject.rotation) + gestureRotation)
+            // .position() en DERNIER — contentShape + gestes AVANT pour
+            // que la zone de hit-test soit l'image (160×160), pas le canvas entier.
+            positionedContent(geo: geo)
                 .position(
                     x: mediaObject.x * geo.size.width + dragOffset.width,
                     y: mediaObject.y * geo.size.height + dragOffset.height
                 )
-                .contentShape(Rectangle())
-                .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
-                .gesture(isEditing ? combinedGesture(geo: geo) : nil)
                 .onAppear {
-                    // Crée un player interne uniquement si pas de player externe
                     if externalPlayer == nil, let url = videoURL {
                         setupInternalPlayer(url: url)
                     }
@@ -72,6 +67,58 @@ public struct DraggableMediaView: View {
         }
     }
 
+    // MARK: - Content avec gestures conditionnels
+
+    /// Construit le contenu avec ou sans les gestures d'édition.
+    /// Séparer drag / pinch / rotation avec .gesture + .simultaneousGesture est indispensable :
+    /// .simultaneously() enchaîné bloque la reconnaissance multi-touch (pinch/rotation).
+    @ViewBuilder
+    private func positionedContent(geo: GeometryProxy) -> some View {
+        if isEditing {
+            mediaContent
+                .frame(width: 160, height: 160)
+                .scaleEffect(mediaObject.scale * gestureScale)
+                .rotationEffect(.radians(mediaObject.rotation) + gestureRotation)
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
+                .gesture(
+                    DragGesture()
+                        .updating($dragOffset) { v, s, _ in s = v.translation }
+                        .onEnded { v in
+                            mediaObject.x = min(1, max(0, mediaObject.x + v.translation.width  / geo.size.width))
+                            mediaObject.y = min(1, max(0, mediaObject.y + v.translation.height / geo.size.height))
+                            onDragEnd()
+                        }
+                )
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .updating($gestureScale) { v, s, _ in s = v }
+                        .onEnded { v in
+                            mediaObject.scale = min(4.0, max(0.3, mediaObject.scale * v))
+                            onDragEnd()
+                        }
+                )
+                .simultaneousGesture(
+                    RotationGesture()
+                        .updating($gestureRotation) { v, s, _ in s = v }
+                        .onEnded { v in
+                            mediaObject.rotation += v.radians
+                            onDragEnd()
+                        }
+                )
+        } else {
+            // Lecteur : tap z-index uniquement, aucun geste d'édition
+            mediaContent
+                .frame(width: 160, height: 160)
+                .scaleEffect(mediaObject.scale)
+                .rotationEffect(.radians(mediaObject.rotation))
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
+        }
+    }
+
+    // MARK: - Contenu média
+
     @ViewBuilder
     private var mediaContent: some View {
         if let image {
@@ -84,6 +131,8 @@ public struct DraggableMediaView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
+
+    // MARK: - Player interne (mode composer)
 
     private func setupInternalPlayer(url: URL) {
         let player = AVPlayer(url: url)
@@ -109,31 +158,5 @@ public struct DraggableMediaView: View {
             loopObserver = nil
         }
         internalPlayer = nil
-    }
-
-    private func combinedGesture(geo: GeometryProxy) -> some Gesture {
-        let drag = DragGesture()
-            .updating($dragOffset) { v, s, _ in s = v.translation }
-            .onEnded { v in
-                mediaObject.x = min(1, max(0, mediaObject.x + v.translation.width / geo.size.width))
-                mediaObject.y = min(1, max(0, mediaObject.y + v.translation.height / geo.size.height))
-                onDragEnd()
-            }
-
-        let pinch = MagnificationGesture()
-            .updating($gestureScale) { v, s, _ in s = v }
-            .onEnded { v in
-                mediaObject.scale = min(4.0, max(0.3, mediaObject.scale * v))
-                onDragEnd()
-            }
-
-        let rotation = RotationGesture()
-            .updating($gestureRotation) { v, s, _ in s = v }
-            .onEnded { v in
-                mediaObject.rotation += v.radians
-                onDragEnd()
-            }
-
-        return drag.simultaneously(with: pinch.simultaneously(with: rotation))
     }
 }

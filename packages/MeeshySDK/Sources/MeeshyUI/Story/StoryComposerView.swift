@@ -114,6 +114,7 @@ public struct StoryComposerView: View {
     @State private var isMediaEditMode = false
     @State private var draggingMediaId: String? = nil
     @State private var mediaDragTranslation: CGFloat = 0
+    @State private var selectedMediaId: String? = nil
     @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
     @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
@@ -309,7 +310,13 @@ public struct StoryComposerView: View {
             ),
             loadedImages: $loadedImages,
             loadedVideoURLs: $loadedVideoURLs,
-            loadedAudioURLs: $loadedAudioURLs
+            loadedAudioURLs: $loadedAudioURLs,
+            onSelectMedia: { id in
+                selectedMediaId = id
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    activePanel = .media
+                }
+            }
         )
         .simultaneousGesture(
             activePanel != .none && !isDrawingActive
@@ -634,10 +641,10 @@ public struct StoryComposerView: View {
                 toolPill(icon: "music.note", label: "Fond Sonore", panel: .audio, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "paintpalette", label: "Fond", panel: .background)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
-                toolPill(icon: "photo.badge.plus", label: "+Média",
+                toolPill(icon: "photo.badge.plus", label: "Média",
                          panel: .media,
                          hasBadge: (currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
-                toolPill(icon: "mic.badge.plus", label: "+Vocal",
+                toolPill(icon: "mic.badge.plus", label: "Vocal",
                          panel: .vocal,
                          hasBadge: (currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
 
@@ -813,6 +820,7 @@ public struct StoryComposerView: View {
                                 image: loadedImages[media.id],
                                 hasVideo: loadedVideoURLs[media.id] != nil,
                                 isEditMode: isMediaEditMode,
+                                isSelected: selectedMediaId == media.id,
                                 isDragging: draggingMediaId == media.id,
                                 dragOffset: draggingMediaId == media.id ? mediaDragTranslation : 0,
                                 onDelete: {
@@ -852,6 +860,43 @@ public struct StoryComposerView: View {
                 }
             }
 
+            // Actions contextuelles — image sélectionnée via tap canvas
+            if let selId = selectedMediaId, foregroundMedia.contains(where: { $0.id == selId }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: "08D9D6"))
+                    Text("Image sélectionnée")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                    Spacer()
+                    Button {
+                        removeMediaObject(id: selId)
+                        selectedMediaId = nil
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11))
+                            Text("Supprimer")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "FF6B6B").opacity(0.15)))
+                    }
+                    Button {
+                        withAnimation(.spring(response: 0.2)) { selectedMediaId = nil }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.35))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             // Add button
             PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
                 HStack(spacing: 8) {
@@ -883,6 +928,7 @@ public struct StoryComposerView: View {
         .onDisappear {
             isMediaEditMode = false
             draggingMediaId = nil
+            selectedMediaId = nil
         }
     }
 
@@ -1622,6 +1668,7 @@ private struct ForegroundMediaThumbnail: View {
     let image: UIImage?
     let hasVideo: Bool
     let isEditMode: Bool
+    let isSelected: Bool
     let isDragging: Bool
     let dragOffset: CGFloat
     let onDelete: () -> Void
@@ -1641,8 +1688,10 @@ private struct ForegroundMediaThumbnail: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(
-                            isDragging ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
-                            lineWidth: isDragging ? 2 : 1
+                            isDragging ? Color(hex: "FF2E63") :
+                            isSelected ? Color(hex: "08D9D6") :
+                            Color.white.opacity(0.2),
+                            lineWidth: (isDragging || isSelected) ? 2 : 1
                         )
                 )
 
