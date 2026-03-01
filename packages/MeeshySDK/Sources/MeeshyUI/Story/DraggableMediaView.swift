@@ -81,8 +81,8 @@ public struct DraggableMediaView: View {
                 .resizable()
                 .scaledToFill()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-        } else if videoURL != nil || externalPlayer != nil {
-            VideoPlayer(player: activePlayer ?? AVPlayer())
+        } else if let player = activePlayer {
+            VideoPlayer(player: player)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }

@@ -119,6 +119,7 @@ public struct StoryComposerView: View {
     // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
     @State private var loadedImages: [String: UIImage] = [:]
     @State private var loadedVideoURLs: [String: URL] = [:]
+    @State private var loadedAudioURLs: [String: URL] = [:]
 
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
@@ -268,56 +269,53 @@ public struct StoryComposerView: View {
     // MARK: - Canvas Area (plein écran)
 
     private var canvasArea: some View {
-        ZStack {
-            StoryCanvasView(
-                text: $text,
-                textStyle: $textStyle,
-                textColor: $textColor,
-                textSize: $textSize,
-                textBgEnabled: $textBgEnabled,
-                textAlignment: $textAlignment,
-                textPosition: $textPosition,
-                stickerObjects: $stickerObjects,
-                selectedFilter: $selectedFilter,
-                drawingData: $drawingData,
-                isDrawingActive: $isDrawingActive,
-                backgroundColor: $backgroundColor,
-                selectedImage: $selectedImage,
-                drawingCanvas: $drawingCanvas,
-                drawingColor: $drawingColor,
-                drawingWidth: $drawingWidth,
-                drawingTool: $drawingTool,
-                mediaObjects: Binding(
-                    get: { currentSlideEffects?.mediaObjects ?? [] },
-                    set: { objs in
-                        var effects = currentSlideEffects ?? buildEffects()
-                        effects.mediaObjects = objs
-                        setCurrentSlideEffects(effects)
+        StoryCanvasView(
+            text: $text,
+            textStyle: $textStyle,
+            textColor: $textColor,
+            textSize: $textSize,
+            textBgEnabled: $textBgEnabled,
+            textAlignment: $textAlignment,
+            textPosition: $textPosition,
+            stickerObjects: $stickerObjects,
+            selectedFilter: $selectedFilter,
+            drawingData: $drawingData,
+            isDrawingActive: $isDrawingActive,
+            backgroundColor: $backgroundColor,
+            selectedImage: $selectedImage,
+            drawingCanvas: $drawingCanvas,
+            drawingColor: $drawingColor,
+            drawingWidth: $drawingWidth,
+            drawingTool: $drawingTool,
+            mediaObjects: Binding(
+                get: { currentSlideEffects?.mediaObjects ?? [] },
+                set: { objs in
+                    var effects = currentSlideEffects ?? buildEffects()
+                    effects.mediaObjects = objs
+                    setCurrentSlideEffects(effects)
+                }
+            ),
+            audioPlayerObjects: Binding(
+                get: { currentSlideEffects?.audioPlayerObjects ?? [] },
+                set: { objs in
+                    var effects = currentSlideEffects ?? buildEffects()
+                    effects.audioPlayerObjects = objs
+                    setCurrentSlideEffects(effects)
+                }
+            ),
+            loadedImages: $loadedImages,
+            loadedVideoURLs: $loadedVideoURLs,
+            loadedAudioURLs: $loadedAudioURLs
+        )
+        .simultaneousGesture(
+            activePanel != .none && !isDrawingActive
+                ? TapGesture().onEnded {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        activePanel = .none
                     }
-                ),
-                audioPlayerObjects: Binding(
-                    get: { currentSlideEffects?.audioPlayerObjects ?? [] },
-                    set: { objs in
-                        var effects = currentSlideEffects ?? buildEffects()
-                        effects.audioPlayerObjects = objs
-                        setCurrentSlideEffects(effects)
-                    }
-                ),
-                loadedImages: $loadedImages,
-                loadedVideoURLs: $loadedVideoURLs
-            )
-
-            // Ferme le panel actif en tapant le canvas (sauf en mode dessin)
-            if activePanel != .none && !isDrawingActive {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            activePanel = .none
-                        }
-                    }
-            }
-        }
+                }
+                : nil
+        )
         .ignoresSafeArea()
     }
 
@@ -1044,11 +1042,13 @@ public struct StoryComposerView: View {
     private func loadPhoto(from item: PhotosPickerItem?) {
         guard let item else { return }
         Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                selectedImage = image
-                slideManager.setImage(image, for: slideManager.currentSlide.id)
-            }
+            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+            let image = await Task.detached(priority: .userInitiated) {
+                UIImage(data: data)
+            }.value
+            guard let image else { return }
+            selectedImage = image
+            slideManager.setImage(image, for: slideManager.currentSlide.id)
         }
     }
 
@@ -1278,8 +1278,9 @@ public struct StoryComposerView: View {
             } else {
                 samples = []
             }
+            let objectId = UUID().uuidString
             let obj = StoryAudioPlayerObject(
-                id: UUID().uuidString,
+                id: objectId,
                 postMediaId: "",
                 placement: placement.rawValue,
                 x: 0.5, y: 0.3,
@@ -1287,6 +1288,7 @@ public struct StoryComposerView: View {
                 waveformSamples: samples
             )
             await MainActor.run {
+                loadedAudioURLs[objectId] = url
                 var effects = currentSlideEffects ?? buildEffects()
                 effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
                 setCurrentSlideEffects(effects)
@@ -1356,8 +1358,9 @@ public struct StoryComposerView: View {
             } else {
                 samples = []
             }
+            let objectId = UUID().uuidString
             let obj = StoryAudioPlayerObject(
-                id: UUID().uuidString,
+                id: objectId,
                 postMediaId: "",
                 placement: "foreground",
                 x: 0.5, y: 0.3,
@@ -1365,6 +1368,7 @@ public struct StoryComposerView: View {
                 waveformSamples: samples
             )
             await MainActor.run {
+                loadedAudioURLs[objectId] = url
                 var effects = currentSlideEffects ?? buildEffects()
                 effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
                 setCurrentSlideEffects(effects)

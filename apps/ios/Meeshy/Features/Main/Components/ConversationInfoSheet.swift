@@ -1,5 +1,4 @@
 import SwiftUI
-import CryptoKit
 import MeeshySDK
 import os
 import MeeshyUI
@@ -140,18 +139,10 @@ struct ConversationInfoSheet: View {
         .sheet(isPresented: $showSecurityVerification) {
             SecurityVerificationView(
                 conversationName: conversation.name,
-                safetyNumber: generateDummySafetyNumber(userId: conversation.participantUserId ?? "unknown")
+                safetyNumber: nil
             )
         }
         .withStatusBubble()
-    }
-
-    // MARK: - Safety Number Generator (déterministe, SHA-256)
-    private func generateDummySafetyNumber(userId: String) -> String {
-        let myId = AuthManager.shared.currentUser?.id ?? ""
-        let canonical = [userId, myId].sorted().joined(separator: ":")
-        let hash = SHA256.hash(data: Data(canonical.utf8))
-        return String(hash.map { String(format: "%02u", $0) }.joined().prefix(30))
     }
 
     // MARK: - Sheet Background

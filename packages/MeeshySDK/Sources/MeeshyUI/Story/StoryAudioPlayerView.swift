@@ -15,6 +15,7 @@ public struct StoryAudioPlayerView: View {
     #if os(iOS)
     @State private var player: AVPlayer?
     @State private var playerObserver: Any?
+    @State private var endObserver: NSObjectProtocol?
     #endif
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
@@ -35,7 +36,25 @@ public struct StoryAudioPlayerView: View {
                     y: audioObject.y * geo.size.height + dragOffset.height
                 )
                 .gesture(isEditing ? dragGesture(geo: geo) : nil)
+                .onDisappear { teardownPlayer() }
         }
+    }
+
+    private func teardownPlayer() {
+        #if os(iOS)
+        player?.pause()
+        if let obs = playerObserver {
+            player?.removeTimeObserver(obs)
+            playerObserver = nil
+        }
+        if let obs = endObserver {
+            NotificationCenter.default.removeObserver(obs)
+            endObserver = nil
+        }
+        player = nil
+        isPlaying = false
+        playbackProgress = 0
+        #endif
     }
 
     private var playerContent: some View {
@@ -113,14 +132,14 @@ public struct StoryAudioPlayerView: View {
                 playbackProgress = time.seconds / duration
             }
 
-            NotificationCenter.default.addObserver(
+            endObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: newPlayer.currentItem,
                 queue: .main
-            ) { _ in
+            ) { [weak newPlayer] _ in
                 isPlaying = false
                 playbackProgress = 0
-                newPlayer.seek(to: .zero)
+                newPlayer?.seek(to: .zero)
             }
         }
 

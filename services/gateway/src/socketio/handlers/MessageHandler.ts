@@ -162,9 +162,25 @@ export class MessageHandler {
       // Répondre au client
       this._sendResponse(callback, response);
 
-      // Copier les attachments si c'est un transfert
+      // Copier les attachments si c'est un transfert (avec vérification d'accès)
       if (response.success && response.data?.id && data.forwardedFromId) {
         try {
+          // Vérifier que l'utilisateur a accès à la conversation source
+          if (data.forwardedFromConversationId) {
+            const isMember = await this.prisma.conversationMember.findFirst({
+              where: {
+                conversationId: data.forwardedFromConversationId,
+                userId,
+                isActive: true
+              },
+              select: { id: true }
+            });
+            if (!isMember) {
+              console.warn(`[MESSAGE_SEND] Forward denied: user ${userId} not member of source conversation ${data.forwardedFromConversationId}`);
+              return;
+            }
+          }
+
           const originalAttachments = await this.prisma.messageAttachment.findMany({
             where: { messageId: data.forwardedFromId }
           });
@@ -555,13 +571,13 @@ export class MessageHandler {
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(this.prisma);
 
-      for (const member of members) {
+      await Promise.all(members.map(async (member) => {
         const unreadCount = await readStatusService.getUnreadCount(member.userId, conversationId);
         this.io.to(ROOMS.user(member.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
-      }
+      }));
     } catch (error) {
       console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);
     }
@@ -586,16 +602,15 @@ export class MessageHandler {
         select: { userId: true }
       });
 
-      // Créer une notification pour chaque membre
-      for (const member of members) {
-        await this.notificationService.createMessageNotification({
+      await Promise.all(members.map(member =>
+        this.notificationService.createMessageNotification({
           recipientUserId: member.userId,
           senderId,
           messageId,
           conversationId,
           messagePreview,
-        });
-      }
+        })
+      ));
 
       console.log(`[NOTIFICATIONS] Created ${members.length} notifications for message ${messageId}`);
     } catch (error) {
