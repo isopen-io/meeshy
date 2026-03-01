@@ -168,19 +168,7 @@ export class MessagingService {
         isAnonymous: true
       };
     } else {
-      if (senderId.startsWith('anon_') || senderId.length > 24) {
-        return {
-          type: 'session',
-          sessionToken: senderId,
-          isAnonymous: true
-        };
-      } else {
-        return {
-          type: 'jwt',
-          userId: senderId,
-          isAnonymous: false
-        };
-      }
+      throw new Error('Authentication required: no JWT token or session token provided');
     }
   }
 

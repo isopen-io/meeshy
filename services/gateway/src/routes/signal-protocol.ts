@@ -488,29 +488,31 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         // Use Signal Protocol service to establish session
         const signalService = encryptionService.getSignalService();
         if (!signalService) {
-          // Signal Protocol not available - store session metadata only
-          // Full E2EE requires @signalapp/libsignal-client to be integrated
-          logger.debug('Signal Protocol not available, storing session metadata only');
+          logger.warn('Signal Protocol not available, refusing to fake E2EE session', {
+            userId,
+            recipientUserId,
+            conversationId,
+          });
 
-          // Mark pre-key as used (should be removed after first use)
-          if (bundle.preKeyId) {
-            await prisma.signalPreKeyBundle.update({
-              where: { userId: recipientUserId },
-              data: { preKeyId: null, preKeyPublic: null },
-            });
-          }
-        } else {
-          // Full Signal Protocol session establishment
-          // Note: This requires @signalapp/libsignal-client to be installed
-          logger.debug('Full Signal Protocol session establishment');
+          return reply.status(503).send({
+            success: false,
+            error: {
+              code: 'E2EE_UNAVAILABLE',
+              message: 'End-to-end encryption is not available on this server',
+            },
+          });
+        }
 
-          // Mark pre-key as used (should be removed after first use)
-          if (bundle.preKeyId) {
-            await prisma.signalPreKeyBundle.update({
-              where: { userId: recipientUserId },
-              data: { preKeyId: null, preKeyPublic: null },
-            });
-          }
+        // Full Signal Protocol session establishment
+        // Note: This requires @signalapp/libsignal-client to be installed
+        logger.debug('Full Signal Protocol session establishment');
+
+        // Mark pre-key as used (should be removed after first use)
+        if (bundle.preKeyId) {
+          await prisma.signalPreKeyBundle.update({
+            where: { userId: recipientUserId },
+            data: { preKeyId: null, preKeyPublic: null },
+          });
         }
 
         logger.info('Established E2EE session', { userId, recipientUserId, conversationId });

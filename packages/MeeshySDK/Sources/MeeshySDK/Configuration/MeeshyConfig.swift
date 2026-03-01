@@ -27,6 +27,7 @@ public final class MeeshyConfig {
 
     /// Resolve a potentially relative media URL (e.g. "/api/v1/attachments/file/...")
     /// into an absolute URL by prepending the server origin.
+    /// Validates scheme (https only, http for localhost) and blocks private IPs (SSRF protection).
     public static func resolveMediaURL(_ urlString: String) -> URL? {
         let resolved: String
         if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
@@ -34,10 +35,31 @@ public final class MeeshyConfig {
         } else if urlString.hasPrefix("/") {
             resolved = shared.serverOrigin + urlString
         } else {
-            // Legacy paths without leading slash (e.g. "2025/12/...")
             resolved = shared.serverOrigin + "/" + urlString
         }
-        return URL(string: resolved)
+        guard let url = URL(string: resolved),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased() else { return nil }
+
+        guard scheme == "https" || (scheme == "http" && isLocalhost(host)) else { return nil }
+        guard !isPrivateIP(host) else { return nil }
+
+        return url
+    }
+
+    private static func isLocalhost(_ host: String) -> Bool {
+        host == "localhost" || host == "127.0.0.1" || host == "::1"
+    }
+
+    private static func isPrivateIP(_ host: String) -> Bool {
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        if parts[0] == 10 { return true }
+        if parts[0] == 172 && (16...31).contains(parts[1]) { return true }
+        if parts[0] == 192 && parts[1] == 168 { return true }
+        if parts[0] == 169 && parts[1] == 254 { return true }
+        if parts[0] == 127 { return true }
+        return false
     }
 
     /// Call once at app startup to configure the SDK
