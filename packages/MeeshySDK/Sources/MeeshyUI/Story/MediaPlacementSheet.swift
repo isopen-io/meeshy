@@ -63,7 +63,7 @@ public struct MediaPlacementSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }
         .accessibilityLabel("\(label) — \(subtitle)")
     }
@@ -116,7 +116,7 @@ public struct AudioSourceSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }
         .accessibilityLabel(label)
     }
