@@ -66,7 +66,12 @@ public enum AvatarMode {
 
     public var ringSize: CGFloat { size + 6 }
     public var initialFont: CGFloat { size * 0.38 }
-    public var ringWidth: CGFloat { size <= 32 ? 1.5 : 2.5 }
+    public var ringWidth: CGFloat {
+        switch self {
+        case .storyTray: return 0.7
+        default: return size <= 32 ? 1.5 : 2.5
+        }
+    }
     public var badgeSize: CGFloat { size * 0.42 }
     public var onlineDotSize: CGFloat { size * 0.26 }
 }

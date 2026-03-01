@@ -25,7 +25,7 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 108)
+        .frame(height: 84)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,

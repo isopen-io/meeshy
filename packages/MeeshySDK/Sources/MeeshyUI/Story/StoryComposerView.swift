@@ -501,7 +501,13 @@ public struct StoryComposerView: View {
                 }
                 if slideManager.canAddSlide {
                     Button {
+                        let currentIdx = slideManager.currentSlideIndex
+                        if currentIdx < slideManager.slides.count {
+                            slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+                            slideManager.slides[currentIdx].effects = buildEffects()
+                        }
                         slideManager.addSlide()
+                        restoreCanvas(from: slideManager.currentSlide)
                         HapticFeedback.medium()
                     } label: {
                         RoundedRectangle(cornerRadius: 5)
@@ -536,6 +542,7 @@ public struct StoryComposerView: View {
             withAnimation(.spring(response: 0.25)) {
                 slideManager.selectSlide(at: index)
             }
+            restoreCanvas(from: slideManager.slides[index])
             HapticFeedback.light()
         } label: {
             ZStack {
@@ -1086,43 +1093,72 @@ public struct StoryComposerView: View {
     }
 
     private func saveDraft() {
-        // Note: mediaData (UIImage) est intentionnellement exclue du draft (évite les gros binaires
-        // dans UserDefaults). Les slides avec images locales non encore uploadées perdront leur image
-        // au restore — seule l'URL distante est préservée si elle existe dans mediaURL.
-        let slides = slideManager.slides
-        let draft = StoryComposerDraft(slides: slides, visibilityPreference: visibility)
-        if let data = try? JSONEncoder().encode(draft) {
-            UserDefaults.standard.set(data, forKey: StoryComposerDraft.userDefaultsKey)
+        let currentIdx = slideManager.currentSlideIndex
+        if currentIdx < slideManager.slides.count {
+            slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+            slideManager.slides[currentIdx].effects = buildEffects()
         }
+        StoryDraftStore.shared.save(slides: slideManager.slides, visibility: visibility)
         HapticFeedback.light()
     }
 
     private func loadDraft() -> StoryComposerDraft? {
-        guard let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
-              let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else {
-            return nil
+        if let stored = StoryDraftStore.shared.load() {
+            return StoryComposerDraft(slides: stored.slides, visibilityPreference: stored.visibility)
         }
+        // Fallback UserDefaults (compat. ancienne version)
+        guard let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
+              let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else { return nil }
         return draft
     }
 
     private func clearDraft() {
+        StoryDraftStore.shared.clear()
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
 
-    // NOTE: Draft restore does not persist loadedImages or loadedVideoURLs.
-    // Foreground media (images/videos placed on the canvas) will not be visually
-    // displayed after restoring a draft. The StoryMediaObject metadata is preserved
-    // in slide effects, but the actual image/video data is transient (in-memory only).
     private func applyDraft(_ draft: StoryComposerDraft) {
         slideManager.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
         slideManager.currentSlideIndex = 0
-        if let first = slideManager.slides.first {
-            text = first.content ?? ""
-            if let bg = first.effects.background {
-                backgroundColor = Color(hex: bg)
-            }
-        }
         visibility = draft.visibilityPreference
+        if let first = slideManager.slides.first {
+            restoreCanvas(from: first)
+        }
+    }
+
+    /// Restaure TOUS les @State du canvas depuis un StorySlide.
+    /// Doit être appelé à chaque changement de slide actif (switch ou création).
+    private func restoreCanvas(from slide: StorySlide) {
+        let e = slide.effects
+        text = slide.content ?? ""
+        if let styleStr = e.textStyle, let style = StoryTextStyle(rawValue: styleStr) {
+            textStyle = style
+        } else { textStyle = .bold }
+        if let hex = e.textColor { textColor = Color(hex: hex) } else { textColor = .white }
+        textSize = e.textSize ?? 28
+        textBgEnabled = e.textBg != nil
+        switch e.textAlign {
+        case "left": textAlignment = .leading
+        case "right": textAlignment = .trailing
+        default: textAlignment = .center
+        }
+        textPosition = e.textPositionPoint ?? .center
+        if let bgHex = e.background { backgroundColor = Color(hex: bgHex) } else { backgroundColor = Color(hex: "0F0C29") }
+        selectedImage = slideManager.slideImages[slide.id]
+        stickerObjects = e.stickerObjects ?? []
+        selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
+        openingEffect = e.opening
+        closingEffect = e.closing
+        selectedAudioId = e.backgroundAudioId
+        selectedAudioTitle = selectedAudioId != nil ? "Audio" : nil
+        audioVolume = e.backgroundAudioVolume ?? 0.7
+        audioTrimStart = e.backgroundAudioStart ?? 0
+        audioTrimEnd = e.backgroundAudioEnd ?? 0
+        drawingCanvas = PKCanvasView()
+        if let data = e.drawingData, let drawing = try? PKDrawing(data: data) {
+            drawingCanvas.drawing = drawing
+        }
+        drawingData = e.drawingData
     }
 
     private func handleMediaPlacement(_ placement: MediaPlacement) {
