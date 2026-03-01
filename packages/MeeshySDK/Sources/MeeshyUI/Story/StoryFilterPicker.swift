@@ -7,9 +7,13 @@ import MeeshySDK
 
 public struct StoryFilterPicker: View {
     @Binding public var selectedFilter: StoryFilter?
+    private let previewImage: UIImage?
 
-    public init(selectedFilter: Binding<StoryFilter?>) {
+    @State private var thumbnails: [StoryFilter: UIImage] = [:]
+
+    public init(selectedFilter: Binding<StoryFilter?>, previewImage: UIImage? = nil) {
         self._selectedFilter = selectedFilter
+        self.previewImage = previewImage
     }
 
     public var body: some View {
@@ -23,7 +27,38 @@ public struct StoryFilterPicker: View {
             }
             .padding(.horizontal, 16)
         }
+        .task(id: previewImage) {
+            await generateThumbnails()
+        }
     }
+
+    // MARK: - Thumbnail generation
+
+    private func generateThumbnails() async {
+        guard let source = previewImage else {
+            await MainActor.run { thumbnails = [:] }
+            return
+        }
+        let small = await Task.detached(priority: .userInitiated) {
+            downsample(source, to: CGSize(width: 112, height: 112))
+        }.value
+
+        var result: [StoryFilter: UIImage] = [:]
+        for filter in StoryFilter.allCases {
+            let filtered = await Task.detached(priority: .userInitiated) {
+                StoryFilterProcessor.apply(filter, to: small)
+            }.value
+            result[filter] = filtered
+        }
+        await MainActor.run { thumbnails = result }
+    }
+
+    private func downsample(_ image: UIImage, to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+    }
+
+    // MARK: - Buttons
 
     private var noFilterButton: some View {
         Button {
@@ -31,20 +66,13 @@ public struct StoryFilterPicker: View {
             HapticFeedback.light()
         } label: {
             VStack(spacing: 4) {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
+                thumbnailView(for: nil)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(selectedFilter == nil ? Color.white : Color.clear, lineWidth: 2)
                     )
 
-                Text("None")
+                Text("Original")
                     .font(.system(size: 10, weight: selectedFilter == nil ? .bold : .medium))
                     .foregroundColor(.white.opacity(selectedFilter == nil ? 1 : 0.6))
             }
@@ -58,9 +86,7 @@ public struct StoryFilterPicker: View {
             HapticFeedback.light()
         } label: {
             VStack(spacing: 4) {
-                filterPreview(filter)
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                thumbnailView(for: filter)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(isSelected ? Color.white : Color.clear, lineWidth: 2)
@@ -71,17 +97,41 @@ public struct StoryFilterPicker: View {
                     .foregroundColor(.white.opacity(isSelected ? 1 : 0.6))
             }
         }
-        .accessibilityLabel("Filter \(filter.displayName)")
+        .accessibilityLabel("Filtre \(filter.displayName)")
     }
 
     @ViewBuilder
-    private func filterPreview(_ filter: StoryFilter) -> some View {
+    private func thumbnailView(for filter: StoryFilter?) -> some View {
+        if let filter, let thumb = thumbnails[filter] {
+            Image(uiImage: thumb)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else if filter == nil, let source = previewImage {
+            Image(uiImage: source)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            fallbackGradient(for: filter)
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    @ViewBuilder
+    private func fallbackGradient(for filter: StoryFilter?) -> some View {
         let colors: [Color] = {
+            guard let filter else {
+                return [Color(hex: "FF2E63"), Color(hex: "08D9D6")]
+            }
             switch filter {
-            case .vintage: return [Color(hex: "D4A574"), Color(hex: "8B7355")]
-            case .bw: return [Color.gray, Color(hex: "333333")]
-            case .warm: return [Color(hex: "FF8C42"), Color(hex: "FFD700")]
-            case .cool: return [Color(hex: "4FC3F7"), Color(hex: "0288D1")]
+            case .vintage:  return [Color(hex: "D4A574"), Color(hex: "8B7355")]
+            case .bw:       return [Color.gray, Color(hex: "333333")]
+            case .warm:     return [Color(hex: "FF8C42"), Color(hex: "FFD700")]
+            case .cool:     return [Color(hex: "4FC3F7"), Color(hex: "0288D1")]
             case .dramatic: return [Color(hex: "1A1A2E"), Color(hex: "16213E")]
             }
         }()

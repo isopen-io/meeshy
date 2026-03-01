@@ -610,12 +610,11 @@ public struct StoryComposerView: View {
     private var toolBarScrollable: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                toolPill(icon: "photo.on.rectangle", label: "Photo", panel: nil, action: { showPhotoPicker = true })
                 toolPill(icon: "textformat", label: "Texte", panel: .text)
                 toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
                 toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
                 toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
-                toolPill(icon: "music.note", label: "Audio", panel: .audio, hasBadge: selectedAudioId != nil)
+                toolPill(icon: "music.note", label: "Fond Sonore", panel: .audio, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "paintpalette", label: "Fond", panel: .background)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
 
@@ -643,9 +642,9 @@ public struct StoryComposerView: View {
                     showAudioSourceSheet = true
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "waveform.badge.plus")
+                        Image(systemName: "mic.badge.plus")
                             .font(.system(size: 14, weight: .medium))
-                        Text("Son")
+                        Text("+Vocal")
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(.white.opacity(0.65))
@@ -653,7 +652,7 @@ public struct StoryComposerView: View {
                     .padding(.vertical, 7)
                     .background(Capsule().fill(Color.white.opacity(0.1)))
                 }
-                .accessibilityLabel("Ajouter audio")
+                .accessibilityLabel("Ajouter un vocal (player visible dans la story)")
 
                 if hasAudioContent {
                     Button {
@@ -766,7 +765,7 @@ public struct StoryComposerView: View {
             .padding(.bottom, 8)
 
         case .filter:
-            StoryFilterPicker(selectedFilter: $selectedFilter)
+            StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
                 .padding(.vertical, 12)
 
         case .audio:
@@ -794,9 +793,47 @@ public struct StoryComposerView: View {
 
     private var backgroundPicker: some View {
         VStack(spacing: 12) {
-            Text("Arrière-plan")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+            HStack(spacing: 10) {
+                Text("Arrière-plan")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+
+                Spacer()
+
+                // Bouton photo de fond (anciennement pill "Photo")
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    HStack(spacing: 4) {
+                        Image(systemName: selectedImage != nil ? "photo.fill" : "photo.on.rectangle")
+                            .font(.system(size: 12, weight: .medium))
+                        Text(selectedImage != nil ? "Changer photo" : "Photo")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(selectedImage != nil ? Color(hex: "FF2E63") : .white.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule().fill(
+                            selectedImage != nil
+                                ? Color(hex: "FF2E63").opacity(0.15)
+                                : Color.white.opacity(0.1)
+                        )
+                    )
+                }
+                .accessibilityLabel("Photo de fond")
+
+                if selectedImage != nil {
+                    Button {
+                        withAnimation(.spring(response: 0.25)) { selectedImage = nil }
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .accessibilityLabel("Supprimer la photo de fond")
+                }
+            }
+            .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
