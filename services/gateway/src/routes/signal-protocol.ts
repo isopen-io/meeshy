@@ -19,6 +19,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import {
   errorResponseSchema,
   signalPreKeyBundleSchema,
+  generatePreKeyBundleRequestSchema,
   generatePreKeyBundleResponseSchema,
   getPreKeyBundleResponseSchema,
   establishSessionRequestSchema,
