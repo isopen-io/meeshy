@@ -111,6 +111,9 @@ public struct StoryComposerView: View {
     // MARK: - Media States
     @State private var pendingMediaItem: PhotosPickerItem? = nil
     @State private var pendingMediaType: String = "image"
+    @State private var isMediaEditMode = false
+    @State private var draggingMediaId: String? = nil
+    @State private var mediaDragTranslation: CGFloat = 0
     @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
     @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
@@ -726,6 +729,11 @@ public struct StoryComposerView: View {
                     drawingData = drawingCanvas.drawing.dataRepresentation()
                     HapticFeedback.light()
                 },
+                onRedo: {
+                    drawingCanvas.undoManager?.redo()
+                    drawingData = drawingCanvas.drawing.dataRepresentation()
+                    HapticFeedback.light()
+                },
                 onClear: {
                     drawingCanvas.drawing = PKDrawing()
                     drawingData = nil
@@ -768,21 +776,83 @@ public struct StoryComposerView: View {
     // MARK: - Media Panel (+Média — foreground uniquement)
 
     private var mediaPickerPanel: some View {
-        let mediaCount = currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        let foregroundMedia = (currentSlideEffects?.mediaObjects ?? []).filter { $0.placement == "foreground" }
         return VStack(spacing: 10) {
+            // Header
             HStack {
                 Text("Premier plan — photos & vidéos")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
-                if mediaCount > 0 {
-                    Text("\(mediaCount) élément\(mediaCount > 1 ? "s" : "")")
+                if foregroundMedia.isEmpty {
+                    EmptyView()
+                } else if isMediaEditMode {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) { isMediaEditMode = false }
+                        draggingMediaId = nil
+                    } label: {
+                        Text("OK")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(hex: "FF2E63"))
+                    }
+                } else {
+                    Text("\(foregroundMedia.count) élément\(foregroundMedia.count > 1 ? "s" : "")")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: "FF2E63"))
                 }
             }
             .padding(.horizontal, 16)
 
+            // Thumbnail strip
+            if !foregroundMedia.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(foregroundMedia.enumerated()), id: \.element.id) { idx, media in
+                            ForegroundMediaThumbnail(
+                                layerIndex: idx,
+                                image: loadedImages[media.id],
+                                hasVideo: loadedVideoURLs[media.id] != nil,
+                                isEditMode: isMediaEditMode,
+                                isDragging: draggingMediaId == media.id,
+                                dragOffset: draggingMediaId == media.id ? mediaDragTranslation : 0,
+                                onDelete: {
+                                    removeMediaObject(id: media.id)
+                                    if (currentSlideEffects?.mediaObjects ?? [])
+                                        .filter({ $0.placement == "foreground" }).isEmpty {
+                                        withAnimation { isMediaEditMode = false }
+                                    }
+                                },
+                                onLongPress: {
+                                    withAnimation(.spring(response: 0.3)) { isMediaEditMode = true }
+                                    HapticFeedback.medium()
+                                },
+                                onDragChanged: { delta in
+                                    draggingMediaId = media.id
+                                    mediaDragTranslation = delta
+                                    let threshold: CGFloat = 41
+                                    if delta > threshold {
+                                        swapMediaObject(id: media.id, direction: 1)
+                                        mediaDragTranslation = 0
+                                    } else if delta < -threshold {
+                                        swapMediaObject(id: media.id, direction: -1)
+                                        mediaDragTranslation = 0
+                                    }
+                                },
+                                onDragEnded: {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        draggingMediaId = nil
+                                        mediaDragTranslation = 0
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+            }
+
+            // Add button
             PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.badge.plus")
@@ -810,6 +880,10 @@ public struct StoryComposerView: View {
             }
         }
         .padding(.vertical, 12)
+        .onDisappear {
+            isMediaEditMode = false
+            draggingMediaId = nil
+        }
     }
 
     // MARK: - Vocal Panel (+Vocal — foreground uniquement)
@@ -1370,6 +1444,30 @@ public struct StoryComposerView: View {
         }
     }
 
+    /// Supprime un média foreground par son id (strip thumbnail × button).
+    private func removeMediaObject(id: String) {
+        var effects = currentSlideEffects ?? buildEffects()
+        effects.mediaObjects?.removeAll { $0.id == id }
+        setCurrentSlideEffects(effects)
+        loadedImages.removeValue(forKey: id)
+        loadedVideoURLs.removeValue(forKey: id)
+        HapticFeedback.medium()
+    }
+
+    /// Échange un média foreground avec son voisin dans l'ordre de profondeur.
+    /// direction = +1 vers le dessus (index+1), -1 vers le dessous (index-1).
+    private func swapMediaObject(id: String, direction: Int) {
+        var effects = currentSlideEffects ?? buildEffects()
+        guard var objects = effects.mediaObjects,
+              let idx = objects.firstIndex(where: { $0.id == id }) else { return }
+        let target = idx + direction
+        guard target >= 0 && target < objects.count else { return }
+        objects.swapAt(idx, target)
+        effects.mediaObjects = objects
+        setCurrentSlideEffects(effects)
+        HapticFeedback.light()
+    }
+
     /// Ajoute directement l'audio confirmé en foreground (sans sheet de placement).
     private func addVocalToForeground() {
         guard let url = confirmedMediaAudioURL else { return }
@@ -1514,5 +1612,111 @@ private struct VolumeMixerSheet: View {
                 effects?.audioPlayerObjects?[i].volume = v
             }
         )
+    }
+}
+
+// MARK: - Foreground Media Thumbnail (strip dans le panel +Média)
+
+private struct ForegroundMediaThumbnail: View {
+    let layerIndex: Int
+    let image: UIImage?
+    let hasVideo: Bool
+    let isEditMode: Bool
+    let isDragging: Bool
+    let dragOffset: CGFloat
+    let onDelete: () -> Void
+    let onLongPress: () -> Void
+    let onDragChanged: (CGFloat) -> Void
+    let onDragEnded: () -> Void
+
+    @State private var wiggleAngle: Double = 0
+
+    private let size: CGFloat = 72
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            thumbnailContent
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(
+                            isDragging ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
+                            lineWidth: isDragging ? 2 : 1
+                        )
+                )
+
+            // Badge numéro de couche (coin bas-gauche)
+            VStack {
+                Spacer()
+                HStack {
+                    Text("\(layerIndex + 1)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.black.opacity(0.7)))
+                        .padding(4)
+                    Spacer()
+                }
+            }
+            .frame(width: size, height: size)
+
+            // Bouton supprimer (coin haut-droit, mode édition)
+            if isEditMode {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(Color.white, Color.red)
+                }
+                .offset(x: 8, y: -8)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .rotationEffect(.degrees(wiggleAngle))
+        .offset(x: dragOffset)
+        .scaleEffect(isDragging ? 1.08 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isDragging)
+        .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
+        .gesture(
+            isEditMode
+                ? DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                    .onChanged { v in onDragChanged(v.translation.width) }
+                    .onEnded { _ in onDragEnded() }
+                : nil
+        )
+        .onChange(of: isEditMode) { active in
+            if active {
+                withAnimation(.easeInOut(duration: 0.1).repeatForever(autoreverses: true)) {
+                    wiggleAngle = layerIndex.isMultiple(of: 2) ? 2.5 : -2.5
+                }
+            } else {
+                withAnimation(.spring(response: 0.2)) { wiggleAngle = 0 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnailContent: some View {
+        if let img = image {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+        } else if hasVideo {
+            ZStack {
+                Color.black.opacity(0.6)
+                Image(systemName: "video.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        } else {
+            ZStack {
+                Color.white.opacity(0.08)
+                Image(systemName: "photo")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+        }
     }
 }

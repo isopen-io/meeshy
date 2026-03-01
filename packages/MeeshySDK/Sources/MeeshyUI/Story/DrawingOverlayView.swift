@@ -43,15 +43,18 @@ public struct DrawingToolbarPanel: View {
     @Binding public var toolWidth: CGFloat
     @Binding public var toolType: DrawingTool
     public var onUndo: () -> Void
+    public var onRedo: () -> Void
     public var onClear: () -> Void
 
     public init(toolColor: Binding<Color>, toolWidth: Binding<CGFloat>,
                 toolType: Binding<DrawingTool>, onUndo: @escaping () -> Void,
+                onRedo: @escaping () -> Void,
                 onClear: @escaping () -> Void) {
         self._toolColor = toolColor
         self._toolWidth = toolWidth
         self._toolType = toolType
         self.onUndo = onUndo
+        self.onRedo = onRedo
         self.onClear = onClear
     }
 
@@ -142,6 +145,19 @@ public struct DrawingToolbarPanel: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
+            .accessibilityLabel("Annuler")
+
+            Button {
+                onRedo()
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .accessibilityLabel("Restaurer")
 
             Button {
                 onClear()

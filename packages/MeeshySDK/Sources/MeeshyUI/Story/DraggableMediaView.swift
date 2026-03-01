@@ -50,9 +50,7 @@ public struct DraggableMediaView: View {
                     y: mediaObject.y * geo.size.height + dragOffset.height
                 )
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    onTapToFront?()
-                }
+                .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
                 .gesture(isEditing ? combinedGesture(geo: geo) : nil)
                 .onAppear {
                     // Crée un player interne uniquement si pas de player externe
