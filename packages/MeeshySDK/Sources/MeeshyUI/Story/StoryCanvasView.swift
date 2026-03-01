@@ -34,6 +34,7 @@ public struct StoryCanvasView: View {
     @State private var imageOffset: CGSize = .zero
     @GestureState private var dragDelta: CGSize = .zero
     @GestureState private var pinchDelta: CGFloat = 1.0
+    @State private var filteredImage: UIImage?
 
     public init(text: Binding<String>, textStyle: Binding<StoryTextStyle>,
                 textColor: Binding<Color>, textSize: Binding<CGFloat>,
@@ -84,12 +85,23 @@ public struct StoryCanvasView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onAppear {
+            updateFilteredImage()
+        }
         .onChange(of: selectedImage) { _ in
             withAnimation(.spring(response: 0.3)) {
                 imageScale = 1.0
                 imageOffset = .zero
             }
+            updateFilteredImage()
         }
+        .onChange(of: selectedFilter) { _ in
+            updateFilteredImage()
+        }
+    }
+
+    private func updateFilteredImage() {
+        filteredImage = selectedImage.map { StoryFilterProcessor.apply(selectedFilter, to: $0) }
     }
 
     // MARK: - Background Layer
@@ -121,9 +133,8 @@ public struct StoryCanvasView: View {
 
     @ViewBuilder
     private var mediaLayer: some View {
-        if let image = selectedImage {
-            let filtered = StoryFilterProcessor.apply(selectedFilter, to: image)
-            Image(uiImage: filtered)
+        if let image = filteredImage ?? selectedImage {
+            Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
                 .scaleEffect(imageScale * pinchDelta)
@@ -315,9 +326,7 @@ public struct DraggableSticker: View {
             x: sticker.x * canvasSize.width,
             y: sticker.y * canvasSize.height
         )
-        .gesture(dragGesture)
-        .gesture(magnificationGesture)
-        .gesture(rotationGesture)
+        .gesture(combinedGesture)
         .onTapGesture(count: 2) {
             withAnimation(.spring(response: 0.2)) { showDeleteButton.toggle() }
         }
@@ -358,5 +367,11 @@ public struct DraggableSticker: View {
                 onUpdate(updated)
                 currentRotation = .zero
             }
+    }
+
+    private var combinedGesture: some Gesture {
+        dragGesture
+            .simultaneously(with: magnificationGesture)
+            .simultaneously(with: rotationGesture)
     }
 }

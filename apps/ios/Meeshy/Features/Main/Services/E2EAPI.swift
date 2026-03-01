@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// API Client dédié au protocole de chiffrement de bout en bout (E2EE Signal)
 public final class E2EAPI {

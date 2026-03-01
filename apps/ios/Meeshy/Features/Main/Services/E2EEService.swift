@@ -1,93 +1,171 @@
 import Foundation
 import CryptoKit
-
-
+import Security
+import MeeshySDK
 
 /// Gère les opérations cryptographiques de base pour le chiffrement E2EE.
 /// Utilise CryptoKit (Curve25519) pour l'échange de clés (X25519) et les signatures (Ed25519).
 public final class E2EEService {
     public static let shared = E2EEService()
-    
-    private let keychain = KeychainManager.shared
-    
+
     // Key identifiers
     private let identityKeyIdentifier = "com.meeshy.e2ee.identityKey"
     private let signedPreKeyIdentifier = "com.meeshy.e2ee.signedPreKey"
-    
+    private let signingKeyIdentifier = "com.meeshy.e2ee.signingKey"
+
     private init() {}
-    
+
+    // MARK: - Keychain helpers for Curve25519 keys
+
+    private func saveCurve25519Key(_ key: Curve25519.KeyAgreement.PrivateKey, identifier: String) throws {
+        let keyData = key.rawRepresentation
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecValueData as String: keyData,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw E2EError.keychainError(status)
+        }
+    }
+
+    private func loadCurve25519Key(identifier: String) throws -> Curve25519.KeyAgreement.PrivateKey {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let keyData = item as? Data else {
+            throw E2EError.keychainError(status)
+        }
+        return try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: keyData)
+    }
+
+    private func curve25519KeyExists(identifier: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecReturnData as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    // MARK: - Keychain helpers for Curve25519 Signing key
+
+    private func saveCurve25519SigningKey(_ key: Curve25519.Signing.PrivateKey, identifier: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecValueData as String: key.rawRepresentation,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw E2EError.keychainError(status) }
+    }
+
+    private func loadCurve25519SigningKey(identifier: String) throws -> Curve25519.Signing.PrivateKey {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let keyData = item as? Data else { throw E2EError.keychainError(status) }
+        return try Curve25519.Signing.PrivateKey(rawRepresentation: keyData)
+    }
+
+    private func signingKeyExists() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: signingKeyIdentifier,
+            kSecReturnData as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Récupère la clé de signature dédiée (Ed25519), la génère si absente.
+    /// Séparée de la clé d'accord (Curve25519 X25519) pour éviter la réutilisation de matériau cryptographique.
+    public func getOrGenerateSigningKey() throws -> Curve25519.Signing.PrivateKey {
+        if signingKeyExists() {
+            return try loadCurve25519SigningKey(identifier: signingKeyIdentifier)
+        }
+        let key = Curve25519.Signing.PrivateKey()
+        try saveCurve25519SigningKey(key, identifier: signingKeyIdentifier)
+        return key
+    }
+
+    private enum E2EError: Error {
+        case keychainError(OSStatus)
+    }
+
     // MARK: - Identity Key Management
-    
+
     /// Génère et sauvegarde une nouvelle Identity Key (Curve25519 KeyAgreement)
     public func generateIdentityKey() throws -> Curve25519.KeyAgreement.PrivateKey {
         let privateKey = Curve25519.KeyAgreement.PrivateKey()
-        try keychain.saveKey(privateKey, identifier: identityKeyIdentifier)
+        try saveCurve25519Key(privateKey, identifier: identityKeyIdentifier)
         return privateKey
     }
-    
+
     /// Récupère l'Identity Key. La génère si elle n'existe pas.
     public func getOrGenerateIdentityKey() throws -> Curve25519.KeyAgreement.PrivateKey {
-        if keychain.keyExists(identifier: identityKeyIdentifier) {
-            return try keychain.loadKey(identifier: identityKeyIdentifier)
+        if curve25519KeyExists(identifier: identityKeyIdentifier) {
+            return try loadCurve25519Key(identifier: identityKeyIdentifier)
         }
         return try generateIdentityKey()
     }
-    
+
     // MARK: - PreKey Management
-    
+
     /// Génère une "Signed PreKey" de base.
     public func generateSignedPreKey() throws -> Curve25519.KeyAgreement.PrivateKey {
         let privateKey = Curve25519.KeyAgreement.PrivateKey()
-        try keychain.saveKey(privateKey, identifier: signedPreKeyIdentifier)
+        try saveCurve25519Key(privateKey, identifier: signedPreKeyIdentifier)
         return privateKey
     }
-    
+
     /// Récupère la "Signed PreKey". La génère si elle n'existe pas.
     public func getOrGenerateSignedPreKey() throws -> Curve25519.KeyAgreement.PrivateKey {
-        if keychain.keyExists(identifier: signedPreKeyIdentifier) {
-            return try keychain.loadKey(identifier: signedPreKeyIdentifier)
+        if curve25519KeyExists(identifier: signedPreKeyIdentifier) {
+            return try loadCurve25519Key(identifier: signedPreKeyIdentifier)
         }
         return try generateSignedPreKey()
     }
-    
-    /// Signe des données (comme la clé publique SignedPreKey) en utilisant une clé Ed25519 dérivée de l'IdentityKey.
-    /// Note: Dans Signal officiel, l'Identity Key est Ed25519 et convertie en X25519 pour l'accord de clé.
-    /// Ici, pour simplifier avec CryptoKit, on dérive une clef de signature depuis l'Identity KeyAgreement.
-    public func signData(data: Data, using identityKey: Curve25519.KeyAgreement.PrivateKey) throws -> Data {
-        // En CryptoKit, on ne peut pas directement signer avec une KeyAgreement.
-        // On dérive une clé de signature symétrique pour le HMAC, ou on utilise une astuce:
-        // Pour être rigoureux, l'Identity Key devrait être une Curve25519.Signing.PrivateKey,
-        // mais l'objectif MVP est de signer la PreKeyPublic.
-        
-        // Dérivation d'une clé de signature locale depuis l'identityKey.
-        let seed = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: identityKey.rawRepresentation),
-                                          info: Data("SigningSeed".utf8),
-                                          outputByteCount: 32)
-        
-        let signingKey = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
-        let signature = try signingKey.signature(for: data)
-        return signature
+
+    /// Signe des données (comme la clé publique SignedPreKey) avec la clé de signature dédiée.
+    /// Clé distincte de la clé d'accord : pas de réutilisation de matériau cryptographique entre X25519 et Ed25519.
+    public func signData(data: Data) throws -> Data {
+        let signingKey = try getOrGenerateSigningKey()
+        return try signingKey.signature(for: data)
     }
-    
+
     // MARK: - Bundle Generation
-    
+
     /// Génère le "Bundle" cryptographique à uploader sur le serveur.
     public func generatePublicBundle() throws -> E2EAPI.BackendPreKeyBundle {
         let identityKey = try getOrGenerateIdentityKey()
         let signedPreKey = try getOrGenerateSignedPreKey()
-        
+
         let identityPublic = identityKey.publicKey.rawRepresentation
         let signedPrePublic = signedPreKey.publicKey.rawRepresentation
-        
-        // La signature de la clé publique de la prekey prouve qu'elle nous appartient.
-        let signature = try signData(data: signedPrePublic, using: identityKey)
-        
-        // MVP Signal generation for compatibility with backend SignalProtocolAdapter
-        // generating one prekey.
+
+        let signature = try signData(data: signedPrePublic)
+
         let preKey = Curve25519.KeyAgreement.PrivateKey()
-        try keychain.saveKey(preKey, identifier: "com.meeshy.e2ee.otpk.1")
+        try saveCurve25519Key(preKey, identifier: "com.meeshy.e2ee.otpk.1")
         let preKeyPublic = preKey.publicKey.rawRepresentation
-        
+
         return E2EAPI.BackendPreKeyBundle(
             identityKey: identityPublic.base64EncodedString(),
             registrationId: Int.random(in: 1...16380),
@@ -102,9 +180,9 @@ public final class E2EEService {
             kyberPreKeySignature: nil
         )
     }
-    
+
     // MARK: - Ciphering Basics (AES-GCM)
-    
+
     /// Chiffre un texte avec une clé symétrique partagée en AES-GCM.
     public func encrypt(message: Data, symmetricKey: SymmetricKey) throws -> Data {
         let sealedBox = try AES.GCM.seal(message, using: symmetricKey)
@@ -113,27 +191,23 @@ public final class E2EEService {
         }
         return combined
     }
-    
+
     /// Déchiffre un ciphertext avec une clé symétrique partagée en AES-GCM.
     public func decrypt(combinedData: Data, symmetricKey: SymmetricKey) throws -> Data {
         let sealedBox = try AES.GCM.SealedBox(combined: combinedData)
-        let decrypted = try AES.GCM.open(sealedBox, using: symmetricKey)
-        return decrypted
+        return try AES.GCM.open(sealedBox, using: symmetricKey)
     }
-    
+
     /// Effectue un Diffie-Hellman (X25519) et dérive une clé symétrique AES.
-    /// (Ceci est la base pour créer une Session, sans le ratcheting complet).
     public func deriveSymmetricKey(privateKey: Curve25519.KeyAgreement.PrivateKey,
                                    publicKeyData: Data) throws -> SymmetricKey {
         let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: publicKeyData)
         let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
-        // Dérivation HKDF pour obtenir une clé de chiffrement forte
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+        return sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
             salt: Data(),
             sharedInfo: Data("MeeshyE2EE".utf8),
             outputByteCount: 32
         )
-        return symmetricKey
     }
 }
