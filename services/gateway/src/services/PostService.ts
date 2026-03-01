@@ -9,7 +9,7 @@ const log = enhancedLogger.child({ module: 'PostService' });
 
 interface StoryTextObjectRaw {
   id?: string;
-  text: string;
+  content: string;
   sourceLanguage?: string;
   translations?: Record<string, string>;
   [key: string]: unknown;
@@ -195,7 +195,7 @@ export class PostService {
 
     if (textObjects?.length) {
       const searchContent = textObjects
-        .map((t) => t.text)
+        .map((t) => t.content)
         .filter(Boolean)
         .join(' ');
 
@@ -312,7 +312,7 @@ export class PostService {
     const targetLanguages = this.getActiveTargetLanguages();
 
     textObjects.forEach((obj, index) => {
-      const text = obj.text?.trim();
+      const text = obj.content?.trim();
       if (!text) return;
 
       const zmqClient = ZMQSingleton.getInstanceSync();
