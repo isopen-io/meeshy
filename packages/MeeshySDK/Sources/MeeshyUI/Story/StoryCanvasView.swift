@@ -23,6 +23,9 @@ public struct StoryCanvasView: View {
     @Binding public var drawingColor: Color
     @Binding public var drawingWidth: CGFloat
     @Binding public var drawingTool: DrawingTool
+    // Media objects (foreground)
+    @Binding public var mediaObjects: [StoryMediaObject]
+    @Binding public var audioPlayerObjects: [StoryAudioPlayerObject]
     // Image manipulation — état local (UX preview)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -37,7 +40,9 @@ public struct StoryCanvasView: View {
                 isDrawingActive: Binding<Bool>, backgroundColor: Binding<Color>,
                 selectedImage: Binding<UIImage?>, drawingCanvas: Binding<PKCanvasView>,
                 drawingColor: Binding<Color>, drawingWidth: Binding<CGFloat>,
-                drawingTool: Binding<DrawingTool>) {
+                drawingTool: Binding<DrawingTool>,
+                mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
+                audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([])) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -49,6 +54,8 @@ public struct StoryCanvasView: View {
         self._drawingColor = drawingColor
         self._drawingWidth = drawingWidth
         self._drawingTool = drawingTool
+        self._mediaObjects = mediaObjects
+        self._audioPlayerObjects = audioPlayerObjects
     }
 
     public var body: some View {
@@ -63,6 +70,10 @@ public struct StoryCanvasView: View {
                 textLayer(canvasSize: geo.size)
 
                 stickerLayer(canvasSize: geo.size)
+
+                foregroundMediaLayer
+
+                foregroundAudioLayer
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -212,6 +223,42 @@ public struct StoryCanvasView: View {
                     stickerObjects.remove(at: index)
                 }
             )
+        }
+    }
+
+    // MARK: - Foreground Media Layer
+
+    @ViewBuilder
+    private var foregroundMediaLayer: some View {
+        ForEach(Array(mediaObjects.enumerated()), id: \.element.id) { index, obj in
+            if obj.placement == "foreground" {
+                DraggableMediaView(
+                    mediaObject: Binding(
+                        get: { mediaObjects[index] },
+                        set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
+                    ),
+                    isEditing: !isDrawingActive,
+                    onDragEnd: {}
+                )
+            }
+        }
+    }
+
+    // MARK: - Foreground Audio Layer
+
+    @ViewBuilder
+    private var foregroundAudioLayer: some View {
+        ForEach(Array(audioPlayerObjects.enumerated()), id: \.element.id) { index, obj in
+            if obj.placement == "foreground" {
+                StoryAudioPlayerView(
+                    audioObject: Binding(
+                        get: { audioPlayerObjects[index] },
+                        set: { guard index < audioPlayerObjects.count else { return }; audioPlayerObjects[index] = $0 }
+                    ),
+                    isEditing: !isDrawingActive,
+                    onDragEnd: {}
+                )
+            }
         }
     }
 }

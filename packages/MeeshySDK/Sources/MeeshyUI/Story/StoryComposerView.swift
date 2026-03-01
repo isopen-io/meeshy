@@ -95,6 +95,15 @@ public struct StoryComposerView: View {
     @State private var pendingAudioEditorURL: URL? = nil
     @State private var showAudioEditor = false
 
+    // MARK: - Media States
+    @State private var pendingMediaItem: PhotosPickerItem? = nil
+    @State private var showMediaPlacementSheet = false
+    @State private var pendingMediaType: String = "image"
+    @State private var showAudioSourceSheet = false
+    @State private var showMediaAudioEditor = false
+    @State private var pendingAudioURL: URL? = nil
+    @State private var showVolumeMixer = false
+
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
     @State private var showDiscardAlert = false
@@ -163,6 +172,42 @@ public struct StoryComposerView: View {
         .onChange(of: photoPickerItem) { newItem in
             loadPhoto(from: newItem)
         }
+        .sheet(isPresented: $showAudioSourceSheet) {
+            AudioSourceSheet { _ in
+                pendingMediaType = "audio"
+                showAudioSourceSheet = false
+                showMediaAudioEditor = true
+            }
+        }
+        .sheet(isPresented: $showMediaAudioEditor) {
+            if let url = pendingAudioURL {
+                MeeshyAudioEditorView(
+                    url: url,
+                    onConfirm: { confirmedURL, _, _, _ in
+                        pendingAudioURL = confirmedURL
+                        showMediaAudioEditor = false
+                        showMediaPlacementSheet = true
+                    },
+                    onDismiss: {
+                        showMediaAudioEditor = false
+                        pendingAudioURL = nil
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showMediaPlacementSheet) {
+            MediaPlacementSheet(mediaType: pendingMediaType) { placement in
+                handleMediaPlacement(placement)
+            }
+        }
+        .sheet(isPresented: $showVolumeMixer) {
+            VolumeMixerSheet(effects: Binding(
+                get: { currentSlideEffects },
+                set: { newEffects in
+                    if let e = newEffects { setCurrentSlideEffects(e) }
+                }
+            ))
+        }
         .alert("Erreur de publication", isPresented: $showPublishError) {
             Button("Réessayer") {
                 let cont = slidePublishContinuation
@@ -225,7 +270,23 @@ public struct StoryComposerView: View {
                 drawingCanvas: $drawingCanvas,
                 drawingColor: $drawingColor,
                 drawingWidth: $drawingWidth,
-                drawingTool: $drawingTool
+                drawingTool: $drawingTool,
+                mediaObjects: Binding(
+                    get: { currentSlideEffects?.mediaObjects ?? [] },
+                    set: { objs in
+                        var effects = currentSlideEffects ?? buildEffects()
+                        effects.mediaObjects = objs
+                        setCurrentSlideEffects(effects)
+                    }
+                ),
+                audioPlayerObjects: Binding(
+                    get: { currentSlideEffects?.audioPlayerObjects ?? [] },
+                    set: { objs in
+                        var effects = currentSlideEffects ?? buildEffects()
+                        effects.audioPlayerObjects = objs
+                        setCurrentSlideEffects(effects)
+                    }
+                )
             )
 
             // Ferme le panel actif en tapant le canvas (sauf en mode dessin)
@@ -523,6 +584,59 @@ public struct StoryComposerView: View {
                 toolPill(icon: "music.note", label: "Audio", panel: .audio, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "paintpalette", label: "Fond", panel: .background)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
+
+                PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Média")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(.white.opacity(0.65))
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                }
+                .accessibilityLabel("Ajouter image ou vidéo")
+                .onChange(of: pendingMediaItem) { item in
+                    guard item != nil else { return }
+                    pendingMediaType = "image"
+                    showMediaPlacementSheet = true
+                }
+
+                Button {
+                    showAudioSourceSheet = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "waveform.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Son")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(.white.opacity(0.65))
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                }
+                .accessibilityLabel("Ajouter audio")
+
+                if hasAudioContent {
+                    Button {
+                        showVolumeMixer = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Volume")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.white.opacity(0.65))
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                    }
+                    .accessibilityLabel("Mixage volume")
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -772,6 +886,27 @@ public struct StoryComposerView: View {
         .accessibilityLabel(label)
     }
 
+    // MARK: - Computed Properties
+
+    private var currentSlideEffects: StoryEffects? {
+        get {
+            guard slideManager.currentSlideIndex < slideManager.slides.count else { return nil }
+            return slideManager.slides[slideManager.currentSlideIndex].effects
+        }
+    }
+
+    private func setCurrentSlideEffects(_ effects: StoryEffects) {
+        guard slideManager.currentSlideIndex < slideManager.slides.count else { return }
+        slideManager.slides[slideManager.currentSlideIndex].effects = effects
+    }
+
+    private var hasAudioContent: Bool {
+        let effects = currentSlideEffects
+        let hasVideo = effects?.mediaObjects?.contains { $0.mediaType == "video" } ?? false
+        let hasAudio = !(effects?.audioPlayerObjects ?? []).isEmpty
+        return hasVideo || hasAudio
+    }
+
     // MARK: - Actions
 
     private func loadPhoto(from item: PhotosPickerItem?) {
@@ -915,6 +1050,63 @@ public struct StoryComposerView: View {
         visibility = draft.visibilityPreference
     }
 
+    private func handleMediaPlacement(_ placement: MediaPlacement) {
+        guard pendingMediaType != "audio" else {
+            handleAudioPlacement(placement)
+            return
+        }
+        guard let item = pendingMediaItem else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                let obj = StoryMediaObject(
+                    id: UUID().uuidString,
+                    postMediaId: "",
+                    mediaType: "image",
+                    placement: placement.rawValue,
+                    x: 0.5, y: 0.5,
+                    scale: 1.0, rotation: 0.0,
+                    volume: 1.0
+                )
+                await MainActor.run {
+                    var effects = currentSlideEffects ?? buildEffects()
+                    effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                    setCurrentSlideEffects(effects)
+                    _ = image
+                }
+            }
+            await MainActor.run {
+                pendingMediaItem = nil
+            }
+        }
+    }
+
+    private func handleAudioPlacement(_ placement: MediaPlacement) {
+        guard let url = pendingAudioURL else { return }
+        Task {
+            let samples: [Float]
+            if let generated = try? await WaveformGenerator.shared.generateSamples(from: url) {
+                samples = generated
+            } else {
+                samples = []
+            }
+            let obj = StoryAudioPlayerObject(
+                id: UUID().uuidString,
+                postMediaId: "",
+                placement: placement.rawValue,
+                x: 0.5, y: 0.3,
+                volume: 1.0,
+                waveformSamples: samples
+            )
+            await MainActor.run {
+                var effects = currentSlideEffects ?? buildEffects()
+                effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
+                setCurrentSlideEffects(effects)
+                pendingAudioURL = nil
+            }
+        }
+    }
+
     private func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : colorToHex(backgroundColor)
         return StoryEffects(
@@ -953,5 +1145,79 @@ public struct StoryComposerView: View {
         var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
         uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+    }
+}
+
+// MARK: - Volume Mixer Sheet
+
+private struct VolumeMixerSheet: View {
+    @Binding var effects: StoryEffects?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Arrière-plan") {
+                    if effects?.audioPlayerObjects?.contains(where: { $0.placement == "background" }) == true {
+                        Slider(value: backgroundVolumeBinding, in: 0...1) {
+                            Text("Volume")
+                        }
+                        .accessibilityLabel("Volume arrière-plan")
+                    }
+                }
+                Section("Premier plan") {
+                    if effects?.mediaObjects?.contains(where: { $0.mediaType == "video" && $0.placement == "foreground" }) == true {
+                        Slider(value: foregroundVideoVolumeBinding, in: 0...1) {
+                            Text("Volume vidéo")
+                        }
+                        .accessibilityLabel("Volume vidéo premier plan")
+                    }
+                    if effects?.audioPlayerObjects?.contains(where: { $0.placement == "foreground" }) == true {
+                        Slider(value: foregroundAudioVolumeBinding, in: 0...1) {
+                            Text("Volume audio")
+                        }
+                        .accessibilityLabel("Volume audio premier plan")
+                    }
+                }
+            }
+            .navigationTitle("Mixage")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("OK") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private var backgroundVolumeBinding: Binding<Float> {
+        Binding(
+            get: { effects?.audioPlayerObjects?.first(where: { $0.placement == "background" })?.volume ?? 1.0 },
+            set: { v in
+                guard let i = effects?.audioPlayerObjects?.firstIndex(where: { $0.placement == "background" }) else { return }
+                effects?.audioPlayerObjects?[i].volume = v
+            }
+        )
+    }
+
+    private var foregroundVideoVolumeBinding: Binding<Float> {
+        Binding(
+            get: { effects?.mediaObjects?.first(where: { $0.mediaType == "video" && $0.placement == "foreground" })?.volume ?? 1.0 },
+            set: { v in
+                guard let i = effects?.mediaObjects?.firstIndex(where: { $0.mediaType == "video" && $0.placement == "foreground" }) else { return }
+                effects?.mediaObjects?[i].volume = v
+            }
+        )
+    }
+
+    private var foregroundAudioVolumeBinding: Binding<Float> {
+        Binding(
+            get: { effects?.audioPlayerObjects?.first(where: { $0.placement == "foreground" })?.volume ?? 1.0 },
+            set: { v in
+                guard let i = effects?.audioPlayerObjects?.firstIndex(where: { $0.placement == "foreground" }) else { return }
+                effects?.audioPlayerObjects?[i].volume = v
+            }
+        )
     }
 }
