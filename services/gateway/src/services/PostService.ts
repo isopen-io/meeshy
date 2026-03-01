@@ -190,7 +190,8 @@ export class PostService {
 
     // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
     const effects = data.storyEffects as Record<string, unknown> | undefined;
-    const textObjects = effects?.textObjects as StoryTextObjectRaw[] | undefined;
+    const rawTextObjects = effects?.textObjects;
+    const textObjects = Array.isArray(rawTextObjects) ? (rawTextObjects as StoryTextObjectRaw[]) : undefined;
 
     if (textObjects?.length) {
       const searchContent = textObjects
@@ -305,6 +306,9 @@ export class PostService {
     postId: string,
     textObjects: StoryTextObjectRaw[]
   ): void {
+    // Envoie les textObjects au pipeline de traduction.
+    // La persistence des résultats est gérée par le handler ZMQ Task 15
+    // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
     const targetLanguages = this.getActiveTargetLanguages();
 
     textObjects.forEach((obj, index) => {
