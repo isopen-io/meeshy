@@ -29,6 +29,7 @@ public struct StoryCanvasView: View {
     // Médias chargés localement (en attente d'upload)
     @Binding public var loadedImages: [String: UIImage]
     @Binding public var loadedVideoURLs: [String: URL]
+    @Binding public var loadedAudioURLs: [String: URL]
     // Image manipulation — état local (UX preview)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -50,7 +51,8 @@ public struct StoryCanvasView: View {
                 mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
                 audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
                 loadedImages: Binding<[String: UIImage]> = .constant([:]),
-                loadedVideoURLs: Binding<[String: URL]> = .constant([:])) {
+                loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
+                loadedAudioURLs: Binding<[String: URL]> = .constant([:])) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -66,6 +68,7 @@ public struct StoryCanvasView: View {
         self._audioPlayerObjects = audioPlayerObjects
         self._loadedImages = loadedImages
         self._loadedVideoURLs = loadedVideoURLs
+        self._loadedAudioURLs = loadedAudioURLs
     }
 
     public var body: some View {
@@ -292,6 +295,7 @@ public struct StoryCanvasView: View {
                         get: { audioPlayerObjects[index] },
                         set: { guard index < audioPlayerObjects.count else { return }; audioPlayerObjects[index] = $0 }
                     ),
+                    url: loadedAudioURLs[obj.id],
                     isEditing: !isDrawingActive,
                     onDragEnd: {}
                 )
