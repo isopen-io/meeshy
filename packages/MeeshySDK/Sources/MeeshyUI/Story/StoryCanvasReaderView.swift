@@ -1,5 +1,7 @@
 import SwiftUI
 import PencilKit
+import AVKit
+import Combine
 import MeeshySDK
 
 /// Reconstruit pixel-perfect le canvas d'une story (lecture seule).
@@ -9,27 +11,44 @@ public struct StoryCanvasReaderView: View {
     public let story: StoryItem
     public let preferredLanguage: String?
 
+    // Mutable local state managed by a StateObject to support socket updates
+    @StateObject private var state: ReaderState
+
     public init(story: StoryItem, preferredLanguage: String? = nil) {
         self.story = story
         self.preferredLanguage = preferredLanguage
+        self._state = StateObject(wrappedValue: ReaderState(story: story))
     }
 
     public var body: some View {
         GeometryReader { geo in
             ZStack {
                 backgroundLayer
-                mediaLayer
+                backgroundMediaLayer
                 filterOverlay
                 drawingLayer
                 stickerLayer(size: geo.size)
                 textLayer(size: geo.size)
+                textObjectsLayer(size: geo.size)
+                foregroundMediaLayer
+                foregroundAudioLayer
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
+        .onAppear {
+            state.startBackgroundAudio(
+                effects: story.storyEffects,
+                userLang: preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
+            )
+            state.subscribeToTranslationUpdates(postId: story.id)
+        }
+        .onDisappear {
+            state.stopBackgroundAudio()
+        }
     }
 
-    // MARK: - Background
+    // MARK: - Background (gradient/color)
 
     @ViewBuilder
     private var backgroundLayer: some View {
@@ -52,12 +71,34 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Media (photo/vidéo de fond)
+    // MARK: - Background Media (image/vidéo de fond depuis storyEffects.mediaObjects)
 
     @ViewBuilder
-    private var mediaLayer: some View {
-        if let media = story.media.first,
-           let urlStr = media.url {
+    private var backgroundMediaLayer: some View {
+        if let bgMedia = story.storyEffects?.mediaObjects?.first(where: { $0.placement == "background" }) {
+            if bgMedia.mediaType == "image" {
+                // TODO: charger depuis MediaCacheManager si disponible
+                if let urlStr = mediaURL(for: bgMedia.postMediaId) {
+                    CachedAsyncImage(url: urlStr) {
+                        Color.clear
+                    }
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                }
+            } else if bgMedia.mediaType == "video" {
+                // TODO: charger depuis MediaCacheManager si disponible
+                if let urlStr = mediaURL(for: bgMedia.postMediaId),
+                   let url = URL(string: urlStr) {
+                    VideoPlayer(player: AVPlayer(url: url))
+                        .disabled(true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                }
+            }
+        } else if let legacyMedia = story.media.first,
+                  let urlStr = legacyMedia.url {
+            // Fallback : média legacy de StoryItem.media (format pré-composer V2)
             CachedAsyncImage(url: urlStr) {
                 Color.clear
             }
@@ -111,7 +152,7 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Text (position exacte normalisée)
+    // MARK: - Legacy text (position exacte normalisée, format pré-textObjects)
 
     @ViewBuilder
     private func textLayer(size: CGSize) -> some View {
@@ -154,6 +195,29 @@ public struct StoryCanvasReaderView: View {
             .frame(maxWidth: 280)
     }
 
+    // MARK: - Text Objects Layer (Composer V2 — multi-texte avec traductions)
+
+    @ViewBuilder
+    private func textObjectsLayer(size: CGSize) -> some View {
+        let lang = preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
+        ForEach(state.textObjects) { obj in
+            Text(resolvedText(for: obj, userLang: lang))
+                .font(.system(size: 22 * obj.scale, weight: .semibold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.black.opacity(0.4))
+                )
+                .scaleEffect(obj.scale)
+                .rotationEffect(.degrees(obj.rotation))
+                .position(x: obj.x * size.width, y: obj.y * size.height)
+                .allowsHitTesting(false)
+        }
+    }
+
     // MARK: - Stickers (positions exactes normalisées)
 
     @ViewBuilder
@@ -179,6 +243,107 @@ public struct StoryCanvasReaderView: View {
             .position(x: size.width / 2, y: size.height * 0.75)
             .allowsHitTesting(false)
         }
+    }
+
+    // MARK: - Foreground Media Layer
+
+    @ViewBuilder
+    private var foregroundMediaLayer: some View {
+        // TODO: charger les UIImage/URL depuis MediaCacheManager (loadedImages[:], loadedVideoURLs[:])
+        ForEach(story.storyEffects?.mediaObjects?.filter { $0.placement == "foreground" } ?? []) { media in
+            DraggableMediaView(
+                mediaObject: .constant(media),
+                image: nil,
+                videoURL: nil,
+                isEditing: false
+            )
+        }
+    }
+
+    // MARK: - Foreground Audio Layer
+
+    @ViewBuilder
+    private var foregroundAudioLayer: some View {
+        ForEach(story.storyEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" } ?? []) { audio in
+            StoryAudioPlayerView(audioObject: .constant(audio), isEditing: false)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func resolvedText(for obj: StoryTextObject, userLang: String) -> String {
+        obj.translations?[userLang]
+            ?? obj.translations?["en"]
+            ?? obj.content
+    }
+
+    /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
+    private func mediaURL(for postMediaId: String) -> String? {
+        story.media.first { $0.id == postMediaId }?.url
+    }
+}
+
+// MARK: - ReaderState (gestion lifecycle, audio de fond, socket updates)
+
+private final class ReaderState: ObservableObject {
+    @Published var textObjects: [StoryTextObject]
+
+    private var backgroundPlayer: AVPlayer?
+    private var cancellables = Set<AnyCancellable>()
+
+    init(story: StoryItem) {
+        self.textObjects = story.storyEffects?.textObjects ?? []
+    }
+
+    // MARK: Background audio
+
+    func startBackgroundAudio(effects: StoryEffects?, userLang: String) {
+        guard let effects else { return }
+        let postMediaId = resolvedBackgroundAudioPostMediaId(effects: effects, userLang: userLang)
+        guard postMediaId != nil || effects.backgroundAudioId != nil else { return }
+
+        // TODO: résoudre l'URL depuis MediaCacheManager ou l'API via postMediaId
+        // Pour l'instant, on utilise backgroundAudio.fileUrl si disponible (legacy)
+        // La résolution complète sera faite quand MediaCacheManager exposera une lookup par postMediaId
+    }
+
+    func stopBackgroundAudio() {
+        backgroundPlayer?.pause()
+        backgroundPlayer = nil
+    }
+
+    // MARK: Langue audio de fond
+
+    private func resolvedBackgroundAudioPostMediaId(effects: StoryEffects, userLang: String) -> String? {
+        let variant = effects.backgroundAudioVariants?.first { $0.language == userLang }
+        return variant?.postMediaId ?? effects.backgroundAudioId
+    }
+
+    // MARK: Socket — post:story-translation-updated
+
+    func subscribeToTranslationUpdates(postId: String) {
+        SocialSocketManager.shared.storyTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] update in
+                guard update.postId == postId else { return }
+                self?.applyTranslationUpdate(index: update.textObjectIndex, translations: update.translations)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyTranslationUpdate(index: Int, translations: [String: String]) {
+        guard index < textObjects.count else { return }
+        let existing = textObjects[index].translations ?? [:]
+        let merged = existing.merging(translations) { _, new in new }
+        textObjects[index] = StoryTextObject(
+            id: textObjects[index].id,
+            content: textObjects[index].content,
+            x: textObjects[index].x,
+            y: textObjects[index].y,
+            scale: textObjects[index].scale,
+            rotation: textObjects[index].rotation,
+            translations: merged
+        )
     }
 }
 

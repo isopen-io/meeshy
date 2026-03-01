@@ -332,6 +332,7 @@ public struct StoryEffects: Codable, Sendable {
     public var closing: StoryTransitionEffect?
 
     // Objets canvas composites
+    public var textObjects: [StoryTextObject]?
     public var mediaObjects: [StoryMediaObject]?
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
@@ -353,6 +354,7 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundAudioStart: TimeInterval? = nil, backgroundAudioEnd: TimeInterval? = nil,
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
                 opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil,
+                textObjects: [StoryTextObject]? = nil,
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil) {
@@ -369,6 +371,7 @@ public struct StoryEffects: Codable, Sendable {
         self.voiceTranscriptions = voiceTranscriptions
         self.opening = opening
         self.closing = closing
+        self.textObjects = textObjects
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.backgroundAudioVariants = backgroundAudioVariants
