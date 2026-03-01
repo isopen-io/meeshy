@@ -51,10 +51,8 @@ public struct DraggableMediaView: View {
                         videoPlayer = AVPlayer(url: videoURL)
                     }
                 }
-                .onChange(of: videoURL) { _, newURL in
-                    if let newURL {
-                        videoPlayer = AVPlayer(url: newURL)
-                    }
+                .onChange(of: videoURL) { newURL in
+                    videoPlayer = AVPlayer(url: newURL)
                 }
         }
     }
