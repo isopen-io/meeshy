@@ -1,9 +1,10 @@
 import SwiftUI
-import AVKit
+import AVFoundation
 import MeeshySDK
 
 public struct StoryAudioPlayerView: View {
     @Binding public var audioObject: StoryAudioPlayerObject
+    public let url: URL?
     public let isEditing: Bool
     public let onDragEnd: () -> Void
 
@@ -11,10 +12,17 @@ public struct StoryAudioPlayerView: View {
     @State private var playbackProgress: Double = 0
     @GestureState private var dragOffset = CGSize.zero
 
+    #if os(iOS)
+    @State private var player: AVPlayer?
+    @State private var playerObserver: Any?
+    #endif
+
     public init(audioObject: Binding<StoryAudioPlayerObject>,
+                url: URL? = nil,
                 isEditing: Bool = false,
                 onDragEnd: @escaping () -> Void = {}) {
         self._audioObject = audioObject
+        self.url = url
         self.isEditing = isEditing
         self.onDragEnd = onDragEnd
     }
@@ -48,7 +56,7 @@ public struct StoryAudioPlayerView: View {
     }
 
     private var waveformView: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { context in
+        TimelineView(.animation(minimumInterval: 0.05, paused: !isPlaying)) { context in
             Canvas { ctx, size in
                 let samples = audioObject.waveformSamples
                 guard !samples.isEmpty else { return }
@@ -90,7 +98,39 @@ public struct StoryAudioPlayerView: View {
     }
 
     private func togglePlayback() {
+        #if os(iOS)
+        guard let url else { return }
+
+        if player == nil {
+            let newPlayer = AVPlayer(url: url)
+            newPlayer.volume = audioObject.volume
+            player = newPlayer
+
+            let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+            playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+                guard let duration = newPlayer.currentItem?.duration.seconds,
+                      duration > 0 else { return }
+                playbackProgress = time.seconds / duration
+            }
+
+            NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: newPlayer.currentItem,
+                queue: .main
+            ) { _ in
+                isPlaying = false
+                playbackProgress = 0
+                newPlayer.seek(to: .zero)
+            }
+        }
+
         isPlaying.toggle()
-        // TODO Task 20 : connecter à AVPlayer via StoryComposerView
+        if isPlaying {
+            Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+            player?.play()
+        } else {
+            player?.pause()
+        }
+        #endif
     }
 }
