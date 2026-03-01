@@ -233,6 +233,80 @@ app_path() {
     echo "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
 }
 
+# ─── Build Guard (wait or kill existing builds) ─────────────────────────────
+is_build_running() {
+    pgrep -f "xcodebuild.*$SCHEME.*build" >/dev/null 2>&1
+}
+
+kill_all_builds() {
+    log "Killing all xcodebuild processes..."
+    pkill -f "xcodebuild" 2>/dev/null || true
+    sleep 2
+    # Verify killed
+    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
+        warn "Processes still alive, sending SIGKILL..."
+        pkill -9 -f "xcodebuild" 2>/dev/null || true
+        sleep 1
+    fi
+    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
+        err "Failed to kill all xcodebuild processes"
+        exit 1
+    fi
+    ok "All xcodebuild processes killed"
+}
+
+wait_for_existing_build() {
+    if ! is_build_running; then
+        return 0
+    fi
+
+    warn "A build is already in progress. Waiting..."
+
+    # Phase 1: every 10s, 5 checks
+    local check=0
+    while [ "$check" -lt 5 ]; do
+        sleep 10
+        check=$((check + 1))
+        if ! is_build_running; then
+            ok "Previous build finished (after ${check}x10s)"
+            return 0
+        fi
+        log "Still building... (10s check $check/5)"
+    done
+
+    # Phase 2: every 30s, 4 checks
+    warn "Switching to 30s polling..."
+    check=0
+    while [ "$check" -lt 4 ]; do
+        sleep 30
+        check=$((check + 1))
+        if ! is_build_running; then
+            ok "Previous build finished (after 30s check $check/4)"
+            return 0
+        fi
+        log "Still building... (30s check $check/4)"
+    done
+
+    # Phase 3: every 60s, 3 checks — if all fail, kill
+    warn "Switching to 60s polling (will force-kill after 3 failures)..."
+    local failures=0
+    check=0
+    while [ "$check" -lt 3 ]; do
+        sleep 60
+        check=$((check + 1))
+        if ! is_build_running; then
+            ok "Previous build finished (after 60s check $check/3)"
+            return 0
+        fi
+        failures=$((failures + 1))
+        warn "Still building after 60s check $check/3 (failure $failures/3)"
+    done
+
+    # All 3 x 60s checks failed — force kill
+    err "Build stuck for too long. Force-killing..."
+    kill_all_builds
+}
+
 # ─── Build ───────────────────────────────────────────────────────────────────
 do_clean() {
     log "Cleaning..."
@@ -261,6 +335,8 @@ do_clean() {
 }
 
 do_build() {
+    wait_for_existing_build
+
     if [ "$CLEAN" = true ]; then
         do_clean
     fi
