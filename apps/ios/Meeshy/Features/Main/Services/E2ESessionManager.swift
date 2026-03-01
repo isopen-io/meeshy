@@ -2,13 +2,14 @@ import Foundation
 import CryptoKit
 
 /// Gère l'état et l'établissement des sessions de chiffrement de bout en bout
-public final class SessionManager {
+/// `actor` garantit l'isolation des données à la compilation — pas de data race sur `activeSessions`.
+public actor SessionManager {
     public static let shared = SessionManager()
-    
-    // Cache en mémoire des clés de session symétriques
-    // En production, stocker en base locale chiffrée (CoreData, Realm...)
+
+    // Cache en mémoire des clés de session symétriques.
+    // En production, persister dans une base locale chiffrée (CoreData + FileProtection).
     private var activeSessions: [String: SymmetricKey] = [:]
-    
+
     private init() {}
     
     /// Récupère la session pour un utilisateur, ou l'établit via Diffie-Hellman si elle n'existe pas.

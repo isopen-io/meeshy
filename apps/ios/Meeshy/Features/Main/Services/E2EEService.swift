@@ -11,6 +11,7 @@ public final class E2EEService {
     // Key identifiers
     private let identityKeyIdentifier = "com.meeshy.e2ee.identityKey"
     private let signedPreKeyIdentifier = "com.meeshy.e2ee.signedPreKey"
+    private let signingKeyIdentifier = "com.meeshy.e2ee.signingKey"
 
     private init() {}
 
@@ -56,6 +57,54 @@ public final class E2EEService {
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
+    // MARK: - Keychain helpers for Curve25519 Signing key
+
+    private func saveCurve25519SigningKey(_ key: Curve25519.Signing.PrivateKey, identifier: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecValueData as String: key.rawRepresentation,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw E2EError.keychainError(status) }
+    }
+
+    private func loadCurve25519SigningKey(identifier: String) throws -> Curve25519.Signing.PrivateKey {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: identifier,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let keyData = item as? Data else { throw E2EError.keychainError(status) }
+        return try Curve25519.Signing.PrivateKey(rawRepresentation: keyData)
+    }
+
+    private func signingKeyExists() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: signingKeyIdentifier,
+            kSecReturnData as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// Récupère la clé de signature dédiée (Ed25519), la génère si absente.
+    /// Séparée de la clé d'accord (Curve25519 X25519) pour éviter la réutilisation de matériau cryptographique.
+    public func getOrGenerateSigningKey() throws -> Curve25519.Signing.PrivateKey {
+        if signingKeyExists() {
+            return try loadCurve25519SigningKey(identifier: signingKeyIdentifier)
+        }
+        let key = Curve25519.Signing.PrivateKey()
+        try saveCurve25519SigningKey(key, identifier: signingKeyIdentifier)
+        return key
+    }
+
     private enum E2EError: Error {
         case keychainError(OSStatus)
     }
@@ -94,12 +143,10 @@ public final class E2EEService {
         return try generateSignedPreKey()
     }
 
-    /// Signe des données (comme la clé publique SignedPreKey) en utilisant une clé Ed25519 dérivée de l'IdentityKey.
-    public func signData(data: Data, using identityKey: Curve25519.KeyAgreement.PrivateKey) throws -> Data {
-        let seed = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: identityKey.rawRepresentation),
-                                          info: Data("SigningSeed".utf8),
-                                          outputByteCount: 32)
-        let signingKey = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
+    /// Signe des données (comme la clé publique SignedPreKey) avec la clé de signature dédiée.
+    /// Clé distincte de la clé d'accord : pas de réutilisation de matériau cryptographique entre X25519 et Ed25519.
+    public func signData(data: Data) throws -> Data {
+        let signingKey = try getOrGenerateSigningKey()
         return try signingKey.signature(for: data)
     }
 
@@ -113,7 +160,7 @@ public final class E2EEService {
         let identityPublic = identityKey.publicKey.rawRepresentation
         let signedPrePublic = signedPreKey.publicKey.rawRepresentation
 
-        let signature = try signData(data: signedPrePublic, using: identityKey)
+        let signature = try signData(data: signedPrePublic)
 
         let preKey = Curve25519.KeyAgreement.PrivateKey()
         try saveCurve25519Key(preKey, identifier: "com.meeshy.e2ee.otpk.1")

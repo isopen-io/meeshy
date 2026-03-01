@@ -248,7 +248,7 @@ class ConversationViewModel: ObservableObject {
     private static let paginationRetryCount: Int = 3
     private static let paginationRetryDelay: UInt64 = 500_000_000
 
-    var currentUserId: String { AuthManager.shared.currentUser?.id ?? "" }
+    private var currentUserId: String { AuthManager.shared.currentUser?.id ?? "" }
 
     // MARK: - Top Active Members (cached)
 

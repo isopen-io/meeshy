@@ -1,4 +1,5 @@
 import SwiftUI
+import CryptoKit
 import MeeshySDK
 import os
 import MeeshyUI
@@ -145,15 +146,12 @@ struct ConversationInfoSheet: View {
         .withStatusBubble()
     }
 
-    // MARK: - Dummy Safety Number Generator (Placeholder for real implementation)
+    // MARK: - Safety Number Generator (déterministe, SHA-256)
     private func generateDummySafetyNumber(userId: String) -> String {
-        let hash = abs(userId.hashValue)
-        let strHash = String(hash).padding(toLength: 12, withPad: "0", startingAt: 0)
-        let secondPart = abs(AuthManager.shared.currentUser?.id.hashValue ?? 0)
-        let strSecond = String(secondPart).padding(toLength: 12, withPad: "0", startingAt: 0)
-        let combined = strHash + strSecond
-        // Ensure strictly 20-30 digits (e.g. padding to 30)
-        return String(combined.padding(toLength: 30, withPad: "0", startingAt: 0).prefix(30))
+        let myId = AuthManager.shared.currentUser?.id ?? ""
+        let canonical = [userId, myId].sorted().joined(separator: ":")
+        let hash = SHA256.hash(data: Data(canonical.utf8))
+        return String(hash.map { String(format: "%02u", $0) }.joined().prefix(30))
     }
 
     // MARK: - Sheet Background
