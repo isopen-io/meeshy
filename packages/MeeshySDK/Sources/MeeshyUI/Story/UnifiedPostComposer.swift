@@ -59,11 +59,7 @@ public struct UnifiedPostComposer: View {
                 onDismiss: { showStoryComposer = false }
             )
         }
-        .photosPicker(isPresented: Binding(
-            get: { selectedPhotoItem != nil ? false : false },
-            set: { _ in }
-        ), selection: $selectedPhotoItem, matching: .images)
-        .onChange(of: selectedPhotoItem) { newItem in
+        .onChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
     }
@@ -298,7 +294,7 @@ public struct UnifiedPostComposer: View {
         switch selectedType {
         case .post: return !content.isEmpty
         case .status: return moodEmoji != nil
-        case .story: return false
+        case .story: return true
         }
     }
 
