@@ -1,3 +1,4 @@
+#if os(iOS)
 import AVFoundation
 
 /// Coordonne l'accès à AVAudioSession entre tous les composants audio.
@@ -42,3 +43,4 @@ public actor MediaSessionCoordinator {
         }
     }
 }
+#endif
