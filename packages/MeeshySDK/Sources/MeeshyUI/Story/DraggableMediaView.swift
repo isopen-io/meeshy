@@ -15,9 +15,21 @@ public struct DraggableMediaView: View {
 
     @State private var internalPlayer: AVPlayer?
     @State private var loopObserver: AnyObject? = nil
+
+    // Local state snapshots: read from binding once, then only update on gesture end.
+    // This prevents parent re-renders from resetting the visual position mid-gesture.
+    @State private var baseX: CGFloat?
+    @State private var baseY: CGFloat?
+    @State private var baseScale: CGFloat?
+    @State private var baseRotation: CGFloat?
+
+    // Gesture-transient visual offsets — never written to binding, reset automatically on gesture end.
+    @GestureState private var dragOffset: CGSize = .zero
     @GestureState private var gestureScale: CGFloat = 1.0
     @GestureState private var gestureRotation: Angle = .zero
-    @GestureState private var dragOffset: CGSize = .zero
+
+    // Canvas size captured from GeometryReader, stored to avoid re-reading mid-gesture.
+    @State private var canvasSize: CGSize = .zero
 
     public init(mediaObject: Binding<StoryMediaObject>,
                 image: UIImage? = nil,
@@ -39,25 +51,33 @@ public struct DraggableMediaView: View {
         externalPlayer ?? internalPlayer
     }
 
+    // Resolved base values: use local snapshot if set, otherwise fall back to binding.
+    private var currentX: CGFloat { baseX ?? mediaObject.x }
+    private var currentY: CGFloat { baseY ?? mediaObject.y }
+    private var currentScale: CGFloat { baseScale ?? mediaObject.scale }
+    private var currentRotation: CGFloat { baseRotation ?? mediaObject.rotation }
+
     public var body: some View {
         GeometryReader { geo in
-            // .position() en DERNIER — contentShape + gestes AVANT pour
-            // que la zone de hit-test soit l'image (160×160), pas le canvas entier.
-            positionedContent(geo: geo)
-                .position(
-                    x: mediaObject.x * geo.size.width + dragOffset.width,
-                    y: mediaObject.y * geo.size.height + dragOffset.height
-                )
+            mediaContentWithGestures(canvasWidth: geo.size.width, canvasHeight: geo.size.height)
                 .onAppear {
+                    canvasSize = geo.size
+                    syncBaseFromBinding()
                     if externalPlayer == nil, let url = videoURL {
                         setupInternalPlayer(url: url)
                     }
+                }
+                .onChange(of: geo.size) { newSize in
+                    canvasSize = newSize
                 }
                 .onChange(of: videoURL) { newURL in
                     if externalPlayer == nil, let url = newURL {
                         teardownInternalPlayer()
                         setupInternalPlayer(url: url)
                     }
+                }
+                .onChange(of: mediaObject.id) { _ in
+                    syncBaseFromBinding()
                 }
                 .onDisappear {
                     if externalPlayer == nil {
@@ -67,72 +87,108 @@ public struct DraggableMediaView: View {
         }
     }
 
-    // MARK: - Content avec gestures conditionnels
+    // MARK: - Sync base state from binding
 
-    /// Construit le contenu avec ou sans les gestures d'édition.
-    /// Séparer drag / pinch / rotation avec .gesture + .simultaneousGesture est indispensable :
-    /// .simultaneously() enchaîné bloque la reconnaissance multi-touch (pinch/rotation).
+    private func syncBaseFromBinding() {
+        baseX = mediaObject.x
+        baseY = mediaObject.y
+        baseScale = mediaObject.scale
+        baseRotation = mediaObject.rotation
+    }
+
+    // MARK: - Content with conditional gestures
+
     @ViewBuilder
-    private func positionedContent(geo: GeometryProxy) -> some View {
+    private func mediaContentWithGestures(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some View {
         if isEditing {
             mediaContent
                 .frame(width: 160, height: 160)
-                .scaleEffect(mediaObject.scale * gestureScale)
-                .rotationEffect(.radians(mediaObject.rotation) + gestureRotation)
+                .scaleEffect(currentScale * gestureScale)
+                .rotationEffect(.radians(currentRotation) + gestureRotation)
                 .contentShape(Rectangle())
+                .position(
+                    x: currentX * canvasWidth + dragOffset.width,
+                    y: currentY * canvasHeight + dragOffset.height
+                )
                 .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
-                .gesture(
-                    DragGesture()
-                        .updating($dragOffset) { v, s, _ in s = v.translation }
-                        .onEnded { v in
-                            mediaObject.x = min(1, max(0, mediaObject.x + v.translation.width  / geo.size.width))
-                            mediaObject.y = min(1, max(0, mediaObject.y + v.translation.height / geo.size.height))
-                            onDragEnd()
-                        }
-                )
-                .simultaneousGesture(
-                    MagnificationGesture()
-                        .updating($gestureScale) { v, s, _ in s = v }
-                        .onEnded { v in
-                            mediaObject.scale = min(4.0, max(0.3, mediaObject.scale * v))
-                            onDragEnd()
-                        }
-                )
-                .simultaneousGesture(
-                    RotationGesture()
-                        .updating($gestureRotation) { v, s, _ in s = v }
-                        .onEnded { v in
-                            mediaObject.rotation += v.radians
-                            onDragEnd()
-                        }
-                )
+                .gesture(dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight))
+                .simultaneousGesture(pinchGesture)
+                .simultaneousGesture(rotateGesture)
         } else {
-            // Lecteur : tap z-index uniquement, aucun geste d'édition
             mediaContent
                 .frame(width: 160, height: 160)
-                .scaleEffect(mediaObject.scale)
-                .rotationEffect(.radians(mediaObject.rotation))
+                .scaleEffect(currentScale)
+                .rotationEffect(.radians(currentRotation))
                 .contentShape(Rectangle())
+                .position(
+                    x: currentX * canvasWidth,
+                    y: currentY * canvasHeight
+                )
                 .simultaneousGesture(TapGesture().onEnded { _ in onTapToFront?() })
         }
     }
 
-    // MARK: - Contenu média
+    // MARK: - Gestures
+
+    private func dragGesture(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some Gesture {
+        DragGesture()
+            .updating($dragOffset) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                let newX = min(1, max(0, currentX + value.translation.width / canvasWidth))
+                let newY = min(1, max(0, currentY + value.translation.height / canvasHeight))
+                baseX = newX
+                baseY = newY
+                mediaObject.x = newX
+                mediaObject.y = newY
+                onDragEnd()
+            }
+    }
+
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .updating($gestureScale) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                let newScale = min(4.0, max(0.3, currentScale * value))
+                baseScale = newScale
+                mediaObject.scale = newScale
+                onDragEnd()
+            }
+    }
+
+    private var rotateGesture: some Gesture {
+        RotationGesture()
+            .updating($gestureRotation) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                let newRotation = currentRotation + value.radians
+                baseRotation = newRotation
+                mediaObject.rotation = newRotation
+                onDragEnd()
+            }
+    }
+
+    // MARK: - Media content
 
     @ViewBuilder
     private var mediaContent: some View {
-        if let image {
+        // Video takes priority when videoURL is set (image may be just a thumbnail).
+        if let player = activePlayer {
+            VideoPlayer(player: player)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else if let image {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-        } else if let player = activePlayer {
-            VideoPlayer(player: player)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
-    // MARK: - Player interne (mode composer)
+    // MARK: - Internal player (composer mode)
 
     private func setupInternalPlayer(url: URL) {
         let player = AVPlayer(url: url)

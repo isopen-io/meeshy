@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import PencilKit
 import UniformTypeIdentifiers
+import AVFoundation
 import MeeshySDK
 
 // MARK: - Story Composer Active Panel
@@ -65,6 +66,11 @@ private struct MediaAudioEditorItem: Identifiable {
     let url: URL
 }
 
+private enum VocalPanelTab: String, CaseIterable {
+    case library = "Bibliothèque"
+    case record = "Enregistrer"
+}
+
 // MARK: - Story Composer View
 
 public struct StoryComposerView: View {
@@ -118,7 +124,7 @@ public struct StoryComposerView: View {
     @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
     @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
-    @State private var showAudioRecorder = false
+    @State private var vocalTab: VocalPanelTab = .library
     @State private var showVolumeMixer = false
     // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
     @State private var loadedImages: [String: UIImage] = [:]
@@ -199,15 +205,6 @@ public struct StoryComposerView: View {
                 pendingMediaType = "audio"
                 mediaAudioEditorItem = MediaAudioEditorItem(url: url)
             }
-        }
-        .sheet(isPresented: $showAudioRecorder) {
-            StoryVoiceRecorder { recordedURL in
-                showAudioRecorder = false
-                pendingMediaType = "audio"
-                mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
         }
         .sheet(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
@@ -316,16 +313,14 @@ public struct StoryComposerView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     activePanel = .media
                 }
-            }
-        )
-        .simultaneousGesture(
-            activePanel != .none && !isDrawingActive
-                ? TapGesture().onEnded {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        activePanel = .none
-                    }
+            },
+            onBackgroundTap: {
+                guard activePanel != .none, !isDrawingActive else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    activePanel = .none
+                    selectedMediaId = nil
                 }
-                : nil
+            }
         )
         .overlay {
             if isLoadingMedia {
@@ -823,6 +818,12 @@ public struct StoryComposerView: View {
                                 isSelected: selectedMediaId == media.id,
                                 isDragging: draggingMediaId == media.id,
                                 dragOffset: draggingMediaId == media.id ? mediaDragTranslation : 0,
+                                onTap: {
+                                    withAnimation(.spring(response: 0.2)) {
+                                        selectedMediaId = (selectedMediaId == media.id) ? nil : media.id
+                                    }
+                                    HapticFeedback.light()
+                                },
                                 onDelete: {
                                     removeMediaObject(id: media.id)
                                     if (currentSlideEffects?.mediaObjects ?? [])
@@ -935,6 +936,61 @@ public struct StoryComposerView: View {
     // MARK: - Vocal Panel (+Vocal — foreground uniquement)
 
     private var vocalPickerPanel: some View {
+        VStack(spacing: 0) {
+            vocalTabSelector
+            vocalTabContent
+        }
+    }
+
+    private var vocalTabSelector: some View {
+        HStack(spacing: 0) {
+            ForEach(VocalPanelTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        vocalTab = tab
+                    }
+                } label: {
+                    Text(tab.rawValue)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(vocalTab == tab ? .white : .white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .overlay(alignment: .bottom) {
+                            if vocalTab == tab {
+                                Capsule()
+                                    .fill(Color(hex: "FF2E63"))
+                                    .frame(height: 2)
+                                    .padding(.horizontal, 20)
+                                    .transition(.opacity)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 4)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.2)
+        }
+    }
+
+    @ViewBuilder
+    private var vocalTabContent: some View {
+        switch vocalTab {
+        case .library:
+            vocalLibraryTab
+        case .record:
+            StoryVoiceRecorder { recordedURL in
+                pendingMediaType = "audio"
+                mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    vocalTab = .library
+                }
+            }
+        }
+    }
+
+    private var vocalLibraryTab: some View {
         let vocalCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
         return VStack(spacing: 10) {
             HStack {
@@ -950,38 +1006,21 @@ public struct StoryComposerView: View {
             }
             .padding(.horizontal, 16)
 
-            HStack(spacing: 10) {
-                Button {
-                    showAudioDocumentPicker = true
-                } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Bibliothèque")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+            Button {
+                showAudioDocumentPicker = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Choisir depuis la bibliothèque")
+                        .font(.system(size: 13, weight: .medium))
                 }
-
-                Button {
-                    showAudioRecorder = true
-                } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 20, weight: .medium))
-                        Text("Enregistrer")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
         .padding(.vertical, 12)
     }
@@ -1463,11 +1502,15 @@ public struct StoryComposerView: View {
                         .appendingPathComponent(objectId + "." + ext)
                     do {
                         try data.write(to: tempURL)
+                        // Generate video thumbnail for carousel
+                        let thumbnail = Self.generateVideoThumbnail(url: tempURL)
                         await MainActor.run {
                             loadedVideoURLs[objectId] = tempURL
+                            if let thumbnail { loadedImages[objectId] = thumbnail }
                             var effects = currentSlideEffects ?? buildEffects()
                             effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
                             setCurrentSlideEffects(effects)
+                            selectedMediaId = objectId
                         }
                     } catch {
                         print("[StoryComposer] Erreur écriture vidéo temp: \(error)")
@@ -1481,6 +1524,7 @@ public struct StoryComposerView: View {
                         var effects = currentSlideEffects ?? buildEffects()
                         effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
                         setCurrentSlideEffects(effects)
+                        selectedMediaId = objectId
                     }
                 }
             }
@@ -1585,6 +1629,20 @@ public struct StoryComposerView: View {
         uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
     }
+
+    /// Extract first frame from video as UIImage thumbnail.
+    static func generateVideoThumbnail(url: URL) -> UIImage? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 400, height: 400)
+        do {
+            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+            return UIImage(cgImage: cgImage)
+        } catch {
+            return nil
+        }
+    }
 }
 
 // MARK: - Volume Mixer Sheet
@@ -1671,6 +1729,7 @@ private struct ForegroundMediaThumbnail: View {
     let isSelected: Bool
     let isDragging: Bool
     let dragOffset: CGFloat
+    let onTap: () -> Void
     let onDelete: () -> Void
     let onLongPress: () -> Void
     let onDragChanged: (CGFloat) -> Void
@@ -1727,6 +1786,9 @@ private struct ForegroundMediaThumbnail: View {
         .offset(x: dragOffset)
         .scaleEffect(isDragging ? 1.08 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isDragging)
+        .onTapGesture {
+            if !isEditMode { onTap() }
+        }
         .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
         .gesture(
             isEditMode

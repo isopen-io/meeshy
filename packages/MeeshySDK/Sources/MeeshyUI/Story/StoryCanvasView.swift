@@ -31,6 +31,7 @@ public struct StoryCanvasView: View {
     @Binding public var loadedVideoURLs: [String: URL]
     @Binding public var loadedAudioURLs: [String: URL]
     public let onSelectMedia: ((String) -> Void)?
+    public let onBackgroundTap: (() -> Void)?
     // Image manipulation — état local (UX preview)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -54,7 +55,8 @@ public struct StoryCanvasView: View {
                 loadedImages: Binding<[String: UIImage]> = .constant([:]),
                 loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
                 loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
-                onSelectMedia: ((String) -> Void)? = nil) {
+                onSelectMedia: ((String) -> Void)? = nil,
+                onBackgroundTap: (() -> Void)? = nil) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -72,6 +74,7 @@ public struct StoryCanvasView: View {
         self._loadedVideoURLs = loadedVideoURLs
         self._loadedAudioURLs = loadedAudioURLs
         self.onSelectMedia = onSelectMedia
+        self.onBackgroundTap = onBackgroundTap
     }
 
     public var body: some View {
@@ -122,6 +125,10 @@ public struct StoryCanvasView: View {
             if selectedImage == nil {
                 gradientOverlay
             }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onBackgroundTap?()
         }
     }
 
@@ -256,35 +263,30 @@ public struct StoryCanvasView: View {
 
     @ViewBuilder
     private var foregroundMediaLayer: some View {
-        // Trier : le dernier tapé est rendu en dernier (le plus au-dessus)
-        let sorted: [(Int, StoryMediaObject)] = {
-            let foreground = mediaObjects.indices.map { ($0, mediaObjects[$0]) }
-                .filter { $0.1.placement == "foreground" }
-            if let tapped = lastTappedMediaId,
-               let idx = foreground.firstIndex(where: { $0.1.id == tapped }) {
-                var reordered = foreground
-                let item = reordered.remove(at: idx)
-                reordered.append(item)
-                return reordered
+        // Use .zIndex() for z-ordering instead of reordering the source array.
+        // Array reordering causes ForEach to destroy and recreate views,
+        // which kills active @GestureState and produces jerky drag.
+        // With .zIndex(), SwiftUI keeps stable view identity and just
+        // paints in the correct order.
+        //
+        // ForEach($mediaObjects) gives each child a Binding<StoryMediaObject>
+        // keyed by StoryMediaObject.id — stable identity, direct binding
+        // (no inline Binding(get:set:) with captured indices).
+        ForEach($mediaObjects) { $obj in
+            if obj.placement == "foreground" {
+                DraggableMediaView(
+                    mediaObject: $obj,
+                    image: loadedImages[obj.id],
+                    videoURL: loadedVideoURLs[obj.id],
+                    isEditing: !isDrawingActive,
+                    onDragEnd: {},
+                    onTapToFront: {
+                        lastTappedMediaId = obj.id
+                        onSelectMedia?(obj.id)
+                    }
+                )
+                .zIndex(obj.id == lastTappedMediaId ? 1 : 0)
             }
-            return foreground
-        }()
-
-        ForEach(sorted, id: \.1.id) { index, obj in
-            DraggableMediaView(
-                mediaObject: Binding(
-                    get: { index < mediaObjects.count ? mediaObjects[index] : obj },
-                    set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
-                ),
-                image: loadedImages[obj.id],
-                videoURL: loadedVideoURLs[obj.id],
-                isEditing: !isDrawingActive,
-                onDragEnd: {},
-                onTapToFront: {
-                    lastTappedMediaId = obj.id
-                    onSelectMedia?(obj.id)
-                }
-            )
         }
     }
 
@@ -292,13 +294,10 @@ public struct StoryCanvasView: View {
 
     @ViewBuilder
     private var foregroundAudioLayer: some View {
-        ForEach(Array(audioPlayerObjects.enumerated()), id: \.element.id) { index, obj in
+        ForEach($audioPlayerObjects) { $obj in
             if obj.placement == "foreground" {
                 StoryAudioPlayerView(
-                    audioObject: Binding(
-                        get: { audioPlayerObjects[index] },
-                        set: { guard index < audioPlayerObjects.count else { return }; audioPlayerObjects[index] = $0 }
-                    ),
+                    audioObject: $obj,
                     url: loadedAudioURLs[obj.id],
                     isEditing: !isDrawingActive,
                     onDragEnd: {}
