@@ -7,6 +7,14 @@ import { ZMQSingleton } from './ZmqSingleton';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
+interface StoryTextObjectRaw {
+  id?: string;
+  text: string;
+  sourceLanguage?: string;
+  translations?: Record<string, string>;
+  [key: string]: unknown;
+}
+
 const STORY_EXPIRY_HOURS = 21;
 const STATUS_EXPIRY_HOURS = 1;
 
@@ -180,6 +188,26 @@ export class PostService {
       this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
     }
 
+    // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
+    const effects = data.storyEffects as Record<string, unknown> | undefined;
+    const textObjects = effects?.textObjects as StoryTextObjectRaw[] | undefined;
+
+    if (textObjects?.length) {
+      const searchContent = textObjects
+        .map((t) => t.text)
+        .filter(Boolean)
+        .join(' ');
+
+      if (searchContent && !data.content) {
+        await this.prisma.post.update({
+          where: { id: post.id },
+          data: { content: searchContent },
+        });
+      }
+
+      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+    }
+
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
@@ -271,6 +299,43 @@ export class PostService {
     } catch (error) {
       log.warn('StoryTranslation failed', { err: error, postId });
     }
+  }
+
+  private triggerStoryTextObjectTranslation(
+    postId: string,
+    textObjects: StoryTextObjectRaw[]
+  ): void {
+    const targetLanguages = this.getActiveTargetLanguages();
+
+    textObjects.forEach((obj, index) => {
+      const text = obj.text?.trim();
+      if (!text) return;
+
+      const zmqClient = ZMQSingleton.getInstanceSync();
+      if (!zmqClient) {
+        log.warn('StoryTextObjectTranslation: ZMQ client not available', { postId, index });
+        return;
+      }
+
+      const storyMessageId = `story_text_object:${postId}:${index}`;
+      const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+
+      log.info('StoryTextObjectTranslation: sending ZMQ request', { postId, index, sourceLanguage, targetLanguages });
+
+      zmqClient.translateToMultipleLanguages(
+        text,
+        sourceLanguage,
+        targetLanguages,
+        storyMessageId,
+        `story_text_object_context:${postId}:${index}`,
+      ).catch((err: unknown) => {
+        log.warn('StoryTextObjectTranslation: ZMQ send failed', { err, postId, index });
+      });
+    });
+  }
+
+  private getActiveTargetLanguages(): string[] {
+    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
   }
 
   async getPostById(postId: string, viewerUserId?: string) {
