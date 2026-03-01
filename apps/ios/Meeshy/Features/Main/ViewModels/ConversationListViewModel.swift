@@ -206,6 +206,10 @@ class ConversationListViewModel: ObservableObject {
                 self.conversations[idx].lastMessagePreview = preview
                 self.conversations[idx].lastMessageSenderName = senderName
                 self.conversations[idx].lastMessageAt = msgDate
+                self.conversations[idx].lastMessageId = apiMsg.id
+                self.conversations[idx].lastMessageIsBlurred = apiMsg.isBlurred ?? false
+                self.conversations[idx].lastMessageIsViewOnce = apiMsg.isViewOnce ?? false
+                self.conversations[idx].lastMessageExpiresAt = apiMsg.expiresAt
 
                 // Move conversation to top if not already
                 if idx > 0 {
@@ -219,6 +223,10 @@ class ConversationListViewModel: ObservableObject {
                     self.groupedConversations[i].conversations[rowIdx].lastMessagePreview = preview
                     self.groupedConversations[i].conversations[rowIdx].lastMessageSenderName = senderName
                     self.groupedConversations[i].conversations[rowIdx].lastMessageAt = msgDate
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageId = apiMsg.id
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageIsBlurred = apiMsg.isBlurred ?? false
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageIsViewOnce = apiMsg.isViewOnce ?? false
+                    self.groupedConversations[i].conversations[rowIdx].lastMessageExpiresAt = apiMsg.expiresAt
                     // Remonter en tête de section (sauf pinned)
                     if rowIdx > 0 && self.groupedConversations[i].section.id != "pinned" {
                         let conv = self.groupedConversations[i].conversations.remove(at: rowIdx)
