@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import PencilKit
+import UniformTypeIdentifiers
 import MeeshySDK
 
 // MARK: - Story Composer Active Panel
@@ -103,6 +104,9 @@ public struct StoryComposerView: View {
     @State private var showMediaAudioEditor = false
     @State private var pendingAudioURL: URL? = nil
     @State private var showVolumeMixer = false
+    // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
+    @State private var loadedImages: [String: UIImage] = [:]
+    @State private var loadedVideoURLs: [String: URL] = [:]
 
     @State private var showPreview = false
     @State private var visibility: String = "PUBLIC"
@@ -286,7 +290,9 @@ public struct StoryComposerView: View {
                         effects.audioPlayerObjects = objs
                         setCurrentSlideEffects(effects)
                     }
-                )
+                ),
+                loadedImages: $loadedImages,
+                loadedVideoURLs: $loadedVideoURLs
             )
 
             // Ferme le panel actif en tapant le canvas (sauf en mode dessin)
@@ -599,8 +605,9 @@ public struct StoryComposerView: View {
                 }
                 .accessibilityLabel("Ajouter image ou vidéo")
                 .onChange(of: pendingMediaItem) { item in
-                    guard item != nil else { return }
-                    pendingMediaType = "image"
+                    guard let item else { return }
+                    let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .audiovisualContent) }
+                    pendingMediaType = isVideo ? "video" : "image"
                     showMediaPlacementSheet = true
                 }
 
@@ -1056,23 +1063,39 @@ public struct StoryComposerView: View {
             return
         }
         guard let item = pendingMediaItem else { return }
+        let mediaType = pendingMediaType
         Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                let obj = StoryMediaObject(
-                    id: UUID().uuidString,
-                    postMediaId: "",
-                    mediaType: "image",
-                    placement: placement.rawValue,
-                    x: 0.5, y: 0.5,
-                    scale: 1.0, rotation: 0.0,
-                    volume: 1.0
-                )
-                await MainActor.run {
-                    var effects = currentSlideEffects ?? buildEffects()
-                    effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                    setCurrentSlideEffects(effects)
-                    _ = image
+            let objectId = UUID().uuidString
+            let obj = StoryMediaObject(
+                id: objectId,
+                postMediaId: "",
+                mediaType: mediaType,
+                placement: placement.rawValue,
+                x: 0.5, y: 0.5,
+                scale: 1.0, rotation: 0.0,
+                volume: 1.0
+            )
+            if mediaType == "video" {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(objectId + ".mp4")
+                    try? data.write(to: tempURL)
+                    await MainActor.run {
+                        loadedVideoURLs[objectId] = tempURL
+                        var effects = currentSlideEffects ?? buildEffects()
+                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                        setCurrentSlideEffects(effects)
+                    }
+                }
+            } else {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        loadedImages[objectId] = image
+                        var effects = currentSlideEffects ?? buildEffects()
+                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
+                        setCurrentSlideEffects(effects)
+                    }
                 }
             }
             await MainActor.run {
@@ -1128,7 +1151,9 @@ public struct StoryComposerView: View {
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
             backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
             opening: openingEffect,
-            closing: closingEffect
+            closing: closingEffect,
+            mediaObjects: currentSlideEffects?.mediaObjects,
+            audioPlayerObjects: currentSlideEffects?.audioPlayerObjects
         )
     }
 

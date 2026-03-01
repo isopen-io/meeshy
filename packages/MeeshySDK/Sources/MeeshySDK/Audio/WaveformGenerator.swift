@@ -25,9 +25,11 @@ public actor WaveformGenerator {
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
         reader.add(output)
         reader.startReading()
+        defer { if reader.status == .reading { reader.cancelReading() } }
 
         var allSamples: [Float] = []
         while let buffer = output.copyNextSampleBuffer() {
+            try Task.checkCancellation()
             guard let blockBuffer = CMSampleBufferGetDataBuffer(buffer) else { continue }
             let length = CMBlockBufferGetDataLength(blockBuffer)
             var data = Data(count: length)

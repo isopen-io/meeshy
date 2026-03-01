@@ -48,12 +48,13 @@ public struct StoryAudioPlayerView: View {
     }
 
     private var waveformView: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { _ in
+        TimelineView(.animation(minimumInterval: 0.05)) { context in
             Canvas { ctx, size in
                 let samples = audioObject.waveformSamples
                 guard !samples.isEmpty else { return }
                 let barWidth = size.width / CGFloat(samples.count)
                 let centerY = size.height / 2
+                let t = context.date.timeIntervalSinceReferenceDate
 
                 for (i, sample) in samples.enumerated() {
                     let x = CGFloat(i) * barWidth + barWidth / 2
@@ -64,7 +65,7 @@ public struct StoryAudioPlayerView: View {
                     let alpha: Double = isPlayed ? 1.0 : 0.4
 
                     let animOffset: CGFloat = isPlaying && isPlayed
-                        ? CGFloat.random(in: -2...2) : 0
+                        ? CGFloat(sin(t * 8 + Double(i) * 0.7)) * 2 : 0
 
                     ctx.fill(
                         Path(CGRect(x: x - barWidth * 0.3,

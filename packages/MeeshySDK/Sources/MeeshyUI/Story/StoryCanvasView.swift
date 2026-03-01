@@ -26,6 +26,9 @@ public struct StoryCanvasView: View {
     // Media objects (foreground)
     @Binding public var mediaObjects: [StoryMediaObject]
     @Binding public var audioPlayerObjects: [StoryAudioPlayerObject]
+    // Médias chargés localement (en attente d'upload)
+    @Binding public var loadedImages: [String: UIImage]
+    @Binding public var loadedVideoURLs: [String: URL]
     // Image manipulation — état local (UX preview)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -42,7 +45,9 @@ public struct StoryCanvasView: View {
                 drawingColor: Binding<Color>, drawingWidth: Binding<CGFloat>,
                 drawingTool: Binding<DrawingTool>,
                 mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
-                audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([])) {
+                audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
+                loadedImages: Binding<[String: UIImage]> = .constant([:]),
+                loadedVideoURLs: Binding<[String: URL]> = .constant([:])) {
         self._text = text; self._textStyle = textStyle
         self._textColor = textColor; self._textSize = textSize
         self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
@@ -56,6 +61,8 @@ public struct StoryCanvasView: View {
         self._drawingTool = drawingTool
         self._mediaObjects = mediaObjects
         self._audioPlayerObjects = audioPlayerObjects
+        self._loadedImages = loadedImages
+        self._loadedVideoURLs = loadedVideoURLs
     }
 
     public var body: some View {
@@ -237,6 +244,8 @@ public struct StoryCanvasView: View {
                         get: { mediaObjects[index] },
                         set: { guard index < mediaObjects.count else { return }; mediaObjects[index] = $0 }
                     ),
+                    image: loadedImages[obj.id],
+                    videoURL: loadedVideoURLs[obj.id],
                     isEditing: !isDrawingActive,
                     onDragEnd: {}
                 )

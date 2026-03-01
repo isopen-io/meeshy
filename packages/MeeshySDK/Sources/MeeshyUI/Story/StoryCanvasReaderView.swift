@@ -143,7 +143,7 @@ public struct StoryCanvasReaderView: View {
             DrawingOverlayView(
                 drawingData: .constant(drawingData),
                 isActive: .constant(false),
-                canvasView: .constant(PKCanvasView()),
+                canvasView: .constant(state.canvas),
                 toolColor: .constant(.white),
                 toolWidth: .constant(5),
                 toolType: .constant(.pen)
@@ -287,6 +287,7 @@ public struct StoryCanvasReaderView: View {
 
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
+    let canvas = PKCanvasView()
 
     private var backgroundPlayer: AVPlayer?
     private var cancellables = Set<AnyCancellable>()
