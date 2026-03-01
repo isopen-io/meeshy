@@ -149,7 +149,7 @@ struct ConversationInfoSheet: View {
     private func generateDummySafetyNumber(userId: String) -> String {
         let hash = abs(userId.hashValue)
         let strHash = String(hash).padding(toLength: 12, withPad: "0", startingAt: 0)
-        let secondPart = abs(AuthManager.shared.currentUserId?.hashValue ?? 0)
+        let secondPart = abs(AuthManager.shared.currentUser?.id.hashValue ?? 0)
         let strSecond = String(secondPart).padding(toLength: 12, withPad: "0", startingAt: 0)
         let combined = strHash + strSecond
         // Ensure strictly 20-30 digits (e.g. padding to 30)

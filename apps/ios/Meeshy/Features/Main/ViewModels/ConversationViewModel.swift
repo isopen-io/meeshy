@@ -99,6 +99,28 @@ class ConversationViewModel: ObservableObject {
     private var savedCursor: String?
     private var savedHasOlder: Bool = true
 
+    // MARK: - O(1) Message Index
+
+    private var _messageIdIndex: [String: Int]?
+
+    private var messageIdIndex: [String: Int] {
+        if let cached = _messageIdIndex { return cached }
+        var index = [String: Int](minimumCapacity: messages.count)
+        for (i, msg) in messages.enumerated() {
+            index[msg.id] = i
+        }
+        _messageIdIndex = index
+        return index
+    }
+
+    func messageIndex(for id: String) -> Int? {
+        messageIdIndex[id]
+    }
+
+    func containsMessage(id: String) -> Bool {
+        messageIdIndex[id] != nil
+    }
+
     // MARK: - Conversation-Wide Media
 
     struct MediaSenderInfo {
@@ -219,7 +241,15 @@ class ConversationViewModel: ObservableObject {
     private let limit = 50
     private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
-    
+    private var socketHandler: ConversationSocketHandler?
+    private var lastOlderPaginationTime: Date = .distantPast
+    private var lastNewerPaginationTime: Date = .distantPast
+    private static let paginationDebounceInterval: TimeInterval = 1.0
+    private static let paginationRetryCount: Int = 3
+    private static let paginationRetryDelay: UInt64 = 500_000_000
+
+    var currentUserId: String { AuthManager.shared.currentUser?.id ?? "" }
+
     // MARK: - Top Active Members (cached)
 
     private var _topActiveMembers: [ConversationActiveMember]?
@@ -407,10 +437,10 @@ class ConversationViewModel: ObservableObject {
         await withTaskGroup(of: (Int, String?).self) { group in
             for i in 0..<msgs.count {
                 let msg = msgs[i]
-                if msg.isEncrypted, let senderId = msg.senderId, let base64content = msg.content, let data = Data(base64Encoded: base64content) {
+                if msg.isEncrypted, let senderId = msg.senderId, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
                     group.addTask {
                         do {
-                            let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId, conversationId: msg.conversationId)
+                            let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId)
                             if let text = String(data: decrypted, encoding: .utf8) {
                                 return (i, text)
                             }

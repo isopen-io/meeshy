@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MeeshySDK",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v17)],
     products: [
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),
