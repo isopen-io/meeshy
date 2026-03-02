@@ -527,8 +527,8 @@ public struct StoryComposerView: View {
 
     private func slideThumb(slide: StorySlide, index: Int) -> some View {
         let isSelected = slideManager.currentSlideIndex == index
-        let thumbW: CGFloat = 28
-        let thumbH: CGFloat = thumbW * 16 / 9  // ratio 9:16
+        let thumbH: CGFloat = 60 - 18  // top bar (60) - marges verticales (9+9)
+        let thumbW: CGFloat = thumbH * 9 / 16  // ratio 9:16
         return Button {
             let currentIdx = slideManager.currentSlideIndex
             if currentIdx < slideManager.slides.count {
@@ -560,7 +560,7 @@ public struct StoryComposerView: View {
                             Image(uiImage: img)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 12, height: 12)
+                                .frame(width: 9, height: 9)
                                 .clipShape(RoundedRectangle(cornerRadius: 1))
                                 .position(x: obj.x * thumbW, y: obj.y * thumbH)
                         }
@@ -571,7 +571,7 @@ public struct StoryComposerView: View {
                 if let stickers = slide.effects.stickerObjects, !stickers.isEmpty {
                     ForEach(stickers, id: \.id) { sticker in
                         Text(sticker.emoji)
-                            .font(.system(size: 6))
+                            .font(.system(size: 5))
                             .position(x: sticker.x * thumbW, y: sticker.y * thumbH)
                     }
                 }
@@ -588,15 +588,14 @@ public struct StoryComposerView: View {
                 }
             }
             .frame(width: thumbW, height: thumbH)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .clipShape(RoundedRectangle(cornerRadius: 3))
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(
                         isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
-                        lineWidth: isSelected ? 0.5 : 0.2
+                        lineWidth: isSelected ? 1.5 : 0.5
                     )
             )
-            .scaleEffect(isSelected ? 1.08 : 1.0)
             .animation(.spring(response: 0.2), value: isSelected)
         }
         .contextMenu {
