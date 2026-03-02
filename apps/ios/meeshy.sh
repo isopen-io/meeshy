@@ -71,7 +71,7 @@ detect_physical_device() {
     ok "Physical device: ${BOLD}$PHYSICAL_DEVICE_NAME${NC} ($PHYSICAL_DEVICE_ID)"
 }
 
-# ─── Device Picker (all simulators + physical) ─────────────────────────────
+# ─── Device Picker (physical first, simulators as fallback) ─────────────────
 # Populates PICKED_DEVICE_TYPE ("simulator"|"physical"), PICKED_DEVICE_ID, PICKED_DEVICE_NAME
 pick_device() {
     local -a dev_types=()
@@ -79,39 +79,7 @@ pick_device() {
     local -a dev_names=()
     local -a dev_labels=()
 
-    # 1. Booted simulators
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local did dname
-        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-        dname=$(echo "$line" | sed 's/ (.*//' | xargs)
-        [ -z "$did" ] && continue
-        dev_types+=("simulator")
-        dev_ids+=("$did")
-        dev_names+=("$dname")
-        dev_labels+=("📱 $dname ${DIM}(Simulator — Booted)${NC}")
-    done < <(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" 2>/dev/null || true)
-
-    # 2. Available (not booted) simulators
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local did dname
-        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-        dname=$(echo "$line" | sed 's/ (.*//' | xargs)
-        [ -z "$did" ] && continue
-        # Skip if already listed as booted
-        local already=false
-        for existing_id in "${dev_ids[@]}"; do
-            [ "$existing_id" = "$did" ] && already=true && break
-        done
-        [ "$already" = true ] && continue
-        dev_types+=("simulator")
-        dev_ids+=("$did")
-        dev_names+=("$dname")
-        dev_labels+=("📱 $dname ${DIM}(Simulator)${NC}")
-    done < <(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable" 2>/dev/null || true)
-
-    # 3. Physical devices
+    # 1. Physical devices FIRST — priority
     while IFS= read -r line; do
         [ -z "$line" ] && continue
         local did dname
@@ -121,13 +89,53 @@ pick_device() {
         dev_types+=("physical")
         dev_ids+=("$did")
         dev_names+=("$dname")
-        dev_labels+=("📲 $dname ${DIM}(Physical Device)${NC}")
+        dev_labels+=("📲 $dname ${DIM}(Physical)${NC}")
     done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" || true)
+
+    local physical_count=${#dev_ids[@]}
+
+    # If physical devices found, only show those (skip simulators)
+    if [ "$physical_count" -eq 0 ]; then
+        # No physical devices — fallback to simulators
+        warn "No physical iPhone found. Falling back to simulators..."
+        echo ""
+
+        # Booted simulators
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local did dname
+            did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+            dname=$(echo "$line" | sed 's/ (.*//' | xargs)
+            [ -z "$did" ] && continue
+            dev_types+=("simulator")
+            dev_ids+=("$did")
+            dev_names+=("$dname")
+            dev_labels+=("📱 $dname ${DIM}(Simulator — Booted)${NC}")
+        done < <(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" 2>/dev/null || true)
+
+        # Available (not booted) simulators
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            local did dname
+            did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+            dname=$(echo "$line" | sed 's/ (.*//' | xargs)
+            [ -z "$did" ] && continue
+            local already=false
+            for existing_id in "${dev_ids[@]}"; do
+                [ "$existing_id" = "$did" ] && already=true && break
+            done
+            [ "$already" = true ] && continue
+            dev_types+=("simulator")
+            dev_ids+=("$did")
+            dev_names+=("$dname")
+            dev_labels+=("📱 $dname ${DIM}(Simulator)${NC}")
+        done < <(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable" 2>/dev/null || true)
+    fi
 
     local count=${#dev_ids[@]}
 
     if [ "$count" -eq 0 ]; then
-        err "No devices found (no simulators, no physical devices)."
+        err "No devices found (no physical iPhones, no simulators)."
         exit 1
     fi
 
