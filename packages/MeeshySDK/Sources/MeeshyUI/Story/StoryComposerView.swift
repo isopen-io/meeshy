@@ -638,8 +638,6 @@ public struct StoryComposerView: View {
             // Panel actif (animé)
             if activePanel != .none {
                 activeToolPanel
-                    .frame(maxHeight: 220)
-                    .clipped()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
