@@ -5,17 +5,10 @@ import UniformTypeIdentifiers
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Story Composer Active Panel
+// MARK: - Story Composer Active Panel (legacy — kept for StoryComposerPanel references)
 
 public enum StoryComposerPanel: Equatable {
-    case none
-    case text
-    case stickers
-    case drawing
-    case filter
-    case background   // Fond (arrière-plan + fond sonore)
-    case transition
-    case content      // Contenu (premier plan média + sonore)
+    case none, text, stickers, drawing, filter, background, transition, content
 }
 
 // MARK: - Story Background Picker Palette
@@ -43,7 +36,6 @@ public enum StoryBackgroundPalette {
 struct StoryComposerDraft: Codable {
     let slides: [StorySlide]
     let visibilityPreference: String
-
     static let userDefaultsKey = "storyComposerDraft"
 }
 
@@ -53,164 +45,204 @@ public enum SlidePublishAction {
     case retry, skip, cancel
 }
 
-// Wrapper Identifiable pour fullScreenCover(item:) — élimine la race condition
-private struct AudioEditorItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-private struct MediaAudioEditorItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
 // MARK: - Story Composer View
 
 public struct StoryComposerView: View {
-    @StateObject private var slideManager = StorySlideManager()
 
-    @State private var selectedTextObjectId: String? = nil
+    // MARK: - Single source of truth
 
-    @State private var stickerObjects: [StorySticker] = []
-    @State private var selectedFilter: StoryFilter? = nil
-    @State private var drawingData: Data? = nil
-    @State private var isDrawingActive = false
-    @State private var backgroundColor: Color = Color(hex: "0F0C29")
-    @State private var selectedImage: UIImage? = nil
+    @State private var viewModel = StoryComposerViewModel()
 
-    // Drawing state (partagé avec DrawingToolbarPanel et StoryCanvasView)
+    // MARK: - Canvas-local state (PKCanvasView must be @State)
+
     @State private var drawingCanvas = PKCanvasView()
-    @State private var drawingColor: Color = .white
-    @State private var drawingWidth: CGFloat = 5
     @State private var drawingTool: DrawingTool = .pen
+    @State private var selectedFilter: StoryFilter?
+    @State private var selectedImage: UIImage?
+    @State private var stickerObjects: [StorySticker] = []
 
-    // Audio
-    @State private var selectedAudioId: String? = nil
-    @State private var selectedAudioTitle: String? = nil
+    // MARK: - Background audio (legacy panel state)
+
+    @State private var selectedAudioId: String?
+    @State private var selectedAudioTitle: String?
     @State private var audioVolume: Float = 0.7
     @State private var audioTrimStart: TimeInterval = 0
     @State private var audioTrimEnd: TimeInterval = 0
 
-    @State private var openingEffect: StoryTransitionEffect? = nil
-    @State private var closingEffect: StoryTransitionEffect? = nil
+    // MARK: - Photo / media pickers
 
-    @State private var activePanel: StoryComposerPanel = .none
-    @State private var showPhotoPicker = false
-    @State private var photoPickerItem: PhotosPickerItem? = nil
-    @State private var showRestoreDraftAlert = false
-    @State private var pendingDraft: StoryComposerDraft? = nil
-    @State private var audioEditorItem: AudioEditorItem? = nil
+    @State private var bgPhotoItem: PhotosPickerItem?
+    @State private var fgPhotoItem: PhotosPickerItem?
+    @State private var fgVideoItem: PhotosPickerItem?
 
-    // MARK: - Media States
-    @State private var pendingMediaItem: PhotosPickerItem? = nil
-    @State private var pendingMediaType: String = "image"
-    @State private var isMediaEditMode = false
-    @State private var draggingMediaId: String? = nil
-    @State private var mediaDragTranslation: CGFloat = 0
-    @State private var selectedMediaId: String? = nil
-    @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
-    @State private var confirmedMediaAudioURL: URL? = nil
+    // MARK: - Audio pickers
+
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
-    @State private var showVolumeMixer = false
-    // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
-    @State private var loadedImages: [String: UIImage] = [:]
-    @State private var loadedVideoURLs: [String: URL] = [:]
-    @State private var loadedAudioURLs: [String: URL] = [:]
+    @State private var audioEditorItem: AudioEditorItemWrapper?
+    @State private var mediaAudioEditorItem: AudioEditorItemWrapper?
+    @State private var confirmedMediaAudioURL: URL?
 
-    @State private var showPreview = false
-    @State private var visibility: String = "PUBLIC"
-    @State private var showDiscardAlert = false
-    @State private var isLoadingMedia = false
+    // MARK: - Publication
+
     @State private var isPublishingAll = false
-    @State private var publishProgressText: String? = nil
-    @State private var slidePublishError: String? = nil
-    @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>? = nil
+    @State private var publishProgressText: String?
+    @State private var slidePublishError: String?
+    @State private var slidePublishContinuation: CheckedContinuation<SlidePublishAction, Never>?
     @State private var showPublishError = false
-    @State private var publishTask: Task<Void, Never>? = nil
+    @State private var publishTask: Task<Void, Never>?
+
+    // MARK: - Canvas viewport (pinch-to-zoom only, no drag — avoids conflicts with drawing/elements)
+
+    @GestureState private var viewportPinchDelta: CGFloat = 1.0
+
+    private var isViewportGestureEnabled: Bool {
+        viewModel.activeTool == nil && viewModel.selectedElementId == nil
+    }
+
+    private var viewportPinchGesture: some Gesture {
+        MagnifyGesture()
+            .updating($viewportPinchDelta) { value, state, _ in
+                state = value.magnification
+            }
+            .onEnded { value in
+                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value.magnification))
+                withAnimation(.spring(response: 0.2)) {
+                    viewModel.canvasScale = newScale
+                }
+            }
+    }
+
+    // MARK: - UI state
+
+    @State private var showDiscardAlert = false
+    @State private var showRestoreDraftAlert = false
+    @State private var isLoadingMedia = false
+    @State private var visibility: String = "PUBLIC"
+
+    // MARK: - Transition effects (local until synced to effects)
+
+    @State private var openingEffect: StoryTransitionEffect?
+    @State private var closingEffect: StoryTransitionEffect?
+
+    @Environment(\.theme) private var theme
+
+    // MARK: - Callbacks (public API preserved)
 
     public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
-    public init(onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void,
-                onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
-                onDismiss: @escaping () -> Void) {
+    public init(
+        onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void,
+        onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
         self.onPublishSlide = onPublishSlide
         self.onPreview = onPreview
         self.onDismiss = onDismiss
     }
 
+    // MARK: - Body
+
     public var body: some View {
         ZStack {
-            // Canvas plein écran
             Color.black.ignoresSafeArea()
-            canvasArea
 
-            // Guides zones story (subtil)
-            storyZoneGuides
+            // Canvas with viewport pan/zoom (2 fingers)
+            StoryCanvasView(
+                viewModel: viewModel,
+                drawingCanvas: $drawingCanvas,
+                drawingTool: $drawingTool,
+                selectedFilter: $selectedFilter,
+                selectedImage: $selectedImage,
+                stickerObjects: $stickerObjects,
+                onEditText: { id in
+                    viewModel.selectedElementId = id
+                    viewModel.activeTool = .text
+                },
+                onEditMedia: { id in
+                    viewModel.selectedElementId = id
+                }
+            )
+            .scaleEffect(viewModel.canvasScale * (isViewportGestureEnabled ? viewportPinchDelta : 1.0))
+            .gesture(isViewportGestureEnabled ? viewportPinchGesture : nil)
+            .overlay {
+                if isLoadingMedia {
+                    Color.black.opacity(0.3)
+                        .overlay(ProgressView().tint(.white).scaleEffect(1.2))
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if viewModel.isCanvasZoomed {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            viewModel.resetCanvasZoom()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(.black.opacity(0.5)))
+                    }
+                    .padding(.top, 70)
+                    .padding(.trailing, 12)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .ignoresSafeArea()
 
-            // Overlay haut
+            // Top bar
             VStack(spacing: 0) {
                 topBar
                 Spacer()
             }
 
-            // Overlay bas (toolbar + panel actif)
+            // Bottom: toolbar + active panel
             VStack(spacing: 0) {
                 Spacer()
                 bottomOverlay
             }
         }
+        .statusBarHidden()
+        .onDisappear { cancelPublishIfNeeded() }
+        .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
+        .onChange(of: fgPhotoItem) { _, item in addForegroundMedia(from: item, type: "image") }
+        .onChange(of: fgVideoItem) { _, item in addForegroundMedia(from: item, type: "video") }
+        .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
+            }
+        }
         .fullScreenCover(item: $audioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
-                onConfirm: { confirmedURL, _, trimS, trimE in
-                    selectedAudioId = confirmedURL.lastPathComponent
+                onConfirm: { url, _, trimS, trimE in
+                    selectedAudioId = url.lastPathComponent
                     selectedAudioTitle = "Enregistrement"
-                    audioTrimStart = trimS
-                    audioTrimEnd = trimE
+                    audioTrimStart = trimS; audioTrimEnd = trimE
                     audioEditorItem = nil
                 },
-                onDismiss: {
-                    audioEditorItem = nil
-                }
+                onDismiss: { audioEditorItem = nil }
             )
-        }
-        .statusBarHidden()
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem,
-                      matching: .any(of: [.images, .videos]))
-        .onChange(of: photoPickerItem) { newItem in
-            loadPhoto(from: newItem)
-        }
-        .fileImporter(
-            isPresented: $showAudioDocumentPicker,
-            allowedContentTypes: [.audio],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                pendingMediaType = "audio"
-                mediaAudioEditorItem = MediaAudioEditorItem(url: url)
-            }
         }
         .sheet(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
-                onConfirm: { confirmedURL, _, _, _ in
-                    confirmedMediaAudioURL = confirmedURL
+                onConfirm: { url, _, _, _ in
+                    confirmedMediaAudioURL = url
                     mediaAudioEditorItem = nil
                     addVocalToForeground()
                 },
-                onDismiss: {
-                    mediaAudioEditorItem = nil
-                }
+                onDismiss: { mediaAudioEditorItem = nil }
             )
         }
         .sheet(isPresented: $showVoiceRecorderSheet) {
             NavigationStack {
                 StoryVoiceRecorder { recordedURL in
-                    pendingMediaType = "audio"
-                    mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
+                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL)
                     showVoiceRecorderSheet = false
                 }
                 .navigationTitle("Enregistrer un vocal")
@@ -223,283 +255,41 @@ public struct StoryComposerView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $showVolumeMixer) {
-            VolumeMixerSheet(effects: Binding(
-                get: { currentSlideEffects },
-                set: { newEffects in
-                    if let e = newEffects { setCurrentSlideEffects(e) }
-                }
-            ))
-        }
         .alert("Erreur de publication", isPresented: $showPublishError) {
-            Button("Réessayer") {
-                let cont = slidePublishContinuation
-                slidePublishContinuation = nil
-                cont?.resume(returning: .retry)
-            }
-            Button("Ignorer", role: .cancel) {
-                let cont = slidePublishContinuation
-                slidePublishContinuation = nil
-                cont?.resume(returning: .skip)
-            }
-            Button("Annuler tout", role: .destructive) {
-                let cont = slidePublishContinuation
-                slidePublishContinuation = nil
-                cont?.resume(returning: .cancel)
-            }
+            Button("Reessayer") { resumePublish(.retry) }
+            Button("Ignorer", role: .cancel) { resumePublish(.skip) }
+            Button("Annuler tout", role: .destructive) { resumePublish(.cancel) }
         } message: {
             Text(slidePublishError ?? "")
         }
-        .onAppear {
-            if let draft = loadDraft() {
-                pendingDraft = draft
-                showRestoreDraftAlert = true
-            }
-        }
         .alert("Reprendre votre story ?", isPresented: $showRestoreDraftAlert) {
-            Button("Reprendre") {
-                if let draft = pendingDraft {
-                    applyDraft(draft)
-                }
-                pendingDraft = nil
-            }
-            Button("Effacer le brouillon", role: .destructive) {
-                clearDraft()
-                pendingDraft = nil
-            }
+            Button("Reprendre") { restoreDraft() }
+            Button("Effacer le brouillon", role: .destructive) { clearAllDrafts() }
         } message: {
-            Text("Vous avez un brouillon non publié.")
+            Text("Vous avez un brouillon non publie.")
         }
+        .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
+            Button("Sauvegarder") { saveDraftAndDismiss() }
+            Button("Quitter", role: .destructive) { cancelAndDismiss() }
+            Button("Annuler", role: .cancel) { }
+        }
+        .onAppear { checkForDraft() }
     }
 
-    // MARK: - Canvas Area (plein écran)
-
-    private var canvasArea: some View {
-        StoryCanvasView(
-            textObjects: Binding(
-                get: { currentSlideEffects?.textObjects ?? [] },
-                set: { objs in
-                    var effects = currentSlideEffects ?? buildEffects()
-                    effects.textObjects = objs
-                    setCurrentSlideEffects(effects)
-                }
-            ),
-            onSelectText: { id in
-                selectedTextObjectId = id
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activePanel = .text
-                }
-            },
-            onEditText: { id in
-                selectedTextObjectId = id
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activePanel = .text
-                }
-            },
-            stickerObjects: $stickerObjects,
-            selectedFilter: $selectedFilter,
-            drawingData: $drawingData,
-            isDrawingActive: $isDrawingActive,
-            backgroundColor: $backgroundColor,
-            selectedImage: $selectedImage,
-            drawingCanvas: $drawingCanvas,
-            drawingColor: $drawingColor,
-            drawingWidth: $drawingWidth,
-            drawingTool: $drawingTool,
-            mediaObjects: Binding(
-                get: { currentSlideEffects?.mediaObjects ?? [] },
-                set: { objs in
-                    var effects = currentSlideEffects ?? buildEffects()
-                    effects.mediaObjects = objs
-                    setCurrentSlideEffects(effects)
-                }
-            ),
-            audioPlayerObjects: Binding(
-                get: { currentSlideEffects?.audioPlayerObjects ?? [] },
-                set: { objs in
-                    var effects = currentSlideEffects ?? buildEffects()
-                    effects.audioPlayerObjects = objs
-                    setCurrentSlideEffects(effects)
-                }
-            ),
-            loadedImages: $loadedImages,
-            loadedVideoURLs: $loadedVideoURLs,
-            loadedAudioURLs: $loadedAudioURLs,
-            onSelectMedia: { id in
-                selectedMediaId = id
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activePanel = .content
-                }
-            },
-            onBackgroundTap: {
-                guard activePanel != .none, !isDrawingActive else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activePanel = .none
-                    selectedMediaId = nil
-                    selectedTextObjectId = nil
-                }
-            }
-        )
-        .overlay {
-            if isLoadingMedia {
-                ZStack {
-                    Color.black.opacity(0.3)
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.2)
-                }
-                .allowsHitTesting(false)
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    // MARK: - Story Zone Guides
-
-    private var storyZoneGuides: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Zone top (zone de danger UI viewer)
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(height: geo.size.height * 0.12)
-                    .frame(maxWidth: .infinity, alignment: .top)
-
-                // Zone bottom (zone de danger UI viewer)
-                Rectangle()
-                    .fill(Color.white.opacity(0.06))
-                    .frame(height: geo.size.height * 0.15)
-                    .frame(maxWidth: .infinity, alignment: .bottom)
-            }
-        }
-        .allowsHitTesting(false)
-        .opacity(activePanel == .none ? 0 : 1) // masqué par défaut, visible en mode édition
-    }
-
-    // MARK: - Top Bar (moderne, overlay)
+    // MARK: - Top Bar
 
     private var topBar: some View {
         HStack(spacing: 0) {
-            // [✕] Dismiss
-            Button {
-                handleDismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 34, height: 34)
-                    .background(
-                        Circle()
-                            .fill(.black.opacity(0.55))
-                            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                    )
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .padding(.leading, 16)
+            dismissButton
+                .padding(.leading, 16)
 
-            // Strip de slides scrollable
             slideStrip
                 .frame(maxWidth: .infinity)
 
-            // Actions groupées
             HStack(spacing: 8) {
-                // [▶] Preview
-                Button {
-                    NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
-                    let (slides, images) = allSlidesSnapshot()
-                    onPreview(slides, images, loadedImages, loadedVideoURLs, loadedAudioURLs)
-                } label: {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(.black.opacity(0.55))
-                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                        )
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
-
-                // [Publier]
-                Button {
-                    publishAllSlides()
-                } label: {
-                    Group {
-                        if let progress = publishProgressText {
-                            HStack(spacing: 4) {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.65)
-                                    .tint(.white)
-                                Text(progress)
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                        } else {
-                            HStack(spacing: 4) {
-                                Text("Publier")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .lineLimit(1)
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.system(size: 13))
-                            }
-                            .fixedSize()
-                        }
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
-                    )
-                }
-                .disabled(isPublishingAll)
-
-                // [⋯] Menu contextuel
-                Menu {
-                    Button { saveDraft() } label: {
-                        Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
-                    }
-                    Menu {
-                        Button { visibility = "PUBLIC" } label: {
-                            Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
-                        }
-                        Button { visibility = "FRIENDS" } label: {
-                            Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
-                        }
-                        Button { visibility = "PRIVATE" } label: {
-                            Label("Privé", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
-                        }
-                    } label: {
-                        Label("Visibilité", systemImage: "eye")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        slideManager.slides = [StorySlide()]
-                        slideManager.currentSlideIndex = 0
-                    } label: {
-                        Label("Supprimer tous les slides", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(.black.opacity(0.55))
-                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                        )
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
+                previewButton
+                publishButton
+                overflowMenu
             }
             .padding(.trailing, 16)
         }
@@ -508,10 +298,102 @@ public struct StoryComposerView: View {
             Color.black.opacity(0.45)
                 .background(.ultraThinMaterial.opacity(0.6))
         )
-        .alert("Quitter sans publier ?", isPresented: $showDiscardAlert) {
-            Button("Sauvegarder") { saveDraft(); onDismiss() }
-            Button("Quitter", role: .destructive) { cancelPublishIfNeeded(); clearDraft(); onDismiss() }
-            Button("Annuler", role: .cancel) { }
+    }
+
+    private var dismissButton: some View {
+        Button { handleDismiss() } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle()
+                        .fill(.black.opacity(0.55))
+                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+    }
+
+    private var previewButton: some View {
+        Button {
+            NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
+            let snapshot = snapshotAllSlides()
+            onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+        } label: {
+            Image(systemName: "play.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(.black.opacity(0.55))
+                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+    }
+
+    private var publishButton: some View {
+        Button { publishAllSlides() } label: {
+            Group {
+                if let progress = publishProgressText {
+                    HStack(spacing: 4) {
+                        ProgressView().progressViewStyle(.circular).scaleEffect(0.65).tint(.white)
+                        Text(progress).font(.system(size: 11, weight: .bold))
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Text("Publier").font(.system(size: 13, weight: .bold)).lineLimit(1)
+                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                    }
+                    .fixedSize()
+                }
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(MeeshyColors.brandGradient))
+        }
+        .disabled(isPublishingAll)
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            Button { saveDraft() } label: {
+                Label("Sauvegarder le brouillon", systemImage: "square.and.arrow.down")
+            }
+            Menu {
+                Button { visibility = "PUBLIC" } label: {
+                    Label("Public", systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
+                }
+                Button { visibility = "FRIENDS" } label: {
+                    Label("Amis", systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                }
+                Button { visibility = "PRIVATE" } label: {
+                    Label("Prive", systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                }
+            } label: {
+                Label("Visibilite", systemImage: "eye")
+            }
+            Divider()
+            Button(role: .destructive) { viewModel.reset() } label: {
+                Label("Supprimer tous les slides", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(.black.opacity(0.55))
+                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
     }
 
@@ -520,640 +402,151 @@ public struct StoryComposerView: View {
     private var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(Array(slideManager.slides.enumerated()), id: \.element.id) { index, slide in
+                ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
-                // DISABLED: Multi-slide désactivé — nécessite maîtrise complète du flow
-                // de publication et conditions de performance avant réactivation.
-                // if slideManager.canAddSlide {
-                //     Button { ... } label: { ... }
-                // }
             }
             .padding(.horizontal, 8)
         }
     }
 
     private func slideThumb(slide: StorySlide, index: Int) -> some View {
-        let isSelected = slideManager.currentSlideIndex == index
-        let thumbH: CGFloat = 60 - 18  // top bar (60) - marges verticales (9+9)
-        let thumbW: CGFloat = thumbH * 9 / 16  // ratio 9:16
+        let isSelected = viewModel.currentSlideIndex == index
+        let thumbH: CGFloat = 42
+        let thumbW: CGFloat = thumbH * 9 / 16
+        let isCurrent = viewModel.currentSlideIndex == index
+        let drawData = isCurrent ? viewModel.drawingData : slide.effects.drawingData
+
         return Button {
-            let currentIdx = slideManager.currentSlideIndex
-            if currentIdx < slideManager.slides.count {
-                slideManager.slides[currentIdx].content = nil
-                slideManager.slides[currentIdx].effects = buildEffects()
-            }
-            withAnimation(.spring(response: 0.25)) {
-                slideManager.selectSlide(at: index)
-            }
-            restoreCanvas(from: slideManager.slides[index])
+            syncCurrentSlideEffects()
+            withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
+            restoreCanvas(from: viewModel.slides[index])
             HapticFeedback.light()
         } label: {
-            ZStack {
-                // Fond (couleur ou image)
-                if let image = slideManager.slideImages[slide.id] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else if let bg = slide.effects.background {
-                    Color(hex: bg)
-                } else {
-                    Color(hex: "1A1A2E")
-                }
-
-                // Dessin (PencilKit)
-                if let drawData = slide.effects.drawingData,
-                   let drawing = try? PKDrawing(data: drawData) {
-                    let canvasRect = CGRect(origin: .zero, size: UIScreen.main.bounds.size)
-                    Image(uiImage: drawing.image(from: canvasRect, scale: 1.0))
-                        .resizable()
-                        .scaledToFill()
-                }
-
-                // Miniatures des médias foreground
-                if let mediaObjs = slide.effects.mediaObjects {
-                    ForEach(mediaObjs.filter { $0.placement == "foreground" }, id: \.id) { obj in
-                        if let img = loadedImages[obj.id] {
-                            let miniScale = CGFloat(obj.scale) * (thumbW / UIScreen.main.bounds.width)
-                            let miniSize: CGFloat = 160 * miniScale
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: max(4, miniSize), height: max(4, miniSize))
-                                .clipShape(RoundedRectangle(cornerRadius: 1))
-                                .rotationEffect(.radians(obj.rotation))
-                                .position(x: obj.x * thumbW, y: obj.y * thumbH)
-                        }
-                    }
-                }
-
-                // Stickers miniatures
-                if let stickers = slide.effects.stickerObjects, !stickers.isEmpty {
-                    ForEach(stickers, id: \.id) { sticker in
-                        Text(sticker.emoji)
-                            .font(.system(size: 5))
-                            .position(x: sticker.x * thumbW, y: sticker.y * thumbH)
-                    }
-                }
-
-                // Indicateur textes (petit trait blanc par textObject)
-                ForEach(slide.effects.textObjects ?? [], id: \.id) { obj in
-                    if !obj.content.isEmpty {
-                        RoundedRectangle(cornerRadius: 0.5)
-                            .fill(Color.white.opacity(0.6))
-                            .frame(width: thumbW * 0.4, height: 2)
-                            .position(x: obj.x * thumbW, y: obj.y * thumbH)
-                    }
-                }
-            }
+            SlideMiniPreview(
+                effects: slide.effects,
+                bgImage: viewModel.slideImages[slide.id],
+                drawingData: drawData,
+                loadedImages: viewModel.loadedImages,
+                index: index
+            )
             .frame(width: thumbW, height: thumbH)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(
-                        isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
+                        isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.2),
                         lineWidth: isSelected ? 1.5 : 0.5
                     )
             )
-            .animation(.spring(response: 0.2), value: isSelected)
         }
         .contextMenu {
-            if slideManager.slides.count > 1 {
+            if viewModel.slides.count > 1 {
                 Button(role: .destructive) {
-                    slideManager.removeSlide(at: index)
+                    syncCurrentSlideEffects()
+                    viewModel.removeSlide(at: index)
+                    restoreCanvas(from: viewModel.currentSlide)
                 } label: {
                     Label("Supprimer", systemImage: "trash")
                 }
             }
             Button {
-                slideManager.duplicateSlide(at: index)
+                syncCurrentSlideEffects()
+                viewModel.duplicateSlide(at: index)
+                restoreCanvas(from: viewModel.currentSlide)
             } label: {
                 Label("Dupliquer", systemImage: "doc.on.doc")
             }
         }
     }
 
-    // MARK: - Bottom Overlay (toolbar + panel)
+    // MARK: - Bottom Overlay
 
     private var bottomOverlay: some View {
         VStack(spacing: 0) {
-            // Séparateur subtil
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 0.5)
+            ContextualToolbar(viewModel: viewModel)
+                .padding(.top, 6)
+                .padding(.bottom, viewModel.activeTool != nil ? 4 : 0)
 
-            // Toolbar scrollable
-            toolBarScrollable
-
-            // Panel actif (animé)
-            if activePanel != .none {
+            if viewModel.activeTool != nil {
+                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
                 activeToolPanel
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.bottom, safeAreaBottomInset)
         .background(
-            Color.black.opacity(0.55)
-                .background(.ultraThinMaterial.opacity(0.7))
-                .ignoresSafeArea(edges: .bottom)
+            Group {
+                if viewModel.activeTool != nil {
+                    Color.black.opacity(0.55)
+                        .background(.ultraThinMaterial.opacity(0.7))
+                } else {
+                    Color.clear
+                }
+            }
+            .ignoresSafeArea(edges: .bottom)
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: activePanel)
-    }
-
-    private var safeAreaBottomInset: CGFloat {
-        (UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.bottom ?? 0)
-    }
-
-    // MARK: - Toolbar Scrollable
-
-    private var toolBarScrollable: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                toolPill(icon: "textformat", label: "Texte", panel: .text, action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        if activePanel == .text {
-                            cleanupEmptyTextObjects()
-                            activePanel = .none
-                            selectedTextObjectId = nil
-                        } else {
-                            addTextObject()
-                            activePanel = .text
-                            isDrawingActive = false
-                        }
-                    }
-                    HapticFeedback.light()
-                })
-                toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
-                toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
-                toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
-                toolPill(icon: "paintpalette", label: "Fond", panel: .background, hasBadge: selectedAudioId != nil)
-                toolPill(icon: "sparkles", label: "Effets", panel: .transition)
-                toolPill(icon: "square.stack.3d.up", label: "Contenu", panel: .content, hasBadge: hasForegroundContent)
-
-                if hasAudioContent {
-                    toolPill(icon: "speaker.wave.2.fill", label: "Volume", panel: nil, action: { showVolumeMixer = true })
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-        }
-    }
-
-    private func toolPill(icon: String, label: String, panel: StoryComposerPanel?, action: (() -> Void)? = nil, hasBadge: Bool = false) -> some View {
-        let isActive = panel != nil && activePanel == panel
-        return Button {
-            if let action {
-                action()
-            } else if let panel {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if activePanel == panel {
-                        activePanel = .none
-                        if panel == .drawing { isDrawingActive = false }
-                    } else {
-                        activePanel = panel
-                        if panel == .drawing { isDrawingActive = true }
-                        else { isDrawingActive = false }
-                    }
-                }
-            }
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                Text(label)
-                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-            }
-            .foregroundColor(isActive ? .white : .white.opacity(0.65))
-            .padding(.horizontal, 13)
-            .padding(.vertical, 7)
-            .background(
-                Capsule()
-                    .fill(isActive
-                          ? AnyShapeStyle(LinearGradient(
-                              colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
-                              startPoint: .leading, endPoint: .trailing
-                          ))
-                          : AnyShapeStyle(Color.white.opacity(0.1))
-                    )
-            )
-            .overlay(alignment: .topTrailing) {
-                if hasBadge && !isActive {
-                    Circle()
-                        .fill(Color(hex: "FF2E63"))
-                        .frame(width: 7, height: 7)
-                        .offset(x: 2, y: -2)
-                }
-            }
-        }
-        .accessibilityLabel(label)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
     }
 
     // MARK: - Active Tool Panel
 
     @ViewBuilder
     private var activeToolPanel: some View {
-        switch activePanel {
-        case .text:
-            textPanel
-                .padding(.bottom, 8)
-
-        case .stickers:
-            StickerPickerView { emoji in
-                let sticker = StorySticker(emoji: emoji, x: 0.5, y: 0.4)
-                stickerObjects.append(sticker)
-                HapticFeedback.medium()
-            }
-
+        switch viewModel.activeTool {
+        case .bgMedia:
+            bgMediaPanel
         case .drawing:
-            DrawingToolbarPanel(
-                toolColor: $drawingColor,
-                toolWidth: $drawingWidth,
-                toolType: $drawingTool,
-                onUndo: {
-                    drawingCanvas.undoManager?.undo()
-                    drawingData = drawingCanvas.drawing.dataRepresentation()
-                    HapticFeedback.light()
-                },
-                onRedo: {
-                    drawingCanvas.undoManager?.redo()
-                    drawingData = drawingCanvas.drawing.dataRepresentation()
-                    HapticFeedback.light()
-                },
-                onClear: {
-                    drawingCanvas.drawing = PKDrawing()
-                    drawingData = nil
-                    HapticFeedback.medium()
-                }
-            )
-            .padding(.bottom, 8)
-
+            drawingPanel
+        case .bgAudio:
+            bgAudioPanel
+        case .text:
+            textPanel.padding(.bottom, 8)
+        case .image:
+            fgImagePanel
+        case .video:
+            fgVideoPanel
+        case .audio:
+            fgAudioPanel
         case .filter:
             StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
                 .padding(.vertical, 12)
-
-        case .background:
-            fondPanel
-
-        case .transition:
+        case .effects:
             transitionPicker
-
-        case .content:
-            contenuPanel
-
+        case .timeline:
+            TimelinePanel(viewModel: viewModel)
         case .none:
             EmptyView()
         }
     }
 
-    // MARK: - Contenu Panel (premier plan média + sonore)
+    // MARK: - Background Media Panel
 
-    private var contenuPanel: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                mediaPickerPanel
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 0.5)
-                    .padding(.horizontal, 16)
-
-                foregroundAudioSection
-            }
-        }
-        .frame(maxHeight: 280)
-    }
-
-    // MARK: - Foreground Audio Section (within contenuPanel)
-
-    private var foregroundAudioSection: some View {
-        let foregroundAudios = (currentSlideEffects?.audioPlayerObjects ?? []).filter { $0.placement == "foreground" }
-        return VStack(spacing: 10) {
-            HStack {
-                Text("Premier plan — sonore")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-                if !foregroundAudios.isEmpty {
-                    Text("\(foregroundAudios.count) vocal\(foregroundAudios.count > 1 ? "s" : "")")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: "FF2E63"))
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Strip des audios foreground existants
-            if !foregroundAudios.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(foregroundAudios.enumerated()), id: \.element.id) { idx, audio in
-                            ForegroundAudioThumbnail(
-                                index: idx,
-                                waveformSamples: audio.waveformSamples ?? [],
-                                onDelete: { removeAudioObject(id: audio.id) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
-                }
-            }
-
-            // Boutons ajout
-            HStack(spacing: 10) {
-                Button {
-                    showAudioDocumentPicker = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Bibliothèque")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-
-                Button {
-                    showVoiceRecorderSheet = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mic")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Enregistrer")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.vertical, 12)
-    }
-
-    private func removeAudioObject(id: String) {
-        var effects = currentSlideEffects ?? buildEffects()
-        effects.audioPlayerObjects?.removeAll { $0.id == id }
-        setCurrentSlideEffects(effects)
-        loadedAudioURLs.removeValue(forKey: id)
-        HapticFeedback.medium()
-    }
-
-    // MARK: - Media Panel (+Média — foreground uniquement)
-
-    private var mediaPickerPanel: some View {
-        let foregroundMedia = (currentSlideEffects?.mediaObjects ?? []).filter { $0.placement == "foreground" }
-        return VStack(spacing: 10) {
-            // Header
-            HStack {
-                Text("Premier plan — photos & vidéos")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-                if foregroundMedia.isEmpty {
-                    EmptyView()
-                } else if isMediaEditMode {
-                    Button {
-                        withAnimation(.spring(response: 0.3)) { isMediaEditMode = false }
-                        draggingMediaId = nil
-                    } label: {
-                        Text("OK")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: "FF2E63"))
-                    }
-                } else {
-                    Text("\(foregroundMedia.count) élément\(foregroundMedia.count > 1 ? "s" : "")")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: "FF2E63"))
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Thumbnail strip
-            if !foregroundMedia.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(foregroundMedia.enumerated()), id: \.element.id) { idx, media in
-                            ForegroundMediaThumbnail(
-                                layerIndex: idx,
-                                image: loadedImages[media.id],
-                                hasVideo: loadedVideoURLs[media.id] != nil,
-                                isEditMode: isMediaEditMode,
-                                isSelected: selectedMediaId == media.id,
-                                isDragging: draggingMediaId == media.id,
-                                dragOffset: draggingMediaId == media.id ? mediaDragTranslation : 0,
-                                onTap: {
-                                    withAnimation(.spring(response: 0.2)) {
-                                        selectedMediaId = (selectedMediaId == media.id) ? nil : media.id
-                                    }
-                                    HapticFeedback.light()
-                                },
-                                onDelete: {
-                                    removeMediaObject(id: media.id)
-                                    if (currentSlideEffects?.mediaObjects ?? [])
-                                        .filter({ $0.placement == "foreground" }).isEmpty {
-                                        withAnimation { isMediaEditMode = false }
-                                    }
-                                },
-                                onLongPress: {
-                                    withAnimation(.spring(response: 0.3)) { isMediaEditMode = true }
-                                    HapticFeedback.medium()
-                                },
-                                onDragChanged: { delta in
-                                    draggingMediaId = media.id
-                                    mediaDragTranslation = delta
-                                    let threshold: CGFloat = 41
-                                    if delta > threshold {
-                                        swapMediaObject(id: media.id, direction: 1)
-                                        mediaDragTranslation = 0
-                                    } else if delta < -threshold {
-                                        swapMediaObject(id: media.id, direction: -1)
-                                        mediaDragTranslation = 0
-                                    }
-                                },
-                                onDragEnded: {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        draggingMediaId = nil
-                                        mediaDragTranslation = 0
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                }
-            }
-
-            // Vue d'édition (Actions contextuelles) — image sélectionnée via tap canvas ou thumbnail
-            if let selId = selectedMediaId, foregroundMedia.contains(where: { $0.id == selId }) {
-                HStack(spacing: 12) {
-                    Text("Édition Média")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white.opacity(0.9))
-                    
-                    Spacer()
-                    
-                    // Reculer (Send Backward)
-                    Button {
-                        swapMediaObject(id: selId, direction: -1)
-                    } label: {
-                        Image(systemName: "square.3.layers.3d.down.backward")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.15)))
-                    }
-                    .accessibilityLabel("Reculer d'un calque")
-                    
-                    // Avancer (Bring Forward)
-                    Button {
-                        swapMediaObject(id: selId, direction: 1)
-                    } label: {
-                        Image(systemName: "square.3.layers.3d.up.forward")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.15)))
-                    }
-                    .accessibilityLabel("Avancer d'un calque")
-
-                    // Supprimer
-                    Button {
-                        removeMediaObject(id: selId)
-                        selectedMediaId = nil
-                    } label: {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: "FF6B6B"))
-                            .padding(8)
-                            .background(Circle().fill(Color(hex: "FF6B6B").opacity(0.15)))
-                    }
-                    .accessibilityLabel("Supprimer le média")
-
-                    // Fermer
-                    Button {
-                        withAnimation(.spring(response: 0.2)) { selectedMediaId = nil }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white.opacity(0.35))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            // Add button
-            PhotosPicker(selection: $pendingMediaItem, matching: .any(of: [.images, .videos])) {
-                HStack(spacing: 8) {
-                    Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 16, weight: .medium))
-                    Text("Sélectionner photo ou vidéo")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "E94057")],
-                            startPoint: .leading, endPoint: .trailing
-                        ))
-                )
-                .padding(.horizontal, 16)
-            }
-            .onChange(of: pendingMediaItem) { item in
-                guard let item else { return }
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .audiovisualContent) }
-                pendingMediaType = isVideo ? "video" : "image"
-                addPendingMediaToForeground()
-            }
-        }
-        .padding(.vertical, 12)
-        .onDisappear {
-            isMediaEditMode = false
-            draggingMediaId = nil
-            selectedMediaId = nil
-        }
-    }
-
-    // MARK: - Fond Panel (arrière-plan + fond sonore)
-
-    private var fondPanel: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                backgroundSection
-                    .padding(.bottom, 4)
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 0.5)
-                    .padding(.horizontal, 16)
-
-                StoryAudioPanel(
-                    selectedAudioId: $selectedAudioId,
-                    selectedAudioTitle: $selectedAudioTitle,
-                    audioVolume: $audioVolume,
-                    onRecordingReady: { url in
-                        audioEditorItem = AudioEditorItem(url: url)
-                    }
-                )
-            }
-        }
-        .frame(maxHeight: 280)
-    }
-
-    // MARK: - Background Section (within fondPanel)
-
-    private var backgroundSection: some View {
+    private var bgMediaPanel: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Text("Arrière-plan")
+            HStack {
+                Text("Arriere-plan")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.6))
-
                 Spacer()
-
-                // Bouton photo de fond (anciennement pill "Photo")
-                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                PhotosPicker(selection: $bgPhotoItem, matching: .images) {
                     HStack(spacing: 4) {
                         Image(systemName: selectedImage != nil ? "photo.fill" : "photo.on.rectangle")
                             .font(.system(size: 12, weight: .medium))
                         Text(selectedImage != nil ? "Changer photo" : "Photo")
                             .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundColor(selectedImage != nil ? Color(hex: "FF2E63") : .white.opacity(0.7))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(
-                            selectedImage != nil
-                                ? Color(hex: "FF2E63").opacity(0.15)
-                                : Color.white.opacity(0.1)
-                        )
-                    )
+                    .foregroundColor(selectedImage != nil ? MeeshyColors.brandPrimary : .white.opacity(0.7))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(selectedImage != nil ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.1)))
                 }
-                .accessibilityLabel("Photo de fond")
-
                 if selectedImage != nil {
                     Button {
                         withAnimation(.spring(response: 0.25)) { selectedImage = nil }
                         HapticFeedback.light()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white.opacity(0.5))
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundColor(.white.opacity(0.5))
                     }
-                    .accessibilityLabel("Supprimer la photo de fond")
                 }
             }
             .padding(.horizontal, 16)
@@ -1162,58 +555,154 @@ public struct StoryComposerView: View {
                 HStack(spacing: 8) {
                     ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
                         Button {
-                            withAnimation(.spring(response: 0.2)) {
-                                backgroundColor = Color(hex: hex)
-                                selectedImage = nil
-                            }
+                            viewModel.backgroundColor = "#\(hex)"
+                            selectedImage = nil
                             HapticFeedback.light()
                         } label: {
-                            Circle()
-                                .fill(Color(hex: hex))
-                                .frame(width: 36, height: 36)
+                            Circle().fill(Color(hex: hex)).frame(width: 36, height: 36)
                                 .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: backgroundColor == Color(hex: hex) && selectedImage == nil ? 2.5 : 0)
-                                        .padding(1)
+                                    Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" && selectedImage == nil ? 2.5 : 0).padding(1)
                                 )
-                                .frame(width: 44, height: 44)
-                                .contentShape(Circle())
+                                .frame(width: 44, height: 44).contentShape(Circle())
                         }
                     }
                 }
                 .padding(.horizontal, 16)
-                .frame(minWidth: 0)
             }
-            .frame(maxWidth: .infinity)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(StoryBackgroundPalette.gradients.indices, id: \.self) { idx in
-                        let grad = StoryBackgroundPalette.gradients[idx]
-                        Button {
-                            withAnimation(.spring(response: 0.2)) {
-                                backgroundColor = Color(hex: grad.0)
-                                selectedImage = nil
-                            }
-                            HapticFeedback.light()
-                        } label: {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: grad.0), Color(hex: grad.1)],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 56, height: 36)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .frame(minWidth: 0)
-            }
-            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Drawing Panel
+
+    private var drawingPanel: some View {
+        DrawingToolbarPanel(
+            toolColor: $viewModel.drawingColor,
+            toolWidth: $viewModel.drawingWidth,
+            toolType: $drawingTool,
+            onUndo: {
+                drawingCanvas.undoManager?.undo()
+                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
+                HapticFeedback.light()
+            },
+            onRedo: {
+                drawingCanvas.undoManager?.redo()
+                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
+                HapticFeedback.light()
+            },
+            onClear: {
+                drawingCanvas.drawing = PKDrawing()
+                viewModel.drawingData = nil
+                HapticFeedback.medium()
+            }
+        )
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Background Audio Panel
+
+    private var bgAudioPanel: some View {
+        StoryAudioPanel(
+            selectedAudioId: $selectedAudioId,
+            selectedAudioTitle: $selectedAudioTitle,
+            audioVolume: $audioVolume,
+            onRecordingReady: { url in
+                audioEditorItem = AudioEditorItemWrapper(url: url)
+            }
+        )
+        .frame(maxHeight: 280)
+    }
+
+    // MARK: - Text Panel
+
+    @ViewBuilder
+    private var textPanel: some View {
+        if let selectedId = viewModel.selectedElementId,
+           let binding = textObjectBinding(for: selectedId) {
+            StoryTextEditorView(
+                textObject: binding,
+                onDelete: { viewModel.deleteElement(id: selectedId) }
+            )
+        } else {
+            Button {
+                viewModel.addText()
+                HapticFeedback.light()
+            } label: {
+                VStack(spacing: 8) {
+                    Image(systemName: "textformat").font(.system(size: 28, weight: .light))
+                    Text("Ajouter du texte").font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.5))
+                .frame(maxWidth: .infinity, minHeight: 60)
+            }
+        }
+    }
+
+    // MARK: - Foreground Image Panel
+
+    private var fgImagePanel: some View {
+        VStack(spacing: 12) {
+            PhotosPicker(selection: $fgPhotoItem, matching: .images) {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.badge.plus").font(.system(size: 16, weight: .medium))
+                    Text("Selectionner une image").font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Foreground Video Panel
+
+    private var fgVideoPanel: some View {
+        VStack(spacing: 12) {
+            PhotosPicker(selection: $fgVideoItem, matching: .videos) {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.badge.plus").font(.system(size: 16, weight: .medium))
+                    Text("Selectionner une video").font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Foreground Audio Panel
+
+    private var fgAudioPanel: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Button { showAudioDocumentPicker = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform").font(.system(size: 14, weight: .medium))
+                        Text("Bibliotheque").font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+
+                Button { showVoiceRecorderSheet = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mic").font(.system(size: 14, weight: .medium))
+                        Text("Enregistrer").font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+            }
+            .padding(.horizontal, 16)
+        }
         .padding(.vertical, 12)
     }
 
@@ -1224,7 +713,6 @@ public struct StoryComposerView: View {
             Text("Effet d'ouverture")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: true)
@@ -1234,11 +722,9 @@ public struct StoryComposerView: View {
                 }
                 .padding(.horizontal, 2)
             }
-
             Text("Effet de fermeture")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     effectButton(effect: nil, label: "Aucun", icon: "minus.circle", isOpening: false)
@@ -1264,204 +750,59 @@ public struct StoryComposerView: View {
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 20))
-                    .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white.opacity(0.6))
+                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.6))
                 Text(label)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white.opacity(0.4))
+                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.4))
             }
             .frame(width: 60, height: 54)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Color(hex: "FF2E63").opacity(0.15) : Color.white.opacity(0.06))
+                    .fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? Color(hex: "FF2E63").opacity(0.5) : Color.clear, lineWidth: 1)
+                            .stroke(isSelected ? MeeshyColors.brandPrimary.opacity(0.5) : Color.clear, lineWidth: 1)
                     )
             )
         }
-        .accessibilityLabel(label)
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Helpers
 
-    private var currentSlideEffects: StoryEffects? {
-        get {
-            guard slideManager.currentSlideIndex < slideManager.slides.count else { return nil }
-            return slideManager.slides[slideManager.currentSlideIndex].effects
-        }
+    private var safeAreaBottomInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.bottom ?? 0
     }
 
-    private func setCurrentSlideEffects(_ effects: StoryEffects) {
-        guard slideManager.currentSlideIndex < slideManager.slides.count else { return }
-        slideManager.slides[slideManager.currentSlideIndex].effects = effects
-    }
-
-    private var hasForegroundContent: Bool {
-        let mediaCount = currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0
-        let audioCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
-        return mediaCount > 0 || audioCount > 0
-    }
-
-    private var hasAudioContent: Bool {
-        let effects = currentSlideEffects
-        let hasVideo = effects?.mediaObjects?.contains { $0.mediaType == "video" } ?? false
-        let hasAudio = !(effects?.audioPlayerObjects ?? []).isEmpty
-        return hasVideo || hasAudio
-    }
-
-    // MARK: - Actions
-
-    private func loadPhoto(from item: PhotosPickerItem?) {
-        guard let item else { return }
-        isLoadingMedia = true
-        Task {
-            defer { isLoadingMedia = false }
-            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-            let image = await Task.detached(priority: .userInitiated) {
-                UIImage(data: data)
-            }.value
-            guard let image else { return }
-            selectedImage = image
-            slideManager.setImage(image, for: slideManager.currentSlide.id)
-        }
-    }
-
-    private func allSlidesSnapshot() -> ([StorySlide], [String: UIImage]) {
-        var slides = slideManager.slides
-        let idx = slideManager.currentSlideIndex
-        guard idx < slides.count else { return (slides, slideManager.slideImages) }
-        slides[idx].content = nil
-        slides[idx].effects = buildEffects()
-        return (slides, slideManager.slideImages)
-    }
-
-    private func handleDismiss() {
-        let hasContent = slideManager.slides.contains {
-            let slideId = $0.id
-            return $0.content != nil
-                || slideManager.slideImages[slideId] != nil
-                || $0.effects.background != nil
-                || !($0.effects.textObjects ?? []).isEmpty
-        } || !stickerObjects.isEmpty
-          || drawingData != nil
-        if hasContent {
-            showDiscardAlert = true
-        } else {
-            cancelPublishIfNeeded()
-            clearDraft()
-            onDismiss()
-        }
-    }
-
-    private func cancelPublishIfNeeded() {
-        if let cont = slidePublishContinuation {
-            slidePublishContinuation = nil
-            slidePublishError = nil
-            showPublishError = false
-            cont.resume(returning: .cancel)
-        }
-        publishTask?.cancel()
-        publishTask = nil
-        isPublishingAll = false
-        publishProgressText = nil
-    }
-
-    private func publishAllSlides() {
-        isPublishingAll = true
-        publishTask = Task {
-            let (slides, images) = allSlidesSnapshot()
-
-            var index = 0
-            while index < slides.count {
-                guard !Task.isCancelled else { break }
-                let slide = slides[index]
-                let image = images[slide.id]
-                publishProgressText = slides.count > 1 ? "\(index + 1)/\(slides.count)..." : "Publication..."
-
-                var retrying = true
-                while retrying {
-                    do {
-                        try await onPublishSlide(slide, image, loadedImages, loadedVideoURLs)
-                        retrying = false
-                        index += 1
-                    } catch {
-                        let action = await withCheckedContinuation { (continuation: CheckedContinuation<SlidePublishAction, Never>) in
-                            slidePublishContinuation = continuation
-                            slidePublishError = "Erreur slide \(index + 1)/\(slides.count) : \(error.localizedDescription)"
-                            showPublishError = true
-                        }
-                        slidePublishError = nil
-                        showPublishError = false
-                        switch action {
-                        case .retry:
-                            break
-                        case .skip:
-                            retrying = false
-                            index += 1
-                        case .cancel:
-                            isPublishingAll = false
-                            publishProgressText = nil
-                            return
-                        }
-                    }
+    private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
+        guard viewModel.currentEffects.textObjects?.contains(where: { $0.id == id }) == true else { return nil }
+        return Binding(
+            get: {
+                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
+                    ?? StoryTextObject(content: "")
+            },
+            set: { newObj in
+                var effects = viewModel.currentEffects
+                if let i = effects.textObjects?.firstIndex(where: { $0.id == id }) {
+                    effects.textObjects?[i] = newObj
+                    viewModel.currentEffects = effects
                 }
             }
-
-            guard !Task.isCancelled else {
-                isPublishingAll = false
-                publishProgressText = nil
-                return
-            }
-
-            clearDraft()
-            isPublishingAll = false
-            publishProgressText = nil
-            HapticFeedback.success()
-            onDismiss()
-        }
+        )
     }
 
-    private func saveDraft() {
-        let currentIdx = slideManager.currentSlideIndex
-        if currentIdx < slideManager.slides.count {
-            slideManager.slides[currentIdx].content = nil
-            slideManager.slides[currentIdx].effects = buildEffects()
-        }
-        StoryDraftStore.shared.save(slides: slideManager.slides, visibility: visibility)
-        HapticFeedback.light()
+    // MARK: - Sync / Restore
+
+    private func syncCurrentSlideEffects() {
+        viewModel.currentEffects = buildEffects()
     }
 
-    private func loadDraft() -> StoryComposerDraft? {
-        if let stored = StoryDraftStore.shared.load() {
-            return StoryComposerDraft(slides: stored.slides, visibilityPreference: stored.visibility)
-        }
-        // Fallback UserDefaults (compat. ancienne version)
-        guard let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
-              let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else { return nil }
-        return draft
-    }
-
-    private func clearDraft() {
-        StoryDraftStore.shared.clear()
-        UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
-    }
-
-    private func applyDraft(_ draft: StoryComposerDraft) {
-        slideManager.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
-        slideManager.currentSlideIndex = 0
-        visibility = draft.visibilityPreference
-        if let first = slideManager.slides.first {
-            restoreCanvas(from: first)
-        }
-    }
-
-    /// Restaure TOUS les @State du canvas depuis un StorySlide.
-    /// Doit être appelé à chaque changement de slide actif (switch ou création).
     private func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
-        selectedTextObjectId = nil
-        if let bgHex = e.background { backgroundColor = Color(hex: bgHex) } else { backgroundColor = Color(hex: "0F0C29") }
-        selectedImage = slideManager.slideImages[slide.id]
+        if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
+        else { viewModel.backgroundColor = "#0F0C29" }
+        selectedImage = viewModel.slideImages[slide.id]
         stickerObjects = e.stickerObjects ?? []
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
         openingEffect = e.opening
@@ -1475,590 +816,263 @@ public struct StoryComposerView: View {
         if let data = e.drawingData, let drawing = try? PKDrawing(data: data) {
             drawingCanvas.drawing = drawing
         }
-        drawingData = e.drawingData
-    }
-
-    private func handleMediaPlacement(_ placement: MediaPlacement) {
-        guard pendingMediaType != "audio" else {
-            handleAudioPlacement(placement)
-            return
-        }
-        guard let item = pendingMediaItem else { return }
-        let mediaType = pendingMediaType
-        Task {
-            let objectId = UUID().uuidString
-            let obj = StoryMediaObject(
-                id: objectId,
-                postMediaId: "",
-                mediaType: mediaType,
-                placement: placement.rawValue,
-                x: 0.5, y: 0.5,
-                scale: 1.0, rotation: 0.0,
-                volume: 1.0
-            )
-            if mediaType == "video" {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let ext = item.supportedContentTypes
-                        .first { $0.conforms(to: .audiovisualContent) }?
-                        .preferredFilenameExtension ?? "mp4"
-                    let tempURL = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(objectId + "." + ext)
-                    do {
-                        try data.write(to: tempURL)
-                        await MainActor.run {
-                            loadedVideoURLs[objectId] = tempURL
-                            var effects = currentSlideEffects ?? buildEffects()
-                            effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                            setCurrentSlideEffects(effects)
-                        }
-                    } catch {
-                        print("[StoryComposer] Failed to write video to temp file: \(error)")
-                    }
-                }
-            } else {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await MainActor.run {
-                        loadedImages[objectId] = image
-                        var effects = currentSlideEffects ?? buildEffects()
-                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                        setCurrentSlideEffects(effects)
-                    }
-                }
-            }
-            await MainActor.run {
-                pendingMediaItem = nil
-            }
-        }
-    }
-
-    private func handleAudioPlacement(_ placement: MediaPlacement) {
-        guard let url = confirmedMediaAudioURL else { return }
-        Task {
-            let samples: [Float]
-            if let generated = try? await WaveformGenerator.shared.generateSamples(from: url) {
-                samples = generated
-            } else {
-                samples = []
-            }
-            let objectId = UUID().uuidString
-            let obj = StoryAudioPlayerObject(
-                id: objectId,
-                postMediaId: "",
-                placement: placement.rawValue,
-                x: 0.5, y: 0.3,
-                volume: 1.0,
-                waveformSamples: samples
-            )
-            await MainActor.run {
-                loadedAudioURLs[objectId] = url
-                var effects = currentSlideEffects ?? buildEffects()
-                effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
-                setCurrentSlideEffects(effects)
-                confirmedMediaAudioURL = nil
-            }
-        }
-    }
-
-    /// Ajoute directement le media sélectionné en foreground (sans sheet de placement).
-    private func addPendingMediaToForeground() {
-        guard let item = pendingMediaItem else { return }
-        let mediaType = pendingMediaType
-        Task {
-            let objectId = UUID().uuidString
-            let obj = StoryMediaObject(
-                id: objectId,
-                postMediaId: "",
-                mediaType: mediaType,
-                placement: "foreground",
-                x: 0.5, y: 0.5,
-                scale: 1.0, rotation: 0.0,
-                volume: 1.0
-            )
-            if mediaType == "video" {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let ext = item.supportedContentTypes
-                        .first { $0.conforms(to: .audiovisualContent) }?
-                        .preferredFilenameExtension ?? "mp4"
-                    let tempURL = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(objectId + "." + ext)
-                    do {
-                        try data.write(to: tempURL)
-                        // Generate video thumbnail for carousel
-                        let thumbnail = Self.generateVideoThumbnail(url: tempURL)
-                        await MainActor.run {
-                            loadedVideoURLs[objectId] = tempURL
-                            if let thumbnail { loadedImages[objectId] = thumbnail }
-                            var effects = currentSlideEffects ?? buildEffects()
-                            effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                            setCurrentSlideEffects(effects)
-                            selectedMediaId = objectId
-                        }
-                    } catch {
-                        print("[StoryComposer] Erreur écriture vidéo temp: \(error)")
-                    }
-                }
-            } else {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await MainActor.run {
-                        loadedImages[objectId] = image
-                        var effects = currentSlideEffects ?? buildEffects()
-                        effects.mediaObjects = (effects.mediaObjects ?? []) + [obj]
-                        setCurrentSlideEffects(effects)
-                        selectedMediaId = objectId
-                    }
-                }
-            }
-            await MainActor.run {
-                pendingMediaItem = nil
-            }
-        }
-    }
-
-    /// Supprime un média foreground par son id (strip thumbnail × button).
-    private func removeMediaObject(id: String) {
-        var effects = currentSlideEffects ?? buildEffects()
-        effects.mediaObjects?.removeAll { $0.id == id }
-        setCurrentSlideEffects(effects)
-        loadedImages.removeValue(forKey: id)
-        loadedVideoURLs.removeValue(forKey: id)
-        HapticFeedback.medium()
-    }
-
-    /// Échange un média foreground avec son voisin dans l'ordre de profondeur.
-    /// direction = +1 vers le dessus (index+1), -1 vers le dessous (index-1).
-    private func swapMediaObject(id: String, direction: Int) {
-        var effects = currentSlideEffects ?? buildEffects()
-        guard var objects = effects.mediaObjects,
-              let idx = objects.firstIndex(where: { $0.id == id }) else { return }
-        let target = idx + direction
-        guard target >= 0 && target < objects.count else { return }
-        objects.swapAt(idx, target)
-        effects.mediaObjects = objects
-        setCurrentSlideEffects(effects)
-        HapticFeedback.light()
-    }
-
-    /// Ajoute directement l'audio confirmé en foreground (sans sheet de placement).
-    private func addVocalToForeground() {
-        guard let url = confirmedMediaAudioURL else { return }
-        Task {
-            let samples: [Float]
-            if let generated = try? await WaveformGenerator.shared.generateSamples(from: url) {
-                samples = generated
-            } else {
-                samples = []
-            }
-            let objectId = UUID().uuidString
-            let obj = StoryAudioPlayerObject(
-                id: objectId,
-                postMediaId: "",
-                placement: "foreground",
-                x: 0.5, y: 0.3,
-                volume: 1.0,
-                waveformSamples: samples
-            )
-            await MainActor.run {
-                loadedAudioURLs[objectId] = url
-                var effects = currentSlideEffects ?? buildEffects()
-                effects.audioPlayerObjects = (effects.audioPlayerObjects ?? []) + [obj]
-                setCurrentSlideEffects(effects)
-                confirmedMediaAudioURL = nil
-            }
-        }
-    }
-
-    // MARK: - Text Object Management
-
-    @ViewBuilder
-    private var textPanel: some View {
-        if let selectedId = selectedTextObjectId,
-           let binding = textObjectBinding(for: selectedId) {
-            StoryTextEditorView(
-                textObject: binding,
-                onDelete: {
-                    removeTextObject(id: selectedId)
-                }
-            )
-        } else {
-            VStack(spacing: 8) {
-                Text("Aucun texte sélectionné")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity, minHeight: 60)
-        }
-    }
-
-    private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
-        guard var effects = currentSlideEffects,
-              let idx = effects.textObjects?.firstIndex(where: { $0.id == id }) else { return nil }
-        return Binding(
-            get: {
-                let fx = currentSlideEffects
-                guard let objs = fx?.textObjects, let i = objs.firstIndex(where: { $0.id == id }) else {
-                    return StoryTextObject(content: "")
-                }
-                return objs[i]
-            },
-            set: { newObj in
-                var fx = currentSlideEffects ?? buildEffects()
-                if let i = fx.textObjects?.firstIndex(where: { $0.id == id }) {
-                    fx.textObjects?[i] = newObj
-                    setCurrentSlideEffects(fx)
-                }
-            }
-        )
-    }
-
-    private func addTextObject() {
-        let obj = StoryTextObject(content: "", x: 0.5, y: 0.45)
-        var effects = currentSlideEffects ?? buildEffects()
-        var objects = effects.textObjects ?? []
-        objects.append(obj)
-        effects.textObjects = objects
-        setCurrentSlideEffects(effects)
-        selectedTextObjectId = obj.id
-    }
-
-    private func removeTextObject(id: String) {
-        var effects = currentSlideEffects ?? buildEffects()
-        effects.textObjects?.removeAll { $0.id == id }
-        setCurrentSlideEffects(effects)
-        selectedTextObjectId = nil
-        if (effects.textObjects ?? []).isEmpty {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activePanel = .none
-            }
-        }
-    }
-
-    private func cleanupEmptyTextObjects() {
-        var effects = currentSlideEffects ?? buildEffects()
-        effects.textObjects?.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        setCurrentSlideEffects(effects)
+        viewModel.drawingData = e.drawingData
     }
 
     private func buildEffects() -> StoryEffects {
-        let bgHex = selectedImage != nil ? nil : colorToHex(backgroundColor)
+        let bgHex = selectedImage != nil ? nil : viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")
         return StoryEffects(
             background: bgHex,
-            textStyle: nil,
-            textColor: nil,
-            textPosition: nil,
             filter: selectedFilter?.rawValue,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
-            textAlign: nil,
-            textSize: nil,
-            textBg: nil,
-            textOffsetY: nil,
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
-            textPositionPoint: nil,
-            drawingData: drawingData,
+            drawingData: viewModel.drawingData,
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
             backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
             opening: openingEffect,
             closing: closingEffect,
-            textObjects: currentSlideEffects?.textObjects,
-            mediaObjects: currentSlideEffects?.mediaObjects,
-            audioPlayerObjects: currentSlideEffects?.audioPlayerObjects
+            textObjects: viewModel.currentEffects.textObjects,
+            mediaObjects: viewModel.currentEffects.mediaObjects,
+            audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects
         )
     }
 
-    private func colorToHex(_ color: Color) -> String {
-        let uiColor = UIColor(color)
-        var r: CGFloat = 0; var g: CGFloat = 0; var b: CGFloat = 0; var a: CGFloat = 0
-        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+    // MARK: - Media Loading
+
+    private func loadBackgroundPhoto(from item: PhotosPickerItem?) {
+        guard let item else { return }
+        isLoadingMedia = true
+        Task {
+            defer { isLoadingMedia = false }
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else { return }
+            selectedImage = image
+            viewModel.setImage(image, for: viewModel.currentSlide.id)
+        }
     }
 
-    /// Extract first frame from video as UIImage thumbnail.
+    private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
+        guard let item else { return }
+        Task {
+            let objectId = UUID().uuidString
+            if type == "video" {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                let ext = item.supportedContentTypes
+                    .first { $0.conforms(to: .audiovisualContent) }?
+                    .preferredFilenameExtension ?? "mp4"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(objectId + "." + ext)
+                do {
+                    try data.write(to: tempURL)
+                    let thumbnail = Self.generateVideoThumbnail(url: tempURL)
+                    await MainActor.run {
+                        viewModel.loadedVideoURLs[objectId] = tempURL
+                        if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
+                        if let obj = viewModel.addMediaObject(type: "video") {
+                            viewModel.loadedVideoURLs[obj.id] = tempURL
+                            if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                            // Remap if id differs from objectId
+                            if obj.id != objectId {
+                                viewModel.loadedVideoURLs.removeValue(forKey: objectId)
+                                viewModel.loadedImages.removeValue(forKey: objectId)
+                            }
+                        }
+                    }
+                } catch {
+                    print("[StoryComposer] Video write error: \(error)")
+                }
+            } else {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else { return }
+                await MainActor.run {
+                    if let obj = viewModel.addMediaObject(type: "image") {
+                        viewModel.loadedImages[obj.id] = image
+                    }
+                }
+            }
+            await MainActor.run {
+                fgPhotoItem = nil
+                fgVideoItem = nil
+            }
+        }
+    }
+
+    private func addVocalToForeground() {
+        guard let url = confirmedMediaAudioURL else { return }
+        Task {
+            let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            await MainActor.run {
+                if let obj = viewModel.addAudioObject() {
+                    viewModel.loadedAudioURLs[obj.id] = url
+                    // Update waveform samples
+                    var effects = viewModel.currentEffects
+                    if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
+                        effects.audioPlayerObjects?[idx].waveformSamples = samples
+                        viewModel.currentEffects = effects
+                    }
+                }
+                confirmedMediaAudioURL = nil
+            }
+        }
+    }
+
+    // MARK: - Publication
+
+    private func publishAllSlides() {
+        isPublishingAll = true
+        syncCurrentSlideEffects()
+        publishTask = Task {
+            let snapshot = snapshotAllSlides()
+            var index = 0
+            while index < snapshot.slides.count {
+                guard !Task.isCancelled else { break }
+                let slide = snapshot.slides[index]
+                let image = snapshot.bgImages[slide.id]
+                publishProgressText = snapshot.slides.count > 1
+                    ? "\(index + 1)/\(snapshot.slides.count)..."
+                    : "Publication..."
+
+                var retrying = true
+                while retrying {
+                    do {
+                        let allMediaURLs = viewModel.loadedVideoURLs.merging(viewModel.loadedAudioURLs) { v, _ in v }
+                        try await onPublishSlide(slide, image, viewModel.loadedImages, allMediaURLs)
+                        retrying = false
+                        index += 1
+                    } catch {
+                        let action = await withCheckedContinuation { (cont: CheckedContinuation<SlidePublishAction, Never>) in
+                            slidePublishContinuation = cont
+                            slidePublishError = "Erreur slide \(index + 1)/\(snapshot.slides.count) : \(error.localizedDescription)"
+                            showPublishError = true
+                        }
+                        slidePublishError = nil
+                        showPublishError = false
+                        switch action {
+                        case .retry: break
+                        case .skip: retrying = false; index += 1
+                        case .cancel:
+                            isPublishingAll = false
+                            publishProgressText = nil
+                            return
+                        }
+                    }
+                }
+            }
+            guard !Task.isCancelled else {
+                isPublishingAll = false; publishProgressText = nil; return
+            }
+            clearAllDrafts()
+            isPublishingAll = false
+            publishProgressText = nil
+            HapticFeedback.success()
+            onDismiss()
+        }
+    }
+
+    private func resumePublish(_ action: SlidePublishAction) {
+        let cont = slidePublishContinuation
+        slidePublishContinuation = nil
+        cont?.resume(returning: action)
+    }
+
+    private func cancelPublishIfNeeded() {
+        if let cont = slidePublishContinuation {
+            slidePublishContinuation = nil
+            cont.resume(returning: .cancel)
+        }
+        publishTask?.cancel()
+        publishTask = nil
+        isPublishingAll = false
+        publishProgressText = nil
+    }
+
+    private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
+        var slides = viewModel.slides
+        let idx = viewModel.currentSlideIndex
+        if idx < slides.count {
+            slides[idx].effects = buildEffects()
+        }
+        return (slides, viewModel.slideImages)
+    }
+
+    // MARK: - Dismiss
+
+    private func handleDismiss() {
+        let hasContent = viewModel.slides.contains { slide in
+            slide.content != nil
+                || viewModel.slideImages[slide.id] != nil
+                || slide.effects.background != nil
+                || !(slide.effects.textObjects ?? []).isEmpty
+                || !(slide.effects.mediaObjects ?? []).isEmpty
+        } || !stickerObjects.isEmpty || viewModel.drawingData != nil
+
+        if hasContent { showDiscardAlert = true }
+        else { cancelPublishIfNeeded(); clearAllDrafts(); onDismiss() }
+    }
+
+    private func saveDraftAndDismiss() {
+        saveDraft()
+        onDismiss()
+    }
+
+    private func cancelAndDismiss() {
+        cancelPublishIfNeeded()
+        clearAllDrafts()
+        onDismiss()
+    }
+
+    // MARK: - Draft Persistence
+
+    private func saveDraft() {
+        syncCurrentSlideEffects()
+        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        HapticFeedback.light()
+    }
+
+    private func checkForDraft() {
+        if StoryDraftStore.shared.load() != nil {
+            showRestoreDraftAlert = true
+        } else if UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) != nil {
+            showRestoreDraftAlert = true
+        }
+    }
+
+    private func restoreDraft() {
+        if let stored = StoryDraftStore.shared.load() {
+            viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
+            viewModel.currentSlideIndex = 0
+            visibility = stored.visibility
+        } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
+                  let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
+            viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
+            viewModel.currentSlideIndex = 0
+            visibility = draft.visibilityPreference
+        }
+        if let first = viewModel.slides.first {
+            restoreCanvas(from: first)
+        }
+    }
+
+    private func clearAllDrafts() {
+        StoryDraftStore.shared.clear()
+        UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
+    // MARK: - Video Thumbnail
+
     static func generateVideoThumbnail(url: URL) -> UIImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 400, height: 400)
-        do {
-            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
+        return try? UIImage(cgImage: generator.copyCGImage(at: .zero, actualTime: nil))
     }
 }
 
-// MARK: - Volume Mixer Sheet
+// MARK: - Audio Editor Item Wrapper
 
-private struct VolumeMixerSheet: View {
-    @Binding var effects: StoryEffects?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Arrière-plan") {
-                    if effects?.audioPlayerObjects?.contains(where: { $0.placement == "background" }) == true {
-                        Slider(value: backgroundVolumeBinding, in: 0...1) {
-                            Text("Volume")
-                        }
-                        .accessibilityLabel("Volume arrière-plan")
-                    }
-                }
-                Section("Premier plan") {
-                    if effects?.mediaObjects?.contains(where: { $0.mediaType == "video" && $0.placement == "foreground" }) == true {
-                        Slider(value: foregroundVideoVolumeBinding, in: 0...1) {
-                            Text("Volume vidéo")
-                        }
-                        .accessibilityLabel("Volume vidéo premier plan")
-                    }
-                    if effects?.audioPlayerObjects?.contains(where: { $0.placement == "foreground" }) == true {
-                        Slider(value: foregroundAudioVolumeBinding, in: 0...1) {
-                            Text("Volume audio")
-                        }
-                        .accessibilityLabel("Volume audio premier plan")
-                    }
-                }
-            }
-            .navigationTitle("Mixage")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("OK") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private var backgroundVolumeBinding: Binding<Float> {
-        Binding(
-            get: { effects?.audioPlayerObjects?.first(where: { $0.placement == "background" })?.volume ?? 1.0 },
-            set: { v in
-                guard let i = effects?.audioPlayerObjects?.firstIndex(where: { $0.placement == "background" }) else { return }
-                effects?.audioPlayerObjects?[i].volume = v
-            }
-        )
-    }
-
-    private var foregroundVideoVolumeBinding: Binding<Float> {
-        Binding(
-            get: { effects?.mediaObjects?.first(where: { $0.mediaType == "video" && $0.placement == "foreground" })?.volume ?? 1.0 },
-            set: { v in
-                guard let i = effects?.mediaObjects?.firstIndex(where: { $0.mediaType == "video" && $0.placement == "foreground" }) else { return }
-                effects?.mediaObjects?[i].volume = v
-            }
-        )
-    }
-
-    private var foregroundAudioVolumeBinding: Binding<Float> {
-        Binding(
-            get: { effects?.audioPlayerObjects?.first(where: { $0.placement == "foreground" })?.volume ?? 1.0 },
-            set: { v in
-                guard let i = effects?.audioPlayerObjects?.firstIndex(where: { $0.placement == "foreground" }) else { return }
-                effects?.audioPlayerObjects?[i].volume = v
-            }
-        )
-    }
-}
-
-// MARK: - Foreground Media Thumbnail (strip dans le panel +Média)
-
-private struct ForegroundMediaThumbnail: View {
-    let layerIndex: Int
-    let image: UIImage?
-    let hasVideo: Bool
-    let isEditMode: Bool
-    let isSelected: Bool
-    let isDragging: Bool
-    let dragOffset: CGFloat
-    let onTap: () -> Void
-    let onDelete: () -> Void
-    let onLongPress: () -> Void
-    let onDragChanged: (CGFloat) -> Void
-    let onDragEnded: () -> Void
-
-    @State private var wiggleAngle: Double = 0
-
-    private let size: CGFloat = 72
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            thumbnailContent
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(
-                            isDragging ? Color(hex: "FF2E63") :
-                            isSelected ? Color(hex: "08D9D6") :
-                            Color.white.opacity(0.2),
-                            lineWidth: (isDragging || isSelected) ? 2 : 1
-                        )
-                )
-
-            // Badge numéro de couche (coin bas-gauche)
-            VStack {
-                Spacer()
-                HStack {
-                    Text("\(layerIndex + 1)")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.7)))
-                        .padding(4)
-                    Spacer()
-                }
-            }
-            .frame(width: size, height: size)
-
-            // Bouton supprimer (coin haut-droit, mode édition)
-            if isEditMode {
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color.white, Color.red)
-                }
-                .offset(x: 8, y: -8)
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .rotationEffect(.degrees(wiggleAngle))
-        .offset(x: dragOffset)
-        .scaleEffect(isDragging ? 1.08 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isDragging)
-        .onTapGesture {
-            if !isEditMode { onTap() }
-        }
-        .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
-        .gesture(
-            isEditMode
-                ? DragGesture(minimumDistance: 5, coordinateSpace: .local)
-                    .onChanged { v in onDragChanged(v.translation.width) }
-                    .onEnded { _ in onDragEnded() }
-                : nil
-        )
-        .onChange(of: isEditMode) { active in
-            if active {
-                withAnimation(.easeInOut(duration: 0.1).repeatForever(autoreverses: true)) {
-                    wiggleAngle = layerIndex.isMultiple(of: 2) ? 2.5 : -2.5
-                }
-            } else {
-                withAnimation(.spring(response: 0.2)) { wiggleAngle = 0 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var thumbnailContent: some View {
-        if let img = image {
-            Image(uiImage: img)
-                .resizable()
-                .scaledToFill()
-        } else if hasVideo {
-            ZStack {
-                Color.black.opacity(0.6)
-                Image(systemName: "video.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-        } else {
-            ZStack {
-                Color.white.opacity(0.08)
-                Image(systemName: "photo")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-        }
-    }
-}
-
-// MARK: - Foreground Audio Thumbnail (strip dans le panel Contenu)
-
-private struct ForegroundAudioThumbnail: View {
-    let index: Int
-    let waveformSamples: [Float]
-    let onDelete: () -> Void
-
-    private let size: CGFloat = 72
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // Waveform miniature
-            ZStack {
-                Color.white.opacity(0.08)
-
-                // Mini waveform
-                Canvas { context, canvasSize in
-                    let barCount = min(waveformSamples.count, 20)
-                    guard barCount > 0 else { return }
-                    let barW = canvasSize.width / CGFloat(barCount) * 0.7
-                    let gap = canvasSize.width / CGFloat(barCount)
-                    for i in 0..<barCount {
-                        let sampleIdx = i * waveformSamples.count / barCount
-                        let amplitude = CGFloat(waveformSamples[sampleIdx])
-                        let barH = max(2, amplitude * canvasSize.height * 0.8)
-                        let x = CGFloat(i) * gap + gap * 0.15
-                        let y = (canvasSize.height - barH) / 2
-                        let rect = CGRect(x: x, y: y, width: barW, height: barH)
-                        context.fill(
-                            Path(roundedRect: rect, cornerRadius: 1),
-                            with: .color(.white.opacity(0.6))
-                        )
-                    }
-                }
-                .padding(8)
-
-                // Icône audio
-                VStack {
-                    Spacer()
-                    HStack {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(3)
-                            .background(Circle().fill(Color.black.opacity(0.5)))
-                        Spacer()
-                    }
-                }
-                .padding(4)
-            }
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-            )
-
-            // Bouton supprimer
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white, Color(hex: "FF2E63"))
-            }
-            .offset(x: 6, y: -6)
-
-            // Badge numéro
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("\(index + 1)")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
-                        .padding(4)
-                }
-            }
-            .frame(width: size, height: size)
-        }
-    }
+private struct AudioEditorItemWrapper: Identifiable {
+    let id = UUID()
+    let url: URL
 }

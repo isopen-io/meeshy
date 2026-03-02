@@ -4,109 +4,115 @@ import MeeshySDK
 
 // MARK: - Story Canvas View
 
-public struct StoryCanvasView: View {
-    // Text objects (multi-texte)
-    @Binding public var textObjects: [StoryTextObject]
-    public let onSelectText: ((String) -> Void)?
-    public let onEditText: ((String) -> Void)?
+struct StoryCanvasView: View {
+    @Bindable var viewModel: StoryComposerViewModel
 
-    @Binding public var stickerObjects: [StorySticker]
-    @Binding public var selectedFilter: StoryFilter?
-    @Binding public var drawingData: Data?
-    @Binding public var isDrawingActive: Bool
-    @Binding public var backgroundColor: Color
-    @Binding public var selectedImage: UIImage?
-    // Drawing state (géré par le parent)
-    @Binding public var drawingCanvas: PKCanvasView
-    @Binding public var drawingColor: Color
-    @Binding public var drawingWidth: CGFloat
-    @Binding public var drawingTool: DrawingTool
-    // Media objects (foreground)
-    @Binding public var mediaObjects: [StoryMediaObject]
-    @Binding public var audioPlayerObjects: [StoryAudioPlayerObject]
-    // Médias chargés localement (en attente d'upload)
-    @Binding public var loadedImages: [String: UIImage]
-    @Binding public var loadedVideoURLs: [String: URL]
-    @Binding public var loadedAudioURLs: [String: URL]
-    public let onSelectMedia: ((String) -> Void)?
-    public let onBackgroundTap: (() -> Void)?
-    // Image manipulation — état local (UX preview)
+    // External state not yet migrated to ViewModel
+    @Binding var drawingCanvas: PKCanvasView
+    @Binding var drawingTool: DrawingTool
+    @Binding var selectedFilter: StoryFilter?
+    @Binding var selectedImage: UIImage?
+    @Binding var stickerObjects: [StorySticker]
+
+    // Callbacks
+    var onEditText: ((String) -> Void)?
+    var onEditMedia: ((String) -> Void)?
+
+    // Background image manipulation (local UX state)
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
     @GestureState private var dragDelta: CGSize = .zero
     @GestureState private var pinchDelta: CGFloat = 1.0
+    @GestureState private var rotationDelta: Angle = .zero
+    @State private var imageRotation: Angle = .zero
     @State private var filteredImage: UIImage?
-    /// Dernier média tapé — affiché au premier plan (z-index le plus élevé).
-    @State private var lastTappedMediaId: String? = nil
-    /// Dernier texte tapé — affiché au premier plan.
-    @State private var lastTappedTextId: String? = nil
 
-    public init(textObjects: Binding<[StoryTextObject]>,
-                onSelectText: ((String) -> Void)? = nil,
-                onEditText: ((String) -> Void)? = nil,
-                stickerObjects: Binding<[StorySticker]>,
-                selectedFilter: Binding<StoryFilter?>, drawingData: Binding<Data?>,
-                isDrawingActive: Binding<Bool>, backgroundColor: Binding<Color>,
-                selectedImage: Binding<UIImage?>, drawingCanvas: Binding<PKCanvasView>,
-                drawingColor: Binding<Color>, drawingWidth: Binding<CGFloat>,
-                drawingTool: Binding<DrawingTool>,
-                mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
-                audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
-                loadedImages: Binding<[String: UIImage]> = .constant([:]),
-                loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
-                loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
-                onSelectMedia: ((String) -> Void)? = nil,
-                onBackgroundTap: (() -> Void)? = nil) {
-        self._textObjects = textObjects
-        self.onSelectText = onSelectText
-        self.onEditText = onEditText
-        self._stickerObjects = stickerObjects
-        self._selectedFilter = selectedFilter; self._drawingData = drawingData
-        self._isDrawingActive = isDrawingActive; self._backgroundColor = backgroundColor
-        self._selectedImage = selectedImage
+    init(
+        viewModel: StoryComposerViewModel,
+        drawingCanvas: Binding<PKCanvasView>,
+        drawingTool: Binding<DrawingTool>,
+        selectedFilter: Binding<StoryFilter?>,
+        selectedImage: Binding<UIImage?>,
+        stickerObjects: Binding<[StorySticker]>,
+        onEditText: ((String) -> Void)? = nil,
+        onEditMedia: ((String) -> Void)? = nil
+    ) {
+        self.viewModel = viewModel
         self._drawingCanvas = drawingCanvas
-        self._drawingColor = drawingColor
-        self._drawingWidth = drawingWidth
         self._drawingTool = drawingTool
-        self._mediaObjects = mediaObjects
-        self._audioPlayerObjects = audioPlayerObjects
-        self._loadedImages = loadedImages
-        self._loadedVideoURLs = loadedVideoURLs
-        self._loadedAudioURLs = loadedAudioURLs
-        self.onSelectMedia = onSelectMedia
-        self.onBackgroundTap = onBackgroundTap
+        self._selectedFilter = selectedFilter
+        self._selectedImage = selectedImage
+        self._stickerObjects = stickerObjects
+        self.onEditText = onEditText
+        self.onEditMedia = onEditMedia
     }
 
-    public var body: some View {
+    // MARK: - Convenience accessors
+
+    private var textObjects: [StoryTextObject] {
+        viewModel.currentEffects.textObjects ?? []
+    }
+
+    private var mediaObjects: [StoryMediaObject] {
+        viewModel.currentEffects.mediaObjects ?? []
+    }
+
+    private var audioPlayerObjects: [StoryAudioPlayerObject] {
+        viewModel.currentEffects.audioPlayerObjects ?? []
+    }
+
+    private var isFondToolActive: Bool { viewModel.isFondToolActive }
+    private var isFrontToolActive: Bool { viewModel.isFrontToolActive }
+    private var isDrawingActive: Bool { viewModel.isDrawingActive }
+
+    private var bgColor: Color {
+        Color(hex: viewModel.backgroundColor)
+    }
+
+    // MARK: - Body
+
+    var body: some View {
         GeometryReader { geo in
             ZStack {
+                // Layer 0: Background color / gradient
                 backgroundLayer
 
-                mediaLayer
+                // Layer 1: Background image/video (gesture-manipulable)
+                backgroundMediaLayer
 
+                // Layer 2: Drawing overlay (PKCanvasView)
                 drawingLayer
 
-                textObjectsLayer
-
-                stickerLayer(canvasSize: geo.size)
-
-                foregroundMediaLayer
-
-                foregroundAudioLayer
+                // Layers 3-N: Front elements (text, stickers, media, audio)
+                frontElementsGroup(canvasSize: geo.size)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(
+                RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 4])
+                    )
+                    .foregroundStyle(MeeshyColors.indigo400.opacity(viewModel.isCanvasZoomed ? 0.6 : 0))
+                    .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.isCanvasZoomed)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                handleEmptyCanvasTap()
+            }
         }
         .onAppear {
             updateFilteredImage()
         }
-        .onChange(of: selectedImage) { _ in
+        .onChange(of: selectedImage) { _, _ in
             withAnimation(.spring(response: 0.3)) {
                 imageScale = 1.0
                 imageOffset = .zero
+                imageRotation = .zero
             }
             updateFilteredImage()
         }
-        .onChange(of: selectedFilter) { _ in
+        .onChange(of: selectedFilter) { _, _ in
             updateFilteredImage()
         }
     }
@@ -115,70 +121,80 @@ public struct StoryCanvasView: View {
         filteredImage = selectedImage.map { StoryFilterProcessor.apply(selectedFilter, to: $0) }
     }
 
+    // MARK: - Empty Canvas Tap
+
+    private func handleEmptyCanvasTap() {
+        guard !isDrawingActive else { return }
+        viewModel.deselectAll()
+    }
+
     // MARK: - Background Layer
 
     private var backgroundLayer: some View {
         ZStack {
-            backgroundColor
+            bgColor
                 .ignoresSafeArea()
 
             if selectedImage == nil {
-                gradientOverlay
+                LinearGradient(
+                    colors: [
+                        bgColor.opacity(0.8),
+                        bgColor,
+                        bgColor.opacity(0.9)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onBackgroundTap?()
-        }
     }
 
-    private var gradientOverlay: some View {
-        LinearGradient(
-            colors: [
-                backgroundColor.opacity(0.8),
-                backgroundColor,
-                backgroundColor.opacity(0.9)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    // MARK: - Media Layer (image interactive avec pinch + drag)
+    // MARK: - Background Media Layer (pinch + drag + rotate)
 
     @ViewBuilder
-    private var mediaLayer: some View {
+    private var backgroundMediaLayer: some View {
         if let image = filteredImage ?? selectedImage {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
                 .scaleEffect(imageScale * pinchDelta)
+                .rotationEffect(imageRotation + rotationDelta)
                 .offset(
                     x: imageOffset.width + dragDelta.width,
                     y: imageOffset.height + dragDelta.height
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .gesture(isDrawingActive ? nil : imageGesture)
+                .allowsHitTesting(!isDrawingActive && !isFrontToolActive)
+                .gesture(isDrawingActive || isFrontToolActive ? nil : backgroundImageGesture)
         }
     }
 
-    private var imageGesture: some Gesture {
+    private var backgroundImageGesture: some Gesture {
         SimultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .updating($dragDelta) { value, state, _ in
-                    state = value.translation
-                }
-                .onEnded { value in
-                    imageOffset.width += value.translation.width
-                    imageOffset.height += value.translation.height
-                },
-            MagnificationGesture()
-                .updating($pinchDelta) { value, state, _ in
+            SimultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($dragDelta) { value, state, _ in
+                        state = value.translation
+                    }
+                    .onEnded { value in
+                        imageOffset.width += value.translation.width
+                        imageOffset.height += value.translation.height
+                    },
+                MagnificationGesture()
+                    .updating($pinchDelta) { value, state, _ in
+                        state = value
+                    }
+                    .onEnded { value in
+                        imageScale = max(0.5, imageScale * value)
+                    }
+            ),
+            RotationGesture()
+                .updating($rotationDelta) { value, state, _ in
                     state = value
                 }
                 .onEnded { value in
-                    imageScale = max(1.0, imageScale * value)
+                    imageRotation += value
                 }
         )
     }
@@ -187,93 +203,272 @@ public struct StoryCanvasView: View {
 
     private var drawingLayer: some View {
         DrawingOverlayView(
-            drawingData: $drawingData,
-            isActive: $isDrawingActive,
+            drawingData: $viewModel.drawingData,
+            isActive: .constant(viewModel.isDrawingActive),
             canvasView: $drawingCanvas,
-            toolColor: $drawingColor,
-            toolWidth: $drawingWidth,
+            toolColor: $viewModel.drawingColor,
+            toolWidth: $viewModel.drawingWidth,
             toolType: $drawingTool
         )
     }
 
-    // MARK: - Text Objects Layer (multi-texte draggable)
+    // MARK: - Front Elements Group
 
     @ViewBuilder
-    private var textObjectsLayer: some View {
-        if !isDrawingActive {
-            ForEach($textObjects) { $obj in
-                if !obj.content.isEmpty {
-                    DraggableTextObjectView(
-                        textObject: $obj,
-                        isEditing: true,
-                        onTapToFront: {
-                            lastTappedTextId = obj.id
-                            onSelectText?(obj.id)
-                        },
-                        onDoubleTap: { onEditText?(obj.id) },
-                        onDragEnd: {}
-                    )
-                    .zIndex(obj.id == lastTappedTextId ? 1 : 0)
-                }
+    private func frontElementsGroup(canvasSize: CGSize) -> some View {
+        let dimmed = isFondToolActive
+        let interactive = !isFondToolActive && !isDrawingActive
+
+        ZStack {
+            textObjectsLayer(interactive: interactive)
+            stickerLayer(canvasSize: canvasSize, interactive: interactive)
+            foregroundMediaLayer(interactive: interactive)
+            foregroundAudioLayer(interactive: interactive)
+        }
+        .opacity(dimmed ? 0.4 : 1.0)
+        .allowsHitTesting(!dimmed)
+        .animation(.easeInOut(duration: 0.2), value: dimmed)
+    }
+
+    // MARK: - Text Objects Layer
+
+    @ViewBuilder
+    private func textObjectsLayer(interactive: Bool) -> some View {
+        ForEach(textObjects, id: \.id) { obj in
+            if !obj.content.isEmpty {
+                DraggableTextObjectView(
+                    textObject: textObjectBinding(for: obj.id),
+                    isEditing: interactive,
+                    onTapToFront: {
+                        viewModel.selectedElementId = obj.id
+                        viewModel.bringToFront(id: obj.id)
+                        HapticFeedback.light()
+                    },
+                    onDoubleTap: {
+                        viewModel.selectedElementId = obj.id
+                        onEditText?(obj.id)
+                    },
+                    onDragEnd: {}
+                )
+                .selectionGlow(viewModel.selectedElementId == obj.id)
+                .canvasContextMenu(
+                    elementId: obj.id,
+                    elementType: .text,
+                    viewModel: viewModel
+                )
+                .zIndex(Double(viewModel.zIndex(for: obj.id)))
             }
         }
     }
 
     // MARK: - Sticker Layer
 
-    private func stickerLayer(canvasSize: CGSize) -> some View {
-        ForEach(Array(stickerObjects.enumerated()), id: \.element.id) { index, sticker in
+    private func stickerLayer(canvasSize: CGSize, interactive: Bool) -> some View {
+        ForEach(stickerObjects, id: \.id) { sticker in
             DraggableSticker(
                 sticker: sticker,
                 canvasSize: canvasSize,
                 onUpdate: { updated in
-                    guard index < stickerObjects.count else { return }
-                    stickerObjects[index] = updated
+                    if let i = stickerObjects.firstIndex(where: { $0.id == sticker.id }) {
+                        stickerObjects[i] = updated
+                    }
                 },
                 onRemove: {
-                    guard index < stickerObjects.count else { return }
-                    stickerObjects.remove(at: index)
+                    stickerObjects.removeAll { $0.id == sticker.id }
                 }
             )
+            .allowsHitTesting(interactive)
         }
     }
 
     // MARK: - Foreground Media Layer
 
     @ViewBuilder
-    private var foregroundMediaLayer: some View {
-        ForEach($mediaObjects) { $obj in
-            if obj.placement == "foreground" {
-                DraggableMediaView(
-                    mediaObject: $obj,
-                    image: loadedImages[obj.id],
-                    videoURL: loadedVideoURLs[obj.id],
-                    isEditing: !isDrawingActive,
-                    onDragEnd: {},
-                    onTapToFront: {
-                        lastTappedMediaId = obj.id
-                        onSelectMedia?(obj.id)
-                    }
-                )
-                .zIndex(obj.id == lastTappedMediaId ? 1 : 0)
+    private func foregroundMediaLayer(interactive: Bool) -> some View {
+        ForEach(mediaObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
+            DraggableMediaView(
+                mediaObject: mediaObjectBinding(for: obj.id),
+                image: viewModel.loadedImages[obj.id],
+                videoURL: viewModel.loadedVideoURLs[obj.id],
+                isEditing: interactive,
+                onDragEnd: {},
+                onTapToFront: {
+                    viewModel.selectedElementId = obj.id
+                    viewModel.bringToFront(id: obj.id)
+                    HapticFeedback.light()
+                }
+            )
+            .overlay(alignment: .bottomLeading) {
+                if obj.mediaType == "video" {
+                    videoPlayBadge
+                }
             }
+            .selectionGlow(viewModel.selectedElementId == obj.id)
+            .canvasContextMenu(
+                elementId: obj.id,
+                elementType: obj.mediaType == "video" ? .video : .image,
+                viewModel: viewModel
+            )
+            .highPriorityGesture(
+                TapGesture(count: 2).onEnded {
+                    viewModel.selectedElementId = obj.id
+                    onEditMedia?(obj.id)
+                }
+            )
+            .zIndex(Double(viewModel.zIndex(for: obj.id)))
         }
     }
 
     // MARK: - Foreground Audio Layer
 
     @ViewBuilder
-    private var foregroundAudioLayer: some View {
-        ForEach($audioPlayerObjects) { $obj in
-            if obj.placement == "foreground" {
-                StoryAudioPlayerView(
-                    audioObject: $obj,
-                    url: loadedAudioURLs[obj.id],
-                    isEditing: !isDrawingActive,
-                    onDragEnd: {}
-                )
-            }
+    private func foregroundAudioLayer(interactive: Bool) -> some View {
+        ForEach(audioPlayerObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
+            StoryAudioPlayerView(
+                audioObject: audioObjectBinding(for: obj.id),
+                url: viewModel.loadedAudioURLs[obj.id],
+                isEditing: interactive,
+                onDragEnd: {}
+            )
+            .selectionGlow(viewModel.selectedElementId == obj.id)
+            .canvasContextMenu(
+                elementId: obj.id,
+                elementType: .audio,
+                viewModel: viewModel
+            )
+            .simultaneousGesture(TapGesture().onEnded {
+                viewModel.selectedElementId = obj.id
+                viewModel.bringToFront(id: obj.id)
+            })
+            .zIndex(Double(viewModel.zIndex(for: obj.id)))
         }
+    }
+
+    // MARK: - Video Play Badge
+
+    private var videoPlayBadge: some View {
+        Image(systemName: "play.fill")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(.white)
+            .padding(6)
+            .background(Circle().fill(Color.black.opacity(0.5)))
+            .padding(8)
+            .allowsHitTesting(false)
+    }
+
+    // MARK: - Bindings into ViewModel arrays
+
+    private func textObjectBinding(for id: String) -> Binding<StoryTextObject> {
+        Binding(
+            get: {
+                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
+                    ?? StoryTextObject(content: "")
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                guard var texts = effects.textObjects,
+                      let idx = texts.firstIndex(where: { $0.id == id }) else { return }
+                texts[idx] = newValue
+                effects.textObjects = texts
+                viewModel.currentEffects = effects
+            }
+        )
+    }
+
+    private func mediaObjectBinding(for id: String) -> Binding<StoryMediaObject> {
+        Binding(
+            get: {
+                viewModel.currentEffects.mediaObjects?.first(where: { $0.id == id })
+                    ?? StoryMediaObject()
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                guard var medias = effects.mediaObjects,
+                      let idx = medias.firstIndex(where: { $0.id == id }) else { return }
+                medias[idx] = newValue
+                effects.mediaObjects = medias
+                viewModel.currentEffects = effects
+            }
+        )
+    }
+
+    private func audioObjectBinding(for id: String) -> Binding<StoryAudioPlayerObject> {
+        Binding(
+            get: {
+                viewModel.currentEffects.audioPlayerObjects?.first(where: { $0.id == id })
+                    ?? StoryAudioPlayerObject()
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                guard var audios = effects.audioPlayerObjects,
+                      let idx = audios.firstIndex(where: { $0.id == id }) else { return }
+                audios[idx] = newValue
+                effects.audioPlayerObjects = audios
+                viewModel.currentEffects = effects
+            }
+        )
+    }
+}
+
+// MARK: - Legacy Binding Bridge
+
+/// Backward-compatible initializer for StoryComposerView (pre-ViewModel migration).
+/// Creates a thin bridge ViewModel that reads/writes through the provided bindings.
+extension StoryCanvasView {
+    @MainActor
+    init(
+        textObjects: Binding<[StoryTextObject]>,
+        onSelectText: ((String) -> Void)?,
+        onEditText: ((String) -> Void)?,
+        stickerObjects: Binding<[StorySticker]>,
+        selectedFilter: Binding<StoryFilter?>,
+        drawingData: Binding<Data?>,
+        isDrawingActive: Binding<Bool>,
+        backgroundColor: Binding<Color>,
+        selectedImage: Binding<UIImage?>,
+        drawingCanvas: Binding<PKCanvasView>,
+        drawingColor: Binding<Color>,
+        drawingWidth: Binding<CGFloat>,
+        drawingTool: Binding<DrawingTool>,
+        mediaObjects: Binding<[StoryMediaObject]> = .constant([]),
+        audioPlayerObjects: Binding<[StoryAudioPlayerObject]> = .constant([]),
+        loadedImages: Binding<[String: UIImage]> = .constant([:]),
+        loadedVideoURLs: Binding<[String: URL]> = .constant([:]),
+        loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
+        onSelectMedia: ((String) -> Void)? = nil,
+        onBackgroundTap: (() -> Void)? = nil
+    ) {
+        let vm = StoryComposerViewModel()
+        // Seed the ViewModel with initial values from the bindings
+        var effects = vm.currentEffects
+        effects.textObjects = textObjects.wrappedValue
+        effects.mediaObjects = mediaObjects.wrappedValue
+        effects.audioPlayerObjects = audioPlayerObjects.wrappedValue
+        vm.currentEffects = effects
+        vm.drawingData = drawingData.wrappedValue
+        vm.drawingColor = drawingColor.wrappedValue
+        vm.drawingWidth = drawingWidth.wrappedValue
+        vm.loadedImages = loadedImages.wrappedValue
+        vm.loadedVideoURLs = loadedVideoURLs.wrappedValue
+        vm.loadedAudioURLs = loadedAudioURLs.wrappedValue
+        if isDrawingActive.wrappedValue {
+            vm.activeTool = .drawing
+        }
+
+        // Convert Color binding to hex string for the ViewModel
+        let uiColor = UIColor(backgroundColor.wrappedValue)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        vm.backgroundColor = String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+
+        self.viewModel = vm
+        self._drawingCanvas = drawingCanvas
+        self._drawingTool = drawingTool
+        self._selectedFilter = selectedFilter
+        self._selectedImage = selectedImage
+        self._stickerObjects = stickerObjects
+        self.onEditText = onEditText
+        self.onEditMedia = nil
     }
 }
 

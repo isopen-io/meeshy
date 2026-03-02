@@ -146,9 +146,16 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var textAlign: String?      // "left"|"center"|"right"
     public var textBg: String?         // hex ou nil (pas de fond)
 
+    // Timeline timing
+    public var startTime: Float?            // quand le texte apparaît (secondes, défaut 0)
+    public var displayDuration: Float?      // durée d'affichage (nil = permanent)
+    public var fadeIn: Float?               // animation d'entrée (secondes)
+    public var fadeOut: Float?              // animation de sortie (secondes)
+
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations
         case textStyle, textColor, textSize, textAlign, textBg
+        case startTime, displayDuration, fadeIn, fadeOut
     }
 
     public init(id: String = UUID().uuidString, content: String,
@@ -157,12 +164,16 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 translations: [String: String]? = nil,
                 textStyle: String? = "bold", textColor: String? = "FFFFFF",
                 textSize: CGFloat? = 28, textAlign: String? = "center",
-                textBg: String? = nil) {
+                textBg: String? = nil,
+                startTime: Float? = nil, displayDuration: Float? = nil,
+                fadeIn: Float? = nil, fadeOut: Float? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
         self.textStyle = textStyle; self.textColor = textColor
         self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
+        self.startTime = startTime; self.displayDuration = displayDuration
+        self.fadeIn = fadeIn; self.fadeOut = fadeOut
     }
 
     // MARK: - Computed properties (non-SwiftUI)
@@ -194,19 +205,31 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var rotation: CGFloat
     public var volume: Float           // 0.0–1.0 (vidéos foreground uniquement)
 
+    // Timeline timing
+    public var startTime: Float?            // offset en secondes (défaut 0)
+    public var duration: Float?             // durée de lecture (nil = jusqu'à la fin)
+    public var loop: Bool?                  // boucle automatique
+    public var fadeIn: Float?               // fade-in (secondes)
+    public var fadeOut: Float?              // fade-out (secondes)
+
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
+        case startTime, duration, loop, fadeIn, fadeOut
     }
 
-    public init(id: String = UUID().uuidString, postMediaId: String,
-                mediaType: String, placement: String = "foreground",
+    public init(id: String = UUID().uuidString, postMediaId: String = "",
+                mediaType: String = "image", placement: String = "foreground",
                 x: CGFloat = 0.5, y: CGFloat = 0.5,
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
-                volume: Float = 1.0) {
+                volume: Float = 1.0,
+                startTime: Float? = nil, duration: Float? = nil,
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.mediaType = mediaType; self.placement = placement
         self.x = x; self.y = y; self.scale = scale
         self.rotation = rotation; self.volume = volume
+        self.startTime = startTime; self.duration = duration
+        self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
     }
 }
 
@@ -221,17 +244,29 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var volume: Float           // 0.0–1.0
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
 
+    // Timeline timing
+    public var startTime: Float?            // offset en secondes (défaut 0)
+    public var duration: Float?             // durée de lecture (nil = jusqu'à la fin)
+    public var loop: Bool?                  // boucle automatique
+    public var fadeIn: Float?               // fade-in (secondes)
+    public var fadeOut: Float?              // fade-out (secondes)
+
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
+        case startTime, duration, loop, fadeIn, fadeOut
     }
 
-    public init(id: String = UUID().uuidString, postMediaId: String,
+    public init(id: String = UUID().uuidString, postMediaId: String = "",
                 placement: String = "foreground",
                 x: CGFloat = 0.5, y: CGFloat = 0.8,
-                volume: Float = 1.0, waveformSamples: [Float] = []) {
+                volume: Float = 1.0, waveformSamples: [Float] = [],
+                startTime: Float? = nil, duration: Float? = nil,
+                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
+        self.startTime = startTime; self.duration = duration
+        self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
     }
 }
 
@@ -475,16 +510,28 @@ public struct StoryEffects: Codable, Sendable {
         if let cl = closing { dict["closing"] = cl.rawValue }
         if let objects = mediaObjects, !objects.isEmpty {
             dict["mediaObjects"] = objects.map { o in
-                ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
+                var d: [String: Any] = ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
                  "placement": o.placement, "x": o.x, "y": o.y,
-                 "scale": o.scale, "rotation": o.rotation, "volume": o.volume] as [String: Any]
+                 "scale": o.scale, "rotation": o.rotation, "volume": o.volume]
+                if let st = o.startTime { d["startTime"] = st }
+                if let dur = o.duration { d["duration"] = dur }
+                if let lp = o.loop { d["loop"] = lp }
+                if let fi = o.fadeIn { d["fadeIn"] = fi }
+                if let fo = o.fadeOut { d["fadeOut"] = fo }
+                return d
             }
         }
         if let players = audioPlayerObjects, !players.isEmpty {
             dict["audioPlayerObjects"] = players.map { p in
-                ["id": p.id, "postMediaId": p.postMediaId, "placement": p.placement,
+                var d: [String: Any] = ["id": p.id, "postMediaId": p.postMediaId, "placement": p.placement,
                  "x": p.x, "y": p.y, "volume": p.volume,
-                 "waveformSamples": p.waveformSamples] as [String: Any]
+                 "waveformSamples": p.waveformSamples]
+                if let st = p.startTime { d["startTime"] = st }
+                if let dur = p.duration { d["duration"] = dur }
+                if let lp = p.loop { d["loop"] = lp }
+                if let fi = p.fadeIn { d["fadeIn"] = fi }
+                if let fo = p.fadeOut { d["fadeOut"] = fo }
+                return d
             }
         }
         if let variants = backgroundAudioVariants, !variants.isEmpty {
@@ -503,6 +550,10 @@ public struct StoryEffects: Codable, Sendable {
                 if let sz = t.textSize { d["textSize"] = sz }
                 if let ta = t.textAlign { d["textAlign"] = ta }
                 if let bg = t.textBg { d["textBg"] = bg }
+                if let st = t.startTime { d["startTime"] = st }
+                if let dd = t.displayDuration { d["displayDuration"] = dd }
+                if let fi = t.fadeIn { d["fadeIn"] = fi }
+                if let fo = t.fadeOut { d["fadeOut"] = fo }
                 return d
             }
         }

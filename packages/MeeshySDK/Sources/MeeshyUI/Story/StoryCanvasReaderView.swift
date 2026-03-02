@@ -59,12 +59,14 @@ public struct StoryCanvasReaderView: View {
             await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
         }
         .onAppear {
+            state.startPlaybackTimer()
             state.startBackgroundAudio(
                 effects: story.storyEffects,
                 story: story,
                 userLang: preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
             )
             state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
+            state.startForegroundAudios(story: story, preloadedAudioURLs: preloadedAudioURLs)
             state.subscribeToTranslationUpdates(postId: story.id)
         }
         .onDisappear {
@@ -236,42 +238,48 @@ public struct StoryCanvasReaderView: View {
             .frame(maxWidth: 280)
     }
 
-    // MARK: - Text Objects Layer (multi-texte avec styles per-objet + traductions)
+    // MARK: - Text Objects Layer (multi-texte avec styles per-objet + traductions + timing)
 
     @ViewBuilder
     private func textObjectsLayer(size: CGSize) -> some View {
         let lang = preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
+        let time = state.currentTime
         ForEach(state.textObjects) { obj in
-            let content = resolvedText(for: obj, userLang: lang)
-            let style = obj.parsedTextStyle
-            let colorHex = obj.textColor ?? "FFFFFF"
-            let fontSize = obj.resolvedSize
-            let alignment: TextAlignment = {
-                switch obj.textAlign {
-                case "left": return .leading
-                case "right": return .trailing
-                default: return .center
-                }
-            }()
-            Text(content)
-                .font(storyFont(for: style, size: fontSize * obj.scale))
-                .foregroundColor(Color(hex: colorHex))
-                .multilineTextAlignment(alignment)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Group {
-                        if obj.hasBg {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.black.opacity(0.4))
-                        }
+            let opacity = state.textObjectOpacity(for: obj, at: time)
+            if opacity > 0 {
+                let content = resolvedText(for: obj, userLang: lang)
+                let style = obj.parsedTextStyle
+                let colorHex = obj.textColor ?? "FFFFFF"
+                let fontSize = obj.resolvedSize
+                let alignment: TextAlignment = {
+                    switch obj.textAlign {
+                    case "left": return .leading
+                    case "right": return .trailing
+                    default: return .center
                     }
-                )
-                .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
-                .frame(maxWidth: 280)
-                .rotationEffect(.degrees(obj.rotation))
-                .position(x: obj.x * size.width, y: obj.y * size.height)
-                .allowsHitTesting(false)
+                }()
+                Text(content)
+                    .font(storyFont(for: style, size: fontSize * obj.scale))
+                    .foregroundColor(Color(hex: colorHex))
+                    .multilineTextAlignment(alignment)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Group {
+                            if obj.hasBg {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.black.opacity(0.4))
+                            }
+                        }
+                    )
+                    .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
+                    .frame(maxWidth: 280)
+                    .opacity(opacity)
+                    .rotationEffect(.degrees(obj.rotation))
+                    .position(x: obj.x * size.width, y: obj.y * size.height)
+                    .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.15), value: opacity)
+            }
         }
     }
 
@@ -302,37 +310,48 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Foreground Media Layer
+    // MARK: - Foreground Media Layer (timing-aware visibility + volume fade)
 
     @ViewBuilder
     private var foregroundMediaLayer: some View {
+        let time = state.currentTime
         ForEach(story.storyEffects?.mediaObjects?.filter { $0.placement == "foreground" } ?? []) { media in
-            DraggableMediaView(
-                mediaObject: .constant(media),
-                image: state.loadedImages[media.id],
-                videoURL: media.mediaType == "video"
-                    ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
-                    : nil,
-                externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
-                isEditing: false
-            )
-            .onAppear {
-                // DEBUG Bug3: log media position at render time in viewer
-                NSLog("[Bug3][ReaderView] storyId=%@ mediaId=%@ x=%f y=%f scale=%f rotation=%f postMediaId=%@", story.id, media.id, media.x, media.y, media.scale, media.rotation, media.postMediaId)
+            let visible = state.mediaObjectVisible(media, at: time)
+            if visible {
+                DraggableMediaView(
+                    mediaObject: .constant(media),
+                    image: state.loadedImages[media.id],
+                    videoURL: media.mediaType == "video"
+                        ? mediaURL(for: media.postMediaId).flatMap { MeeshyConfig.resolveMediaURL($0) }
+                        : nil,
+                    externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
+                    isEditing: false
+                )
+                .opacity(state.mediaObjectOpacity(for: media, at: time))
+                .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
+                .onAppear {
+                    NSLog("[Bug3][ReaderView] storyId=%@ mediaId=%@ x=%f y=%f scale=%f rotation=%f postMediaId=%@", story.id, media.id, media.x, media.y, media.scale, media.rotation, media.postMediaId)
+                }
             }
         }
     }
 
-    // MARK: - Foreground Audio Layer
+    // MARK: - Foreground Audio Layer (timing-aware visibility)
 
     @ViewBuilder
     private var foregroundAudioLayer: some View {
+        let time = state.currentTime
         ForEach(story.storyEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" } ?? []) { audio in
-            StoryAudioPlayerView(
-                audioObject: .constant(audio),
-                url: resolvedAudioURL(for: audio),
-                isEditing: false
-            )
+            let visible = state.audioObjectVisible(audio, at: time)
+            if visible {
+                StoryAudioPlayerView(
+                    audioObject: .constant(audio),
+                    url: resolvedAudioURL(for: audio),
+                    isEditing: false
+                )
+                .opacity(state.audioObjectOpacity(for: audio, at: time))
+                .animation(.easeInOut(duration: 0.15), value: state.audioObjectOpacity(for: audio, at: time))
+            }
         }
     }
 
@@ -357,27 +376,46 @@ public struct StoryCanvasReaderView: View {
     }
 }
 
-// MARK: - ReaderState (gestion lifecycle, audio de fond, socket updates)
+// MARK: - ReaderState (gestion lifecycle, audio de fond, socket updates, timing)
 
 @MainActor
 private final class ReaderState: ObservableObject {
     @Published var textObjects: [StoryTextObject]
     @Published var loadedImages: [String: UIImage] = [:]
-    /// Players vidéo foreground — un par média, tous démarrés simultanément à onAppear.
+    /// Players vidéo foreground — un par média, démarrés selon leur startTime.
     @Published var foregroundVideoPlayers: [String: AVPlayer] = [:]
+    /// Elapsed time since playback started (seconds). Drives timing-based visibility.
+    @Published var currentTime: TimeInterval = 0
     let canvas = PKCanvasView()
 
     private var backgroundPlayer: AVPlayer?
     private var backgroundVideoPlayer: AVPlayer?
     private var loopObserver: NSObjectProtocol?
     private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
+    private var foregroundStopTimers: [String: Timer] = [:]
+    private var foregroundAudioPlayers: [String: AVPlayer] = [:]
+    private var foregroundAudioObservers: [String: NSObjectProtocol] = [:]
+    private var foregroundAudioStopTimers: [String: Timer] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var fadeTimer: Timer?
+    private var playbackTimer: Timer?
     /// Volume cible défini par l'utilisateur pour l'audio de fond.
     private var targetBackgroundVolume: Float = 0.5
+    /// Tracks which foreground videos have already been started (to avoid re-triggering).
+    private var startedForegroundVideos: Set<String> = []
+    /// Tracks which foreground audios have already been started.
+    private var startedForegroundAudios: Set<String> = []
+    /// Stores media objects for timing-based scheduling of foreground videos.
+    private var pendingVideoStarts: [String: (url: URL, media: StoryMediaObject)] = [:]
+    /// Stores audio objects for timing-based scheduling of foreground audios.
+    private var pendingAudioStarts: [String: (url: URL, audio: StoryAudioPlayerObject)] = [:]
+    /// Active fade-volume timers (Issue 5: must be tracked to invalidate on cleanup).
+    private var fadeTimers: [Timer] = []
+    /// Observer token for storyAudioFadeOut notification (Issue 6: must be removed on cleanup).
+    private var fadeOutObserver: NSObjectProtocol?
 
     init(story: StoryItem) {
-        // Migrate legacy text → textObjects si nécessaire
+        // Migrate legacy text -> textObjects si necessaire
         var objects = story.storyEffects?.textObjects ?? []
         if objects.isEmpty, let content = story.content, !content.isEmpty {
             var effects = story.storyEffects ?? StoryEffects()
@@ -385,9 +423,144 @@ private final class ReaderState: ObservableObject {
             objects = effects.textObjects ?? []
         }
         self.textObjects = objects
-        NotificationCenter.default.addObserver(forName: .storyAudioFadeOut, object: nil, queue: .main) { [weak self] _ in
+        fadeOutObserver = NotificationCenter.default.addObserver(forName: .storyAudioFadeOut, object: nil, queue: .main) { [weak self] _ in
             self?.fadeOutThenStop()
         }
+    }
+
+    // MARK: Playback timer (drives element timing)
+
+    func startPlaybackTimer() {
+        currentTime = 0
+        playbackTimer?.invalidate()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.currentTime += 0.05
+            self.checkPendingVideoStarts()
+            self.checkPendingAudioStarts()
+        }
+    }
+
+    func stopPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+    }
+
+    // MARK: Text object timing
+
+    func textObjectOpacity(for obj: StoryTextObject, at time: TimeInterval) -> Double {
+        let start = TimeInterval(obj.startTime ?? 0)
+        let fadeInDur = TimeInterval(obj.fadeIn ?? 0)
+        let fadeOutDur = TimeInterval(obj.fadeOut ?? 0)
+
+        // No timing fields at all -> always visible (backward compatible)
+        guard obj.startTime != nil || obj.displayDuration != nil else { return 1.0 }
+
+        // Before start time -> invisible
+        if time < start { return 0.0 }
+
+        let elapsed = time - start
+
+        // During fade-in
+        if fadeInDur > 0, elapsed < fadeInDur {
+            return min(1.0, elapsed / fadeInDur)
+        }
+
+        // Check display duration
+        if let displayDur = obj.displayDuration {
+            let endTime = start + TimeInterval(displayDur)
+            // After end -> invisible
+            if time >= endTime { return 0.0 }
+
+            // During fade-out (before end)
+            if fadeOutDur > 0 {
+                let fadeOutStart = endTime - TimeInterval(fadeOutDur)
+                if time >= fadeOutStart {
+                    let remaining = endTime - time
+                    return max(0.0, remaining / TimeInterval(fadeOutDur))
+                }
+            }
+        }
+
+        // Fully visible
+        return 1.0
+    }
+
+    // MARK: Media object timing
+
+    func mediaObjectVisible(_ media: StoryMediaObject, at time: TimeInterval) -> Bool {
+        let start = TimeInterval(media.startTime ?? 0)
+        guard time >= start else { return false }
+        if let dur = media.duration {
+            let shouldLoop = media.loop ?? false
+            if !shouldLoop, time >= start + TimeInterval(dur) { return false }
+        }
+        return true
+    }
+
+    func mediaObjectOpacity(for media: StoryMediaObject, at time: TimeInterval) -> Double {
+        let start = TimeInterval(media.startTime ?? 0)
+        let fadeInDur = TimeInterval(media.fadeIn ?? 0)
+        let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
+
+        // No timing fields -> fully visible (backward compatible)
+        guard media.startTime != nil || media.duration != nil else { return 1.0 }
+
+        let elapsed = time - start
+        guard elapsed >= 0 else { return 0.0 }
+
+        // Fade-in
+        if fadeInDur > 0, elapsed < fadeInDur {
+            return min(1.0, elapsed / fadeInDur)
+        }
+
+        // Fade-out before end
+        if let dur = media.duration, fadeOutDur > 0 {
+            let endTime = start + TimeInterval(dur)
+            let fadeOutStart = endTime - TimeInterval(fadeOutDur)
+            if time >= fadeOutStart, time < endTime {
+                return max(0.0, (endTime - time) / TimeInterval(fadeOutDur))
+            }
+        }
+
+        return 1.0
+    }
+
+    // MARK: Audio object timing
+
+    func audioObjectVisible(_ audio: StoryAudioPlayerObject, at time: TimeInterval) -> Bool {
+        let start = TimeInterval(audio.startTime ?? 0)
+        guard time >= start else { return false }
+        if let dur = audio.duration {
+            let shouldLoop = audio.loop ?? false
+            if !shouldLoop, time >= start + TimeInterval(dur) { return false }
+        }
+        return true
+    }
+
+    func audioObjectOpacity(for audio: StoryAudioPlayerObject, at time: TimeInterval) -> Double {
+        let start = TimeInterval(audio.startTime ?? 0)
+        let fadeInDur = TimeInterval(audio.fadeIn ?? 0)
+        let fadeOutDur = TimeInterval(audio.fadeOut ?? 0)
+
+        guard audio.startTime != nil || audio.duration != nil else { return 1.0 }
+
+        let elapsed = time - start
+        guard elapsed >= 0 else { return 0.0 }
+
+        if fadeInDur > 0, elapsed < fadeInDur {
+            return min(1.0, elapsed / fadeInDur)
+        }
+
+        if let dur = audio.duration, fadeOutDur > 0 {
+            let endTime = start + TimeInterval(dur)
+            let fadeOutStart = endTime - TimeInterval(fadeOutDur)
+            if time >= fadeOutStart, time < endTime {
+                return max(0.0, (endTime - time) / TimeInterval(fadeOutDur))
+            }
+        }
+
+        return 1.0
     }
 
     // MARK: Foreground image loading
@@ -396,7 +569,7 @@ private final class ReaderState: ObservableObject {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
         for media in foregroundImages {
-            // Asset préchargé localement (mode preview) — priorité sur le réseau.
+            // Asset precharge localement (mode preview) -- priorite sur le reseau.
             if let img = preloadedImages[media.id] {
                 loadedImages[media.id] = img
                 continue
@@ -423,7 +596,7 @@ private final class ReaderState: ObservableObject {
         targetBackgroundVolume = userVolume
 
         let player = AVPlayer(url: url)
-        player.volume = userVolume * 0.2  // Démarrer à 20% du volume cible
+        player.volume = userVolume * 0.2  // Demarrer a 20% du volume cible
         backgroundPlayer = player
 
         if let startTime = effects.backgroundAudioStart {
@@ -451,8 +624,15 @@ private final class ReaderState: ObservableObject {
     }
 
     func stopAllMedia() {
+        stopPlaybackTimer()
         fadeTimer?.invalidate()
         fadeTimer = nil
+        fadeTimers.forEach { $0.invalidate() }
+        fadeTimers.removeAll()
+        if let obs = fadeOutObserver {
+            NotificationCenter.default.removeObserver(obs)
+            fadeOutObserver = nil
+        }
         backgroundPlayer?.pause()
         backgroundPlayer = nil
         backgroundVideoPlayer?.pause()
@@ -469,9 +649,25 @@ private final class ReaderState: ObservableObject {
         }
         foregroundVideoPlayers = [:]
         foregroundLoopObservers = [:]
+        for (_, timer) in foregroundStopTimers { timer.invalidate() }
+        foregroundStopTimers = [:]
+        for (id, player) in foregroundAudioPlayers {
+            player.pause()
+            if let obs = foregroundAudioObservers[id] {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
+        foregroundAudioPlayers = [:]
+        foregroundAudioObservers = [:]
+        for (_, timer) in foregroundAudioStopTimers { timer.invalidate() }
+        foregroundAudioStopTimers = [:]
+        startedForegroundVideos = []
+        startedForegroundAudios = []
+        pendingVideoStarts = [:]
+        pendingAudioStarts = [:]
     }
 
-    /// Fade-out progressif (2s) puis arrêt complet de tous les médias.
+    /// Fade-out progressif (2s) puis arret complet de tous les medias.
     func fadeOutThenStop(completion: (() -> Void)? = nil) {
         let fadeDuration: TimeInterval = 2.0
         let steps = 40
@@ -481,6 +677,7 @@ private final class ReaderState: ObservableObject {
         // Capturer les volumes actuels
         let bgStartVol = backgroundPlayer?.volume ?? 0
         let fgStartVols = foregroundVideoPlayers.mapValues { $0.volume }
+        let fgAudioStartVols = foregroundAudioPlayers.mapValues { $0.volume }
 
         fadeTimer?.invalidate()
         fadeTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
@@ -493,6 +690,10 @@ private final class ReaderState: ObservableObject {
             self.backgroundPlayer?.volume = bgStartVol * (1.0 - progress) + (bgStartVol * targetRatio) * progress
             for (id, player) in self.foregroundVideoPlayers {
                 let startVol = fgStartVols[id] ?? 1.0
+                player.volume = startVol * (1.0 - progress) + (startVol * targetRatio) * progress
+            }
+            for (id, player) in self.foregroundAudioPlayers {
+                let startVol = fgAudioStartVols[id] ?? 1.0
                 player.volume = startVol * (1.0 - progress) + (startVol * targetRatio) * progress
             }
 
@@ -512,7 +713,8 @@ private final class ReaderState: ObservableObject {
         let interval = duration / Double(steps)
         var currentStep = 0
 
-        Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak player] timer in
+            guard let player else { timer.invalidate(); return }
             currentStep += 1
             let progress = Float(currentStep) / Float(steps)
             player.volume = startVol + (endVol - startVol) * progress
@@ -521,20 +723,21 @@ private final class ReaderState: ObservableObject {
                 player.volume = endVol
             }
         }
+        fadeTimers.append(timer)
     }
 
-    // MARK: Foreground video players (tous démarrés simultanément)
+    // MARK: Foreground video players (timing-aware start)
 
     func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
         for media in videoObjects {
-            // Asset préchargé localement (mode preview) — priorité sur le réseau.
+            // Asset precharge localement (mode preview) -- priorite sur le reseau.
             if let preloaded = preloadedVideoURLs[media.id] {
-                createAndStartVideoPlayer(for: media.id, url: preloaded)
+                registerPendingVideoStart(media: media, url: preloaded)
             } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
                       let resolved = MeeshyConfig.resolveMediaURL(urlString) {
-                // Télécharger via MediaCacheManager pour contourner les erreurs de Content-Type serveur,
+                // Telecharger via MediaCacheManager pour contourner les erreurs de Content-Type serveur,
                 // puis jouer depuis un fichier local temporaire.
                 Task {
                     do {
@@ -544,13 +747,13 @@ private final class ReaderState: ObservableObject {
                             .appendingPathComponent("story_video_\(media.id).\(ext)")
                         try data.write(to: tempURL, options: .atomic)
                         await MainActor.run {
-                            self.createAndStartVideoPlayer(for: media.id, url: tempURL)
+                            self.registerPendingVideoStart(media: media, url: tempURL)
                         }
                     } catch {
                         NSLog("[StoryReader] Failed to download video for %@: %@", media.id, error.localizedDescription)
-                        // Fallback : essayer directement avec l'URL réseau (fonctionne si serveur renvoie le bon Content-Type)
+                        // Fallback : essayer directement avec l'URL reseau
                         await MainActor.run {
-                            self.createAndStartVideoPlayer(for: media.id, url: resolved)
+                            self.registerPendingVideoStart(media: media, url: resolved)
                         }
                     }
                 }
@@ -558,23 +761,157 @@ private final class ReaderState: ObservableObject {
         }
     }
 
-    private func createAndStartVideoPlayer(for mediaId: String, url: URL) {
+    private func registerPendingVideoStart(media: StoryMediaObject, url: URL) {
+        let startOffset = TimeInterval(media.startTime ?? 0)
+        if currentTime >= startOffset {
+            // Already past start time, start immediately
+            createAndStartVideoPlayer(for: media, url: url)
+        } else {
+            // Register for deferred start via playback timer
+            pendingVideoStarts[media.id] = (url: url, media: media)
+        }
+    }
+
+    private func checkPendingVideoStarts() {
+        for (id, pending) in pendingVideoStarts {
+            let startOffset = TimeInterval(pending.media.startTime ?? 0)
+            if currentTime >= startOffset {
+                pendingVideoStarts.removeValue(forKey: id)
+                createAndStartVideoPlayer(for: pending.media, url: pending.url)
+            }
+        }
+    }
+
+    private func createAndStartVideoPlayer(for media: StoryMediaObject, url: URL) {
+        guard !startedForegroundVideos.contains(media.id) else { return }
+        startedForegroundVideos.insert(media.id)
+
         let player = AVPlayer(url: url)
         player.isMuted = false
-        player.volume = 0.2
-        foregroundVideoPlayers[mediaId] = player
+        let targetVolume = media.volume
+        let hasFadeIn = (media.fadeIn ?? 0) > 0
 
+        // Start at reduced volume if fade-in configured, otherwise start low for smooth ramp
+        player.volume = hasFadeIn ? 0.0 : 0.2
+        foregroundVideoPlayers[media.id] = player
+
+        let shouldLoop = media.loop ?? true
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
         ) { [weak player] _ in
+            guard shouldLoop else { return }
             player?.seek(to: .zero)
             player?.play()
         }
-        foregroundLoopObservers[mediaId] = obs
+        foregroundLoopObservers[media.id] = obs
+
         player.play()
-        fadeVolume(player: player, from: 0.2, to: 1.0, duration: 1.0)
+
+        // Volume fade-in
+        let fadeInDuration = TimeInterval(media.fadeIn ?? 0)
+        if fadeInDuration > 0 {
+            fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
+        } else {
+            fadeVolume(player: player, from: 0.2, to: targetVolume, duration: 1.0)
+        }
+
+        // Schedule stop + fade-out if duration is set and not looping
+        if let dur = media.duration, !(media.loop ?? false) {
+            let stopDelay = TimeInterval(dur)
+            let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
+            let fadeOutStart = max(0, stopDelay - fadeOutDur)
+
+            if fadeOutDur > 0 {
+                foregroundStopTimers[media.id]?.invalidate()
+                foregroundStopTimers[media.id] = Timer.scheduledTimer(withTimeInterval: fadeOutStart, repeats: false) { [weak self, weak player] _ in
+                    guard let player else { return }
+                    self?.fadeVolume(player: player, from: player.volume, to: 0.0, duration: fadeOutDur)
+                }
+            }
+        }
+    }
+
+    // MARK: Foreground audio players (timing-aware start)
+
+    func startForegroundAudios(story: StoryItem, preloadedAudioURLs: [String: URL] = [:]) {
+        guard let audioObjects = story.storyEffects?.audioPlayerObjects else { return }
+        let foregroundAudios = audioObjects.filter { $0.placement == "foreground" }
+        for audio in foregroundAudios {
+            if let preloaded = preloadedAudioURLs[audio.id] {
+                registerPendingAudioStart(audio: audio, url: preloaded)
+            } else if let urlStr = story.media.first(where: { $0.id == audio.postMediaId })?.url,
+                      let resolved = MeeshyConfig.resolveMediaURL(urlStr) {
+                registerPendingAudioStart(audio: audio, url: resolved)
+            }
+        }
+    }
+
+    private func registerPendingAudioStart(audio: StoryAudioPlayerObject, url: URL) {
+        let startOffset = TimeInterval(audio.startTime ?? 0)
+        if currentTime >= startOffset {
+            createAndStartAudioPlayer(for: audio, url: url)
+        } else {
+            pendingAudioStarts[audio.id] = (url: url, audio: audio)
+        }
+    }
+
+    private func checkPendingAudioStarts() {
+        for (id, pending) in pendingAudioStarts {
+            let startOffset = TimeInterval(pending.audio.startTime ?? 0)
+            if currentTime >= startOffset {
+                pendingAudioStarts.removeValue(forKey: id)
+                createAndStartAudioPlayer(for: pending.audio, url: pending.url)
+            }
+        }
+    }
+
+    private func createAndStartAudioPlayer(for audio: StoryAudioPlayerObject, url: URL) {
+        guard !startedForegroundAudios.contains(audio.id) else { return }
+        startedForegroundAudios.insert(audio.id)
+
+        let player = AVPlayer(url: url)
+        let targetVolume = audio.volume
+        let hasFadeIn = (audio.fadeIn ?? 0) > 0
+
+        player.volume = hasFadeIn ? 0.0 : targetVolume
+        foregroundAudioPlayers[audio.id] = player
+
+        let shouldLoop = audio.loop ?? false
+        let obs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak player] _ in
+            guard shouldLoop else { return }
+            player?.seek(to: .zero)
+            player?.play()
+        }
+        foregroundAudioObservers[audio.id] = obs
+
+        player.play()
+
+        // Volume fade-in
+        let fadeInDuration = TimeInterval(audio.fadeIn ?? 0)
+        if fadeInDuration > 0 {
+            fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
+        }
+
+        // Schedule fade-out + stop if duration is set and not looping
+        if let dur = audio.duration, !shouldLoop {
+            let stopDelay = TimeInterval(dur)
+            let fadeOutDur = TimeInterval(audio.fadeOut ?? 0)
+            let fadeOutStart = max(0, stopDelay - fadeOutDur)
+
+            if fadeOutDur > 0 {
+                foregroundAudioStopTimers[audio.id]?.invalidate()
+                foregroundAudioStopTimers[audio.id] = Timer.scheduledTimer(withTimeInterval: fadeOutStart, repeats: false) { [weak self, weak player] _ in
+                    guard let player else { return }
+                    self?.fadeVolume(player: player, from: player.volume, to: 0.0, duration: fadeOutDur)
+                }
+            }
+        }
     }
 
     // MARK: Background video (stored to avoid re-creation on every render)

@@ -231,6 +231,21 @@ public struct PencilKitCanvas: UIViewRepresentable {
     public func updateUIView(_ uiView: PKCanvasView, context: Context) {
         uiView.isUserInteractionEnabled = isActive
         applyTool(to: uiView)
+
+        // Sync drawing when slide changes (drawingData changed externally)
+        guard !context.coordinator.isUpdatingFromDelegate else { return }
+        if let data = drawingData {
+            if uiView.drawing.dataRepresentation() != data,
+               let drawing = try? PKDrawing(data: data) {
+                context.coordinator.isUpdatingFromDelegate = true
+                uiView.drawing = drawing
+                context.coordinator.isUpdatingFromDelegate = false
+            }
+        } else if !uiView.drawing.strokes.isEmpty {
+            context.coordinator.isUpdatingFromDelegate = true
+            uiView.drawing = PKDrawing()
+            context.coordinator.isUpdatingFromDelegate = false
+        }
     }
 
     private func applyTool(to canvas: PKCanvasView) {
@@ -254,12 +269,14 @@ public struct PencilKitCanvas: UIViewRepresentable {
 
     public class Coordinator: NSObject, PKCanvasViewDelegate {
         var parent: PencilKitCanvas
+        var isUpdatingFromDelegate = false
 
         init(parent: PencilKitCanvas) {
             self.parent = parent
         }
 
         public func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            guard !isUpdatingFromDelegate else { return }
             parent.drawingData = canvasView.drawing.dataRepresentation()
         }
     }

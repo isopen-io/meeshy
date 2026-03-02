@@ -12,9 +12,12 @@ public struct DraggableMediaView: View {
     public let onDragEnd: () -> Void
     /// Appelé quand l'utilisateur tape ce média — le parent doit le ramener au premier plan (z-index).
     public let onTapToFront: (() -> Void)?
+    /// Appelé quand l'utilisateur toggle play/pause — passe l'ID de l'élément média.
+    public let onTogglePlay: ((String) -> Void)?
 
     @State private var internalPlayer: AVPlayer?
     @State private var loopObserver: AnyObject? = nil
+    @State private var isPlaying: Bool = false
 
     // Local state snapshots: read from binding once, then only update on gesture end.
     // This prevents parent re-renders from resetting the visual position mid-gesture.
@@ -37,7 +40,8 @@ public struct DraggableMediaView: View {
                 externalPlayer: AVPlayer? = nil,
                 isEditing: Bool = false,
                 onDragEnd: @escaping () -> Void = {},
-                onTapToFront: (() -> Void)? = nil) {
+                onTapToFront: (() -> Void)? = nil,
+                onTogglePlay: ((String) -> Void)? = nil) {
         self._mediaObject = mediaObject
         self.image = image
         self.videoURL = videoURL
@@ -45,10 +49,15 @@ public struct DraggableMediaView: View {
         self.isEditing = isEditing
         self.onDragEnd = onDragEnd
         self.onTapToFront = onTapToFront
+        self.onTogglePlay = onTogglePlay
     }
 
     private var activePlayer: AVPlayer? {
         externalPlayer ?? internalPlayer
+    }
+
+    private var isVideoElement: Bool {
+        mediaObject.mediaType == "video"
     }
 
     // Resolved base values: use local snapshot if set, otherwise fall back to binding.
@@ -65,6 +74,8 @@ public struct DraggableMediaView: View {
                     syncBaseFromBinding()
                     if externalPlayer == nil, let url = videoURL {
                         setupInternalPlayer(url: url)
+                    } else if externalPlayer != nil {
+                        isPlaying = externalPlayer?.rate ?? 0 > 0
                     }
                 }
                 .onChange(of: geo.size) { newSize in
@@ -113,7 +124,7 @@ public struct DraggableMediaView: View {
         let scaledSize = baseMediaSize * effectiveScale
 
         if isEditing {
-            mediaContent
+            mediaContentBase
                 .frame(width: baseMediaSize, height: baseMediaSize)
                 .scaleEffect(effectiveScale)
                 .rotationEffect(.radians(effectiveRotation))
@@ -127,6 +138,19 @@ public struct DraggableMediaView: View {
                 .gesture(dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight))
                 .simultaneousGesture(pinchGesture)
                 .simultaneousGesture(rotateGesture)
+                .overlay {
+                    if isVideoElement, activePlayer != nil {
+                        videoPlayPauseOverlay
+                            .frame(width: scaledSize, height: scaledSize)
+                            .position(
+                                x: currentX * canvasWidth + dragOffset.width,
+                                y: currentY * canvasHeight + dragOffset.height
+                            )
+                            .highPriorityGesture(
+                                TapGesture().onEnded { _ in togglePlayback() }
+                            )
+                    }
+                }
         } else {
             mediaContent
                 .frame(width: baseMediaSize, height: baseMediaSize)
@@ -186,24 +210,77 @@ public struct DraggableMediaView: View {
             }
     }
 
-    // MARK: - Media content
+    // MARK: - Media content (without video overlay — used in editing mode)
 
-    private var mediaContent: some View {
-        // ZStack stable (même type quel que soit l'état) — empêche onAppear de refirer
-        // quand le type de contenu change (EmptyView→VideoPlayer ou Image→VideoPlayer).
+    private var mediaContentBase: some View {
         ZStack {
             if let player = activePlayer {
-                // Video takes priority when player is ready.
                 VideoPlayer(player: player)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if let image {
-                // Thumbnail (image directe ou vignette vidéo) — affiché pendant le chargement.
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
+    }
+
+    // MARK: - Media content (with video overlay — used in non-editing/reader mode)
+
+    private var mediaContent: some View {
+        ZStack {
+            if let player = activePlayer {
+                VideoPlayer(player: player)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            if isVideoElement, activePlayer != nil {
+                videoPlayPauseOverlay
+            }
+        }
+    }
+
+    // MARK: - Video play/pause overlay
+
+    private var videoPlayPauseOverlay: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Button(action: togglePlayback) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .accessibilityLabel(isPlaying ? "Pause" : "Play")
+                Spacer()
+            }
+            .padding(6)
+        }
+    }
+
+    // MARK: - Playback toggle
+
+    private func togglePlayback() {
+        guard let player = activePlayer else { return }
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        } else {
+            player.play()
+            isPlaying = true
+        }
+        onTogglePlay?(mediaObject.id)
     }
 
     // MARK: - Internal player (composer mode)
@@ -224,6 +301,7 @@ public struct DraggableMediaView: View {
         }
         loopObserver = observer as AnyObject
         player.play()
+        isPlaying = true
     }
 
     private func teardownInternalPlayer() {
@@ -233,5 +311,6 @@ public struct DraggableMediaView: View {
             loopObserver = nil
         }
         internalPlayer = nil
+        isPlaying = false
     }
 }
