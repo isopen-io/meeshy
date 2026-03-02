@@ -811,21 +811,39 @@ public struct StoryComposerView: View {
     // MARK: - Foreground Audio Section (within contenuPanel)
 
     private var foregroundAudioSection: some View {
-        let vocalCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        let foregroundAudios = (currentSlideEffects?.audioPlayerObjects ?? []).filter { $0.placement == "foreground" }
         return VStack(spacing: 10) {
             HStack {
                 Text("Premier plan — sonore")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
-                if vocalCount > 0 {
-                    Text("\(vocalCount) vocal\(vocalCount > 1 ? "s" : "")")
+                if !foregroundAudios.isEmpty {
+                    Text("\(foregroundAudios.count) vocal\(foregroundAudios.count > 1 ? "s" : "")")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(Color(hex: "FF2E63"))
                 }
             }
             .padding(.horizontal, 16)
 
+            // Strip des audios foreground existants
+            if !foregroundAudios.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(foregroundAudios.enumerated()), id: \.element.id) { idx, audio in
+                            ForegroundAudioThumbnail(
+                                index: idx,
+                                waveformSamples: audio.waveformSamples ?? [],
+                                onDelete: { removeAudioObject(id: audio.id) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+                }
+            }
+
+            // Boutons ajout
             HStack(spacing: 10) {
                 Button {
                     showAudioDocumentPicker = true
@@ -860,6 +878,14 @@ public struct StoryComposerView: View {
             .padding(.horizontal, 16)
         }
         .padding(.vertical, 12)
+    }
+
+    private func removeAudioObject(id: String) {
+        var effects = currentSlideEffects ?? buildEffects()
+        effects.audioPlayerObjects?.removeAll { $0.id == id }
+        setCurrentSlideEffects(effects)
+        loadedAudioURLs.removeValue(forKey: id)
+        HapticFeedback.medium()
     }
 
     // MARK: - Media Panel (+Média — foreground uniquement)
@@ -1877,6 +1903,92 @@ private struct ForegroundMediaThumbnail: View {
                     .font(.system(size: 24))
                     .foregroundColor(.white.opacity(0.4))
             }
+        }
+    }
+}
+
+// MARK: - Foreground Audio Thumbnail (strip dans le panel Contenu)
+
+private struct ForegroundAudioThumbnail: View {
+    let index: Int
+    let waveformSamples: [Float]
+    let onDelete: () -> Void
+
+    private let size: CGFloat = 72
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // Waveform miniature
+            ZStack {
+                Color.white.opacity(0.08)
+
+                // Mini waveform
+                Canvas { context, canvasSize in
+                    let barCount = min(waveformSamples.count, 20)
+                    guard barCount > 0 else { return }
+                    let barW = canvasSize.width / CGFloat(barCount) * 0.7
+                    let gap = canvasSize.width / CGFloat(barCount)
+                    for i in 0..<barCount {
+                        let sampleIdx = i * waveformSamples.count / barCount
+                        let amplitude = CGFloat(waveformSamples[sampleIdx])
+                        let barH = max(2, amplitude * canvasSize.height * 0.8)
+                        let x = CGFloat(i) * gap + gap * 0.15
+                        let y = (canvasSize.height - barH) / 2
+                        let rect = CGRect(x: x, y: y, width: barW, height: barH)
+                        context.fill(
+                            Path(roundedRect: rect, cornerRadius: 1),
+                            with: .color(.white.opacity(0.6))
+                        )
+                    }
+                }
+                .padding(8)
+
+                // Icône audio
+                VStack {
+                    Spacer()
+                    HStack {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(3)
+                            .background(Circle().fill(Color.black.opacity(0.5)))
+                        Spacer()
+                    }
+                }
+                .padding(4)
+            }
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+
+            // Bouton supprimer
+            Button {
+                onDelete()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.white, Color(hex: "FF2E63"))
+            }
+            .offset(x: 6, y: -6)
+
+            // Badge numéro
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("\(index + 1)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                        .padding(4)
+                }
+            }
+            .frame(width: size, height: size)
         }
     }
 }
