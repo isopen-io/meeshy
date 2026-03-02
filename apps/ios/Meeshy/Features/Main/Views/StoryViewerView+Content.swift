@@ -383,6 +383,7 @@ extension StoryViewerView {
         update()
         markCurrentViewed()
         prefetchStory(at: currentStoryIndex + 1)
+        prefetchStory(at: currentStoryIndex + 2)
 
         // Read opening effect from the INCOMING story (currentStory is now the new one)
         let incomingEffect = currentStory?.storyEffects?.opening
@@ -460,6 +461,7 @@ extension StoryViewerView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             update()
             markCurrentViewed()
+            prefetchCurrentGroup()
             groupSlide = enterX
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 groupSlide = 0
@@ -734,22 +736,70 @@ extension StoryViewerView {
 
     // MARK: - Prefetch
 
-    /// Précharge l'image de la story à l'index donné dans le groupe actuel.
+    /// Précharge tous les médias d'une story : legacy media, mediaObjects, audioPlayerObjects, backgroundAudio.
+    private func prefetchAllMedia(for story: StoryItem) {
+        // Collecter toutes les URLs à prefetch
+        var urls: [String] = []
+
+        // Legacy story.media URLs
+        urls.append(contentsOf: story.media.compactMap(\.url))
+
+        // Composer V2 media objects (foreground + background images/videos)
+        if let mediaObjs = story.storyEffects?.mediaObjects {
+            for obj in mediaObjs {
+                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                    urls.append(urlStr)
+                }
+            }
+        }
+
+        // Foreground audio player objects
+        if let audioObjs = story.storyEffects?.audioPlayerObjects {
+            for obj in audioObjs {
+                if let urlStr = story.media.first(where: { $0.id == obj.postMediaId })?.url {
+                    urls.append(urlStr)
+                }
+            }
+        }
+
+        // Background audio
+        if let bgAudioId = story.storyEffects?.backgroundAudioId {
+            if let urlStr = story.media.first(where: { $0.id == bgAudioId })?.url {
+                urls.append(urlStr)
+            }
+        }
+
+        // Prefetch dans un contexte async (MediaCacheManager est un actor)
+        let uniqueURLs = Array(Set(urls))
+        Task {
+            let cache = MediaCacheManager.shared
+            for url in uniqueURLs {
+                await cache.prefetch(url)
+            }
+        }
+    }
+
+    /// Précharge la story à l'index donné dans le groupe actuel.
     func prefetchStory(at index: Int) {
         guard currentGroupIndex < groups.count else { return }
         let stories = groups[currentGroupIndex].stories
         guard index >= 0, index < stories.count else { return }
-        stories[index].media.compactMap(\.url).forEach {
-            MediaCacheManager.shared.prefetch($0)
-        }
+        prefetchAllMedia(for: stories[index])
     }
 
-    /// Précharge toutes les stories du groupe actuel (appelé à l'ouverture du viewer).
+    /// Précharge toutes les stories du groupe actuel + les 2 premières du groupe suivant.
     func prefetchCurrentGroup() {
         guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
-        groups[currentGroupIndex].stories.forEach { story in
-            story.media.compactMap(\.url).forEach {
-                MediaCacheManager.shared.prefetch($0)
+
+        // Groupe actuel : toutes les stories
+        groups[currentGroupIndex].stories.forEach { prefetchAllMedia(for: $0) }
+
+        // Groupe suivant : les 2 premières stories (lookahead)
+        let nextGroupIdx = currentGroupIndex + 1
+        if nextGroupIdx < groups.count {
+            let nextStories = groups[nextGroupIdx].stories
+            for i in 0..<min(2, nextStories.count) {
+                prefetchAllMedia(for: nextStories[i])
             }
         }
     }
