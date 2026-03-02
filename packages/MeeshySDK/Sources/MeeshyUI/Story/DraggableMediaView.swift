@@ -104,13 +104,20 @@ public struct DraggableMediaView: View {
 
     // MARK: - Content with conditional gestures
 
+    private let baseMediaSize: CGFloat = 160
+
     @ViewBuilder
     private func mediaContentWithGestures(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some View {
+        let effectiveScale = isEditing ? currentScale * gestureScale : currentScale
+        let effectiveRotation = isEditing ? currentRotation + gestureRotation.radians : currentRotation
+        let scaledSize = baseMediaSize * effectiveScale
+
         if isEditing {
             mediaContent
-                .frame(width: 160, height: 160)
-                .scaleEffect(currentScale * gestureScale)
-                .rotationEffect(.radians(currentRotation) + gestureRotation)
+                .frame(width: baseMediaSize, height: baseMediaSize)
+                .scaleEffect(effectiveScale)
+                .rotationEffect(.radians(effectiveRotation))
+                .frame(width: scaledSize, height: scaledSize)
                 .contentShape(Rectangle())
                 .position(
                     x: currentX * canvasWidth + dragOffset.width,
@@ -122,9 +129,10 @@ public struct DraggableMediaView: View {
                 .simultaneousGesture(rotateGesture)
         } else {
             mediaContent
-                .frame(width: 160, height: 160)
+                .frame(width: baseMediaSize, height: baseMediaSize)
                 .scaleEffect(currentScale)
                 .rotationEffect(.radians(currentRotation))
+                .frame(width: scaledSize, height: scaledSize)
                 .contentShape(Rectangle())
                 .position(
                     x: currentX * canvasWidth,

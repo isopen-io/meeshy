@@ -566,11 +566,14 @@ public struct StoryComposerView: View {
                 if let mediaObjs = slide.effects.mediaObjects {
                     ForEach(mediaObjs.filter { $0.placement == "foreground" }, id: \.id) { obj in
                         if let img = loadedImages[obj.id] {
+                            let miniScale = CGFloat(obj.scale) * (thumbW / UIScreen.main.bounds.width)
+                            let miniSize: CGFloat = 160 * miniScale
                             Image(uiImage: img)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 9, height: 9)
+                                .frame(width: max(4, miniSize), height: max(4, miniSize))
                                 .clipShape(RoundedRectangle(cornerRadius: 1))
+                                .rotationEffect(.radians(obj.rotation))
                                 .position(x: obj.x * thumbW, y: obj.y * thumbH)
                         }
                     }
