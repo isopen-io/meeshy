@@ -228,10 +228,8 @@ private struct ConversationHeaderAvatarView: View {
         var items: [AvatarContextMenuItem] = []
         if storyViewModel.hasStories(forUserId: userId) {
             items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                    headerState.storyGroupIndexForHeader = groupIndex
-                    headerState.showStoryViewerFromHeader = true
-                }
+                headerState.storyUserIdForHeader = userId
+                headerState.showStoryViewerFromHeader = true
             })
         }
         items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
@@ -247,9 +245,8 @@ private struct ConversationHeaderAvatarView: View {
         var items: [AvatarContextMenuItem] = []
         if let userId = conversation?.participantUserId, storyViewModel.hasStories(forUserId: userId) {
             items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
-                if let uid = conversation?.participantUserId,
-                   let groupIndex = storyViewModel.groupIndex(forUserId: uid) {
-                    headerState.storyGroupIndexForHeader = groupIndex
+                if let uid = conversation?.participantUserId {
+                    headerState.storyUserIdForHeader = uid
                     headerState.showStoryViewerFromHeader = true
                 }
             })
@@ -282,10 +279,8 @@ private struct ConversationHeaderAvatarView: View {
                         }
                     },
                     onViewStory: {
-                        if let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-                            headerState.storyGroupIndexForHeader = groupIndex
-                            headerState.showStoryViewerFromHeader = true
-                        }
+                        headerState.storyUserIdForHeader = userId
+                        headerState.showStoryViewerFromHeader = true
                     },
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
                     contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
@@ -308,10 +303,8 @@ private struct ConversationHeaderAvatarView: View {
                                 }
                             },
                             onViewStory: {
-                                if let groupIndex = storyViewModel.groupIndex(forUserId: member.id) {
-                                    headerState.storyGroupIndexForHeader = groupIndex
-                                    headerState.showStoryViewerFromHeader = true
-                                }
+                                headerState.storyUserIdForHeader = member.id
+                                headerState.showStoryViewerFromHeader = true
                             },
                             onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                             contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)

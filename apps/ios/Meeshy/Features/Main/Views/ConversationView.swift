@@ -95,7 +95,7 @@ struct ConversationComposerState {
 
 struct ConversationHeaderState {
     var showStoryViewerFromHeader = false
-    var storyGroupIndexForHeader = 0
+    var storyUserIdForHeader: String?
     var showSearch = false
     var searchQuery = ""
     var typingDotPhase: Int = 0
@@ -378,8 +378,9 @@ struct ConversationView: View {
                 }
             }
             .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
-                if headerState.storyGroupIndexForHeader < storyViewModel.storyGroups.count {
-                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[headerState.storyGroupIndexForHeader]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
+                if let userId = headerState.storyUserIdForHeader,
+                   let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
+                    StoryViewerView(viewModel: storyViewModel, groups: [storyViewModel.storyGroups[resolvedIndex]], currentGroupIndex: 0, isPresented: $headerState.showStoryViewerFromHeader)
                 }
             }
             .sheet(isPresented: $composerState.showConversationInfo) {

@@ -22,7 +22,7 @@ struct RootView: View {
     @State private var notificationCount = 3
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
-    @State private var selectedStoryGroupIndexFromConv = 0
+    @State private var selectedStoryUserIdFromConv: String?
     @State private var joinFlowIdentifier: String?
     @State private var showJoinFlow = false
 
@@ -67,8 +67,8 @@ struct RootView: View {
                     onSelect: { conversation in
                         router.push(.conversation(conversation))
                     },
-                    onStoryViewRequest: { groupIndex, _ in
-                        selectedStoryGroupIndexFromConv = groupIndex
+                    onStoryViewRequest: { userId, _ in
+                        selectedStoryUserIdFromConv = userId
                         showStoryViewerFromConv = true
                     }
                 )
@@ -261,11 +261,12 @@ struct RootView: View {
             await conversationViewModel.loadConversations()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
-            if selectedStoryGroupIndexFromConv < storyViewModel.storyGroups.count {
+            if let userId = selectedStoryUserIdFromConv,
+               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
                 StoryViewerView(
                     viewModel: storyViewModel,
                     groups: storyViewModel.storyGroups,
-                    currentGroupIndex: selectedStoryGroupIndexFromConv,
+                    currentGroupIndex: resolvedIndex,
                     isPresented: $showStoryViewerFromConv,
                     onReplyToStory: { replyContext in
                         showStoryViewerFromConv = false

@@ -230,7 +230,7 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State private var showStoryViewer = false
-    @State private var selectedGroupIndex = 0
+    @State private var selectedStoryUserId: String?
     @State private var showStatusComposer = false
     @State private var showAudioComposer = false
 
@@ -637,8 +637,8 @@ struct FeedView: View {
                         .id("feed-top")
 
                     // Story Tray
-                    StoryTrayView(viewModel: storyViewModel) { groupIndex in
-                        selectedGroupIndex = groupIndex
+                    StoryTrayView(viewModel: storyViewModel) { userId in
+                        selectedStoryUserId = userId
                         showStoryViewer = true
                     }
 
@@ -764,12 +764,15 @@ struct FeedView: View {
             statusViewModel.subscribeToSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerView(
-                viewModel: storyViewModel,
-                groups: storyViewModel.storyGroups,
-                currentGroupIndex: selectedGroupIndex,
-                isPresented: $showStoryViewer
-            )
+            if let userId = selectedStoryUserId,
+               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
+                StoryViewerView(
+                    viewModel: storyViewModel,
+                    groups: storyViewModel.storyGroups,
+                    currentGroupIndex: resolvedIndex,
+                    isPresented: $showStoryViewer
+                )
+            }
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)

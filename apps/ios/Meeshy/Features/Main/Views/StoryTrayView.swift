@@ -13,7 +13,7 @@ private struct StoryPreviewAssets: Identifiable {
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
-    var onViewStory: (Int) -> Void
+    var onViewStory: (String) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
@@ -22,6 +22,7 @@ struct StoryTrayView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showStatusComposer = false
+    @State private var showOwnStoryViewer = false
     @State private var storyPreviewAssets: StoryPreviewAssets?
 
     var body: some View {
@@ -68,7 +69,9 @@ struct StoryTrayView: View {
                     }
                 )
             }
-            .fullScreenCover(item: $storyPreviewAssets) { assets in
+            .fullScreenCover(item: $storyPreviewAssets, onDismiss: {
+                NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
+            }) { assets in
                 let items = assets.slides.map { $0.toPreviewStoryItem() }
                 let group = StoryGroup(
                     id: "preview",
@@ -85,9 +88,19 @@ struct StoryTrayView: View {
                         set: { if !$0 { storyPreviewAssets = nil } }
                     ),
                     isPreviewMode: true,
-                    preloadedImages: assets.loadedImages,
+                    preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
                     preloadedVideoURLs: assets.videoURLs,
                     preloadedAudioURLs: assets.audioURLs
+                )
+            }
+        }
+        .fullScreenCover(isPresented: $showOwnStoryViewer) {
+            if let myGroup = viewModel.storyGroupForUser(userId: AuthManager.shared.currentUser?.id ?? "") {
+                StoryViewerView(
+                    viewModel: viewModel,
+                    groups: [myGroup],
+                    currentGroupIndex: 0,
+                    isPresented: $showOwnStoryViewer
                 )
             }
         }
@@ -109,12 +122,11 @@ struct StoryTrayView: View {
                     .bounceOnAppear(delay: 0)
 
                 ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId }.enumerated()), id: \.element.id) { visibleIndex, group in
-                    let originalIndex = viewModel.groupIndex(forUserId: group.id) ?? visibleIndex
-                    storyRing(group: group, index: originalIndex)
+                    storyRing(group: group, userId: group.id)
                         .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
                         .onTapGesture {
                             HapticFeedback.medium()
-                            onViewStory(originalIndex)
+                            onViewStory(group.id)
                         }
                 }
             }
@@ -128,14 +140,14 @@ struct StoryTrayView: View {
     private var myStoryButton: some View {
         MyStoryButton(
             viewModel: viewModel,
-            onViewStory: onViewStory,
-            showStatusComposer: $showStatusComposer
+            showStatusComposer: $showStatusComposer,
+            showOwnStoryViewer: $showOwnStoryViewer
         )
     }
 
     // MARK: - Story Ring
 
-    private func storyRing(group: StoryGroup, index: Int) -> some View {
+    private func storyRing(group: StoryGroup, userId: String) -> some View {
         VStack(spacing: 5) {
             ZStack {
                 MeeshyAvatar(
@@ -149,7 +161,7 @@ struct StoryTrayView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                            onViewStory(index)
+                            onViewStory(userId)
                         },
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                             selectedProfileUser = .from(storyGroup: group)
@@ -221,8 +233,8 @@ struct StoryTrayView: View {
 
 private struct MyStoryButton: View {
     let viewModel: StoryViewModel
-    let onViewStory: (Int) -> Void
     @Binding var showStatusComposer: Bool
+    @Binding var showOwnStoryViewer: Bool
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
@@ -231,7 +243,6 @@ private struct MyStoryButton: View {
         let currentUser = AuthManager.shared.currentUser
         let userId = currentUser?.id ?? ""
         let myGroup = viewModel.storyGroupForUser(userId: userId)
-        let myGroupIndex = viewModel.groupIndex(forUserId: userId)
         let hasMyStory = myGroup != nil
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
@@ -248,12 +259,20 @@ private struct MyStoryButton: View {
                     storyState: storyState,
                     presenceState: .offline,
                     onTap: {
-                        viewModel.showStoryComposer = true
+                        if hasMyStory {
+                            showOwnStoryViewer = true
+                        } else {
+                            viewModel.showStoryComposer = true
+                        }
                         HapticFeedback.medium()
                     },
                     contextMenuItems: hasMyStory ? [
                         AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
-                            if let idx = myGroupIndex { onViewStory(idx) }
+                            showOwnStoryViewer = true
+                            HapticFeedback.medium()
+                        },
+                        AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
+                            viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         }
                     ] : nil

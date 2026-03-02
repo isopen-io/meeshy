@@ -155,7 +155,7 @@ struct ThemedFeedOverlay: View {
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
     @State private var showStoryViewer = false
-    @State private var selectedGroupIndex = 0
+    @State private var selectedStoryUserId: String?
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
@@ -187,8 +187,8 @@ struct ThemedFeedOverlay: View {
                     Spacer().frame(height: 70)
 
                     // Story Tray
-                    StoryTrayView(viewModel: storyViewModel) { groupIndex in
-                        selectedGroupIndex = groupIndex
+                    StoryTrayView(viewModel: storyViewModel) { userId in
+                        selectedStoryUserId = userId
                         showStoryViewer = true
                     }
 
@@ -242,12 +242,15 @@ struct ThemedFeedOverlay: View {
             discoverStatusViewModel.subscribeToSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerView(
-                viewModel: storyViewModel,
-                groups: storyViewModel.storyGroups,
-                currentGroupIndex: selectedGroupIndex,
-                isPresented: $showStoryViewer
-            )
+            if let userId = selectedStoryUserId,
+               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
+                StoryViewerView(
+                    viewModel: storyViewModel,
+                    groups: storyViewModel.storyGroups,
+                    currentGroupIndex: resolvedIndex,
+                    isPresented: $showStoryViewer
+                )
+            }
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)

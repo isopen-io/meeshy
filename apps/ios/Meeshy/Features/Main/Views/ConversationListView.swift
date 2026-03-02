@@ -56,7 +56,7 @@ struct ConversationListView: View {
     @Binding var isScrollingDown: Bool
     @Binding var feedIsVisible: Bool  // Track Feed visibility to show search bar when Feed closes
     let onSelect: (Conversation) -> Void
-    var onStoryViewRequest: ((Int, Bool) -> Void)? = nil  // (groupIndex, fromTray)
+    var onStoryViewRequest: ((String, Bool) -> Void)? = nil  // (userId, fromTray)
 
     @ObservedObject var theme = ThemeManager.shared
     @ObservedObject var socketManager = MessageSocketManager.shared
@@ -114,7 +114,7 @@ struct ConversationListView: View {
 
 
     // Alternative init without binding for backward compatibility
-    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((Int, Bool) -> Void)? = nil) {
+    init(isScrollingDown: Binding<Bool>? = nil, feedIsVisible: Binding<Bool>? = nil, onSelect: @escaping (Conversation) -> Void, onStoryViewRequest: ((String, Bool) -> Void)? = nil) {
         self._isScrollingDown = isScrollingDown ?? .constant(false)
         self._feedIsVisible = feedIsVisible ?? .constant(false)
         self.onSelect = onSelect
@@ -563,8 +563,8 @@ struct ConversationListView: View {
                         )
 
                     // Story carousel
-                    StoryTrayView(viewModel: storyViewModel) { groupIndex in
-                        onStoryViewRequest?(groupIndex, true)  // fromTray = true -> all groups
+                    StoryTrayView(viewModel: storyViewModel) { userId in
+                        onStoryViewRequest?(userId, true)
                     }
 
                     // Connection status banner
@@ -680,13 +680,13 @@ struct ConversationListView: View {
         guard conversation.type == .direct else { return }
 
         if let userId = conversation.participantUserId,
-           let groupIndex = storyViewModel.groupIndex(forUserId: userId) {
-            onStoryViewRequest?(groupIndex, false)
+           storyViewModel.groupIndex(forUserId: userId) != nil {
+            onStoryViewRequest?(userId, false)
             return
         }
 
-        if let groupIndex = storyViewModel.storyGroups.firstIndex(where: { $0.username == conversation.name }) {
-            onStoryViewRequest?(groupIndex, false)
+        if let group = storyViewModel.storyGroups.first(where: { $0.username == conversation.name }) {
+            onStoryViewRequest?(group.id, false)
             return
         }
     }
