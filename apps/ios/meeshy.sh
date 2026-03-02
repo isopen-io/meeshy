@@ -71,6 +71,101 @@ detect_physical_device() {
     ok "Physical device: ${BOLD}$PHYSICAL_DEVICE_NAME${NC} ($PHYSICAL_DEVICE_ID)"
 }
 
+# ─── Device Picker (all simulators + physical) ─────────────────────────────
+# Populates PICKED_DEVICE_TYPE ("simulator"|"physical"), PICKED_DEVICE_ID, PICKED_DEVICE_NAME
+pick_device() {
+    local -a dev_types=()
+    local -a dev_ids=()
+    local -a dev_names=()
+    local -a dev_labels=()
+
+    # 1. Booted simulators
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local did dname
+        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+        dname=$(echo "$line" | sed 's/ (.*//' | xargs)
+        [ -z "$did" ] && continue
+        dev_types+=("simulator")
+        dev_ids+=("$did")
+        dev_names+=("$dname")
+        dev_labels+=("📱 $dname ${DIM}(Simulator — Booted)${NC}")
+    done < <(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" 2>/dev/null || true)
+
+    # 2. Available (not booted) simulators
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local did dname
+        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+        dname=$(echo "$line" | sed 's/ (.*//' | xargs)
+        [ -z "$did" ] && continue
+        # Skip if already listed as booted
+        local already=false
+        for existing_id in "${dev_ids[@]}"; do
+            [ "$existing_id" = "$did" ] && already=true && break
+        done
+        [ "$already" = true ] && continue
+        dev_types+=("simulator")
+        dev_ids+=("$did")
+        dev_names+=("$dname")
+        dev_labels+=("📱 $dname ${DIM}(Simulator)${NC}")
+    done < <(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable" 2>/dev/null || true)
+
+    # 3. Physical devices
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local did dname
+        dname=$(echo "$line" | awk -F'  +' '{print $1}' | xargs)
+        did=$(echo "$line" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | head -1)
+        [ -z "$did" ] && continue
+        dev_types+=("physical")
+        dev_ids+=("$did")
+        dev_names+=("$dname")
+        dev_labels+=("📲 $dname ${DIM}(Physical Device)${NC}")
+    done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" || true)
+
+    local count=${#dev_ids[@]}
+
+    if [ "$count" -eq 0 ]; then
+        err "No devices found (no simulators, no physical devices)."
+        exit 1
+    fi
+
+    if [ "$count" -eq 1 ]; then
+        PICKED_DEVICE_TYPE="${dev_types[0]}"
+        PICKED_DEVICE_ID="${dev_ids[0]}"
+        PICKED_DEVICE_NAME="${dev_names[0]}"
+        ok "Auto-selected: ${BOLD}$PICKED_DEVICE_NAME${NC}"
+        return 0
+    fi
+
+    # Interactive selection
+    echo ""
+    echo -e "  ${BOLD}Available devices:${NC}"
+    echo ""
+    for i in $(seq 0 $((count - 1))); do
+        echo -e "    ${BOLD}$((i + 1))${NC})  ${dev_labels[$i]}"
+    done
+    echo ""
+
+    local choice
+    while true; do
+        echo -ne "  ${CYAN}Select device [1-$count]:${NC} "
+        read -r choice
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
+            break
+        fi
+        warn "Invalid choice. Enter a number between 1 and $count."
+    done
+
+    local idx=$((choice - 1))
+    PICKED_DEVICE_TYPE="${dev_types[$idx]}"
+    PICKED_DEVICE_ID="${dev_ids[$idx]}"
+    PICKED_DEVICE_NAME="${dev_names[$idx]}"
+    echo ""
+    ok "Selected: ${BOLD}$PICKED_DEVICE_NAME${NC}"
+}
+
 # ─── Device Deploy (with provisioning fallback) ────────────────────────────
 strip_entitlements() {
     log "Stripping Associated Domains & Push Notifications from entitlements..."
@@ -97,7 +192,10 @@ restore_entitlements() {
 
 do_device_deploy() {
     detect_physical_device
+    do_device_deploy_only
+}
 
+do_device_deploy_only() {
     local device_app_path="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
@@ -664,7 +762,7 @@ usage() {
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
-    echo -e "    ${GREEN}device${NC}       Build + deploy to physical iPhone ${DIM}(auto-strips capabilities if needed)${NC}"
+    echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Flags:${NC}"
@@ -826,6 +924,23 @@ case "$COMMAND" in
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
-        do_device_deploy
+        pick_device
+
+        if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then
+            # Route to physical device deploy
+            PHYSICAL_DEVICE_ID="$PICKED_DEVICE_ID"
+            PHYSICAL_DEVICE_NAME="$PICKED_DEVICE_NAME"
+            do_device_deploy_only
+        else
+            # Route to simulator deploy
+            DEVICE_ID="$PICKED_DEVICE_ID"
+            DEVICE_NAME="$PICKED_DEVICE_NAME"
+            ensure_booted
+            do_build
+            do_install
+            do_launch
+            echo ""
+            ok "App deployed to simulator ${BOLD}$DEVICE_NAME${NC}"
+        fi
         ;;
 esac
