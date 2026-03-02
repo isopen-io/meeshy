@@ -553,6 +553,15 @@ public struct StoryComposerView: View {
                     Color(hex: "1A1A2E")
                 }
 
+                // Dessin (PencilKit)
+                if let drawData = slide.effects.drawingData,
+                   let drawing = try? PKDrawing(data: drawData) {
+                    let canvasRect = CGRect(origin: .zero, size: UIScreen.main.bounds.size)
+                    Image(uiImage: drawing.image(from: canvasRect, scale: 1.0))
+                        .resizable()
+                        .scaledToFill()
+                }
+
                 // Miniatures des médias foreground
                 if let mediaObjs = slide.effects.mediaObjects {
                     ForEach(mediaObjs.filter { $0.placement == "foreground" }, id: \.id) { obj in
