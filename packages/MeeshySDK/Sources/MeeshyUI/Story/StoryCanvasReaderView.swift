@@ -4,6 +4,14 @@ import AVKit
 import Combine
 import MeeshySDK
 
+/// Notification envoyée par le viewer pour déclencher le fade-out audio (2s avant la fin du slide).
+public extension Notification.Name {
+    static let storyAudioFadeOut = Notification.Name("storyAudioFadeOut")
+    /// Envoyée par le composer pour muter/démuter les sons du canvas (ex: pendant la preview).
+    static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
+    static let storyComposerUnmuteCanvas = Notification.Name("storyComposerUnmuteCanvas")
+}
+
 /// Reconstruit pixel-perfect le canvas d'une story (lecture seule).
 /// Symétrique de StoryCanvasView (Composer) mais sans interactions.
 /// Utilisé par StoryViewerView pour le rendu fidèle.
@@ -112,6 +120,13 @@ public struct StoryCanvasReaderView: View {
                         .clipped()
                 }
             }
+        } else if let preloadedBg = preloadedImages[story.id] {
+            // Image de fond préchargée (mode preview — pas encore uploadée)
+            Image(uiImage: preloadedBg)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
         } else if let legacyMedia = story.media.first,
                   let urlStr = legacyMedia.url {
             // Fallback : média legacy de StoryItem.media (format pré-composer V2)
@@ -274,6 +289,10 @@ public struct StoryCanvasReaderView: View {
                 externalPlayer: media.mediaType == "video" ? state.foregroundVideoPlayers[media.id] : nil,
                 isEditing: false
             )
+            .onAppear {
+                // DEBUG Bug3: log media position at render time in viewer
+                NSLog("[Bug3][ReaderView] storyId=%@ mediaId=%@ x=%f y=%f scale=%f rotation=%f postMediaId=%@", story.id, media.id, media.x, media.y, media.scale, media.rotation, media.postMediaId)
+            }
         }
     }
 
@@ -326,9 +345,15 @@ private final class ReaderState: ObservableObject {
     private var loopObserver: NSObjectProtocol?
     private var foregroundLoopObservers: [String: NSObjectProtocol] = [:]
     private var cancellables = Set<AnyCancellable>()
+    private var fadeTimer: Timer?
+    /// Volume cible défini par l'utilisateur pour l'audio de fond.
+    private var targetBackgroundVolume: Float = 0.5
 
     init(story: StoryItem) {
         self.textObjects = story.storyEffects?.textObjects ?? []
+        NotificationCenter.default.addObserver(forName: .storyAudioFadeOut, object: nil, queue: .main) { [weak self] _ in
+            self?.fadeOutThenStop()
+        }
     }
 
     // MARK: Foreground image loading
@@ -360,8 +385,11 @@ private final class ReaderState: ObservableObject {
         guard let urlString = story.media.first(where: { $0.id == mediaId })?.url,
               let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
 
+        let userVolume = effects.backgroundAudioVolume ?? 0.5
+        targetBackgroundVolume = userVolume
+
         let player = AVPlayer(url: url)
-        player.volume = effects.backgroundAudioVolume ?? 0.5
+        player.volume = userVolume * 0.2  // Démarrer à 20% du volume cible
         backgroundPlayer = player
 
         if let startTime = effects.backgroundAudioStart {
@@ -369,6 +397,7 @@ private final class ReaderState: ObservableObject {
         }
 
         player.play()
+        fadeVolume(player: player, from: userVolume * 0.2, to: userVolume, duration: 1.0)
 
         loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
@@ -388,6 +417,8 @@ private final class ReaderState: ObservableObject {
     }
 
     func stopAllMedia() {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
         backgroundPlayer?.pause()
         backgroundPlayer = nil
         backgroundVideoPlayer?.pause()
@@ -404,6 +435,58 @@ private final class ReaderState: ObservableObject {
         }
         foregroundVideoPlayers = [:]
         foregroundLoopObservers = [:]
+    }
+
+    /// Fade-out progressif (2s) puis arrêt complet de tous les médias.
+    func fadeOutThenStop(completion: (() -> Void)? = nil) {
+        let fadeDuration: TimeInterval = 2.0
+        let steps = 40
+        let interval = fadeDuration / Double(steps)
+        var currentStep = 0
+
+        // Capturer les volumes actuels
+        let bgStartVol = backgroundPlayer?.volume ?? 0
+        let fgStartVols = foregroundVideoPlayers.mapValues { $0.volume }
+
+        fadeTimer?.invalidate()
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            currentStep += 1
+            let progress = Float(currentStep) / Float(steps)
+            let targetRatio: Float = 0.1  // 10% du volume
+
+            // Interpoler vers 10%
+            self.backgroundPlayer?.volume = bgStartVol * (1.0 - progress) + (bgStartVol * targetRatio) * progress
+            for (id, player) in self.foregroundVideoPlayers {
+                let startVol = fgStartVols[id] ?? 1.0
+                player.volume = startVol * (1.0 - progress) + (startVol * targetRatio) * progress
+            }
+
+            if currentStep >= steps {
+                timer.invalidate()
+                self.fadeTimer = nil
+                self.stopAllMedia()
+                completion?()
+            }
+        }
+    }
+
+    // MARK: Volume fade utility
+
+    private func fadeVolume(player: AVPlayer, from startVol: Float, to endVol: Float, duration: TimeInterval) {
+        let steps = 20
+        let interval = duration / Double(steps)
+        var currentStep = 0
+
+        Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
+            currentStep += 1
+            let progress = Float(currentStep) / Float(steps)
+            player.volume = startVol + (endVol - startVol) * progress
+            if currentStep >= steps {
+                timer.invalidate()
+                player.volume = endVol
+            }
+        }
     }
 
     // MARK: Foreground video players (tous démarrés simultanément)
@@ -425,6 +508,7 @@ private final class ReaderState: ObservableObject {
 
             let player = AVPlayer(url: url)
             player.isMuted = false
+            player.volume = 0.2  // Démarrer à 20%
             foregroundVideoPlayers[media.id] = player
 
             let obs = NotificationCenter.default.addObserver(
@@ -437,6 +521,7 @@ private final class ReaderState: ObservableObject {
             }
             foregroundLoopObservers[media.id] = obs
             player.play()
+            fadeVolume(player: player, from: 0.2, to: 1.0, duration: 1.0)
         }
     }
 

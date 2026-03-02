@@ -37,6 +37,13 @@ public struct StoryAudioPlayerView: View {
                 )
                 .gesture(isEditing ? dragGesture(geo: geo) : nil)
                 .onDisappear { teardownPlayer() }
+                .onReceive(NotificationCenter.default.publisher(for: .storyComposerMuteCanvas)) { _ in
+                    player?.pause()
+                    if isPlaying { isPlaying = false }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .storyComposerUnmuteCanvas)) { _ in
+                    // Ne pas reprendre automatiquement — l'utilisateur relancera manuellement
+                }
         }
     }
 

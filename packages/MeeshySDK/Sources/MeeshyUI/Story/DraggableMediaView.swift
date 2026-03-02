@@ -84,6 +84,12 @@ public struct DraggableMediaView: View {
                         teardownInternalPlayer()
                     }
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .storyComposerMuteCanvas)) { _ in
+                    internalPlayer?.isMuted = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .storyComposerUnmuteCanvas)) { _ in
+                    internalPlayer?.isMuted = false
+                }
         }
     }
 

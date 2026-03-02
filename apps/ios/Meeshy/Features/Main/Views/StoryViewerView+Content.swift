@@ -476,6 +476,8 @@ extension StoryViewerView {
         guard !isDismissing else { return }
         isTransitioning = true
         timerCancellable?.cancel()
+        // Déclencher le fade-out audio immédiat lors du dismiss
+        NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
 
         // isDismissing MUST be inside withAnimation so computed transforms animate
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
@@ -511,10 +513,12 @@ extension StoryViewerView {
     func startTimer() {
         timerCancellable?.cancel()
         progress = 0
+        hasFiredFadeOut = false
         updateStoryDuration()
         let duration = computedStoryDuration
         let interval: Double = 0.03
         let increment = CGFloat(interval / duration)
+        let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
 
         timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
@@ -524,6 +528,11 @@ extension StoryViewerView {
                     goToNext()
                 } else {
                     progress += increment
+                    // Déclencher le fade-out audio 2s avant la fin
+                    if progress >= fadeOutThreshold && !hasFiredFadeOut {
+                        hasFiredFadeOut = true
+                        NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
+                    }
                 }
             }
     }

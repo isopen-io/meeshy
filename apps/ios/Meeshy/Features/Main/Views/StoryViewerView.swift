@@ -42,6 +42,7 @@ struct StoryViewerView: View {
     /// Durée dynamique du slide courant — max(5, durée max des médias vidéo/audio).
     @State var computedStoryDuration: Double = 5.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
+    @State var hasFiredFadeOut = false // internal for cross-file extension access
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access

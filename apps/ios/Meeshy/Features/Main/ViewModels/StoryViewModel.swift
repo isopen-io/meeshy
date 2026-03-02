@@ -29,6 +29,12 @@ class StoryViewModel: ObservableObject {
             )
 
             if response.success {
+                // DEBUG Bug3: log decoded storyEffects.mediaObjects from server
+                for apiPost in response.data {
+                    if let objects = apiPost.storyEffects?.mediaObjects, !objects.isEmpty {
+                        NSLog("[Bug3][loadStories] postId=%@ mediaObjects=%@", apiPost.id, objects.map { "id=\($0.id) x=\($0.x) y=\($0.y) scale=\($0.scale) rotation=\($0.rotation) postMediaId=\($0.postMediaId)" }.joined(separator: " | "))
+                    }
+                }
                 storyGroups = response.data.toStoryGroups()
             } else {
                 fallbackToSampleData()
@@ -243,6 +249,11 @@ class StoryViewModel: ObservableObject {
         var allMediaIds: [String] = []
         if let id = uploadResult?.id { allMediaIds.append(id) }
         allMediaIds.append(contentsOf: foregroundMediaIds)
+
+        // DEBUG Bug3: log effects just before sending to server
+        if let objects = updatedEffects.mediaObjects, !objects.isEmpty {
+            NSLog("[Bug3][publishStorySingle] SENDING mediaObjects=%@", objects.map { "id=\($0.id) x=\($0.x) y=\($0.y) scale=\($0.scale) rotation=\($0.rotation) postMediaId=\($0.postMediaId)" }.joined(separator: " | "))
+        }
 
         let post = try await postService.createStory(
             content: content,

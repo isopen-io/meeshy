@@ -13,11 +13,9 @@ public enum StoryComposerPanel: Equatable {
     case stickers
     case drawing
     case filter
-    case audio
-    case background
+    case background   // Fond (arrière-plan + fond sonore)
     case transition
-    case media   // +Média : images/vidéos en premier plan
-    case vocal   // +Vocal : audio player visible dans la story
+    case content      // Contenu (premier plan média + sonore)
 }
 
 // MARK: - Story Background Picker Palette
@@ -64,11 +62,6 @@ private struct AudioEditorItem: Identifiable {
 private struct MediaAudioEditorItem: Identifiable {
     let id = UUID()
     let url: URL
-}
-
-private enum VocalPanelTab: String, CaseIterable {
-    case library = "Bibliothèque"
-    case record = "Enregistrer"
 }
 
 // MARK: - Story Composer View
@@ -124,7 +117,7 @@ public struct StoryComposerView: View {
     @State private var mediaAudioEditorItem: MediaAudioEditorItem? = nil
     @State private var confirmedMediaAudioURL: URL? = nil
     @State private var showAudioDocumentPicker = false
-    @State private var vocalTab: VocalPanelTab = .library
+    @State private var showVoiceRecorderSheet = false
     @State private var showVolumeMixer = false
     // Stockage local des médias chargés (en attente d'upload) — indexés par StoryMediaObject.id
     @State private var loadedImages: [String: UIImage] = [:]
@@ -219,6 +212,23 @@ public struct StoryComposerView: View {
                 }
             )
         }
+        .sheet(isPresented: $showVoiceRecorderSheet) {
+            NavigationStack {
+                StoryVoiceRecorder { recordedURL in
+                    pendingMediaType = "audio"
+                    mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
+                    showVoiceRecorderSheet = false
+                }
+                .navigationTitle("Enregistrer un vocal")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Annuler") { showVoiceRecorderSheet = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .sheet(isPresented: $showVolumeMixer) {
             VolumeMixerSheet(effects: Binding(
                 get: { currentSlideEffects },
@@ -311,7 +321,7 @@ public struct StoryComposerView: View {
             onSelectMedia: { id in
                 selectedMediaId = id
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    activePanel = .media
+                    activePanel = .content
                 }
             },
             onBackgroundTap: {
@@ -388,6 +398,7 @@ public struct StoryComposerView: View {
             HStack(spacing: 8) {
                 // [▶] Preview
                 Button {
+                    NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
                     let (slides, images) = allSlidesSnapshot()
                     onPreview(slides, images, loadedImages, loadedVideoURLs, loadedAudioURLs)
                 } label: {
@@ -504,33 +515,11 @@ public struct StoryComposerView: View {
                 ForEach(Array(slideManager.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
-                if slideManager.canAddSlide {
-                    Button {
-                        let currentIdx = slideManager.currentSlideIndex
-                        if currentIdx < slideManager.slides.count {
-                            slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
-                            slideManager.slides[currentIdx].effects = buildEffects()
-                        }
-                        slideManager.addSlide()
-                        restoreCanvas(from: slideManager.currentSlide)
-                        HapticFeedback.medium()
-                    } label: {
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 34, height: 40)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .stroke(Color.white.opacity(0.2),
-                                            style: StrokeStyle(lineWidth: 1, dash: [3]))
-                            )
-                            .overlay(
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.5))
-                            )
-                    }
-                    .accessibilityLabel("Ajouter un slide")
-                }
+                // DISABLED: Multi-slide désactivé — nécessite maîtrise complète du flow
+                // de publication et conditions de performance avant réactivation.
+                // if slideManager.canAddSlide {
+                //     Button { ... } label: { ... }
+                // }
             }
             .padding(.horizontal, 8)
         }
@@ -538,6 +527,8 @@ public struct StoryComposerView: View {
 
     private func slideThumb(slide: StorySlide, index: Int) -> some View {
         let isSelected = slideManager.currentSlideIndex == index
+        let thumbW: CGFloat = 28
+        let thumbH: CGFloat = thumbW * 16 / 9  // ratio 9:16
         return Button {
             let currentIdx = slideManager.currentSlideIndex
             if currentIdx < slideManager.slides.count {
@@ -551,6 +542,7 @@ public struct StoryComposerView: View {
             HapticFeedback.light()
         } label: {
             ZStack {
+                // Fond (couleur ou image)
                 if let image = slideManager.slideImages[slide.id] {
                     Image(uiImage: image)
                         .resizable()
@@ -560,11 +552,45 @@ public struct StoryComposerView: View {
                 } else {
                     Color(hex: "1A1A2E")
                 }
+
+                // Miniatures des médias foreground
+                if let mediaObjs = slide.effects.mediaObjects {
+                    ForEach(mediaObjs.filter { $0.placement == "foreground" }, id: \.id) { obj in
+                        if let img = loadedImages[obj.id] {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 12, height: 12)
+                                .clipShape(RoundedRectangle(cornerRadius: 1))
+                                .position(x: obj.x * thumbW, y: obj.y * thumbH)
+                        }
+                    }
+                }
+
+                // Stickers miniatures
+                if let stickers = slide.effects.stickerObjects, !stickers.isEmpty {
+                    ForEach(stickers, id: \.id) { sticker in
+                        Text(sticker.emoji)
+                            .font(.system(size: 6))
+                            .position(x: sticker.x * thumbW, y: sticker.y * thumbH)
+                    }
+                }
+
+                // Indicateur texte (petit trait blanc centré)
+                if slide.content != nil && !(slide.content?.isEmpty ?? true) {
+                    RoundedRectangle(cornerRadius: 0.5)
+                        .fill(Color.white.opacity(0.6))
+                        .frame(width: thumbW * 0.6, height: 2)
+                        .position(
+                            x: thumbW / 2,
+                            y: slide.effects.resolvedTextPosition.y * thumbH
+                        )
+                }
             }
-            .frame(width: 34, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .frame(width: thumbW, height: thumbH)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
             .overlay(
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: 4)
                     .stroke(
                         isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2),
                         lineWidth: isSelected ? 0.5 : 0.2
@@ -633,15 +659,9 @@ public struct StoryComposerView: View {
                 toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
                 toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
                 toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
-                toolPill(icon: "music.note", label: "Fond Sonore", panel: .audio, hasBadge: selectedAudioId != nil)
-                toolPill(icon: "paintpalette", label: "Fond", panel: .background)
+                toolPill(icon: "paintpalette", label: "Fond", panel: .background, hasBadge: selectedAudioId != nil)
                 toolPill(icon: "sparkles", label: "Effets", panel: .transition)
-                toolPill(icon: "photo.badge.plus", label: "Média",
-                         panel: .media,
-                         hasBadge: (currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
-                toolPill(icon: "mic.badge.plus", label: "Vocal",
-                         panel: .vocal,
-                         hasBadge: (currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0) > 0)
+                toolPill(icon: "square.stack.3d.up", label: "Contenu", panel: .content, hasBadge: hasForegroundContent)
 
                 if hasAudioContent {
                     toolPill(icon: "speaker.wave.2.fill", label: "Volume", panel: nil, action: { showVolumeMixer = true })
@@ -748,31 +768,90 @@ public struct StoryComposerView: View {
             StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
                 .padding(.vertical, 12)
 
-        case .audio:
-            StoryAudioPanel(
-                selectedAudioId: $selectedAudioId,
-                selectedAudioTitle: $selectedAudioTitle,
-                audioVolume: $audioVolume,
-                onRecordingReady: { url in
-                    audioEditorItem = AudioEditorItem(url: url)
-                }
-            )
-
         case .background:
-            backgroundPicker
+            fondPanel
 
         case .transition:
             transitionPicker
 
-        case .media:
-            mediaPickerPanel
-
-        case .vocal:
-            vocalPickerPanel
+        case .content:
+            contenuPanel
 
         case .none:
             EmptyView()
         }
+    }
+
+    // MARK: - Contenu Panel (premier plan média + sonore)
+
+    private var contenuPanel: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                mediaPickerPanel
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 16)
+
+                foregroundAudioSection
+            }
+        }
+        .frame(maxHeight: 280)
+    }
+
+    // MARK: - Foreground Audio Section (within contenuPanel)
+
+    private var foregroundAudioSection: some View {
+        let vocalCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        return VStack(spacing: 10) {
+            HStack {
+                Text("Premier plan — sonore")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                if vocalCount > 0 {
+                    Text("\(vocalCount) vocal\(vocalCount > 1 ? "s" : "")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "FF2E63"))
+                }
+            }
+            .padding(.horizontal, 16)
+
+            HStack(spacing: 10) {
+                Button {
+                    showAudioDocumentPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Bibliothèque")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+
+                Button {
+                    showVoiceRecorderSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mic")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Enregistrer")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 12)
     }
 
     // MARK: - Media Panel (+Média — foreground uniquement)
@@ -861,31 +940,53 @@ public struct StoryComposerView: View {
                 }
             }
 
-            // Actions contextuelles — image sélectionnée via tap canvas
+            // Vue d'édition (Actions contextuelles) — image sélectionnée via tap canvas ou thumbnail
             if let selId = selectedMediaId, foregroundMedia.contains(where: { $0.id == selId }) {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "08D9D6"))
-                    Text("Image sélectionnée")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                HStack(spacing: 12) {
+                    Text("Édition Média")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white.opacity(0.9))
+                    
                     Spacer()
+                    
+                    // Reculer (Send Backward)
+                    Button {
+                        swapMediaObject(id: selId, direction: -1)
+                    } label: {
+                        Image(systemName: "square.3.layers.3d.down.backward")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Circle().fill(Color.white.opacity(0.15)))
+                    }
+                    .accessibilityLabel("Reculer d'un calque")
+                    
+                    // Avancer (Bring Forward)
+                    Button {
+                        swapMediaObject(id: selId, direction: 1)
+                    } label: {
+                        Image(systemName: "square.3.layers.3d.up.forward")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Circle().fill(Color.white.opacity(0.15)))
+                    }
+                    .accessibilityLabel("Avancer d'un calque")
+
+                    // Supprimer
                     Button {
                         removeMediaObject(id: selId)
                         selectedMediaId = nil
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash.fill")
-                                .font(.system(size: 11))
-                            Text("Supprimer")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(Color(hex: "FF6B6B"))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "FF6B6B").opacity(0.15)))
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .padding(8)
+                            .background(Circle().fill(Color(hex: "FF6B6B").opacity(0.15)))
                     }
+                    .accessibilityLabel("Supprimer le média")
+
+                    // Fermer
                     Button {
                         withAnimation(.spring(response: 0.2)) { selectedMediaId = nil }
                     } label: {
@@ -933,101 +1034,35 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Vocal Panel (+Vocal — foreground uniquement)
+    // MARK: - Fond Panel (arrière-plan + fond sonore)
 
-    private var vocalPickerPanel: some View {
-        VStack(spacing: 0) {
-            vocalTabSelector
-            vocalTabContent
-        }
-    }
+    private var fondPanel: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                backgroundSection
+                    .padding(.bottom, 4)
 
-    private var vocalTabSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(VocalPanelTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        vocalTab = tab
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 16)
+
+                StoryAudioPanel(
+                    selectedAudioId: $selectedAudioId,
+                    selectedAudioTitle: $selectedAudioTitle,
+                    audioVolume: $audioVolume,
+                    onRecordingReady: { url in
+                        audioEditorItem = AudioEditorItem(url: url)
                     }
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(vocalTab == tab ? .white : .white.opacity(0.45))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .overlay(alignment: .bottom) {
-                            if vocalTab == tab {
-                                Capsule()
-                                    .fill(Color(hex: "FF2E63"))
-                                    .frame(height: 2)
-                                    .padding(.horizontal, 20)
-                                    .transition(.opacity)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
+                )
             }
         }
-        .padding(.top, 4)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(0.2)
-        }
+        .frame(maxHeight: 280)
     }
 
-    @ViewBuilder
-    private var vocalTabContent: some View {
-        switch vocalTab {
-        case .library:
-            vocalLibraryTab
-        case .record:
-            StoryVoiceRecorder { recordedURL in
-                pendingMediaType = "audio"
-                mediaAudioEditorItem = MediaAudioEditorItem(url: recordedURL)
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    vocalTab = .library
-                }
-            }
-        }
-    }
+    // MARK: - Background Section (within fondPanel)
 
-    private var vocalLibraryTab: some View {
-        let vocalCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
-        return VStack(spacing: 10) {
-            HStack {
-                Text("Vocal — player visible dans la story")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-                if vocalCount > 0 {
-                    Text("\(vocalCount) vocal\(vocalCount > 1 ? "s" : "")")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: "FF2E63"))
-                }
-            }
-            .padding(.horizontal, 16)
-
-            Button {
-                showAudioDocumentPicker = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "music.note.list")
-                        .font(.system(size: 16, weight: .medium))
-                    Text("Choisir depuis la bibliothèque")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                .padding(.horizontal, 16)
-            }
-        }
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Background Picker
-
-    private var backgroundPicker: some View {
+    private var backgroundSection: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 Text("Arrière-plan")
@@ -1207,6 +1242,12 @@ public struct StoryComposerView: View {
     private func setCurrentSlideEffects(_ effects: StoryEffects) {
         guard slideManager.currentSlideIndex < slideManager.slides.count else { return }
         slideManager.slides[slideManager.currentSlideIndex].effects = effects
+    }
+
+    private var hasForegroundContent: Bool {
+        let mediaCount = currentSlideEffects?.mediaObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        let audioCount = currentSlideEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" }.count ?? 0
+        return mediaCount > 0 || audioCount > 0
     }
 
     private var hasAudioContent: Bool {
