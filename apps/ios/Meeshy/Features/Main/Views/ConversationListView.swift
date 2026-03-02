@@ -169,7 +169,7 @@ struct ConversationListView: View {
         // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
         // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
         let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
-        LazyVStack(spacing: 0) {
+        LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
                     .onAppear {

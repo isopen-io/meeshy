@@ -51,8 +51,8 @@ struct ThemedConversationRow: View {
     /// Gradient de fond calibré sur l'activité : pastel (faible) → vibrant (forte)
     private var heatBackground: LinearGradient {
         let heat = conversationHeat
-        let topOpacity = isDark ? (0.05 + heat * 0.23) : (0.03 + heat * 0.16)
-        let botOpacity = topOpacity * 0.30
+        let topOpacity = isDark ? (0.03 + heat * 0.10) : (0.02 + heat * 0.08)
+        let botOpacity = topOpacity * 0.25
         return LinearGradient(
             colors: [
                 Color(hex: accentColor).opacity(topOpacity),
@@ -177,15 +177,21 @@ struct ThemedConversationRow: View {
         .padding(.vertical, 12)
         .background(
             ZStack {
-                // Base opaque : empêche les couleurs des actions de swipe de transparaître
                 backgroundSecondary
                 heatBackground
                 if isDragging {
-                    Color(hex: accentColor).opacity(0.07)
+                    Color(hex: accentColor).opacity(0.05)
                 }
             }
         )
-        .overlay(alignment: .bottom) { separatorLine }
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06),
+                    lineWidth: 0.5
+                )
+        )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
@@ -323,7 +329,7 @@ struct ThemedConversationRow: View {
                     )
                 )
                 .frame(width: 24, height: 24)
-                .shadow(color: Color(hex: accentColor).opacity(0.5), radius: 6)
+                .shadow(color: Color(hex: accentColor).opacity(0.25), radius: 3)
 
             Text("\(min(conversation.unreadCount, 99))")
                 .font(.system(size: 11, weight: .bold))
@@ -336,17 +342,7 @@ struct ThemedConversationRow: View {
     /// Ligne de séparation stylisée : gradient accent → secondaire → transparent
     /// Décalée après l'avatar (padding 14 + avatar 52 + spacing 14 = 80pt)
     private var separatorLine: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: accentColor).opacity(0.18 + Double(conversationHeat) * 0.27),
-                Color(hex: conversation.colorPalette.secondary).opacity(0.10 + Double(conversationHeat) * 0.15),
-                Color.clear
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(height: 0.5)
-        .padding(.leading, 80)
+        EmptyView()
     }
 
     private func timeAgo(_ date: Date) -> String {
