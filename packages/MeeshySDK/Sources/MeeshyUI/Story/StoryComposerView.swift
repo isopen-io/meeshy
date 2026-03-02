@@ -143,11 +143,11 @@ public struct StoryComposerView: View {
     @State private var publishTask: Task<Void, Never>? = nil
 
     public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void
-    public var onPreview: ([StorySlide], [String: UIImage]) -> Void
+    public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL]) async throws -> Void,
-                onPreview: @escaping ([StorySlide], [String: UIImage]) -> Void,
+                onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
                 onDismiss: @escaping () -> Void) {
         self.onPublishSlide = onPublishSlide
         self.onPreview = onPreview
@@ -389,7 +389,7 @@ public struct StoryComposerView: View {
                 // [▶] Preview
                 Button {
                     let (slides, images) = allSlidesSnapshot()
-                    onPreview(slides, images)
+                    onPreview(slides, images, loadedImages, loadedVideoURLs, loadedAudioURLs)
                 } label: {
                     Image(systemName: "play.fill")
                         .font(.system(size: 12, weight: .bold))

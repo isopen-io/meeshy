@@ -2,6 +2,15 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+private struct StoryPreviewAssets: Identifiable {
+    let id = UUID()
+    let slides: [StorySlide]
+    let backgroundImages: [String: UIImage]
+    let loadedImages: [String: UIImage]
+    let videoURLs: [String: URL]
+    let audioURLs: [String: URL]
+}
+
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
     var onViewStory: (Int) -> Void
@@ -13,9 +22,7 @@ struct StoryTrayView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showStatusComposer = false
-    @State private var previewSlides: [StorySlide] = []
-    @State private var previewImages: [String: UIImage] = [:]
-    @State private var showStoryPreview = false
+    @State private var storyPreviewAssets: StoryPreviewAssets?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,18 +54,22 @@ struct StoryTrayView: View {
                             loadedVideoURLs: loadedVideoURLs
                         )
                     },
-                    onPreview: { slides, images in
-                        previewSlides = slides
-                        previewImages = images
-                        showStoryPreview = true
+                    onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
+                        storyPreviewAssets = StoryPreviewAssets(
+                            slides: slides,
+                            backgroundImages: images,
+                            loadedImages: loadedImgs,
+                            videoURLs: videoURLs,
+                            audioURLs: audioURLs
+                        )
                     },
                     onDismiss: {
                         viewModel.showStoryComposer = false
                     }
                 )
             }
-            .fullScreenCover(isPresented: $showStoryPreview) {
-                let items = previewSlides.map { $0.toPreviewStoryItem() }
+            .fullScreenCover(item: $storyPreviewAssets) { assets in
+                let items = assets.slides.map { $0.toPreviewStoryItem() }
                 let group = StoryGroup(
                     id: "preview",
                     username: "Aperçu",
@@ -69,8 +80,14 @@ struct StoryTrayView: View {
                     viewModel: viewModel,
                     groups: [group],
                     currentGroupIndex: 0,
-                    isPresented: $showStoryPreview,
-                    isPreviewMode: true
+                    isPresented: Binding(
+                        get: { storyPreviewAssets != nil },
+                        set: { if !$0 { storyPreviewAssets = nil } }
+                    ),
+                    isPreviewMode: true,
+                    preloadedImages: assets.loadedImages,
+                    preloadedVideoURLs: assets.videoURLs,
+                    preloadedAudioURLs: assets.audioURLs
                 )
             }
         }

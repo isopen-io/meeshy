@@ -21,6 +21,10 @@ struct StoryViewerView: View {
     @Binding var isPresented: Bool
     var isPreviewMode: Bool = false
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
+    /// Assets préchargés localement transmis depuis le composer (mode preview uniquement).
+    var preloadedImages: [String: UIImage] = [:]
+    var preloadedVideoURLs: [String: URL] = [:]
+    var preloadedAudioURLs: [String: URL] = [:]
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -35,7 +39,8 @@ struct StoryViewerView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
 
-    let storyDuration: Double = 5.0 // internal for cross-file extension access
+    /// Durée dynamique du slide courant — max(5, durée max des médias vidéo/audio).
+    @State var computedStoryDuration: Double = 5.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
@@ -223,7 +228,10 @@ struct StoryViewerView: View {
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
-                StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage)
+                StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage,
+                                      preloadedImages: preloadedImages,
+                                      preloadedVideoURLs: preloadedVideoURLs,
+                                      preloadedAudioURLs: preloadedAudioURLs)
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -232,7 +240,10 @@ struct StoryViewerView: View {
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             if let story = currentStory {
-                StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage)
+                StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage,
+                                      preloadedImages: preloadedImages,
+                                      preloadedVideoURLs: preloadedVideoURLs,
+                                      preloadedAudioURLs: preloadedAudioURLs)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)

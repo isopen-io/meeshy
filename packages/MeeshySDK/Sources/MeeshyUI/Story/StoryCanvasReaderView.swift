@@ -10,13 +10,24 @@ import MeeshySDK
 public struct StoryCanvasReaderView: View {
     public let story: StoryItem
     public let preferredLanguage: String?
+    /// Assets préchargés localement (mode preview — avant publication).
+    /// En mode viewer normal, ces dicts sont vides et les URLs sont résolues depuis story.media.
+    public let preloadedImages: [String: UIImage]
+    public let preloadedVideoURLs: [String: URL]
+    public let preloadedAudioURLs: [String: URL]
 
     // Mutable local state managed by a StateObject to support socket updates
     @StateObject private var state: ReaderState
 
-    public init(story: StoryItem, preferredLanguage: String? = nil) {
+    public init(story: StoryItem, preferredLanguage: String? = nil,
+                preloadedImages: [String: UIImage] = [:],
+                preloadedVideoURLs: [String: URL] = [:],
+                preloadedAudioURLs: [String: URL] = [:]) {
         self.story = story
         self.preferredLanguage = preferredLanguage
+        self.preloadedImages = preloadedImages
+        self.preloadedVideoURLs = preloadedVideoURLs
+        self.preloadedAudioURLs = preloadedAudioURLs
         self._state = StateObject(wrappedValue: ReaderState(story: story))
     }
 
@@ -37,7 +48,7 @@ public struct StoryCanvasReaderView: View {
             .clipped()
         }
         .task {
-            await state.loadForegroundImages(story: story)
+            await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
         }
         .onAppear {
             state.startBackgroundAudio(
@@ -45,7 +56,7 @@ public struct StoryCanvasReaderView: View {
                 story: story,
                 userLang: preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
             )
-            state.startForegroundVideos(story: story)
+            state.startForegroundVideos(story: story, preloadedVideoURLs: preloadedVideoURLs)
             state.subscribeToTranslationUpdates(postId: story.id)
         }
         .onDisappear {
@@ -271,7 +282,11 @@ public struct StoryCanvasReaderView: View {
     @ViewBuilder
     private var foregroundAudioLayer: some View {
         ForEach(story.storyEffects?.audioPlayerObjects?.filter { $0.placement == "foreground" } ?? []) { audio in
-            StoryAudioPlayerView(audioObject: .constant(audio), isEditing: false)
+            StoryAudioPlayerView(
+                audioObject: .constant(audio),
+                url: resolvedAudioURL(for: audio),
+                isEditing: false
+            )
         }
     }
 
@@ -286,6 +301,13 @@ public struct StoryCanvasReaderView: View {
     /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
     private func mediaURL(for postMediaId: String) -> String? {
         story.media.first { $0.id == postMediaId }?.url
+    }
+
+    /// Résout l'URL audio foreground : preloaded (preview) > story.media (viewer normal).
+    private func resolvedAudioURL(for audio: StoryAudioPlayerObject) -> URL? {
+        if let url = preloadedAudioURLs[audio.id] { return url }
+        guard let urlStr = story.media.first(where: { $0.id == audio.postMediaId })?.url else { return nil }
+        return MeeshyConfig.resolveMediaURL(urlStr)
     }
 }
 
@@ -311,10 +333,15 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Foreground image loading
 
-    func loadForegroundImages(story: StoryItem) async {
+    func loadForegroundImages(story: StoryItem, preloadedImages: [String: UIImage] = [:]) async {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let foregroundImages = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "image" }
         for media in foregroundImages {
+            // Asset préchargé localement (mode preview) — priorité sur le réseau.
+            if let img = preloadedImages[media.id] {
+                loadedImages[media.id] = img
+                continue
+            }
             guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url else { continue }
             guard let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
             if let img = try? await MediaCacheManager.shared.image(for: resolved) {
@@ -381,12 +408,20 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Foreground video players (tous démarrés simultanément)
 
-    func startForegroundVideos(story: StoryItem) {
+    func startForegroundVideos(story: StoryItem, preloadedVideoURLs: [String: URL] = [:]) {
         guard let mediaObjects = story.storyEffects?.mediaObjects else { return }
         let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
         for media in videoObjects {
-            guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
-                  let url = MeeshyConfig.resolveMediaURL(urlString) else { continue }
+            // Asset préchargé localement (mode preview) — priorité sur le réseau.
+            let url: URL?
+            if let preloaded = preloadedVideoURLs[media.id] {
+                url = preloaded
+            } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url {
+                url = MeeshyConfig.resolveMediaURL(urlString)
+            } else {
+                url = nil
+            }
+            guard let url else { continue }
 
             let player = AVPlayer(url: url)
             player.isMuted = false

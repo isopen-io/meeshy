@@ -133,16 +133,19 @@ class StoryViewModel: ObservableObject {
                 mediaIds: uploadResult.map { [$0.id] }
             )
 
-            // Build local media from upload result (API response may not include linked media yet)
+            // Toujours utiliser post.media (l'API retourne tous les médias associés).
+            let apiMedia = (post.media ?? []).map { m in
+                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+            }
             let media: [FeedMedia]
-            if let uploaded = uploadResult {
+            if !apiMedia.isEmpty {
+                media = apiMedia
+            } else if let uploaded = uploadResult {
                 media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
                                    thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
             } else {
-                media = (post.media ?? []).map { m in
-                    FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                              width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
-                }
+                media = []
             }
             let newItem = StoryItem(id: post.id, content: post.content, media: media,
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
@@ -248,15 +251,20 @@ class StoryViewModel: ObservableObject {
             mediaIds: allMediaIds.isEmpty ? nil : allMediaIds
         )
 
+        // Toujours utiliser post.media (l'API retourne tous les médias associés).
+        // Fallback local uniquement si l'API ne retourne rien.
+        let apiMedia = (post.media ?? []).map { m in
+            FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                      width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+        }
         let media: [FeedMedia]
-        if let uploaded = uploadResult {
+        if !apiMedia.isEmpty {
+            media = apiMedia
+        } else if let uploaded = uploadResult {
             media = [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
                                thumbnailColor: "4ECDC4", width: uploaded.width, height: uploaded.height)]
         } else {
-            media = (post.media ?? []).map { m in
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
-                          width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
-            }
+            media = []
         }
         let newItem = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true)

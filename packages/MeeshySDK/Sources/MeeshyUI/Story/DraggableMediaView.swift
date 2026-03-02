@@ -174,23 +174,28 @@ public struct DraggableMediaView: View {
 
     // MARK: - Media content
 
-    @ViewBuilder
     private var mediaContent: some View {
-        // Video takes priority when videoURL is set (image may be just a thumbnail).
-        if let player = activePlayer {
-            VideoPlayer(player: player)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-        } else if let image {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+        // ZStack stable (même type quel que soit l'état) — empêche onAppear de refirer
+        // quand le type de contenu change (EmptyView→VideoPlayer ou Image→VideoPlayer).
+        ZStack {
+            if let player = activePlayer {
+                // Video takes priority when player is ready.
+                VideoPlayer(player: player)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else if let image {
+                // Thumbnail (image directe ou vignette vidéo) — affiché pendant le chargement.
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
         }
     }
 
     // MARK: - Internal player (composer mode)
 
     private func setupInternalPlayer(url: URL) {
+        teardownInternalPlayer()
         let player = AVPlayer(url: url)
         player.isMuted = false
         internalPlayer = player

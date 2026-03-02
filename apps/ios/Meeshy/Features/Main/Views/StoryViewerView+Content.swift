@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -510,8 +511,10 @@ extension StoryViewerView {
     func startTimer() {
         timerCancellable?.cancel()
         progress = 0
+        updateStoryDuration()
+        let duration = computedStoryDuration
         let interval: Double = 0.03
-        let increment = CGFloat(interval / storyDuration)
+        let increment = CGFloat(interval / duration)
 
         timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
@@ -529,6 +532,69 @@ extension StoryViewerView {
     private func restartTimer() {
         isPaused = false
         startTimer()
+    }
+
+    /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
+    /// Minimum 5s pour les slides texte/image seules.
+    private func updateStoryDuration() {
+        guard let story = currentStory else {
+            computedStoryDuration = 5.0
+            return
+        }
+        var maxDuration: Double = 5.0
+        let effects = story.storyEffects
+
+        // Durées des médias foreground (vidéo + audio) depuis FeedMedia.duration
+        if let mediaObjects = effects?.mediaObjects {
+            for obj in mediaObjects where obj.placement == "foreground" {
+                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+                   let dur = feedMedia.duration, dur > 0 {
+                    maxDuration = max(maxDuration, Double(dur))
+                }
+            }
+        }
+
+        // Durées des audio players foreground
+        if let audioObjects = effects?.audioPlayerObjects {
+            for obj in audioObjects where obj.placement == "foreground" {
+                if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
+                   let dur = feedMedia.duration, dur > 0 {
+                    maxDuration = max(maxDuration, Double(dur))
+                }
+            }
+        }
+
+        // Audio de fond (trimé ou complet)
+        if let bgAudioId = effects?.backgroundAudioId {
+            if let start = effects?.backgroundAudioStart, let end = effects?.backgroundAudioEnd, end > start {
+                maxDuration = max(maxDuration, end - start)
+            } else if let feedMedia = story.media.first(where: { $0.id == bgAudioId }),
+                      let dur = feedMedia.duration, dur > 0 {
+                maxDuration = max(maxDuration, Double(dur))
+            }
+        }
+
+        // Pour les vidéos/audios locales en preview, utiliser AVURLAsset si FeedMedia.duration est nil
+        if isPreviewMode {
+            // Vidéos foreground préchargées
+            for (_, url) in preloadedVideoURLs {
+                let asset = AVURLAsset(url: url)
+                let dur = CMTimeGetSeconds(asset.duration)
+                if dur > 0 && dur.isFinite {
+                    maxDuration = max(maxDuration, dur)
+                }
+            }
+            // Audios foreground préchargées
+            for (_, url) in preloadedAudioURLs {
+                let asset = AVURLAsset(url: url)
+                let dur = CMTimeGetSeconds(asset.duration)
+                if dur > 0 && dur.isFinite {
+                    maxDuration = max(maxDuration, dur)
+                }
+            }
+        }
+
+        computedStoryDuration = maxDuration
     }
 
     /// Manual pause — only for direct gesture holds (long press, drag).
