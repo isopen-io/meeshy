@@ -125,6 +125,7 @@
 		<string>remote-notification</string>
 		<string>processing</string>
 		<string>picture-in-picture</string>
+		<string>location</string>
 	</array>
 	<key>UIDeviceFamily</key>
 	<array>

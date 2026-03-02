@@ -26,9 +26,9 @@ public enum ThemePreference: String, CaseIterable {
 
     public var tintColor: String {
         switch self {
-        case .system: return "45B7D1"
-        case .light: return "F8B500"
-        case .dark: return "9B59B6"
+        case .system: return "818CF8"
+        case .light: return "6366F1"
+        case .dark: return "A5B4FC"
         }
     }
 
@@ -116,15 +116,15 @@ public class ThemeManager: ObservableObject {
     // MARK: - Background Colors
 
     public var backgroundPrimary: Color {
-        mode.isDark ? Color(hex: "0F0F14") : Color(hex: "F8F6F2")
+        mode.isDark ? Color(hex: "09090B") : Color(hex: "FFFFFF")
     }
 
     public var backgroundSecondary: Color {
-        mode.isDark ? Color(hex: "191920") : Color(hex: "FFFFFF")
+        mode.isDark ? Color(hex: "13111C") : Color(hex: "F8F7FF")
     }
 
     public var backgroundTertiary: Color {
-        mode.isDark ? Color(hex: "222230") : Color(hex: "F2EDE6")
+        mode.isDark ? Color(hex: "1E1B4B") : Color(hex: "EEF2FF")
     }
 
     // MARK: - Surface Colors
@@ -157,15 +157,15 @@ public class ThemeManager: ObservableObject {
     // MARK: - Text Colors
 
     public var textPrimary: Color {
-        mode.isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917")
+        mode.isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B")
     }
 
     public var textSecondary: Color {
-        mode.isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6)
+        mode.isDark ? Color(hex: "A5B4FC") : Color(hex: "4338CA").opacity(0.6)
     }
 
     public var textMuted: Color {
-        mode.isDark ? Color(hex: "F5F5F0").opacity(0.5) : Color(hex: "1C1917").opacity(0.4)
+        mode.isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4)
     }
 
     // MARK: - Button/Interactive Colors
@@ -186,17 +186,17 @@ public class ThemeManager: ObservableObject {
     public var ambientOrbs: [(color: String, opacity: Double, size: CGFloat, offset: CGPoint)] {
         if mode.isDark {
             return [
-                ("E76F51", 0.10, 300, CGPoint(x: -100, y: -200)),
-                ("2A9D8F", 0.10, 350, CGPoint(x: 150, y: 300)),
-                ("9B59B6", 0.08, 250, CGPoint(x: 100, y: -100)),
-                ("E9C46A", 0.07, 200, CGPoint(x: -150, y: 200))
+                ("6366F1", 0.10, 300, CGPoint(x: -100, y: -200)),
+                ("4338CA", 0.10, 350, CGPoint(x: 150, y: 300)),
+                ("818CF8", 0.08, 250, CGPoint(x: 100, y: -100)),
+                ("A5B4FC", 0.06, 200, CGPoint(x: -150, y: 200))
             ]
         } else {
             return [
-                ("E76F51", 0.06, 300, CGPoint(x: -100, y: -200)),
-                ("2A9D8F", 0.06, 350, CGPoint(x: 150, y: 300)),
-                ("9B59B6", 0.04, 250, CGPoint(x: 100, y: -100)),
-                ("E9C46A", 0.04, 200, CGPoint(x: -150, y: 200))
+                ("6366F1", 0.05, 300, CGPoint(x: -100, y: -200)),
+                ("4338CA", 0.05, 350, CGPoint(x: 150, y: 300)),
+                ("818CF8", 0.04, 250, CGPoint(x: 100, y: -100)),
+                ("A5B4FC", 0.03, 200, CGPoint(x: -150, y: 200))
             ]
         }
     }
@@ -206,12 +206,12 @@ public class ThemeManager: ObservableObject {
     public var backgroundGradient: LinearGradient {
         if mode.isDark {
             return LinearGradient(
-                colors: [Color(hex: "141418"), Color(hex: "18161E"), Color(hex: "0F0F14")],
+                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         } else {
             return LinearGradient(
-                colors: [Color(hex: "FAF8F5"), Color(hex: "F5F0EA"), Color(hex: "F8F6F2")],
+                colors: [Color(hex: "FFFFFF"), Color(hex: "FAFAFF"), Color(hex: "F8F7FF")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         }
@@ -220,11 +220,11 @@ public class ThemeManager: ObservableObject {
     // MARK: - Input Field Styling
 
     public var inputBackground: Color {
-        mode.isDark ? Color(hex: "1E1E28") : Color(hex: "F5F2ED")
+        mode.isDark ? Color(hex: "16142A") : Color(hex: "F5F3FF")
     }
 
     public var inputBorder: Color {
-        mode.isDark ? Color(hex: "3A3A48") : Color(hex: "DDD8D0")
+        mode.isDark ? Color(hex: "312E81").opacity(0.6) : Color(hex: "C7D2FE")
     }
 
     public func inputBorderFocused(tint: String) -> LinearGradient {
@@ -242,11 +242,11 @@ public class ThemeManager: ObservableObject {
 
     // MARK: - Semantic Colors
 
-    public var success: Color { Color(hex: "4ADE80") }
-    public var error: Color { Color(hex: "FF6B6B") }
-    public var warning: Color { Color(hex: "F59E0B") }
-    public var info: Color { Color(hex: "45B7D1") }
-    public var readReceipt: Color { Color(hex: "34B7F1") }
+    public var success: Color { MeeshyColors.success }
+    public var error: Color { MeeshyColors.error }
+    public var warning: Color { MeeshyColors.warning }
+    public var info: Color { MeeshyColors.info }
+    public var readReceipt: Color { MeeshyColors.readReceipt }
 }
 
 // MARK: - Environment Key

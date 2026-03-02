@@ -1,5 +1,18 @@
 import SwiftUI
 
+// MARK: - Swipe Progress Environment
+
+public struct SwipeProgressKey: EnvironmentKey {
+    public static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    var swipeProgress: CGFloat {
+        get { self[SwipeProgressKey.self] }
+        set { self[SwipeProgressKey.self] = newValue }
+    }
+}
+
 public struct SwipeAction: Identifiable {
     public let id = UUID()
     public let icon: String
@@ -73,6 +86,12 @@ public struct SwipeableRow<Content: View>: View {
     private var leadingReveal: CGFloat { max(0, effectiveOffset) }
     private var trailingReveal: CGFloat { max(0, -effectiveOffset) }
 
+    /// 0 = centered, 1 = fully swiped open (either direction)
+    private var swipeProgress: CGFloat {
+        let maxWidth = max(totalLeadingWidth, totalTrailingWidth, 1)
+        return min(abs(effectiveOffset) / maxWidth, 1.0)
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -85,6 +104,7 @@ public struct SwipeableRow<Content: View>: View {
             }
 
             content
+                .environment(\.swipeProgress, swipeProgress)
                 .offset(x: effectiveOffset)
                 .gesture(swipeGesture)
                 .onTapGesture {

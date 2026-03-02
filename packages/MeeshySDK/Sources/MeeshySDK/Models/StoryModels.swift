@@ -136,20 +136,48 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
     public var scale: CGFloat
-    public var rotation: CGFloat
+    public var rotation: CGFloat       // degrés
     public var translations: [String: String]?  // { "en": "Hello", "es": "Hola", ... }
+
+    // Style per-objet (tous optionnels pour backward compat JSON existant)
+    public var textStyle: String?      // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
+    public var textColor: String?      // hex "FFFFFF"
+    public var textSize: CGFloat?      // 14...60, defaut 28
+    public var textAlign: String?      // "left"|"center"|"right"
+    public var textBg: String?         // hex ou nil (pas de fond)
 
     enum CodingKeys: String, CodingKey {
         case id, content, x, y, scale, rotation, translations
+        case textStyle, textColor, textSize, textAlign, textBg
     }
 
     public init(id: String = UUID().uuidString, content: String,
                 x: CGFloat = 0.5, y: CGFloat = 0.5,
                 scale: CGFloat = 1.0, rotation: CGFloat = 0,
-                translations: [String: String]? = nil) {
+                translations: [String: String]? = nil,
+                textStyle: String? = "bold", textColor: String? = "FFFFFF",
+                textSize: CGFloat? = 28, textAlign: String? = "center",
+                textBg: String? = nil) {
         self.id = id; self.content = content
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.translations = translations
+        self.textStyle = textStyle; self.textColor = textColor
+        self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
+    }
+
+    // MARK: - Computed properties (non-SwiftUI)
+
+    public var parsedTextStyle: StoryTextStyle {
+        guard let raw = textStyle else { return .bold }
+        return StoryTextStyle(rawValue: raw) ?? .bold
+    }
+
+    public var resolvedSize: CGFloat {
+        textSize ?? 28
+    }
+
+    public var hasBg: Bool {
+        textBg != nil
     }
 }
 
@@ -412,6 +440,16 @@ public struct StoryEffects: Codable, Sendable {
         }
     }
 
+    public mutating func migrateLegacyText(content: String) {
+        guard textObjects == nil || textObjects?.isEmpty == true else { return }
+        let pos = resolvedTextPosition
+        textObjects = [StoryTextObject(
+            content: content, x: pos.x, y: pos.y,
+            textStyle: textStyle, textColor: textColor,
+            textSize: textSize ?? 28, textAlign: textAlign, textBg: textBg
+        )]
+    }
+
     public func toJSON() -> [String: Any] {
         var dict: [String: Any] = [:]
         if let bg = background { dict["background"] = bg }
@@ -460,6 +498,11 @@ public struct StoryEffects: Codable, Sendable {
                 var d: [String: Any] = ["id": t.id, "content": t.content,
                  "x": t.x, "y": t.y, "scale": t.scale, "rotation": t.rotation]
                 if let tr = t.translations, !tr.isEmpty { d["translations"] = tr }
+                if let ts = t.textStyle { d["textStyle"] = ts }
+                if let tc = t.textColor { d["textColor"] = tc }
+                if let sz = t.textSize { d["textSize"] = sz }
+                if let ta = t.textAlign { d["textAlign"] = ta }
+                if let bg = t.textBg { d["textBg"] = bg }
                 return d
             }
         }

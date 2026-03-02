@@ -275,6 +275,7 @@ export async function registerDownloadRoutes(
           '.pdf': 'application/pdf',
           '.txt': 'text/plain',
           '.mp4': 'video/mp4',
+          '.mov': 'video/quicktime',
           '.webm': 'audio/webm',
           '.ogg': 'audio/ogg',
           '.mp3': 'audio/mpeg',

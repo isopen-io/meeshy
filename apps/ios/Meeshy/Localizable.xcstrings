@@ -1,2726 +1,3595 @@
 {
-  "sourceLanguage": "fr",
-  "version": "1.0",
-  "strings": {
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "" : {
 
-    "Meeshy": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meeshy"
-          }
-        }
-      }
     },
+    "·" : {
 
-    "Nom d'utilisateur": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Username"
-          }
-        }
-      }
     },
+    "· %@" : {
 
-    "Mot de passe": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Password"
-          }
-        }
-      }
     },
+    "· %@ uniques" : {
 
-    "Se connecter": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Log in"
-          }
-        }
-      }
     },
+    "@%@" : {
 
-    "Mot de passe oublie ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forgot password?"
-          }
-        }
-      }
     },
+    "%@" : {
 
-    "Connexion sans mot de passe": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passwordless login"
+    },
+    "%@ / %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@"
           }
         }
       }
     },
-
-    "Pas de compte ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No account?"
+    "%@ %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
           }
         }
       }
     },
-
-    "Creer un compte": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create an account"
+    "%@ × %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ × %2$@"
           }
         }
       }
     },
+    "%@ caractères" : {
 
-    "Rechercher...": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search..."
-          }
-        }
-      }
     },
+    "%@ clics" : {
 
-    "Rechercher dans la conversation...": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search in conversation..."
-          }
-        }
-      }
     },
+    "%@ commentaires" : {
 
-    "Aucune conversation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No conversations"
-          }
-        }
-      }
     },
+    "%@ locuteurs detectes" : {
 
-    "Commencez a discuter avec vos amis ou rejoignez une communaute": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start chatting with friends or join a community"
+    },
+    "%@ membre%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ membre%2$@"
           }
         }
       }
     },
-
-    "Commencer une discussion": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start a conversation"
+    "%@ membres · %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ membres · %2$@"
           }
         }
       }
     },
-
-    "Aucun message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No messages"
+    "%@ nouveau%@ post%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ nouveau%2$@ post%3$@"
           }
         }
       }
     },
+    "%@ pages" : {
 
-    "Nouveaux messages": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New messages"
-          }
-        }
-      }
     },
+    "%@ rejoints" : {
 
-    "Modifier le message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit message"
-          }
-        }
-      }
     },
+    "%@ reponses" : {
 
-    "Vous": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You"
-          }
-        }
-      }
     },
+    "%@ réponses" : {
 
-    "Photo": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photo"
+    },
+    "%@ utilisation%@ maximum" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ utilisation%2$@ maximum"
           }
         }
       }
     },
+    "%@ verrou(s)" : {
 
-    "Vid\u00e9o": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Video"
+    },
+    "%@ vue%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ vue%2$@"
           }
         }
       }
     },
+    "%@ Vues" : {
 
-    "Audio": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Audio"
+    },
+    "%@/%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@"
           }
         }
       }
     },
-
-    "Fichier": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "File"
+    "%@/%@ fichiers" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@ fichiers"
           }
         }
       }
     },
+    "%@/122" : {
 
-    "Position": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Location"
-          }
-        }
-      }
     },
+    "%@/150 caracteres" : {
 
-    "R\u00e9glages": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Settings"
-          }
-        }
-      }
     },
+    "%@/500" : {
 
-    "Compte": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Account"
-          }
-        }
-      }
     },
+    "%@%%" : {
 
-    "Profil": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profile"
-          }
-        }
-      }
     },
+    "%@x" : {
 
-    "Confidentialit\u00e9": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Privacy"
+    },
+    "%lld membres" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld members"
           }
         }
       }
     },
+    "•" : {
 
-    "S\u00e9curit\u00e9": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Security"
-          }
-        }
-      }
     },
+    "• %@ membres" : {
 
-    "Utilisateurs bloques": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blocked users"
-          }
-        }
-      }
     },
+    "+" : {
 
-    "Apparence": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appearance"
-          }
-        }
-      }
     },
+    "+%@" : {
 
-    "Th\u00e8me": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Theme"
-          }
-        }
-      }
     },
+    "2h" : {
 
-    "Notifications": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Notifications"
-          }
-        }
-      }
     },
+    "2024-2026 Meeshy. Tous droits reserves." : {
 
-    "Sons": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sounds"
-          }
-        }
-      }
     },
+    "A propos" : {
 
-    "Vibrations": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vibrations"
+    },
+    "À propos" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
           }
         }
       }
     },
+    "a republié" : {
 
-    "Plus d'options": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More options"
-          }
-        }
-      }
     },
+    "Accepter" : {
 
-    "Langue": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Language"
+    },
+    "accessibility.back" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour"
           }
         }
       }
     },
-
-    "\u00c0 propos": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "About"
+    "accessibility.clear_recent_searches" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear recent searches"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer les recherches recentes"
           }
         }
       }
     },
-
-    "Conditions d'utilisation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terms of Service"
+    "accessibility.clear_search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear search"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer la recherche"
           }
         }
       }
     },
-
-    "Politique de confidentialit\u00e9": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Privacy Policy"
+    "accessibility.close_communities" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close communities"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer les communautes"
+          }
         }
       }
     },
-
-    "Version": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Version"
+    "accessibility.dashboard" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tableau de bord"
           }
         }
       }
     },
-
-    "D\u00e9connexion": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Log out"
+    "accessibility.dashboard.hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the dashboard with widgets"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre le tableau de bord avec les widgets"
           }
         }
       }
     },
-
-    "Voulez-vous vraiment vous d\u00e9connecter ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Are you sure you want to log out?"
+    "accessibility.global_search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global search"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche globale"
           }
         }
       }
     },
-
-    "Bienvenue sur Meeshy": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Welcome to Meeshy"
+    "accessibility.global_search_field" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global search"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche globale"
+          }
         }
       }
     },
-
-    "La messagerie nouvelle generation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next-gen messaging"
+    "accessibility.global_search.hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search across all messages, conversations, and users"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans tous les messages, conversations et utilisateurs"
           }
         }
       }
     },
-
-    "Traduction instantanee": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Instant translation"
+    "accessibility.in_conversation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dans"
           }
         }
       }
     },
-
-    "Parlez dans votre langue, vos amis lisent dans la leur": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Speak your language, your friends read in theirs"
+    "accessibility.last_message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "last message"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dernier message"
           }
         }
       }
     },
-
-    "Votre voix, leurs langues": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your voice, their languages"
+    "accessibility.message_from" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message from"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message de"
+          }
         }
       }
     },
-
-    "Le clonage vocal traduit vos messages audio avec votre propre voix": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voice cloning translates your audio messages in your own voice"
+    "accessibility.opens_conversation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens conversation"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre la conversation"
           }
         }
       }
     },
-
-    "Pret a commencer ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ready to start?"
+    "accessibility.recent_search_hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run search again"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relance la recherche"
           }
         }
       }
     },
-
-    "Vos conversations sont chiffrees de bout en bout": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your conversations are end-to-end encrypted"
+    "accessibility.recent_search_label" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent search"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche recente"
           }
         }
       }
     },
-
-    "Passer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Skip"
+    "accessibility.remove_recent_search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from recent searches"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer des recherches recentes"
+          }
         }
       }
     },
-
-    "Passer l'introduction": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Skip the introduction"
+    "accessibility.results" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "results"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resultats"
           }
         }
       }
     },
-
-    "Suivant": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next"
+    "accessibility.search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher"
           }
         }
       }
     },
-
-    "Commencer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Get started"
+    "accessibility.search.hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens filters and conversation search"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre les filtres et la recherche de conversations"
           }
         }
       }
     },
-
-    "Commencer a utiliser Meeshy": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start using Meeshy"
+    "accessibility.searching" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche en cours"
+          }
         }
       }
     },
-
-    "Page suivante": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next page"
+    "accessibility.see_all_communities" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See all communities"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir toutes les communautes"
           }
         }
       }
     },
-
-    "Annuler": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
+    "accessibility.tab_results" : {
+      "comment" : "Legacy key - no longer used with String(localized:) interpolation",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %lld results"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %lld resultats"
           }
         }
       }
     },
-
-    "Confirmer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirm"
+    "accessibility.view_profile" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View profile"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir le profil"
           }
         }
       }
     },
+    "Action irreversible" : {
 
-    "Supprimer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
+    },
+    "Action sélectionnée" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action selected"
           }
         }
       }
     },
-
-    "Envoyer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send"
+    "action.block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquer"
           }
         }
       }
     },
-
-    "Modifier": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit"
+    "action.cancel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
         }
       }
     },
-
-    "Enregistrer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save"
+    "action.clear" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer"
           }
         }
       }
     },
-
-    "Fermer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
+    "action.copy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier"
           }
         }
       }
     },
-
-    "OK": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
+    "action.delete" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         }
       }
     },
-
-    "Conversation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversation"
+    "action.forward" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forward"
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transférer"
+          }
         }
       }
     },
-
-    "Action s\u00e9lectionn\u00e9e": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Action selected"
+    "action.reply" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Répondre"
           }
         }
       }
     },
-
-    "Supprimer ce message ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete this message?"
+    "action.see_all" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See all"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir tout"
           }
         }
       }
     },
+    "Actions rapides" : {
 
-    "Cette action est irr\u00e9versible.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This action cannot be undone."
-          }
-        }
-      }
     },
+    "ACTIVITE" : {
 
-    "Chargement...": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading..."
-          }
-        }
-      }
     },
+    "Aide et support" : {
 
-    "Aujourd'hui": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today"
-          }
-        }
-      }
     },
+    "Ajouter" : {
 
-    "Hier": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yesterday"
-          }
-        }
-      }
     },
+    "Ajouter un membre" : {
 
-    "En ligne": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Online"
-          }
-        }
-      }
     },
+    "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide." : {
 
-    "%lld membres": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld members"
-          }
-        }
-      }
     },
+    "Analyse de l'audio…" : {
 
-    "Communaut\u00e9s": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Communities"
+    },
+    "Annuler" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
           }
         }
       }
     },
+    "Aperçu" : {
 
-    "Voir tout": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See all"
-          }
-        }
-      }
     },
+    "Apercu de ton profil" : {
 
-    "D\u00e9s\u00e9pingler": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unpin"
+    },
+    "Apparence" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appearance"
           }
         }
       }
     },
+    "Appel en cours..." : {
 
-    "\u00c9pingler": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pin"
-          }
-        }
-      }
     },
+    "Appuyez pour enregistrer" : {
 
-    "Son": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sound"
-          }
-        }
-      }
     },
+    "Appuyez pour vérifier le numéro de sécurité" : {
 
-    "Silence": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mute"
+    },
+    "Archiver" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive"
           }
         }
       }
     },
+    "Aucun lien de parrainage" : {
 
-    "Archiver": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archive"
-          }
-        }
-      }
     },
+    "Aucun lien de partage" : {
 
-    "R\u00e9activer les notifications": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unmute notifications"
-          }
-        }
-      }
     },
+    "Aucun lien de tracking" : {
 
-    "Mettre en silence": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mute"
-          }
-        }
-      }
     },
+    "Aucun membre" : {
 
-    "Marquer comme lu": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark as read"
+    },
+    "Aucun message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No messages"
           }
         }
       }
     },
+    "Aucun résultat" : {
 
-    "Marquer comme non lu": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark as unread"
-          }
-        }
-      }
     },
+    "Aucun utilisateur trouve" : {
 
-    "R\u00e9agir": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "React"
-          }
-        }
-      }
     },
+    "Aucun utilisateur trouvé" : {
 
-    "D\u00e9placer vers...": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Move to..."
-          }
-        }
-      }
     },
+    "Aucune communauté administrée" : {
 
-    "Mes conversations": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "My conversations"
+    },
+    "Aucune conversation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No conversations"
           }
         }
       }
     },
+    "Aucune demande" : {
 
-    "D\u00e9verrouiller": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock"
-          }
-        }
-      }
     },
+    "Aucune donnée" : {
 
-    "Verrouiller": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lock"
-          }
-        }
-      }
     },
+    "Aucune transcription" : {
 
-    "Bloquer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block"
-          }
-        }
-      }
     },
+    "Aucune vue pour le moment" : {
 
-    "Bloquer cet utilisateur ?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block this user?"
+    },
+    "Audio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
           }
         }
       }
     },
-
-    "Cette personne ne pourra plus vous envoyer de messages dans cette conversation.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This person will no longer be able to send you messages in this conversation."
+    "Aujourd'hui" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
           }
         }
       }
     },
+    "Autre compte" : {
 
-    "Voir les stories": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View stories"
-          }
-        }
-      }
     },
+    "BADGES" : {
 
-    "Voir le profil": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View profile"
+    },
+    "Bienvenue sur Meeshy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to Meeshy"
           }
         }
       }
     },
+    "Bienvenue sur Meeshy! En utilisant notre application, tu acceptes les conditions suivantes:\n\n1. UTILISATION RESPONSABLE\nMeeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illegal.\n\n2. TON COMPTE\nTu es responsable de ton compte. Garde ton mot de passe secret!\n\n3. TES DONNEES\nOn protege tes donnees avec le chiffrement de bout en bout. Tes messages sont prives.\n\n4. TRADUCTION\nLa traduction est automatique et peut ne pas etre parfaite. C'est un outil, pas une science exacte!\n\n5. RESPECT\nTraite les autres comme tu voudrais etre traite. On est une communaute!\n\nOn est ensemble!" : {
 
-    "Infos conversation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversation info"
-          }
-        }
-      }
     },
+    "Bio" : {
 
-    "Envoyer un message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send a message"
-          }
-        }
-      }
     },
+    "Bio (optionnel)" : {
 
-    "Partager quelque chose avec le monde...": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share something with the world..."
+    },
+    "block.confirm.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person will no longer be able to send you messages in this conversation."
           }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."
+          }
         }
       }
     },
-
-    "Mon profil": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "My profile"
+    "block.confirm.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block this user?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquer cet utilisateur ?"
           }
         }
       }
     },
-
-    "Copier": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy"
+    "Bloquer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block"
           }
         }
       }
     },
+    "Bloquer cet utilisateur" : {
 
-    "Signaler": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Report"
+    },
+    "Bloquer cet utilisateur ?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block this user?"
           }
         }
       }
     },
+    "Blur" : {
 
-    "R\u00e9pondre": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reply"
-          }
-        }
-      }
     },
+    "Break the language barrier" : {
 
-    "Transf\u00e9rer": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forward"
+    },
+    "Cache media" : {
+
+    },
+    "Ce compte a ete desactive." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This account has been deactivated."
           }
         }
       }
     },
+    "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire." : {
 
-    "Ce compte a ete desactive.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This account has been deactivated."
+    },
+    "Cette action est irreversible" : {
+
+    },
+    "Cette action est irréversible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action cannot be undone."
           }
         }
       }
+    },
+    "Cette action est irréversible. Le lien ne sera plus accessible." : {
+
+    },
+    "Cette etape est optionnelle" : {
+
     },
+    "Cette personne ne pourra plus acceder a la conversation." : {
 
-    "Utilisateur introuvable.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "User not found."
+    },
+    "Cette personne ne pourra plus vous envoyer de messages dans cette conversation." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person will no longer be able to send you messages in this conversation."
           }
         }
       }
     },
+    "Changer le mot de passe" : {
 
-    "Erreur reseau. Verifiez votre connexion.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Network error. Check your connection."
+    },
+    "Chargement..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading..."
           }
         }
       }
+    },
+    "Chiffrement de bout en bout" : {
+
+    },
+    "Choisir un groupe ou une communauté" : {
+
+    },
+    "Choisir un lieu" : {
+
     },
+    "Clone" : {
 
-    "Impossible de charger ce profil.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unable to load this profile."
+    },
+    "Code envoye par SMS" : {
+
+    },
+    "Commencer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get started"
+          }
+        }
+      }
+    },
+    "Commencer a utiliser Meeshy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start using Meeshy"
+          }
+        }
+      }
+    },
+    "Commencer une discussion" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a conversation"
+          }
+        }
+      }
+    },
+    "Commencez a discuter avec vos amis ou rejoignez une communaute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start chatting with friends or join a community"
           }
         }
       }
+    },
+    "Comment ca marche" : {
+
     },
+    "Comment tu te sens ?" : {
 
-    "date.today": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aujourd'hui"
+    },
+    "Communautés" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Communities"
+          }
+        }
+      }
+    },
+    "communities.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Communities"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Communautés"
           }
         }
       }
+    },
+    "complet" : {
+
     },
+    "Compris" : {
 
-    "date.yesterday": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hier"
+    },
+    "Compte" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yesterday"
+        }
+      }
+    },
+    "Comptes sauvegardés" : {
+
+    },
+    "Conditions" : {
+
+    },
+    "Conditions d'utilisation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terms of Service"
           }
         }
       }
     },
+    "Confidentialite" : {
 
-    "loading": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chargement..."
+    },
+    "Confidentialité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacy"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading..."
+        }
+      }
+    },
+    "Configurer" : {
+
+    },
+    "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations." : {
+
+    },
+    "Confirmer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm"
           }
         }
       }
     },
+    "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles." : {
 
-    "action.reply": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "R\u00e9pondre"
+    },
+    "connection.offline" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reply"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hors ligne"
           }
         }
       }
     },
-
-    "action.copy": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copier"
+    "connection.offline.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages will be sent when reconnected"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages seront envoyes a la reconnexion"
           }
         }
       }
     },
-
-    "action.forward": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transf\u00e9rer"
+    "connection.reconnecting" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecting"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forward"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnexion en cours"
+          }
+        }
+      }
+    },
+    "Connexion par lien magique" : {
+
+    },
+    "Connexion sans mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passwordless login"
           }
         }
       }
+    },
+    "Connexion..." : {
+
+    },
+    "Conseils Meeshy" : {
+
+    },
+    "Contact partage" : {
+
+    },
+    "Contenu" : {
+
     },
+    "Contenu du presse-papier" : {
 
-    "action.delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
+    },
+    "context.archive" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiver"
           }
         }
       }
     },
-
-    "emoji.search": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher un emoji"
+    "context.block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search emoji"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquer"
           }
         }
       }
     },
-
-    "emoji.quickReactions": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "R\u00e9actions rapides"
+    "context.delete" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quick reactions"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         }
       }
     },
-
-    "emoji.recent": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Utilis\u00e9s r\u00e9cemment"
+    "context.lock" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recently used"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verrouiller"
           }
         }
       }
     },
-
-    "emoji.title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "R\u00e9actions"
+    "context.mark_read" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as read"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reactions"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marquer comme lu"
           }
         }
       }
     },
-
-    "emoji.close": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer"
+    "context.mark_unread" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as unread"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marquer comme non lu"
           }
         }
       }
     },
-
-    "search.global.placeholder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher partout..."
+    "context.move_to" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to..."
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search everywhere..."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacer vers..."
           }
         }
       }
     },
-
-    "search.global.title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans Meeshy"
+    "context.mute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search in Meeshy"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mettre en silence"
           }
         }
       }
     },
-
-    "search.global.subtitle": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages, conversations, utilisateurs"
+    "context.my_conversations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My conversations"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages, conversations, users"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mes conversations"
           }
         }
       }
     },
-
-    "search.no_results": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun resultat"
+    "context.pin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No results"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épingler"
           }
         }
       }
     },
-
-    "search.try_other_terms": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essayez avec d'autres termes de recherche"
+    "context.react" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "React"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try different search terms"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réagir"
           }
         }
       }
     },
-
-    "search.recent": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherches recentes"
+    "context.unlock" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recent searches"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déverrouiller"
           }
         }
       }
     },
-
-    "search.in_progress": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche en cours..."
+    "context.unmute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute notifications"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réactiver les notifications"
+          }
+        }
+      }
+    },
+    "context.unpin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désépingler"
+          }
+        }
+      }
+    },
+    "Conversation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversation"
+          }
+        }
+      }
+    },
+    "conversation.type.bot" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bot"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bot"
+          }
+        }
+      }
+    },
+    "conversation.type.channel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Channel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Channel"
+          }
+        }
+      }
+    },
+    "conversation.type.community" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Communaute"
+          }
+        }
+      }
+    },
+    "conversation.type.direct" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct"
+          }
+        }
+      }
+    },
+    "conversation.type.global" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global"
+          }
+        }
+      }
+    },
+    "conversation.type.group" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Groupe"
+          }
+        }
+      }
+    },
+    "conversation.type.public" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Public"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Searching..."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Public"
           }
         }
       }
     },
+    "Conversations récentes" : {
 
-    "search.placeholder": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher..."
+    },
+    "conversations.empty.action" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a conversation"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commencer une discussion"
+          }
+        }
+      }
+    },
+    "conversations.empty.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start chatting with friends or join a community"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commencez a discuter avec vos amis ou rejoignez une communaute"
+          }
+        }
+      }
+    },
+    "conversations.empty.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No conversations"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search..."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune conversation"
+          }
+        }
+      }
+    },
+    "Copier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
+    },
+    "Creation de ton compte..." : {
+
+    },
+    "Cree le %@" : {
+
+    },
+    "Créer" : {
+
+    },
+    "Creer le lien" : {
+
+    },
+    "Créer le lien" : {
+
+    },
+    "Creer un compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create an account"
           }
         }
       }
     },
+    "Créez un groupe ou une communauté pour partager un lien d'invitation" : {
 
-    "action.clear": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer"
+    },
+    "Créez un lien pour inviter des personnes dans une conversation" : {
+
+    },
+    "Creez un lien pour inviter vos amis" : {
+
+    },
+    "Créez un lien pour suivre vos clics et campagnes" : {
+
+    },
+    "Criteres de securite" : {
+
+    },
+    "date.today" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aujourd'hui"
+          }
+        }
+      }
+    },
+    "date.yesterday" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier"
+          }
+        }
+      }
+    },
+    "Debloquer" : {
+
+    },
+    "Déconnexion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log out"
+          }
+        }
+      }
+    },
+    "Demandes d'amis" : {
+
+    },
+    "Déplacer vers..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to..."
+          }
+        }
+      }
+    },
+    "Deplacez la carte pour choisir" : {
+
+    },
+    "Depuis" : {
+
+    },
+    "Dernier clic : %@" : {
+
+    },
+    "Désépingler" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin"
+          }
+        }
+      }
+    },
+    "Details (optionnel)" : {
+
+    },
+    "Detectee" : {
+
+    },
+    "Déverrouiller" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock"
           }
         }
       }
+    },
+    "Déverrouiller tout (%@)" : {
+
     },
+    "Discussion" : {
 
-    "action.see_all": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir tout"
+    },
+    "E2EE" : {
+
+    },
+    "Échec de l'envoi" : {
+
+    },
+    "Écrire" : {
+
+    },
+    "Email" : {
+
+    },
+    "Email actuel" : {
+
+    },
+    "Email de verification envoye" : {
+
+    },
+    "emoji.close" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer"
+          }
+        }
+      }
+    },
+    "emoji.quickReactions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick reactions"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réactions rapides"
+          }
+        }
+      }
+    },
+    "emoji.recent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently used"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisés récemment"
+          }
+        }
+      }
+    },
+    "emoji.search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search emoji"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See all"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher un emoji"
           }
         }
       }
     },
+    "emoji.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reactions"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réactions"
+          }
+        }
+      }
+    },
+    "En attente" : {
+
+    },
+    "En ligne" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Online"
+          }
+        }
+      }
+    },
+    "English" : {
+
+    },
+    "Enregistrer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "Entrez votre adresse email" : {
+
+    },
+    "Envoi de la photo..." : {
+
+    },
+    "Envoye a %@" : {
+
+    },
+    "Envoyer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send"
+          }
+        }
+      }
+    },
+    "Envoyer le code" : {
+
+    },
+    "Envoyer le lien magique" : {
+
+    },
+    "Envoyer le signalement" : {
+
+    },
+    "Envoyer un message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send a message"
+          }
+        }
+      }
+    },
+    "Epingle" : {
+
+    },
+    "Épingler" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
+          }
+        }
+      }
+    },
+    "Erreur reseau. Verifiez votre connexion." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network error. Check your connection."
+          }
+        }
+      }
+    },
+    "Etes-vous absolument certain ? Cette action est irreversible." : {
+
+    },
+    "Expiration" : {
+
+    },
+    "Export de donnees" : {
+
+    },
+    "Faites glisser les poignees pour recadrer" : {
+
+    },
+    "Fermer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Fichier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File"
+          }
+        }
+      }
+    },
+    "Francais" : {
+
+    },
+    "Gerer les membres" : {
+
+    },
+    "Gérez vos liens" : {
+
+    },
+    "Hello! How are you doing today?" : {
+
+    },
+    "Hier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
+          }
+        }
+      }
+    },
+    "Illimité" : {
+
+    },
+    "Images, audio et videos mis en cache" : {
+
+    },
+    "Impossible de charger ce profil." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to load this profile."
+          }
+        }
+      }
+    },
+    "INFORMATIONS" : {
+
+    },
+    "Infos conversation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversation info"
+          }
+        }
+      }
+    },
+    "Infos du message" : {
+
+    },
+    "J'accepte les conditions d'utilisation et la politique de confidentialite" : {
+
+    },
+    "Jean-Pierre" : {
+
+    },
+    "JP" : {
+
+    },
+    "La messagerie nouvelle generation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next-gen messaging"
+          }
+        }
+      }
+    },
+    "La suppression de votre compte entrainera la perte definitive de :" : {
+
+    },
+    "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement." : {
+
+    },
+    "Laissez vide pour un token aléatoire" : {
+
+    },
+    "Langue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "Langue principale" : {
+
+    },
+    "Langue regionale" : {
+
+    },
+    "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours." : {
+
+    },
+    "Le clonage vocal traduit vos messages audio avec votre propre voix" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice cloning translates your audio messages in your own voice"
+          }
+        }
+      }
+    },
+    "Les communautés que vous gérez apparaîtront ici avec leur lien de partage" : {
+
+    },
+    "Les demandes d'amis apparaitront ici" : {
 
-    "action.block": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquer"
+    },
+    "Les messages avec %@ sont chiffrés de bout en bout." : {
+
+    },
+    "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire." : {
+
+    },
+    "Les personnes qui regardent votre story apparaîtront ici." : {
+
+    },
+    "Licences" : {
+
+    },
+    "Lien envoye !" : {
+
+    },
+    "Lien expire, renvoyez-en un nouveau" : {
+
+    },
+    "Liens communauté" : {
+
+    },
+    "Liens de partage" : {
+
+    },
+    "Liens de tracking" : {
+
+    },
+    "Limiter les utilisations" : {
+
+    },
+    "Lire les conditions" : {
+
+    },
+    "loading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading..."
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chargement..."
+          }
+        }
+      }
+    },
+    "M" : {
+
+    },
+    "Ma position" : {
+
+    },
+    "Maintenir pour voir" : {
+
+    },
+    "Marquer comme lu" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as read"
+          }
+        }
+      }
+    },
+    "Marquer comme non lu" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as unread"
+          }
+        }
+      }
+    },
+    "Master PIN" : {
+
+    },
+    "Meeshy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        }
+      }
+    },
+    "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout." : {
+
+    },
+    "Meeshy utilise les bibliotheques open source suivantes." : {
+
+    },
+    "meeshy.me/join/%@" : {
+
+    },
+    "Membre" : {
+
+    },
+    "MES COMMUNAUTÉS" : {
+
+    },
+    "Mes conversations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My conversations"
+          }
+        }
+      }
+    },
+    "MES LIENS" : {
+
+    },
+    "Message supprime" : {
+
+    },
+    "Message vide" : {
+
+    },
+    "Message..." : {
+
+    },
+    "messages" : {
+
+    },
+    "Messages récents" : {
+
+    },
+    "Mettre en silence" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
+          }
+        }
+      }
+    },
+    "modifie" : {
+
+    },
+    "Modifie" : {
+
+    },
+    "Modifier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        }
+      }
+    },
+    "Modifier le message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit message"
+          }
+        }
+      }
+    },
+    "Modifier le profil" : {
+
+    },
+    "Moi" : {
+
+    },
+    "Mon profil" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My profile"
+          }
+        }
+      }
+    },
+    "Mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "Mot de passe modifie" : {
+
+    },
+    "Mot de passe oublie ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forgot password?"
+          }
+        }
+      }
+    },
+    "Nom d'utilisateur" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Username"
+          }
+        }
+      }
+    },
+    "Nom du lien" : {
+
+    },
+    "non lus" : {
+
+    },
+    "Notifications" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "Notifications desactivees" : {
+
+    },
+    "Nous vous enverrons un lien de connexion securise" : {
+
+    },
+    "Nouveau post" : {
+
+    },
+    "Nouveaux messages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New messages"
           }
         }
       }
     },
+    "Nouvelle conversation" : {
 
-    "action.cancel": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
+    },
+    "Numéro de sécurité" : {
+
+    },
+    "Off" : {
+
+    },
+    "OK" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
           }
         }
       }
     },
+    "Original • %@" : {
 
-    "tab.messages": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages"
+    },
+    "Ouvrez votre email et cliquez sur le lien" : {
+
+    },
+    "Page suivante" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next page"
           }
         }
       }
     },
+    "Paramètres UTM" : {
 
-    "tab.conversations": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversations"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conversations"
+    },
+    "Parlez dans votre langue, vos amis lisent dans la leur" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speak your language, your friends read in theirs"
           }
         }
       }
     },
+    "Parrainage" : {
 
-    "tab.users": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Utilisateurs"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Users"
+    },
+    "Partager quelque chose avec le monde..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share something with the world..."
           }
         }
       }
     },
+    "Partagez, suivez et monétisez votre audience" : {
 
-    "status.online": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En ligne"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Online"
+    },
+    "Pas de compte ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No account?"
           }
         }
       }
     },
-
-    "connection.reconnecting": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnexion en cours"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnecting"
+    "Passer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip"
           }
         }
       }
     },
+    "Passer ce membre en %@ ?" : {
 
-    "connection.offline": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hors ligne"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Offline"
+    },
+    "Passer cette etape" : {
+
+    },
+    "Passer l'introduction" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip the introduction"
           }
         }
       }
     },
-
-    "connection.offline.subtitle": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les messages seront envoyes a la reconnexion"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messages will be sent when reconnected"
+    "Photo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
           }
         }
       }
     },
-
-    "conversations.empty.title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune conversation"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No conversations"
+    "Plus d'options" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More options"
           }
         }
       }
     },
-
-    "conversations.empty.subtitle": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencez a discuter avec vos amis ou rejoignez une communaute"
+    "Politique de confidentialité" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacy Policy"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start chatting with friends or join a community"
-          }
         }
       }
     },
-
-    "conversations.empty.action": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencer une discussion"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start a conversation"
+    "Position" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location"
           }
         }
       }
     },
+    "Position partagee" : {
 
-    "block.confirm.title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquer cet utilisateur ?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block this user?"
+    },
+    "Pour vérifier, comparez ce numéro avec celui affiché sur l'appareil de %@, ou scannez son code QR." : {
+
+    },
+    "Pourquoi le telephone?" : {
+
+    },
+    "Pourquoi signalez-vous ce message ?" : {
+
+    },
+    "Pret a commencer ?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to start?"
           }
         }
       }
     },
-
-    "block.confirm.message": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."
+    "preview.member_count %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld members"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This person will no longer be able to send you messages in this conversation."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld membres"
           }
         }
       }
     },
-
-    "communities.title": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Communaut\u00e9s"
+    "preview.no_messages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No messages"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Communities"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun message"
           }
         }
       }
     },
-
-    "preview.no_messages": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun message"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No messages"
+    "Profil" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile"
           }
         }
       }
     },
+    "Profil mis a jour" : {
 
-    "preview.member_count %lld": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld membres"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld members"
+    },
+    "Public" : {
+
+    },
+    "Publier" : {
+
+    },
+    "Qu'avez-vous en tête ?" : {
+
+    },
+    "Quitter le groupe" : {
+
+    },
+    "Réactiver les notifications" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute notifications"
           }
         }
       }
     },
-
-    "search.member_count %lld": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld membres"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld members"
+    "Réagir" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "React"
           }
         }
       }
     },
+    "Recapitulatif" : {
 
-    "unit.members": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "membres"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "members"
+    },
+    "Recherche de l'adresse..." : {
+
+    },
+    "Rechercher dans la conversation..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in conversation..."
           }
         }
       }
     },
-
-    "unit.unread": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "non lus"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unread"
+    "Rechercher..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search..."
           }
         }
       }
     },
+    "Recherchez par nom ou @pseudo" : {
 
-    "conversation.type.direct": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Direct"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Direct"
+    },
+    "Réessayer" : {
+
+    },
+    "Refuser" : {
+
+    },
+    "Réglages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
           }
         }
       }
     },
+    "Reinitialiser" : {
 
-    "conversation.type.group": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Groupe"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Group"
+    },
+    "Renvoyer" : {
+
+    },
+    "Répondre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply"
           }
         }
       }
     },
+    "Réponse à %@" : {
 
-    "conversation.type.public": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Public"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Public"
+    },
+    "Retour" : {
+
+    },
+    "Sauvegarder" : {
+
+    },
+    "Se connecter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log in"
           }
         }
       }
     },
-
-    "conversation.type.global": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Global"
+    "search.global.placeholder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search everywhere..."
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Global"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher partout..."
           }
         }
       }
     },
-
-    "conversation.type.community": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Communaute"
+    "search.global.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages, conversations, users"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Community"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages, conversations, utilisateurs"
           }
         }
       }
     },
-
-    "conversation.type.channel": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Channel"
+    "search.global.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in Meeshy"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Channel"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher dans Meeshy"
           }
         }
       }
     },
-
-    "conversation.type.bot": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bot"
+    "search.in_progress" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching..."
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bot"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherche en cours..."
           }
         }
       }
     },
-
-    "swipe.unpin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "D\u00e9s\u00e9pingler"
+    "search.member_count %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld members"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unpin"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld membres"
           }
         }
       }
     },
-
-    "swipe.pin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "\u00c9pingler"
+    "search.no_results" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No results"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pin"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun resultat"
           }
         }
       }
     },
-
-    "swipe.unmute": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Son"
+    "search.placeholder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search..."
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sound"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher..."
           }
         }
       }
     },
-
-    "swipe.mute": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Silence"
+    "search.recent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent searches"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mute"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherches recentes"
           }
         }
       }
     },
-
-    "swipe.archive": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archiver"
+    "search.try_other_terms" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try different search terms"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archive"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essayez avec d'autres termes de recherche"
           }
         }
       }
     },
+    "Securite" : {
 
-    "swipe.delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
+    },
+    "Sécurité" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Security"
           }
         }
       }
     },
-
-    "context.unpin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "D\u00e9s\u00e9pingler"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unpin"
+    "Signaler" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report"
           }
         }
       }
     },
+    "Signaler @%@" : {
 
-    "context.pin": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "\u00c9pingler"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pin"
+    },
+    "Silence" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
           }
         }
       }
     },
-
-    "context.unmute": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "R\u00e9activer les notifications"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unmute notifications"
+    "Son" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sound"
           }
         }
       }
     },
-
-    "context.mute": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mettre en silence"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mute"
+    "Sons" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sounds"
           }
         }
       }
     },
+    "Statistiques" : {
 
-    "context.mark_read": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Marquer comme lu"
+    },
+    "Status" : {
+
+    },
+    "status.online" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Online"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark as read"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En ligne"
           }
         }
       }
     },
+    "Statut de livraison" : {
 
-    "context.mark_unread": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Marquer comme non lu"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark as unread"
+    },
+    "Stockage" : {
+
+    },
+    "Suggestions disponibles" : {
+
+    },
+    "Suivant" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
           }
         }
       }
     },
-
-    "context.react": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "R\u00e9agir"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "React"
+    "Supprimer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
           }
         }
       }
     },
-
-    "context.move_to": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "D\u00e9placer vers..."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Move to..."
+    "Supprimer ce message ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete this message?"
           }
         }
       }
     },
+    "Supprimer definitivement mon compte" : {
 
-    "context.my_conversations": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mes conversations"
+    },
+    "Supprimer le compte" : {
+
+    },
+    "swipe.archive" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "My conversations"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archiver"
           }
         }
       }
     },
-
-    "context.unlock": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "D\u00e9verrouiller"
+    "swipe.delete" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         }
       }
     },
-
-    "context.lock": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verrouiller"
+    "swipe.mute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lock"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silence"
           }
         }
       }
     },
-
-    "context.archive": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archiver"
+    "swipe.pin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archive"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épingler"
           }
         }
       }
     },
-
-    "context.block": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bloquer"
+    "swipe.unmute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sound"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Block"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son"
           }
         }
       }
     },
-
-    "context.delete": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
+    "swipe.unpin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désépingler"
           }
         }
       }
     },
-
-    "accessibility.back": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour"
+    "tab.conversations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversations"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversations"
           }
         }
       }
     },
-
-    "accessibility.results": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "resultats"
+    "tab.messages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "results"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
           }
         }
       }
     },
-
-    "accessibility.global_search_field": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche globale"
+    "tab.users" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Users"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Global search"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisateurs"
           }
         }
       }
     },
+    "Tapez **SUPPRIMER MON COMPTE** pour confirmer" : {
 
-    "accessibility.searching": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche en cours"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Searching"
+    },
+    "Telephone" : {
+
+    },
+    "Telephone actuel" : {
+
+    },
+    "Terminé" : {
+
+    },
+    "Thème" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theme"
           }
         }
       }
     },
+    "Token personnalisé (optionnel)" : {
 
-    "accessibility.clear_recent_searches": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer les recherches recentes"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear recent searches"
+    },
+    "Ton email est protege" : {
+
+    },
+    "Ton identite sur Meeshy" : {
+
+    },
+    "Tout est lu" : {
+
+    },
+    "Traduction instantanee" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instant translation"
           }
         }
       }
     },
+    "Traductions audio" : {
 
-    "accessibility.remove_recent_search": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer des recherches recentes"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remove from recent searches"
+    },
+    "Traduire" : {
+
+    },
+    "Transcription" : {
+
+    },
+    "Transcription en cours..." : {
+
+    },
+    "Transcription indisponible." : {
+
+    },
+    "Transcrire" : {
+
+    },
+    "Transf. de %@" : {
+
+    },
+    "Transf. de %@ • %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transf. de %1$@ • %2$@"
           }
         }
       }
     },
+    "Transfere" : {
 
-    "accessibility.recent_search_label": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche recente"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recent search"
+    },
+    "Transférer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forward"
           }
         }
       }
+    },
+    "Tu recois le message original + la traduction dans ta langue principale (%@)" : {
+
+    },
+    "Un email de confirmation vous a ete envoye" : {
+
     },
+    "Un lien de connexion a ete envoye a" : {
 
-    "accessibility.recent_search_hint": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Relance la recherche"
+    },
+    "unit.members" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "members"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run search again"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membres"
           }
         }
       }
     },
-
-    "accessibility.opens_conversation": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre la conversation"
+    "unit.unread" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unread"
           }
         },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens conversation"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "non lus"
           }
         }
       }
     },
-
-    "accessibility.view_profile": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir le profil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View profile"
+    "Utilisateur introuvable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "User not found."
           }
         }
       }
     },
-
-    "accessibility.message_from": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Message de"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Message from"
+    "Utilisateurs bloques" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked users"
           }
         }
       }
     },
+    "utilisations" : {
 
-    "accessibility.in_conversation": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "dans"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "in"
+    },
+    "Utilisations max (optionnel)" : {
+
+    },
+    "Utiliser" : {
+
+    },
+    "Vérification non disponible" : {
+
+    },
+    "Verifier" : {
+
+    },
+    "Vérifier" : {
+
+    },
+    "Verifiez votre boite de reception pour confirmer la suppression de votre compte." : {
+
+    },
+    "Verrouiller" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock"
           }
         }
       }
     },
-
-    "accessibility.last_message": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "dernier message"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "last message"
+    "Version" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
           }
         }
       }
     },
-
-    "accessibility.tab_results": {
-      "comment": "Legacy key - no longer used with String(localized:) interpolation",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@, %lld resultats"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@, %lld results"
+    "Version %@ (%@)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version %1$@ (%2$@)"
           }
         }
       }
     },
-
-    "accessibility.search": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search"
+    "Vibrations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vibrations"
           }
         }
       }
     },
-
-    "accessibility.search.hint": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre les filtres et la recherche de conversations"
+    "Vidéo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens filters and conversation search"
-          }
         }
       }
     },
+    "Video en attente..." : {
 
-    "accessibility.clear_search": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effacer la recherche"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear search"
+    },
+    "Vider le cache" : {
+
+    },
+    "Vocal" : {
+
+    },
+    "Voir le profil" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View profile"
           }
         }
       }
     },
+    "Voir les %@ commentaires" : {
 
-    "accessibility.dashboard": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tableau de bord"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dashboard"
+    },
+    "Voir les stories" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View stories"
           }
         }
       }
     },
-
-    "accessibility.dashboard.hint": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre le tableau de bord avec les widgets"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens the dashboard with widgets"
+    "Voir tout" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See all"
           }
         }
       }
     },
-
-    "accessibility.global_search": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recherche globale"
+    "Vos conversations sont chiffrees de bout en bout" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your conversations are end-to-end encrypted"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Global search"
-          }
         }
       }
     },
+    "Vos donnees, votre controle" : {
 
-    "accessibility.global_search.hint": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher dans tous les messages, conversations et utilisateurs"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search across all messages, conversations, and users"
+    },
+    "Votre voix, leurs langues" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your voice, their languages"
           }
         }
       }
     },
+    "Voulez-vous debloquer %@ ?" : {
 
-    "accessibility.close_communities": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer les communautes"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close communities"
+    },
+    "Voulez-vous vraiment vous déconnecter ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Are you sure you want to log out?"
           }
         }
       }
     },
-
-    "accessibility.see_all_communities": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir toutes les communautes"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See all communities"
+    "Vous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You"
           }
         }
       }
+    },
+    "Vous ne pourrez plus voir les messages de ce groupe." : {
+
+    },
+    "Vous ne recevrez plus de messages de %@. Vous pourrez le debloquer dans les reglages." : {
+
+    },
+    "Vous ne recevrez plus de messages de cette conversation." : {
+
+    },
+    "Vu et effacé" : {
+
+    },
+    "Widgets Meeshy" : {
+
     }
-  }
+  },
+  "version" : "1.0"
 }

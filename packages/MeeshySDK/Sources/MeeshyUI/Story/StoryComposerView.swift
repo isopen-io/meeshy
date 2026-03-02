@@ -69,13 +69,7 @@ private struct MediaAudioEditorItem: Identifiable {
 public struct StoryComposerView: View {
     @StateObject private var slideManager = StorySlideManager()
 
-    @State private var text = ""
-    @State private var textStyle: StoryTextStyle = .bold
-    @State private var textColor: Color = .white
-    @State private var textSize: CGFloat = 28
-    @State private var textBgEnabled = false
-    @State private var textAlignment: TextAlignment = .center
-    @State private var textPosition: StoryTextPosition = .center
+    @State private var selectedTextObjectId: String? = nil
 
     @State private var stickerObjects: [StorySticker] = []
     @State private var selectedFilter: StoryFilter? = nil
@@ -282,13 +276,26 @@ public struct StoryComposerView: View {
 
     private var canvasArea: some View {
         StoryCanvasView(
-            text: $text,
-            textStyle: $textStyle,
-            textColor: $textColor,
-            textSize: $textSize,
-            textBgEnabled: $textBgEnabled,
-            textAlignment: $textAlignment,
-            textPosition: $textPosition,
+            textObjects: Binding(
+                get: { currentSlideEffects?.textObjects ?? [] },
+                set: { objs in
+                    var effects = currentSlideEffects ?? buildEffects()
+                    effects.textObjects = objs
+                    setCurrentSlideEffects(effects)
+                }
+            ),
+            onSelectText: { id in
+                selectedTextObjectId = id
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    activePanel = .text
+                }
+            },
+            onEditText: { id in
+                selectedTextObjectId = id
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    activePanel = .text
+                }
+            },
             stickerObjects: $stickerObjects,
             selectedFilter: $selectedFilter,
             drawingData: $drawingData,
@@ -329,6 +336,7 @@ public struct StoryComposerView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     activePanel = .none
                     selectedMediaId = nil
+                    selectedTextObjectId = nil
                 }
             }
         )
@@ -532,7 +540,7 @@ public struct StoryComposerView: View {
         return Button {
             let currentIdx = slideManager.currentSlideIndex
             if currentIdx < slideManager.slides.count {
-                slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+                slideManager.slides[currentIdx].content = nil
                 slideManager.slides[currentIdx].effects = buildEffects()
             }
             withAnimation(.spring(response: 0.25)) {
@@ -588,15 +596,14 @@ public struct StoryComposerView: View {
                     }
                 }
 
-                // Indicateur texte (petit trait blanc centré)
-                if slide.content != nil && !(slide.content?.isEmpty ?? true) {
-                    RoundedRectangle(cornerRadius: 0.5)
-                        .fill(Color.white.opacity(0.6))
-                        .frame(width: thumbW * 0.6, height: 2)
-                        .position(
-                            x: thumbW / 2,
-                            y: slide.effects.resolvedTextPosition.y * thumbH
-                        )
+                // Indicateur textes (petit trait blanc par textObject)
+                ForEach(slide.effects.textObjects ?? [], id: \.id) { obj in
+                    if !obj.content.isEmpty {
+                        RoundedRectangle(cornerRadius: 0.5)
+                            .fill(Color.white.opacity(0.6))
+                            .frame(width: thumbW * 0.4, height: 2)
+                            .position(x: obj.x * thumbW, y: obj.y * thumbH)
+                    }
                 }
             }
             .frame(width: thumbW, height: thumbH)
@@ -664,7 +671,20 @@ public struct StoryComposerView: View {
     private var toolBarScrollable: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                toolPill(icon: "textformat", label: "Texte", panel: .text)
+                toolPill(icon: "textformat", label: "Texte", panel: .text, action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        if activePanel == .text {
+                            cleanupEmptyTextObjects()
+                            activePanel = .none
+                            selectedTextObjectId = nil
+                        } else {
+                            addTextObject()
+                            activePanel = .text
+                            isDrawingActive = false
+                        }
+                    }
+                    HapticFeedback.light()
+                })
                 toolPill(icon: "pencil.tip", label: "Dessin", panel: .drawing)
                 toolPill(icon: "face.smiling", label: "Sticker", panel: .stickers)
                 toolPill(icon: "camera.filters", label: "Filtre", panel: .filter)
@@ -737,11 +757,8 @@ public struct StoryComposerView: View {
     private var activeToolPanel: some View {
         switch activePanel {
         case .text:
-            StoryTextEditorView(
-                text: $text, textStyle: $textStyle, textColor: $textColor,
-                textSize: $textSize, textBgEnabled: $textBgEnabled, textAlignment: $textAlignment
-            )
-            .padding(.bottom, 8)
+            textPanel
+                .padding(.bottom, 8)
 
         case .stickers:
             StickerPickerView { emoji in
@@ -1313,7 +1330,7 @@ public struct StoryComposerView: View {
         var slides = slideManager.slides
         let idx = slideManager.currentSlideIndex
         guard idx < slides.count else { return (slides, slideManager.slideImages) }
-        slides[idx].content = text.isEmpty ? nil : text
+        slides[idx].content = nil
         slides[idx].effects = buildEffects()
         return (slides, slideManager.slideImages)
     }
@@ -1324,6 +1341,7 @@ public struct StoryComposerView: View {
             return $0.content != nil
                 || slideManager.slideImages[slideId] != nil
                 || $0.effects.background != nil
+                || !($0.effects.textObjects ?? []).isEmpty
         } || !stickerObjects.isEmpty
           || drawingData != nil
         if hasContent {
@@ -1406,7 +1424,7 @@ public struct StoryComposerView: View {
     private func saveDraft() {
         let currentIdx = slideManager.currentSlideIndex
         if currentIdx < slideManager.slides.count {
-            slideManager.slides[currentIdx].content = text.isEmpty ? nil : text
+            slideManager.slides[currentIdx].content = nil
             slideManager.slides[currentIdx].effects = buildEffects()
         }
         StoryDraftStore.shared.save(slides: slideManager.slides, visibility: visibility)
@@ -1441,19 +1459,7 @@ public struct StoryComposerView: View {
     /// Doit être appelé à chaque changement de slide actif (switch ou création).
     private func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
-        text = slide.content ?? ""
-        if let styleStr = e.textStyle, let style = StoryTextStyle(rawValue: styleStr) {
-            textStyle = style
-        } else { textStyle = .bold }
-        if let hex = e.textColor { textColor = Color(hex: hex) } else { textColor = .white }
-        textSize = e.textSize ?? 28
-        textBgEnabled = e.textBg != nil
-        switch e.textAlign {
-        case "left": textAlignment = .leading
-        case "right": textAlignment = .trailing
-        default: textAlignment = .center
-        }
-        textPosition = e.textPositionPoint ?? .center
+        selectedTextObjectId = nil
         if let bgHex = e.background { backgroundColor = Color(hex: bgHex) } else { backgroundColor = Color(hex: "0F0C29") }
         selectedImage = slideManager.slideImages[slide.id]
         stickerObjects = e.stickerObjects ?? []
@@ -1663,21 +1669,92 @@ public struct StoryComposerView: View {
         }
     }
 
+    // MARK: - Text Object Management
+
+    @ViewBuilder
+    private var textPanel: some View {
+        if let selectedId = selectedTextObjectId,
+           let binding = textObjectBinding(for: selectedId) {
+            StoryTextEditorView(
+                textObject: binding,
+                onDelete: {
+                    removeTextObject(id: selectedId)
+                }
+            )
+        } else {
+            VStack(spacing: 8) {
+                Text("Aucun texte sélectionné")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity, minHeight: 60)
+        }
+    }
+
+    private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
+        guard var effects = currentSlideEffects,
+              let idx = effects.textObjects?.firstIndex(where: { $0.id == id }) else { return nil }
+        return Binding(
+            get: {
+                let fx = currentSlideEffects
+                guard let objs = fx?.textObjects, let i = objs.firstIndex(where: { $0.id == id }) else {
+                    return StoryTextObject(content: "")
+                }
+                return objs[i]
+            },
+            set: { newObj in
+                var fx = currentSlideEffects ?? buildEffects()
+                if let i = fx.textObjects?.firstIndex(where: { $0.id == id }) {
+                    fx.textObjects?[i] = newObj
+                    setCurrentSlideEffects(fx)
+                }
+            }
+        )
+    }
+
+    private func addTextObject() {
+        let obj = StoryTextObject(content: "", x: 0.5, y: 0.45)
+        var effects = currentSlideEffects ?? buildEffects()
+        var objects = effects.textObjects ?? []
+        objects.append(obj)
+        effects.textObjects = objects
+        setCurrentSlideEffects(effects)
+        selectedTextObjectId = obj.id
+    }
+
+    private func removeTextObject(id: String) {
+        var effects = currentSlideEffects ?? buildEffects()
+        effects.textObjects?.removeAll { $0.id == id }
+        setCurrentSlideEffects(effects)
+        selectedTextObjectId = nil
+        if (effects.textObjects ?? []).isEmpty {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activePanel = .none
+            }
+        }
+    }
+
+    private func cleanupEmptyTextObjects() {
+        var effects = currentSlideEffects ?? buildEffects()
+        effects.textObjects?.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        setCurrentSlideEffects(effects)
+    }
+
     private func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : colorToHex(backgroundColor)
         return StoryEffects(
             background: bgHex,
-            textStyle: textStyle.rawValue,
-            textColor: colorToHex(textColor),
+            textStyle: nil,
+            textColor: nil,
             textPosition: nil,
             filter: selectedFilter?.rawValue,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
-            textAlign: alignmentString(textAlignment),
-            textSize: textSize,
-            textBg: textBgEnabled ? "000000" : nil,
+            textAlign: nil,
+            textSize: nil,
+            textBg: nil,
             textOffsetY: nil,
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
-            textPositionPoint: textPosition,
+            textPositionPoint: nil,
             drawingData: drawingData,
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
@@ -1689,14 +1766,6 @@ public struct StoryComposerView: View {
             mediaObjects: currentSlideEffects?.mediaObjects,
             audioPlayerObjects: currentSlideEffects?.audioPlayerObjects
         )
-    }
-
-    private func alignmentString(_ alignment: TextAlignment) -> String {
-        switch alignment {
-        case .leading: return "left"
-        case .center: return "center"
-        case .trailing: return "right"
-        }
     }
 
     private func colorToHex(_ color: Color) -> String {

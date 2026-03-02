@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -219,7 +219,7 @@
 		467B3BA1305D0EA5CEFF3EEE /* Meeshy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Meeshy.entitlements; sourceTree = "<group>"; };
 		553CE480C5B7C55136F3B3B4 /* ConversationView+AttachmentHandlers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+AttachmentHandlers.swift"; sourceTree = "<group>"; };
 		56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationMediaViews.swift; sourceTree = "<group>"; };
-		5832205F0A09E149C8B976A8 /* Meeshy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Meeshy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5832205F0A09E149C8B976A8 /* Meeshy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Meeshy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		60EE19EAAF10B595D04E99F8 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+MessageRow.swift"; sourceTree = "<group>"; };
 		67CC3F2F25BE7ED204EC43B5 /* ConversationListView+Overlays.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationListView+Overlays.swift"; sourceTree = "<group>"; };
@@ -431,7 +431,6 @@
 				A3CF7F1D12E70B692594F386 /* Info.plist */,
 				00075CCB07F2C17B7B703EDB /* MeeshyWidgets.entitlements */,
 			);
-			name = MeeshyWidgets;
 			path = MeeshyWidgets;
 			sourceTree = "<group>";
 		};
@@ -490,7 +489,6 @@
 				3CD3F73AED1D6C3D98E9730A /* Info.plist */,
 				DF83D8A3D5241D7D38A0C6B0 /* MeeshyNotificationExtension.entitlements */,
 			);
-			name = MeeshyNotificationExtension;
 			path = MeeshyNotificationExtension;
 			sourceTree = "<group>";
 		};
@@ -612,7 +610,6 @@
 			children = (
 				D228B0D1B6B950E7D7B2CA3D /* Onboarding */,
 			);
-			name = Auth;
 			path = Auth;
 			sourceTree = "<group>";
 		};
@@ -637,7 +634,6 @@
 				DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */,
 				6B4592BA9A00EF9FA3BBEE07 /* OnboardingFlowView.swift */,
 			);
-			name = Onboarding;
 			path = Onboarding;
 			sourceTree = "<group>";
 		};
@@ -817,9 +813,8 @@
 			mainGroup = 4B839730A63FC9359E52BECF;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */,
+				AABB001100220055 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
-			preferredProjectObjectVersion = 77;
 			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -1068,6 +1063,7 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Widgets Dev";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1161,6 +1157,8 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1242,6 +1240,8 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1270,6 +1270,7 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev Notifications";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1303,6 +1304,7 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyNotificationExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Notifications";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1337,6 +1339,7 @@
 				DEVELOPMENT_TEAM = J2LP6UE7JQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MeeshyWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Widgets";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1444,7 +1447,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AABB001100220055 /* XCLocalSwiftPackageReference "MeeshySDK" */ = {
+		AABB001100220055 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../packages/MeeshySDK;
 		};

@@ -5,13 +5,11 @@ import MeeshySDK
 // MARK: - Story Canvas View
 
 public struct StoryCanvasView: View {
-    @Binding public var text: String
-    @Binding public var textStyle: StoryTextStyle
-    @Binding public var textColor: Color
-    @Binding public var textSize: CGFloat
-    @Binding public var textBgEnabled: Bool
-    @Binding public var textAlignment: TextAlignment
-    @Binding public var textPosition: StoryTextPosition
+    // Text objects (multi-texte)
+    @Binding public var textObjects: [StoryTextObject]
+    public let onSelectText: ((String) -> Void)?
+    public let onEditText: ((String) -> Void)?
+
     @Binding public var stickerObjects: [StorySticker]
     @Binding public var selectedFilter: StoryFilter?
     @Binding public var drawingData: Data?
@@ -40,11 +38,13 @@ public struct StoryCanvasView: View {
     @State private var filteredImage: UIImage?
     /// Dernier média tapé — affiché au premier plan (z-index le plus élevé).
     @State private var lastTappedMediaId: String? = nil
+    /// Dernier texte tapé — affiché au premier plan.
+    @State private var lastTappedTextId: String? = nil
 
-    public init(text: Binding<String>, textStyle: Binding<StoryTextStyle>,
-                textColor: Binding<Color>, textSize: Binding<CGFloat>,
-                textBgEnabled: Binding<Bool>, textAlignment: Binding<TextAlignment>,
-                textPosition: Binding<StoryTextPosition>, stickerObjects: Binding<[StorySticker]>,
+    public init(textObjects: Binding<[StoryTextObject]>,
+                onSelectText: ((String) -> Void)? = nil,
+                onEditText: ((String) -> Void)? = nil,
+                stickerObjects: Binding<[StorySticker]>,
                 selectedFilter: Binding<StoryFilter?>, drawingData: Binding<Data?>,
                 isDrawingActive: Binding<Bool>, backgroundColor: Binding<Color>,
                 selectedImage: Binding<UIImage?>, drawingCanvas: Binding<PKCanvasView>,
@@ -57,10 +57,10 @@ public struct StoryCanvasView: View {
                 loadedAudioURLs: Binding<[String: URL]> = .constant([:]),
                 onSelectMedia: ((String) -> Void)? = nil,
                 onBackgroundTap: (() -> Void)? = nil) {
-        self._text = text; self._textStyle = textStyle
-        self._textColor = textColor; self._textSize = textSize
-        self._textBgEnabled = textBgEnabled; self._textAlignment = textAlignment
-        self._textPosition = textPosition; self._stickerObjects = stickerObjects
+        self._textObjects = textObjects
+        self.onSelectText = onSelectText
+        self.onEditText = onEditText
+        self._stickerObjects = stickerObjects
         self._selectedFilter = selectedFilter; self._drawingData = drawingData
         self._isDrawingActive = isDrawingActive; self._backgroundColor = backgroundColor
         self._selectedImage = selectedImage
@@ -86,7 +86,7 @@ public struct StoryCanvasView: View {
 
                 drawingLayer
 
-                textLayer(canvasSize: geo.size)
+                textObjectsLayer
 
                 stickerLayer(canvasSize: geo.size)
 
@@ -196,48 +196,27 @@ public struct StoryCanvasView: View {
         )
     }
 
-    // MARK: - Text Layer
+    // MARK: - Text Objects Layer (multi-texte draggable)
 
     @ViewBuilder
-    private func textLayer(canvasSize: CGSize) -> some View {
-        if !text.isEmpty && !isDrawingActive {
-            draggableTextView(canvasSize: canvasSize)
-        }
-    }
-
-    private func draggableTextView(canvasSize: CGSize) -> some View {
-        let posX = textPosition.x * canvasSize.width
-        let posY = textPosition.y * canvasSize.height
-
-        return styledTextView
-            .position(x: posX, y: posY)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newX = max(0.05, min(0.95, value.location.x / canvasSize.width))
-                        let newY = max(0.05, min(0.95, value.location.y / canvasSize.height))
-                        textPosition = StoryTextPosition(x: newX, y: newY)
-                    }
-            )
-    }
-
-    private var styledTextView: some View {
-        Text(text)
-            .font(storyFont(for: textStyle, size: textSize))
-            .foregroundColor(textColor)
-            .multilineTextAlignment(textAlignment)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Group {
-                    if textBgEnabled {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.5))
-                    }
+    private var textObjectsLayer: some View {
+        if !isDrawingActive {
+            ForEach($textObjects) { $obj in
+                if !obj.content.isEmpty {
+                    DraggableTextObjectView(
+                        textObject: $obj,
+                        isEditing: true,
+                        onTapToFront: {
+                            lastTappedTextId = obj.id
+                            onSelectText?(obj.id)
+                        },
+                        onDoubleTap: { onEditText?(obj.id) },
+                        onDragEnd: {}
+                    )
+                    .zIndex(obj.id == lastTappedTextId ? 1 : 0)
                 }
-            )
-            .shadow(color: textStyle == .neon ? textColor.opacity(0.6) : .clear, radius: 10)
-            .frame(maxWidth: 280)
+            }
+        }
     }
 
     // MARK: - Sticker Layer
@@ -263,15 +242,6 @@ public struct StoryCanvasView: View {
 
     @ViewBuilder
     private var foregroundMediaLayer: some View {
-        // Use .zIndex() for z-ordering instead of reordering the source array.
-        // Array reordering causes ForEach to destroy and recreate views,
-        // which kills active @GestureState and produces jerky drag.
-        // With .zIndex(), SwiftUI keeps stable view identity and just
-        // paints in the correct order.
-        //
-        // ForEach($mediaObjects) gives each child a Binding<StoryMediaObject>
-        // keyed by StoryMediaObject.id — stable identity, direct binding
-        // (no inline Binding(get:set:) with captured indices).
         ForEach($mediaObjects) { $obj in
             if obj.placement == "foreground" {
                 DraggableMediaView(

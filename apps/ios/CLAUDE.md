@@ -117,13 +117,64 @@ MediaCacheManager.shared    // Disk caching
 - `@Environment(\.dismiss)` for back navigation (replaces custom `onBack` callbacks)
 - Native iOS swipe-to-back gesture (replaces custom DragGesture)
 
-## Design System
-- Colors: Pink (#FF2E63), Cyan (#08D9D6), Purple (#A855F7)
-- Glass UI: `.ultraThinMaterial` + subtle borders
+## Design System & Visual Identity
+
+### Brand Identity — Indigo
+The Meeshy brand is built on an **Indigo gradient** (`#6366F1` -> `#4338CA`), derived from the logo.
+- **Light mode logo**: Indigo gradient background + white stacked-dashes icon
+- **Dark mode logo**: Black background + Indigo gradient stacked-dashes icon
+- The gradient is THE signature — used for CTAs, hero elements, and logo treatments
+
+### Brand Color Scale (Indigo)
+| Token | Hex | Role |
+|-------|-----|------|
+| `indigo50` | `#EEF2FF` | Tinted backgrounds (light) |
+| `indigo100` | `#E0E7FF` | Hover/pressed states (light) |
+| `indigo200` | `#C7D2FE` | Borders, subtle UI (light) |
+| `indigo300` | `#A5B4FC` | Secondary elements |
+| `indigo400` | `#818CF8` | Interactive elements (light) |
+| **`indigo500`** | **`#6366F1`** | **Primary — gradient start** |
+| `indigo600` | `#4F46E5` | Hovered primary |
+| **`indigo700`** | **`#4338CA`** | **Primary deep — gradient end** |
+| `indigo800` | `#3730A3` | Pressed states |
+| `indigo900` | `#312E81` | Deep accents |
+| `indigo950` | `#1E1B4B` | Darkest brand surface |
+
+### Semantic State Colors
+| Token | Hex | Usage |
+|-------|-----|-------|
+| `success` | `#34D399` | Sent, online, confirmed |
+| `warning` | `#FBBF24` | Attention, pending |
+| `error` | `#F87171` | Error, failure, disconnected |
+| `info` | `#60A5FA` | Information, help |
+| `readReceipt` | `#818CF8` | Read indicator (indigo400) |
+
+### Theme Colors
+**Light mode**: White/indigo-tinted backgrounds, indigo950 text, indigo200 borders
+**Dark mode**: Near-black with indigo tint backgrounds, indigo50 text, indigo900 borders
+
+### UI Components
+- Glass UI: `.ultraThinMaterial` + indigo-tinted borders
 - View modifiers: `.glassCard()`, `.pressable()`, `.shimmer()`, `.pulse()`
 - Haptics: `HapticFeedback.light()`, `.medium()`, `.success()`, `.error()`
 - Animations: `.spring(response: 0.4-0.7, dampingFraction: 0.6-0.8)`
 - Staggered delays: 0.04-0.05s per list item index
+
+### Color Migration (Legacy -> New)
+Old code uses deprecated aliases that map to the new palette:
+| Old | New | Notes |
+|-----|-----|-------|
+| `MeeshyColors.pink` | `MeeshyColors.indigo500` | Brand primary |
+| `MeeshyColors.coral` | `MeeshyColors.error` | Error/destructive |
+| `MeeshyColors.cyan` | `MeeshyColors.indigo400` | Interactive |
+| `MeeshyColors.purple` | `MeeshyColors.indigo600` | Hovered primary |
+| `MeeshyColors.teal` | `MeeshyColors.indigo300` | Secondary |
+| `MeeshyColors.green` | `MeeshyColors.success` | Success state |
+| `MeeshyColors.orange` | `MeeshyColors.warning` | Warning state |
+| `MeeshyColors.infoBlue` | `MeeshyColors.info` | Info state |
+| `MeeshyColors.primaryGradient` | `MeeshyColors.brandGradient` | Signature gradient |
+
+New code MUST use the Indigo scale or semantic names. Legacy aliases are `@available(*, deprecated)`.
 
 ## Prisme Linguistique — Implementation iOS
 

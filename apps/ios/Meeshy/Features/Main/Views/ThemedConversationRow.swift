@@ -18,6 +18,7 @@ struct ThemedConversationRow: View {
     var onCreateShareLink: (() -> Void)? = nil
     var onCommunityTap: (() -> Void)? = nil
 
+    @Environment(\.swipeProgress) private var swipeProgress
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
@@ -188,7 +189,7 @@ struct ThemedConversationRow: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(
-                    isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06),
+                    isDark ? Color.white.opacity(0.06 * (1 - swipeProgress)) : Color.black.opacity(0.06 * (1 - swipeProgress)),
                     lineWidth: 0.5
                 )
         )

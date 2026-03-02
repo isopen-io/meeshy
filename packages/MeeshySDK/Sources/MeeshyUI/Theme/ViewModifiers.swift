@@ -270,7 +270,7 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.avatarRingGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
+    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.brandGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
         modifier(GlowingBorder(gradient: gradient, cornerRadius: cornerRadius, lineWidth: lineWidth))
     }
 

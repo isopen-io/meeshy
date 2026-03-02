@@ -118,6 +118,51 @@ Le SDK fournit les types API et la communication temps reel pour le prisme lingu
 
 **Resolution** : La logique de resolution de langue preferee est dans le ViewModel de l'app (pas dans le SDK). Le SDK fournit les donnees brutes, l'app decide de l'affichage.
 
+## Visual Identity — Indigo Brand
+
+The Meeshy brand identity is built on an **Indigo gradient** derived from the logo SVGs.
+
+### Logo
+- **Light mode**: Gradient background (`#6366F1` -> `#4338CA`) + white stacked-dashes icon
+- **Dark mode**: Black background (`#000000`) + gradient stacked-dashes icon (`#6366F1` -> `#4338CA`)
+- Icon: Three horizontal lines of decreasing length, left-aligned, rounded caps
+
+### Brand Color System (`MeeshyUI/Theme/MeeshyColors.swift`)
+```
+Indigo Scale (the full palette):
+  indigo50  #EEF2FF   indigo100 #E0E7FF   indigo200 #C7D2FE
+  indigo300 #A5B4FC   indigo400 #818CF8   indigo500 #6366F1  <- primary
+  indigo600 #4F46E5   indigo700 #4338CA  <- primary deep
+  indigo800 #3730A3   indigo900 #312E81   indigo950 #1E1B4B
+
+Semantic: success=#34D399  error=#F87171  warning=#FBBF24  info=#60A5FA
+```
+
+### Gradients
+- **`brandGradient`**: `#6366F1` -> `#4338CA` (top-leading -> bottom-trailing) — THE signature
+- **`brandGradientLight`**: `#818CF8` -> `#6366F1` — secondary elements
+- **`brandGradientSubtle`**: indigo300@30% -> indigo500@30% — tinted backgrounds
+- **`avatarRingGradient`**: indigo500 -> indigo400 -> indigo500 — avatar borders
+
+### Theme Colors (`MeeshyUI/Theme/ThemeManager.swift`)
+| Token | Dark | Light |
+|-------|------|-------|
+| `backgroundPrimary` | `#09090B` | `#FFFFFF` |
+| `backgroundSecondary` | `#13111C` | `#F8F7FF` |
+| `backgroundTertiary` | `#1E1B4B` | `#EEF2FF` |
+| `textPrimary` | `#EEF2FF` | `#1E1B4B` |
+| `textSecondary` | `#A5B4FC` | `#4338CA@60%` |
+| `textMuted` | `#818CF8@50%` | `#6366F1@40%` |
+| `inputBackground` | `#16142A` | `#F5F3FF` |
+| `inputBorder` | `#312E81@60%` | `#C7D2FE` |
+
+### Rules
+1. The Indigo gradient is sacred — always `#6366F1` -> `#4338CA`
+2. New code MUST use `indigo50`-`indigo950` or semantic names (`success`, `error`, etc.)
+3. Legacy aliases (`pink`, `coral`, `cyan`, `teal`, etc.) are `@available(*, deprecated)` — do not use
+4. Glass effects use `.ultraThinMaterial` tinted with Indigo, not neutral
+5. Ambient orbs use Indigo family colors (indigo500, indigo700, indigo400, indigo300)
+
 ## Conventions
 
 ### Nommage

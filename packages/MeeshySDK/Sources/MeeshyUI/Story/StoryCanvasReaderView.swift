@@ -112,7 +112,7 @@ public struct StoryCanvasReaderView: View {
                 }
             } else if bgMedia.mediaType == "video" {
                 if let urlStr = mediaURL(for: bgMedia.postMediaId),
-                   let url = URL(string: urlStr) {
+                   let url = MeeshyConfig.resolveMediaURL(urlStr) {
                     let player = state.ensureBackgroundVideoPlayer(url: url)
                     VideoPlayer(player: player)
                         .disabled(true)
@@ -130,12 +130,20 @@ public struct StoryCanvasReaderView: View {
         } else if let legacyMedia = story.media.first,
                   let urlStr = legacyMedia.url {
             // Fallback : média legacy de StoryItem.media (format pré-composer V2)
-            CachedAsyncImage(url: urlStr) {
-                Color.clear
+            if legacyMedia.type == .video, let url = MeeshyConfig.resolveMediaURL(urlStr) {
+                let player = state.ensureBackgroundVideoPlayer(url: url)
+                VideoPlayer(player: player)
+                    .disabled(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                CachedAsyncImage(url: urlStr) {
+                    Color.clear
+                }
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
             }
-            .scaledToFill()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
         }
     }
 
@@ -183,16 +191,18 @@ public struct StoryCanvasReaderView: View {
         }
     }
 
-    // MARK: - Legacy text (position exacte normalisée, format pré-textObjects)
+    // MARK: - Legacy text (format pré-textObjects — affiché seulement si textObjects vide)
 
     @ViewBuilder
     private func textLayer(size: CGSize) -> some View {
-        let resolvedContent = story.resolvedContent(preferredLanguage: preferredLanguage)
-        if let content = resolvedContent, !content.isEmpty {
-            let effects = story.storyEffects
-            let pos = effects?.resolvedTextPosition ?? .center
-            styledText(content: content, effects: effects)
-                .position(x: pos.x * size.width, y: pos.y * size.height)
+        if state.textObjects.isEmpty {
+            let resolvedContent = story.resolvedContent(preferredLanguage: preferredLanguage)
+            if let content = resolvedContent, !content.isEmpty {
+                let effects = story.storyEffects
+                let pos = effects?.resolvedTextPosition ?? .center
+                styledText(content: content, effects: effects)
+                    .position(x: pos.x * size.width, y: pos.y * size.height)
+            }
         }
     }
 
@@ -226,22 +236,39 @@ public struct StoryCanvasReaderView: View {
             .frame(maxWidth: 280)
     }
 
-    // MARK: - Text Objects Layer (Composer V2 — multi-texte avec traductions)
+    // MARK: - Text Objects Layer (multi-texte avec styles per-objet + traductions)
 
     @ViewBuilder
     private func textObjectsLayer(size: CGSize) -> some View {
         let lang = preferredLanguage ?? Locale.current.language.languageCode?.identifier ?? "en"
         ForEach(state.textObjects) { obj in
-            Text(resolvedText(for: obj, userLang: lang))
-                .font(.system(size: 22 * obj.scale, weight: .semibold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
+            let content = resolvedText(for: obj, userLang: lang)
+            let style = obj.parsedTextStyle
+            let colorHex = obj.textColor ?? "FFFFFF"
+            let fontSize = obj.resolvedSize
+            let alignment: TextAlignment = {
+                switch obj.textAlign {
+                case "left": return .leading
+                case "right": return .trailing
+                default: return .center
+                }
+            }()
+            Text(content)
+                .font(storyFont(for: style, size: fontSize * obj.scale))
+                .foregroundColor(Color(hex: colorHex))
+                .multilineTextAlignment(alignment)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.black.opacity(0.4))
+                    Group {
+                        if obj.hasBg {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.black.opacity(0.4))
+                        }
+                    }
                 )
+                .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
+                .frame(maxWidth: 280)
                 .rotationEffect(.degrees(obj.rotation))
                 .position(x: obj.x * size.width, y: obj.y * size.height)
                 .allowsHitTesting(false)
@@ -350,7 +377,14 @@ private final class ReaderState: ObservableObject {
     private var targetBackgroundVolume: Float = 0.5
 
     init(story: StoryItem) {
-        self.textObjects = story.storyEffects?.textObjects ?? []
+        // Migrate legacy text → textObjects si nécessaire
+        var objects = story.storyEffects?.textObjects ?? []
+        if objects.isEmpty, let content = story.content, !content.isEmpty {
+            var effects = story.storyEffects ?? StoryEffects()
+            effects.migrateLegacyText(content: content)
+            objects = effects.textObjects ?? []
+        }
+        self.textObjects = objects
         NotificationCenter.default.addObserver(forName: .storyAudioFadeOut, object: nil, queue: .main) { [weak self] _ in
             self?.fadeOutThenStop()
         }
@@ -496,33 +530,51 @@ private final class ReaderState: ObservableObject {
         let videoObjects = mediaObjects.filter { $0.placement == "foreground" && $0.mediaType == "video" }
         for media in videoObjects {
             // Asset préchargé localement (mode preview) — priorité sur le réseau.
-            let url: URL?
             if let preloaded = preloadedVideoURLs[media.id] {
-                url = preloaded
-            } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url {
-                url = MeeshyConfig.resolveMediaURL(urlString)
-            } else {
-                url = nil
+                createAndStartVideoPlayer(for: media.id, url: preloaded)
+            } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
+                      let resolved = MeeshyConfig.resolveMediaURL(urlString) {
+                // Télécharger via MediaCacheManager pour contourner les erreurs de Content-Type serveur,
+                // puis jouer depuis un fichier local temporaire.
+                Task {
+                    do {
+                        let data = try await MediaCacheManager.shared.data(for: resolved.absoluteString)
+                        let ext = resolved.pathExtension.isEmpty ? "mov" : resolved.pathExtension
+                        let tempURL = FileManager.default.temporaryDirectory
+                            .appendingPathComponent("story_video_\(media.id).\(ext)")
+                        try data.write(to: tempURL, options: .atomic)
+                        await MainActor.run {
+                            self.createAndStartVideoPlayer(for: media.id, url: tempURL)
+                        }
+                    } catch {
+                        NSLog("[StoryReader] Failed to download video for %@: %@", media.id, error.localizedDescription)
+                        // Fallback : essayer directement avec l'URL réseau (fonctionne si serveur renvoie le bon Content-Type)
+                        await MainActor.run {
+                            self.createAndStartVideoPlayer(for: media.id, url: resolved)
+                        }
+                    }
+                }
             }
-            guard let url else { continue }
-
-            let player = AVPlayer(url: url)
-            player.isMuted = false
-            player.volume = 0.2  // Démarrer à 20%
-            foregroundVideoPlayers[media.id] = player
-
-            let obs = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: player.currentItem,
-                queue: .main
-            ) { [weak player] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
-            foregroundLoopObservers[media.id] = obs
-            player.play()
-            fadeVolume(player: player, from: 0.2, to: 1.0, duration: 1.0)
         }
+    }
+
+    private func createAndStartVideoPlayer(for mediaId: String, url: URL) {
+        let player = AVPlayer(url: url)
+        player.isMuted = false
+        player.volume = 0.2
+        foregroundVideoPlayers[mediaId] = player
+
+        let obs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
+        foregroundLoopObservers[mediaId] = obs
+        player.play()
+        fadeVolume(player: player, from: 0.2, to: 1.0, duration: 1.0)
     }
 
     // MARK: Background video (stored to avoid re-creation on every render)
@@ -560,16 +612,7 @@ private final class ReaderState: ObservableObject {
     private func applyTranslationUpdate(index: Int, translations: [String: String]) {
         guard index < textObjects.count else { return }
         let existing = textObjects[index].translations ?? [:]
-        let merged = existing.merging(translations) { _, new in new }
-        textObjects[index] = StoryTextObject(
-            id: textObjects[index].id,
-            content: textObjects[index].content,
-            x: textObjects[index].x,
-            y: textObjects[index].y,
-            scale: textObjects[index].scale,
-            rotation: textObjects[index].rotation,
-            translations: merged
-        )
+        textObjects[index].translations = existing.merging(translations) { _, new in new }
     }
 }
 
