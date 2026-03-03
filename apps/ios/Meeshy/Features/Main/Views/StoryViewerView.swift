@@ -233,6 +233,7 @@ struct StoryViewerView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
+                    .id("out-\(outgoing.id)")
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -245,6 +246,7 @@ struct StoryViewerView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
+                    .id(story.id)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)

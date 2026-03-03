@@ -9,8 +9,8 @@ struct SelectionGlowModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .shadow(
-                color: isSelected ? Color(hex: "#6366F1").opacity(0.6) : .clear,
-                radius: isSelected ? 8 : 0
+                color: isSelected ? Color(hex: "#6366F1").opacity(0.25) : .clear,
+                radius: isSelected ? 4 : 0
             )
             .animation(.easeInOut(duration: 0.2), value: isSelected)
     }

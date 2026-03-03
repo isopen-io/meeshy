@@ -135,9 +135,13 @@ public struct DraggableMediaView: View {
                     y: currentY * canvasHeight + dragOffset.height
                 )
                 .highPriorityGesture(TapGesture().onEnded { _ in onTapToFront?() })
-                .gesture(dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight))
-                .simultaneousGesture(pinchGesture)
-                .simultaneousGesture(rotateGesture)
+                // Combined primary gesture — claims touch exclusively, preventing
+                // parent canvas gestures from firing when touching this element.
+                .gesture(
+                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+                        .simultaneously(with: pinchGesture)
+                        .simultaneously(with: rotateGesture)
+                )
                 .overlay {
                     if isVideoElement, activePlayer != nil {
                         videoPlayPauseOverlay
@@ -300,8 +304,9 @@ public struct DraggableMediaView: View {
             player.play()
         }
         loopObserver = observer as AnyObject
-        player.play()
-        isPlaying = true
+        // Do NOT autoplay in composer — user must tap play explicitly.
+        player.pause()
+        isPlaying = false
     }
 
     private func teardownInternalPlayer() {

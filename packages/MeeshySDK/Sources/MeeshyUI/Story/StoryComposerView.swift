@@ -92,12 +92,21 @@ public struct StoryComposerView: View {
     @State private var showPublishError = false
     @State private var publishTask: Task<Void, Never>?
 
-    // MARK: - Canvas viewport (pinch-to-zoom only, no drag — avoids conflicts with drawing/elements)
+    // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
     @GestureState private var viewportPinchDelta: CGFloat = 1.0
+    @GestureState private var viewportDragDelta: CGSize = .zero
 
-    private var isViewportGestureEnabled: Bool {
-        viewModel.activeTool == nil && viewModel.selectedElementId == nil
+    /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
+    /// For all other modes, child element gestures naturally take priority via SwiftUI's
+    /// gesture hierarchy (.gesture on child beats .gesture on parent).
+    private var isCanvasGestureEnabled: Bool {
+        !viewModel.isDrawingActive
+    }
+
+    /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
+    private var isPanEnabled: Bool {
+        viewModel.isCanvasZoomed
     }
 
     private var viewportPinchGesture: some Gesture {
@@ -109,8 +118,28 @@ public struct StoryComposerView: View {
                 let newScale = min(4.0, max(0.5, viewModel.canvasScale * value.magnification))
                 withAnimation(.spring(response: 0.2)) {
                     viewModel.canvasScale = newScale
+                    if newScale <= 1.0 { viewModel.canvasOffset = .zero }
                 }
             }
+    }
+
+    private var viewportDragGesture: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .updating($viewportDragDelta) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                viewModel.canvasOffset = CGSize(
+                    width: viewModel.canvasOffset.width + value.translation.width,
+                    height: viewModel.canvasOffset.height + value.translation.height
+                )
+            }
+    }
+
+    /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
+    /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
+    private var showTopBar: Bool {
+        !viewModel.isCanvasZoomed || viewModel.activeTool != nil || viewModel.selectedElementId != nil
     }
 
     // MARK: - UI state
@@ -165,8 +194,15 @@ public struct StoryComposerView: View {
                     viewModel.selectedElementId = id
                 }
             )
-            .scaleEffect(viewModel.canvasScale * (isViewportGestureEnabled ? viewportPinchDelta : 1.0))
-            .gesture(isViewportGestureEnabled ? viewportPinchGesture : nil)
+            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
+            .offset(
+                x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                y: viewModel.canvasOffset.height + viewportDragDelta.height
+            )
+            // .gesture (not .highPriority/.simultaneous) — child element gestures
+            // naturally take priority. Canvas gestures only fire on empty areas.
+            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay {
                 if isLoadingMedia {
                     Color.black.opacity(0.3)
@@ -187,18 +223,24 @@ public struct StoryComposerView: View {
                             .frame(width: 30, height: 30)
                             .background(Circle().fill(.black.opacity(0.5)))
                     }
-                    .padding(.top, 70)
+                    // When top bar is hidden, move button up to safe area top
+                    .padding(.top, showTopBar ? 70 : 16)
                     .padding(.trailing, 12)
                     .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(response: 0.3), value: showTopBar)
                 }
             }
             .ignoresSafeArea()
 
-            // Top bar
+            // Top bar — auto-hides during canvas zoom to reveal canvas controls
             VStack(spacing: 0) {
-                topBar
+                if showTopBar {
+                    topBar
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 Spacer()
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
 
             // Bottom: toolbar + active panel
             VStack(spacing: 0) {
@@ -617,23 +659,31 @@ public struct StoryComposerView: View {
 
     @ViewBuilder
     private var textPanel: some View {
-        if let selectedId = viewModel.selectedElementId,
-           let binding = textObjectBinding(for: selectedId) {
-            StoryTextEditorView(
-                textObject: binding,
-                onDelete: { viewModel.deleteElement(id: selectedId) }
-            )
-        } else {
-            Button {
-                viewModel.addText()
-                HapticFeedback.light()
-            } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "textformat").font(.system(size: 28, weight: .light))
-                    Text("Ajouter du texte").font(.system(size: 14, weight: .medium))
+        VStack(spacing: 0) {
+            if let selectedId = viewModel.selectedElementId,
+               let binding = textObjectBinding(for: selectedId) {
+                StoryTextEditorView(
+                    textObject: binding,
+                    onDelete: { viewModel.deleteElement(id: selectedId) }
+                )
+            }
+
+            // Add text button — always visible when under limit
+            if viewModel.canAddText {
+                Button {
+                    viewModel.addText()
+                    HapticFeedback.light()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(viewModel.selectedElementId != nil ? "Autre texte" : "Ajouter du texte")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
                 }
-                .foregroundColor(.white.opacity(0.5))
-                .frame(maxWidth: .infinity, minHeight: 60)
             }
         }
     }

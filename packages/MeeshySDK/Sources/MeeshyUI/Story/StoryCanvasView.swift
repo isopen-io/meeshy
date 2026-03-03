@@ -65,6 +65,35 @@ struct StoryCanvasView: View {
     private var isFrontToolActive: Bool { viewModel.isFrontToolActive }
     private var isDrawingActive: Bool { viewModel.isDrawingActive }
 
+    private func isElementVisible(startTime: Float?, duration: Float?) -> Bool {
+        guard viewModel.isTimelinePlaying else { return true }
+        let t = viewModel.timelinePlaybackTime
+        let start = startTime ?? 0
+        guard t >= start else { return false }
+        if let dur = duration {
+            return t <= start + dur
+        }
+        return true
+    }
+
+    private func elementOpacity(startTime: Float?, duration: Float?, fadeIn: Float?, fadeOut: Float?) -> Double {
+        guard viewModel.isTimelinePlaying else { return 1.0 }
+        let t = viewModel.timelinePlaybackTime
+        let start = startTime ?? 0
+        let dur = duration ?? (viewModel.currentSlideDuration - start)
+        let end = start + dur
+
+        guard t >= start, t <= end else { return 0.0 }
+
+        if let fi = fadeIn, fi > 0, t < start + fi {
+            return Double((t - start) / fi)
+        }
+        if let fo = fadeOut, fo > 0, t > end - fo {
+            return Double((end - t) / fo)
+        }
+        return 1.0
+    }
+
     private var bgColor: Color {
         Color(hex: viewModel.backgroundColor)
     }
@@ -80,11 +109,14 @@ struct StoryCanvasView: View {
                 // Layer 1: Background image/video (gesture-manipulable)
                 backgroundMediaLayer
 
-                // Layer 2: Drawing overlay (PKCanvasView)
+                // Layer 2: Drawing overlay (PKCanvasView — UIKit via UIViewRepresentable)
                 drawingLayer
 
                 // Layers 3-N: Front elements (text, stickers, media, audio)
+                // Explicit zIndex ensures SwiftUI front content renders above
+                // UIKit-backed drawing layer (UIViewRepresentable can break ZStack order).
                 frontElementsGroup(canvasSize: geo.size)
+                    .zIndex(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(
@@ -100,6 +132,8 @@ struct StoryCanvasView: View {
             .onTapGesture {
                 handleEmptyCanvasTap()
             }
+            .onAppear { viewModel.canvasSize = geo.size }
+            .onChange(of: geo.size) { _, newSize in viewModel.canvasSize = newSize }
         }
         .onAppear {
             updateFilteredImage()
@@ -235,7 +269,7 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func textObjectsLayer(interactive: Bool) -> some View {
         ForEach(textObjects, id: \.id) { obj in
-            if !obj.content.isEmpty {
+            if !obj.content.isEmpty, isElementVisible(startTime: obj.startTime, duration: obj.displayDuration) {
                 DraggableTextObjectView(
                     textObject: textObjectBinding(for: obj.id),
                     isEditing: interactive,
@@ -250,6 +284,7 @@ struct StoryCanvasView: View {
                     },
                     onDragEnd: {}
                 )
+                .opacity(elementOpacity(startTime: obj.startTime, duration: obj.displayDuration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
                 .selectionGlow(viewModel.selectedElementId == obj.id)
                 .canvasContextMenu(
                     elementId: obj.id,
@@ -286,36 +321,39 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func foregroundMediaLayer(interactive: Bool) -> some View {
         ForEach(mediaObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
-            DraggableMediaView(
-                mediaObject: mediaObjectBinding(for: obj.id),
-                image: viewModel.loadedImages[obj.id],
-                videoURL: viewModel.loadedVideoURLs[obj.id],
-                isEditing: interactive,
-                onDragEnd: {},
-                onTapToFront: {
-                    viewModel.selectedElementId = obj.id
-                    viewModel.bringToFront(id: obj.id)
-                    HapticFeedback.light()
+            if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
+                DraggableMediaView(
+                    mediaObject: mediaObjectBinding(for: obj.id),
+                    image: viewModel.loadedImages[obj.id],
+                    videoURL: viewModel.loadedVideoURLs[obj.id],
+                    isEditing: interactive,
+                    onDragEnd: {},
+                    onTapToFront: {
+                        viewModel.selectedElementId = obj.id
+                        viewModel.bringToFront(id: obj.id)
+                        HapticFeedback.light()
+                    }
+                )
+                .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
+                .overlay(alignment: .bottomLeading) {
+                    if obj.mediaType == "video" {
+                        videoPlayBadge
+                    }
                 }
-            )
-            .overlay(alignment: .bottomLeading) {
-                if obj.mediaType == "video" {
-                    videoPlayBadge
-                }
+                .selectionGlow(viewModel.selectedElementId == obj.id)
+                .canvasContextMenu(
+                    elementId: obj.id,
+                    elementType: obj.mediaType == "video" ? .video : .image,
+                    viewModel: viewModel
+                )
+                .highPriorityGesture(
+                    TapGesture(count: 2).onEnded {
+                        viewModel.selectedElementId = obj.id
+                        onEditMedia?(obj.id)
+                    }
+                )
+                .zIndex(Double(viewModel.zIndex(for: obj.id)))
             }
-            .selectionGlow(viewModel.selectedElementId == obj.id)
-            .canvasContextMenu(
-                elementId: obj.id,
-                elementType: obj.mediaType == "video" ? .video : .image,
-                viewModel: viewModel
-            )
-            .highPriorityGesture(
-                TapGesture(count: 2).onEnded {
-                    viewModel.selectedElementId = obj.id
-                    onEditMedia?(obj.id)
-                }
-            )
-            .zIndex(Double(viewModel.zIndex(for: obj.id)))
         }
     }
 
@@ -324,23 +362,26 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func foregroundAudioLayer(interactive: Bool) -> some View {
         ForEach(audioPlayerObjects.filter({ $0.placement == "foreground" }), id: \.id) { obj in
-            StoryAudioPlayerView(
-                audioObject: audioObjectBinding(for: obj.id),
-                url: viewModel.loadedAudioURLs[obj.id],
-                isEditing: interactive,
-                onDragEnd: {}
-            )
-            .selectionGlow(viewModel.selectedElementId == obj.id)
-            .canvasContextMenu(
-                elementId: obj.id,
-                elementType: .audio,
-                viewModel: viewModel
-            )
-            .simultaneousGesture(TapGesture().onEnded {
-                viewModel.selectedElementId = obj.id
-                viewModel.bringToFront(id: obj.id)
-            })
-            .zIndex(Double(viewModel.zIndex(for: obj.id)))
+            if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
+                StoryAudioPlayerView(
+                    audioObject: audioObjectBinding(for: obj.id),
+                    url: viewModel.loadedAudioURLs[obj.id],
+                    isEditing: interactive,
+                    onDragEnd: {}
+                )
+                .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
+                .selectionGlow(viewModel.selectedElementId == obj.id)
+                .canvasContextMenu(
+                    elementId: obj.id,
+                    elementType: .audio,
+                    viewModel: viewModel
+                )
+                .simultaneousGesture(TapGesture().onEnded {
+                    viewModel.selectedElementId = obj.id
+                    viewModel.bringToFront(id: obj.id)
+                })
+                .zIndex(Double(viewModel.zIndex(for: obj.id)))
+            }
         }
     }
 

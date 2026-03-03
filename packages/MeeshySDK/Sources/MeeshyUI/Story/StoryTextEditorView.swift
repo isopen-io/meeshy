@@ -3,213 +3,327 @@ import MeeshySDK
 
 // MARK: - Story Text Editor View
 
+/// Hierarchical text editor panel with collapsible sections.
+/// Shows text input + quick actions by default, expandable sections for styling.
 public struct StoryTextEditorView: View {
     @Binding public var textObject: StoryTextObject
     public let onDelete: (() -> Void)?
 
-    @State private var isEditing = false
     @FocusState private var isFocused: Bool
+    @State private var expandedSection: TextEditorSection?
 
     public init(textObject: Binding<StoryTextObject>, onDelete: (() -> Void)? = nil) {
         self._textObject = textObject
         self.onDelete = onDelete
     }
 
-    // Derived bindings into textObject fields
-    private var textBinding: Binding<String> {
+    public var body: some View {
+        VStack(spacing: 0) {
+            textInputRow
+            quickActions
+            sectionPicker
+            expandedSectionContent
+        }
+    }
+
+    // MARK: - Text Input
+
+    private var textInputRow: some View {
+        HStack(spacing: 8) {
+            TextField("Saisissez votre texte...", text: contentBinding, axis: .vertical)
+                .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 20)))
+                .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
+                .multilineTextAlignment(resolvedAlignment)
+                .focused($isFocused)
+                .lineLimit(1...4)
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(MeeshyColors.indigo400.opacity(isFocused ? 0.6 : 0.2), lineWidth: 1)
+                        )
+                )
+
+            if let onDelete {
+                Button {
+                    onDelete()
+                    HapticFeedback.medium()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Quick Actions (always visible)
+
+    private var quickActions: some View {
+        HStack(spacing: 10) {
+            // Font style cycle
+            Button {
+                cycleStyle()
+                HapticFeedback.light()
+            } label: {
+                Text("Aa")
+                    .font(storyFont(for: textObject.parsedTextStyle, size: 14))
+                    .foregroundColor(.white)
+                    .frame(width: 34, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+            }
+
+            // Alignment cycle
+            Button {
+                cycleAlignment()
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: alignmentIcon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 34, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+            }
+
+            // Background toggle
+            Button {
+                textObject.textBg = textObject.hasBg ? nil : "000000"
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: textObject.hasBg ? "a.square.fill" : "a.square")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(textObject.hasBg ? MeeshyColors.brandPrimary : .white.opacity(0.5))
+                    .frame(width: 34, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+            }
+
+            Spacer()
+
+            // Current color dot (tap to expand color section)
+            Button {
+                toggleSection(.color)
+            } label: {
+                Circle()
+                    .fill(Color(hex: textObject.textColor ?? "FFFFFF"))
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1.5))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Section Picker
+
+    private var sectionPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                sectionTab(.style, label: "Style", icon: "textformat")
+                sectionTab(.color, label: "Couleur", icon: "paintpalette")
+                sectionTab(.size, label: "Taille", icon: "textformat.size")
+                sectionTab(.timing, label: "Timing", icon: "clock")
+            }
+            .padding(.horizontal, 14)
+        }
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func sectionTab(_ section: TextEditorSection, label: String, icon: String) -> some View {
+        let isActive = expandedSection == section
+        Button {
+            toggleSection(section)
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(isActive ? .white : .white.opacity(0.5))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(isActive ? MeeshyColors.brandPrimary.opacity(0.8) : Color.white.opacity(0.08))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Expanded Section Content
+
+    @ViewBuilder
+    private var expandedSectionContent: some View {
+        if let section = expandedSection {
+            Group {
+                switch section {
+                case .style: styleSection
+                case .color: colorSection
+                case .size: sizeSection
+                case .timing: timingSection
+                }
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .padding(.top, 4)
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Style Section
+
+    private var styleSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextStyle.allCases, id: \.self) { style in
+                    let isSelected = textObject.parsedTextStyle == style
+                    Button {
+                        textObject.textStyle = style.rawValue
+                        HapticFeedback.light()
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text("Aa")
+                                .font(storyFont(for: style, size: 18))
+                                .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                                .frame(width: 52, height: 40)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.1))
+                                )
+                            Text(style.displayName)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(isSelected ? .white : .white.opacity(0.4))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    // MARK: - Color Section
+
+    private var colorSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(StoryTextColors.palette, id: \.self) { hex in
+                    let isSelected = (textObject.textColor ?? "FFFFFF") == hex
+                    Button {
+                        textObject.textColor = hex
+                        HapticFeedback.light()
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Circle().stroke(Color.white, lineWidth: isSelected ? 2.5 : 0).padding(1)
+                            )
+                            .scaleEffect(isSelected ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.2), value: isSelected)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    // MARK: - Size Section
+
+    private var sizeSection: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "textformat.size.smaller")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.4))
+
+            Slider(value: sizeBinding, in: 14...60, step: 1)
+                .tint(MeeshyColors.brandPrimary)
+
+            Image(systemName: "textformat.size.larger")
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.4))
+
+            Text("\(Int(textObject.resolvedSize))")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 28)
+        }
+        .padding(.horizontal, 14)
+    }
+
+    // MARK: - Timing Section
+
+    private var timingSection: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                timingField(label: "Debut", value: startTimeBinding, range: 0...30, unit: "s")
+                timingField(label: "Duree", value: durationBinding, range: 0...30, unit: "s")
+            }
+            HStack(spacing: 12) {
+                timingField(label: "Fondu in", value: fadeInBinding, range: 0...5, unit: "s")
+                timingField(label: "Fondu out", value: fadeOutBinding, range: 0...5, unit: "s")
+            }
+        }
+        .padding(.horizontal, 14)
+    }
+
+    @ViewBuilder
+    private func timingField(label: String, value: Binding<Float>, range: ClosedRange<Float>, unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.4))
+            HStack(spacing: 4) {
+                Slider(value: value, in: range, step: 0.5)
+                    .tint(MeeshyColors.indigo400)
+                Text("\(String(format: "%.1f", value.wrappedValue))\(unit)")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(width: 32)
+            }
+        }
+    }
+
+    // MARK: - Bindings
+
+    private var contentBinding: Binding<String> {
         Binding(get: { textObject.content }, set: { textObject.content = $0 })
     }
 
-    private var styleBinding: Binding<StoryTextStyle> {
-        Binding(
-            get: { textObject.parsedTextStyle },
-            set: { textObject.textStyle = $0.rawValue }
-        )
-    }
-
     private var sizeBinding: Binding<CGFloat> {
-        Binding(
-            get: { textObject.resolvedSize },
-            set: { textObject.textSize = $0 }
-        )
+        Binding(get: { textObject.resolvedSize }, set: { textObject.textSize = $0 })
     }
 
-    private var colorHex: String { textObject.textColor ?? "FFFFFF" }
+    private var startTimeBinding: Binding<Float> {
+        Binding(get: { textObject.startTime ?? 0 }, set: { textObject.startTime = $0 > 0 ? $0 : nil })
+    }
 
-    private var alignment: TextAlignment {
+    private var durationBinding: Binding<Float> {
+        Binding(get: { textObject.displayDuration ?? 0 }, set: { textObject.displayDuration = $0 > 0 ? $0 : nil })
+    }
+
+    private var fadeInBinding: Binding<Float> {
+        Binding(get: { textObject.fadeIn ?? 0 }, set: { textObject.fadeIn = $0 > 0 ? $0 : nil })
+    }
+
+    private var fadeOutBinding: Binding<Float> {
+        Binding(get: { textObject.fadeOut ?? 0 }, set: { textObject.fadeOut = $0 > 0 ? $0 : nil })
+    }
+
+    // MARK: - Helpers
+
+    private var resolvedAlignment: TextAlignment {
         switch textObject.textAlign {
         case "left": return .leading
         case "right": return .trailing
         default: return .center
-        }
-    }
-
-    private var bgEnabled: Bool { textObject.hasBg }
-
-    public var body: some View {
-        VStack(spacing: 16) {
-            if isEditing {
-                textInputArea
-                textControls
-            } else {
-                textPreview
-            }
-        }
-    }
-
-    // MARK: - Text Preview (tap to edit)
-
-    private var textPreview: some View {
-        Group {
-            if textObject.content.isEmpty {
-                Button {
-                    isEditing = true
-                    isFocused = true
-                    HapticFeedback.light()
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: "textformat")
-                            .font(.system(size: 28, weight: .light))
-                        Text("Add text")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, minHeight: 60)
-                }
-            } else {
-                styledText
-                    .onTapGesture {
-                        isEditing = true
-                        isFocused = true
-                    }
-            }
-        }
-    }
-
-    // MARK: - Styled Text Display
-
-    private var styledText: some View {
-        Text(textObject.content)
-            .font(storyFont(for: textObject.parsedTextStyle, size: textObject.resolvedSize))
-            .foregroundColor(Color(hex: colorHex))
-            .multilineTextAlignment(alignment)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Group {
-                    if bgEnabled {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.5))
-                    }
-                }
-            )
-            .shadow(color: textObject.parsedTextStyle == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
-    }
-
-    // MARK: - Text Input Area
-
-    private var textInputArea: some View {
-        VStack(spacing: 8) {
-            TextField("Type something...", text: textBinding, axis: .vertical)
-                .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 24)))
-                .foregroundColor(Color(hex: colorHex))
-                .multilineTextAlignment(alignment)
-                .focused($isFocused)
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                )
-                .lineLimit(1...6)
-
-            HStack(spacing: 12) {
-                Button {
-                    isEditing = false
-                    isFocused = false
-                    HapticFeedback.light()
-                } label: {
-                    Text("Done")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().fill(Color(hex: "FF2E63"))
-                        )
-                }
-
-                if let onDelete {
-                    Button {
-                        onDelete()
-                        HapticFeedback.medium()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.red.opacity(0.8))
-                            .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-
-    // MARK: - Text Controls
-
-    private var textControls: some View {
-        VStack(spacing: 12) {
-            FontStylePicker(selectedStyle: styleBinding)
-
-            HStack(spacing: 16) {
-                sizeSlider
-                alignmentToggle
-                bgToggle
-            }
-            .padding(.horizontal, 16)
-
-            colorRow
-        }
-    }
-
-    private var sizeSlider: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "textformat.size.smaller")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.5))
-
-            Slider(value: sizeBinding, in: 14...60) {
-                Text("Text size")
-            }
-            .tint(Color(hex: "FF2E63"))
-
-            Image(systemName: "textformat.size.larger")
-                .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var alignmentToggle: some View {
-        Button {
-            withAnimation(.spring(response: 0.2)) {
-                switch textObject.textAlign {
-                case "left": textObject.textAlign = "center"
-                case "center": textObject.textAlign = "right"
-                default: textObject.textAlign = "left"
-                }
-            }
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: alignmentIcon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.12)))
         }
     }
 
@@ -221,43 +335,33 @@ public struct StoryTextEditorView: View {
         }
     }
 
-    private var bgToggle: some View {
-        Button {
-            withAnimation(.spring(response: 0.2)) {
-                textObject.textBg = textObject.hasBg ? nil : "000000"
-            }
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: bgEnabled ? "a.square.fill" : "a.square")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(bgEnabled ? Color(hex: "FF2E63") : .white.opacity(0.5))
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.12)))
+    private func cycleStyle() {
+        let all = StoryTextStyle.allCases
+        let current = textObject.parsedTextStyle
+        let idx = all.firstIndex(of: current) ?? 0
+        let next = all[(idx + 1) % all.count]
+        textObject.textStyle = next.rawValue
+    }
+
+    private func cycleAlignment() {
+        switch textObject.textAlign {
+        case "left": textObject.textAlign = "center"
+        case "center": textObject.textAlign = "right"
+        default: textObject.textAlign = "left"
         }
     }
 
-    private var colorRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(StoryTextColors.palette, id: \.self) { hex in
-                    Button {
-                        textObject.textColor = hex
-                        HapticFeedback.light()
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: colorHex == hex ? 2.5 : 0)
-                                    .padding(1)
-                            )
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
+    private func toggleSection(_ section: TextEditorSection) {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            expandedSection = expandedSection == section ? nil : section
         }
     }
+}
+
+// MARK: - Section Enum
+
+private enum TextEditorSection {
+    case style, color, size, timing
 }
 
 // MARK: - Story Text Colors

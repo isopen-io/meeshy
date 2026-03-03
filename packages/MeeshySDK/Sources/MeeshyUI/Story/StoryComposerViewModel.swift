@@ -32,9 +32,6 @@ enum StoryToolGroup: String {
     case fond, front, plus
 }
 
-enum TimelineMode: String {
-    case simple, advanced
-}
 
 // MARK: - Canvas Element Protocol
 
@@ -118,16 +115,54 @@ final class StoryComposerViewModel {
     // MARK: - Timeline
 
     var isTimelineVisible: Bool = false
-    var timelineMode: TimelineMode = .simple
+    var timelinePlaybackTime: Float = 0
+    var isTimelinePlaying: Bool = false
+    var timelineZoomScale: CGFloat = 1.0
+    var timelineScrollOffset: CGFloat = 0
+
+    // MARK: - Slide Duration
+
+    var currentSlideDuration: Float {
+        get { Float(currentSlide.duration) }
+        set {
+            let clamped = max(2, min(30, newValue))
+            var slide = currentSlide
+            slide.duration = TimeInterval(clamped)
+            currentSlide = slide
+        }
+    }
+
+    func autoExtendDuration(forElementEnd end: Float) {
+        if end > currentSlideDuration {
+            currentSlideDuration = min(30, end + 0.5)
+        }
+    }
 
     // MARK: - Canvas Viewport
 
     var canvasScale: CGFloat = 1.0
+    var canvasOffset: CGSize = .zero
+    var canvasSize: CGSize = .zero
 
     var isCanvasZoomed: Bool { canvasScale != 1.0 }
 
     func resetCanvasZoom() {
         canvasScale = 1.0
+        canvasOffset = .zero
+    }
+
+    /// Returns the normalized (0-1) canvas position corresponding to the current viewport center.
+    /// When zoomed/panned, new elements should appear at the visible center, not at (0.5, 0.5).
+    func viewportCenter() -> CGPoint {
+        guard canvasSize.width > 0, canvasSize.height > 0, canvasScale > 0 else {
+            return CGPoint(x: 0.5, y: 0.5)
+        }
+        let nx = 0.5 - canvasOffset.width / (canvasScale * canvasSize.width)
+        let ny = 0.5 - canvasOffset.height / (canvasScale * canvasSize.height)
+        return CGPoint(
+            x: max(0.05, min(0.95, nx)),
+            y: max(0.05, min(0.95, ny))
+        )
     }
 
     // MARK: - UI State
@@ -221,10 +256,11 @@ final class StoryComposerViewModel {
     @discardableResult
     func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
+        let center = viewportCenter()
         let obj = StoryTextObject(
             content: "",
-            x: 0.5,
-            y: 0.5,
+            x: center.x,
+            y: center.y,
             scale: 1.0,
             rotation: 0,
             textStyle: "classic",
@@ -245,12 +281,13 @@ final class StoryComposerViewModel {
     @discardableResult
     func addMediaObject(type: String, placement: String = "foreground") -> StoryMediaObject? {
         guard canAddMedia else { return nil }
+        let center = viewportCenter()
         let obj = StoryMediaObject(
             postMediaId: "",
             mediaType: type,
             placement: placement,
-            x: 0.5,
-            y: 0.5,
+            x: center.x,
+            y: center.y,
             scale: 1.0,
             rotation: 0,
             volume: 1.0
@@ -267,11 +304,12 @@ final class StoryComposerViewModel {
     @discardableResult
     func addAudioObject(placement: String = "foreground") -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
+        let center = viewportCenter()
         let obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: placement,
-            x: 0.5,
-            y: 0.8,
+            x: center.x,
+            y: min(0.9, center.y + 0.15),
             volume: 1.0,
             waveformSamples: []
         )
@@ -397,7 +435,10 @@ final class StoryComposerViewModel {
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
         isTimelineVisible = false
-        timelineMode = .simple
+        timelinePlaybackTime = 0
+        isTimelinePlaying = false
+        timelineZoomScale = 1.0
+        timelineScrollOffset = 0
         showPhotoPicker = false
         showVideoPicker = false
         showAudioPicker = false
@@ -405,6 +446,7 @@ final class StoryComposerViewModel {
         errorMessage = nil
         showDraftAlert = false
         canvasScale = 1.0
+        canvasOffset = .zero
         zIndexMap = [:]
         nextZIndex = 1
     }

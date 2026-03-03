@@ -77,9 +77,13 @@ public struct DraggableTextObjectView: View {
                 )
                 .highPriorityGesture(TapGesture(count: 2).onEnded { onDoubleTap() })
                 .highPriorityGesture(TapGesture().onEnded { onTapToFront() })
-                .gesture(dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight))
-                .simultaneousGesture(pinchGesture)
-                .simultaneousGesture(rotateGesture)
+                // Combined primary gesture — claims touch exclusively, preventing
+                // parent canvas gestures from firing when touching this element.
+                .gesture(
+                    dragGesture(canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+                        .simultaneously(with: pinchGesture)
+                        .simultaneously(with: rotateGesture)
+                )
         } else {
             styledTextContent
                 .scaleEffect(currentScale)
