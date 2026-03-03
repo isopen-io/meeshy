@@ -1020,9 +1020,8 @@ export function registerMessagesRoutes(
       },
       body: {
         type: 'object',
-        required: ['content'],
         properties: {
-          content: { type: 'string', description: 'Message content', minLength: 1 },
+          content: { type: 'string', description: 'Message content' },
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
