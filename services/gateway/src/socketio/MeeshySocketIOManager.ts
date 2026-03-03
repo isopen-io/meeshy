@@ -3073,22 +3073,16 @@ export class MeeshySocketIOManager {
         }
       }
 
-      // Créer une notification pour chaque membre (sauf l'expéditeur, les utilisateurs mentionnés ET l'auteur du message original en cas de réponse)
-      for (const member of conversationMembers) {
-        // Ne pas envoyer de notification de message générique aux utilisateurs mentionnés
-        // Ils recevront une notification de mention plus spécifique
-        if (mentionedUserIds.has(member.userId)) {
-          logger.info(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (mentionné)`);
-          continue;
-        }
+      // Filtrer les destinataires (exclure mentionnés et auteur du message original)
+      const recipients = conversationMembers.filter(member => {
+        if (mentionedUserIds.has(member.userId)) return false;
+        if (originalMessageAuthorId && member.userId === originalMessageAuthorId) return false;
+        return true;
+      });
 
-        // Ne pas envoyer de notification de message générique à l'auteur du message original
-        // Il recevra une notification de réponse spécifique
-        if (originalMessageAuthorId && member.userId === originalMessageAuthorId) {
-          logger.info(`📢 [NOTIFICATIONS] Skip notification générique pour ${member.userId} (auteur du message original)`);
-          continue;
-        }
+      logger.info(`📢 [NOTIFICATIONS] Génération de ${recipients.length} notification(s) pour le message ${message.id} dans la conversation ${message.conversationId} (${conversationMembers.length} membres, ${mentionedUserIds.size} mentionné(s), sender exclu)`);
 
+      for (const member of recipients) {
         await this.notificationService.createMessageNotification({
           recipientUserId: member.userId,
           senderId: message.senderId || '',

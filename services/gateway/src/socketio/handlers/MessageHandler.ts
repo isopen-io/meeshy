@@ -602,6 +602,8 @@ export class MessageHandler {
         select: { userId: true }
       });
 
+      console.log(`[NOTIFICATIONS] Génération de ${members.length} notification(s) pour le message ${messageId} dans la conversation ${conversationId}`);
+
       await Promise.all(members.map(member =>
         this.notificationService.createMessageNotification({
           recipientUserId: member.userId,
@@ -611,8 +613,6 @@ export class MessageHandler {
           messagePreview,
         })
       ));
-
-      console.log(`[NOTIFICATIONS] Created ${members.length} notifications for message ${messageId}`);
     } catch (error) {
       console.error('[NOTIFICATIONS] Error creating message notifications:', error);
     }

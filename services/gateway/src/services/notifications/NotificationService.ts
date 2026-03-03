@@ -228,47 +228,14 @@ export class NotificationService {
         } as any, // Cast global pour compilation avant régénération Prisma
       });
 
+      const formatted = this.formatNotification(notification);
+
       // Émettre via Socket.IO
-      notificationLogger.info('🔍 [SOCKET.IO] Tentative d\'émission notification', {
-        hasIo: !!this.io,
-        ioType: this.io ? typeof this.io : 'undefined',
-        userId: params.userId,
-        notificationId: notification.id,
-      });
-
       if (this.io) {
-        // DEBUG: Vérifier les sockets dans la room
-        const socketsInRoom = this.io.sockets.adapter.rooms.get(params.userId);
-        const socketCount = socketsInRoom ? socketsInRoom.size : 0;
-
-        notificationLogger.info('🔍 [SOCKET.IO] État de la room avant émission', {
-          roomName: params.userId,
-          socketsInRoom: socketCount,
-          allRooms: Array.from(this.io.sockets.adapter.rooms.keys()).slice(0, 10),
-        });
-
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, this.formatForSocket(notification));
-        notificationLogger.info('📤 [SOCKET.IO] Notification émise', {
-          userId: params.userId,
-          notificationId: notification.id,
-          event: SERVER_EVENTS.NOTIFICATION_NEW,
-          socketsInRoom: socketCount,
-          warningIfZero: socketCount === 0 ? '⚠️ AUCUN socket dans la room!' : undefined,
-        });
-      } else {
-        notificationLogger.error('❌ [SOCKET.IO] this.io est undefined - notification NON émise !', {
-          userId: params.userId,
-          notificationId: notification.id,
-        });
+        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
       }
 
-      notificationLogger.info('Notification created', {
-        notificationId: notification.id,
-        userId: params.userId,
-        type: params.type,
-      });
-
-      return this.formatNotification(notification);
+      return formatted;
     } catch (error) {
       notificationLogger.error('Failed to create notification', {
         error,
@@ -344,30 +311,9 @@ export class NotificationService {
    * Formate une notification DB → API
    */
   private formatNotification(raw: any): Notification {
-    // Debug: Log AVANT sanitize pour voir ce que Prisma envoie
-    notificationLogger.info('🔍 formatNotification AVANT sanitize', {
-      notificationId: raw.id,
-      rawCreatedAt: raw.createdAt,
-      typeofCreatedAt: typeof raw.createdAt,
-      isDate: raw.createdAt instanceof Date,
-      toISOString: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : 'N/A',
-      rawJSON: JSON.stringify({ createdAt: raw.createdAt, readAt: raw.readAt, expiresAt: raw.expiresAt }),
-    });
-
-    // Sanitize les dates - PAS de fallback new Date() !
     const readAtDate = this.sanitizeDate(raw.readAt, null);
     const createdAtDate = this.sanitizeDate(raw.createdAt, null);
     const expiresAtDate = this.sanitizeDate(raw.expiresAt, null);
-
-    // Debug: Log si createdAt est null/invalide
-    if (!createdAtDate) {
-      notificationLogger.error('❌ Notification createdAt est null après sanitize', {
-        notificationId: raw.id,
-        rawCreatedAt: raw.createdAt,
-        typeofCreatedAt: typeof raw.createdAt,
-        rawCreatedAtValue: raw.createdAt?.toString(),
-      });
-    }
 
     return {
       id: raw.id,
@@ -391,13 +337,6 @@ export class NotificationService {
 
       delivery: (raw.delivery || { emailSent: false, pushSent: false }) as any,
     } as any; // Cast pour compilation avant régénération Prisma
-  }
-
-  /**
-   * Formate pour Socket.IO (même structure)
-   */
-  private formatForSocket(raw: any): Notification {
-    return this.formatNotification(raw);
   }
 
   // ==============================================
