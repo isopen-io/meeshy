@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -8,6 +8,7 @@ import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 import { useAuthActions } from '@/stores';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
+import { requestBrowserGeolocation, getGeolocationHeaders } from '@/lib/geolocation';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { User } from '@/types';
 import type { JoinConversationResponse } from '@/types/frontend';
@@ -35,6 +36,15 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
   const { setUser, setTokens } = useAuthActions();
   const { t } = useI18n('auth');
   const sharedIdentifier = useAuthFormStore(state => state.identifier);
+
+  // Request browser geolocation on mount (non-blocking)
+  const geoRequested = useRef(false);
+  useEffect(() => {
+    if (!geoRequested.current) {
+      geoRequested.current = true;
+      requestBrowserGeolocation();
+    }
+  }, []);
 
   // Create a stable login function
   const login = useCallback((user: User, token: string, sessionToken?: string, expiresIn?: number) => {
@@ -173,7 +183,10 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
 
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getGeolocationHeaders(),
+        },
         body: JSON.stringify(requestBody),
       });
 

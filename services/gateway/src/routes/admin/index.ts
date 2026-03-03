@@ -8,6 +8,7 @@ import { messagesRoutes } from './messages';
 import { registerRoleRoutes } from './roles';
 import { registerContentRoutes } from './content';
 import { dashboardRoutes } from './dashboard';
+import { systemRankingsRoutes } from './system-rankings';
 
 /**
  * Point d'entrée principal pour toutes les routes d'administration
@@ -24,6 +25,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(messagesRoutes);
   await fastify.register(registerRoleRoutes);
   await fastify.register(registerContentRoutes);
+  await fastify.register(systemRankingsRoutes);
 }
 
 // Re-export des sous-routes pour imports directs
@@ -36,3 +38,4 @@ export { languagesRoutes } from './languages';
 export { messagesRoutes } from './messages';
 export { registerRoleRoutes } from './roles';
 export { registerContentRoutes } from './content';
+export { systemRankingsRoutes } from './system-rankings';

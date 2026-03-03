@@ -103,8 +103,9 @@ export function useRankingData({ entityType, criterion, period, limit }: UseRank
       console.log('[Ranking] Response received:', response);
 
       if (response.success && response.data) {
-        const responseData = response.data as { rankings?: unknown[] };
-        const rankings = responseData.rankings;
+        const rawData = response.data as Record<string, unknown>;
+        const innerData = (rawData.data ?? rawData) as Record<string, unknown>;
+        const rankings = innerData.rankings;
 
         if (Array.isArray(rankings)) {
           const rankedData = rankings.map((item: any, index: number) => ({

@@ -214,37 +214,6 @@ export function UserSecuritySection({
           </Button>
         </div>
 
-        {/* Device & Login Info */}
-        {(user.lastLoginIp || user.lastLoginDevice || user.lastLoginLocation) && (
-          <div className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
-            <h4 className="font-semibold text-sm mb-3 dark:text-gray-100">Dernière connexion</h4>
-
-            <div className="space-y-2 text-sm">
-              {user.lastLoginIp && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Adresse IP:</span>
-                  <span className="font-mono text-xs font-medium dark:text-gray-200">
-                    {user.lastLoginIp}
-                  </span>
-                </div>
-              )}
-              {user.lastLoginLocation && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Localisation:</span>
-                  <span className="font-medium dark:text-gray-200">{user.lastLoginLocation}</span>
-                </div>
-              )}
-              {user.lastLoginDevice && (
-                <div className="flex flex-col space-y-1">
-                  <span className="text-gray-600 dark:text-gray-400 text-xs">Appareil:</span>
-                  <span className="font-mono text-xs text-gray-900 dark:text-gray-200 break-all">
-                    {user.lastLoginDevice}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

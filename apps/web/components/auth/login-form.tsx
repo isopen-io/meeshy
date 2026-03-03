@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
+import { requestBrowserGeolocation, getGeolocationHeaders } from '@/lib/geolocation';
 
 interface LoginFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -32,6 +33,15 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Request browser geolocation on mount (non-blocking)
+  const geoRequested = useRef(false);
+  useEffect(() => {
+    if (!geoRequested.current) {
+      geoRequested.current = true;
+      requestBrowserGeolocation();
+    }
+  }, []);
 
   // Initialize username from shared store
   useEffect(() => {
@@ -85,6 +95,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getGeolocationHeaders(),
         },
         body: JSON.stringify({
           username: formData.username.trim(),

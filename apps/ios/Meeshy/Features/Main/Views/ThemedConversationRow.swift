@@ -185,12 +185,12 @@ struct ThemedConversationRow: View {
                 }
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous)
                 .strokeBorder(
                     isDark ? Color.white.opacity(0.06 * (1 - swipeProgress)) : Color.black.opacity(0.06 * (1 - swipeProgress)),
-                    lineWidth: 0.5
+                    lineWidth: 0.5 * (1 - swipeProgress)
                 )
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)

@@ -142,9 +142,21 @@ export interface FullUser {
   deletedAt: Date | null;
   deletedBy: string | null;
   profileCompletionRate: number | null;
+  phoneCountryCode: string | null;
+  timezone: string | null;
   lastPasswordChange: Date | null;
   failedLoginAttempts: number | null;
   lockedUntil: Date | null;
+  lockedReason: string | null;
+  twoFactorEnabledAt: Date | null;
+  twoFactorBackupCodes: string[];
+  lastLoginIp: string | null;
+  lastLoginLocation: string | null;
+  lastLoginDevice: string | null;
+  registrationIp: string | null;
+  registrationLocation: string | null;
+  registrationDevice: string | null;
+  registrationCountry: string | null;
   userFeature?: UserFeatureData | null;
   _count?: {
     sentMessages?: number;
@@ -187,18 +199,37 @@ export interface PublicUser {
 export interface AdminUser extends PublicUser {
   email: string;
   phoneNumber: string | null;
+  phoneCountryCode: string | null;
+  timezone: string | null;
   systemLanguage: string;
   regionalLanguage: string;
   customDestinationLanguage: string | null;
   lastPasswordChange: Date | null;
   failedLoginAttempts: number | null;
   lockedUntil: Date | null;
+  lockedReason: string | null;
+  twoFactorEnabledAt: Date | null;
+  twoFactorBackupCodes: string[];
+  lastLoginIp: string | null;
+  lastLoginLocation: string | null;
+  lastLoginDevice: string | null;
+  registrationIp: string | null;
+  registrationLocation: string | null;
+  registrationDevice: string | null;
+  registrationCountry: string | null;
   deletedAt: Date | null;
   deletedBy: string | null;
   userFeature?: UserFeatureData | null;
   _count?: {
     sentMessages?: number;
     conversations?: number;
+    createdShareLinks?: number;
+    createdTrackingLinks?: number;
+    createdAffiliateTokens?: number;
+    affiliateRelations?: number;
+    referredRelations?: number;
+    sentFriendRequests?: number;
+    receivedFriendRequests?: number;
   };
 }
 

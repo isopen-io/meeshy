@@ -17,7 +17,11 @@ import {
   Users as UsersIcon,
   Activity,
   Shield,
-  Calendar
+  Calendar,
+  Link2,
+  Target,
+  UserPlus,
+  Share2
 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { adminService, type User as AdminUserType } from '@/services/admin.service';
@@ -28,6 +32,8 @@ import { UserPersonalInfoSection } from '@/components/admin/user-detail/UserPers
 import { UserContactInfoSection } from '@/components/admin/user-detail/UserContactInfoSection';
 import { UserLanguageSection } from '@/components/admin/user-detail/UserLanguageSection';
 import { UserSecuritySection } from '@/components/admin/user-detail/UserSecuritySection';
+import { UserGeolocationSection } from '@/components/admin/user-detail/UserGeolocationSection';
+import { UserActivitySection } from '@/components/admin/user-detail/UserActivitySection';
 
 interface AdminApiResponse<T> {
   success: boolean;
@@ -294,6 +300,10 @@ export default function UserDetailPage() {
               onResetPassword={() => setPasswordReset({ ...passwordReset, open: true })}
             />
 
+            <UserGeolocationSection user={user} />
+
+            <UserActivitySection userId={userId} />
+
             {/* Gestion du rôle */}
             <Card className="dark:bg-gray-900 dark:border-gray-800">
               <CardHeader>
@@ -391,6 +401,36 @@ export default function UserDetailPage() {
                     Conversations
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.conversations || 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Liens de partage
+                  </span>
+                  <span className="font-medium dark:text-gray-200">{user._count?.createdShareLinks || 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center">
+                    <Target className="h-4 w-4 mr-2" />
+                    Liens trackés
+                  </span>
+                  <span className="font-medium dark:text-gray-200">{user._count?.createdTrackingLinks || 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center">
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Tokens affiliation
+                  </span>
+                  <span className="font-medium dark:text-gray-200">{user._count?.createdAffiliateTokens || 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400 flex items-center">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Contacts
+                  </span>
+                  <span className="font-medium dark:text-gray-200">
+                    {(user._count?.sentFriendRequests || 0) + (user._count?.receivedFriendRequests || 0)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-sm pt-2 border-t dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">

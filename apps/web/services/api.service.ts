@@ -1,4 +1,5 @@
 import { buildApiUrl } from '@/lib/config';
+import { getGeolocationHeaders } from '@/lib/geolocation';
 import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
 import type { ApiResponse, ApiError } from '@meeshy/shared/types';
@@ -126,11 +127,15 @@ class ApiService {
     token: string | null,
     customHeaders?: Record<string, string>
   ): Record<string, string> {
-    // Si headers custom, ne pas utiliser le cache
-    if (customHeaders) {
+    const geoHeaders = getGeolocationHeaders();
+    const hasGeo = Object.keys(geoHeaders).length > 0;
+
+    // Si headers custom ou geo headers present, ne pas utiliser le cache
+    if (customHeaders || hasGeo) {
       return {
         ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...geoHeaders,
         ...customHeaders,
       };
     }

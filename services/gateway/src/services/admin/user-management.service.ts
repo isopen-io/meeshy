@@ -110,7 +110,14 @@ export class UserManagementService {
         _count: {
           select: {
             sentMessages: true,
-            conversations: true
+            conversations: true,
+            createdShareLinks: true,
+            createdTrackingLinks: true,
+            createdAffiliateTokens: true,
+            affiliateRelations: true,
+            referredRelations: true,
+            sentFriendRequests: true,
+            receivedFriendRequests: true,
           }
         }
       }

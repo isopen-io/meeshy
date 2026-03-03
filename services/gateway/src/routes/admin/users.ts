@@ -1186,4 +1186,137 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
   });
+
+  /**
+   * GET /admin/users/:userId/activity - Detailed links, affiliates, contacts for a user
+   */
+  fastify.get<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/activity', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+
+      const [shareLinks, trackingLinks, affiliateTokens, sentRequests, receivedRequests] = await Promise.all([
+        fastify.prisma.conversationShareLink.findMany({
+          where: { createdBy: userId },
+          select: {
+            id: true,
+            linkId: true,
+            identifier: true,
+            name: true,
+            description: true,
+            maxUses: true,
+            currentUses: true,
+            maxConcurrentUsers: true,
+            currentConcurrentUsers: true,
+            isActive: true,
+            expiresAt: true,
+            createdAt: true,
+            conversation: {
+              select: { id: true, identifier: true }
+            },
+            _count: {
+              select: { anonymousParticipants: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+
+        fastify.prisma.trackingLink.findMany({
+          where: { createdBy: userId },
+          select: {
+            id: true,
+            token: true,
+            name: true,
+            campaign: true,
+            source: true,
+            medium: true,
+            originalUrl: true,
+            shortUrl: true,
+            totalClicks: true,
+            uniqueClicks: true,
+            isActive: true,
+            expiresAt: true,
+            createdAt: true,
+            lastClickedAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+
+        fastify.prisma.affiliateToken.findMany({
+          where: { createdBy: userId },
+          select: {
+            id: true,
+            token: true,
+            name: true,
+            maxUses: true,
+            currentUses: true,
+            clickCount: true,
+            isActive: true,
+            expiresAt: true,
+            createdAt: true,
+            _count: {
+              select: { affiliations: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+
+        fastify.prisma.friendRequest.findMany({
+          where: { senderId: userId },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            receiver: {
+              select: { id: true, username: true, displayName: true, avatar: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+
+        fastify.prisma.friendRequest.findMany({
+          where: { receiverId: userId },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            sender: {
+              select: { id: true, username: true, displayName: true, avatar: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+      ]);
+
+      reply.send({
+        success: true,
+        data: {
+          shareLinks,
+          trackingLinks,
+          affiliateTokens,
+          contacts: {
+            sent: sentRequests,
+            received: receivedRequests,
+          },
+        },
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user activity');
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+        message: 'Failed to fetch user activity'
+      });
+    }
+  });
 }
