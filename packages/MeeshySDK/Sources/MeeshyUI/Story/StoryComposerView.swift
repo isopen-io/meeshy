@@ -261,10 +261,8 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $audioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
-                onConfirm: { url, _, trimS, trimE in
-                    selectedAudioId = url.lastPathComponent
-                    selectedAudioTitle = "Enregistrement"
-                    audioTrimStart = trimS; audioTrimEnd = trimE
+                onConfirm: { url, _, _, _ in
+                    addRecordingToBackground(url: url)
                     audioEditorItem = nil
                 },
                 onDismiss: { audioEditorItem = nil }
@@ -584,7 +582,7 @@ public struct StoryComposerView: View {
                 }
                 if selectedImage != nil {
                     Button {
-                        withAnimation(.spring(response: 0.25)) { selectedImage = nil }
+                        withAnimation(.spring(response: 0.25)) { selectedImage = nil; viewModel.hasBackgroundImage = false }
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundColor(.white.opacity(0.5))
@@ -598,7 +596,7 @@ public struct StoryComposerView: View {
                     ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
                         Button {
                             viewModel.backgroundColor = "#\(hex)"
-                            selectedImage = nil
+                            selectedImage = nil; viewModel.hasBackgroundImage = false
                             HapticFeedback.light()
                         } label: {
                             Circle().fill(Color(hex: hex)).frame(width: 36, height: 36)
@@ -644,6 +642,7 @@ public struct StoryComposerView: View {
     // MARK: - Background Audio Panel
 
     private var bgAudioPanel: some View {
+        VStack(spacing: 0) {
         StoryAudioPanel(
             selectedAudioId: $selectedAudioId,
             selectedAudioTitle: $selectedAudioTitle,
@@ -653,6 +652,54 @@ public struct StoryComposerView: View {
             }
         )
         .frame(maxHeight: 280)
+
+        // Show existing background audio objects with timeline shortcut
+        let bgAudios = viewModel.currentEffects.audioPlayerObjects?.filter { $0.placement == "background" } ?? []
+        if !bgAudios.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(bgAudios, id: \.id) { audio in
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(MeeshyColors.indigo400)
+                        Text("Enregistrement")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Button {
+                            viewModel.selectedElementId = audio.id
+                            viewModel.selectTool(.timeline)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "timeline.selection")
+                                    .font(.system(size: 9, weight: .semibold))
+                                Text("Timeline")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundStyle(MeeshyColors.indigo400)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(MeeshyColors.indigo400.opacity(0.15)))
+                        }
+                        Button {
+                            viewModel.deleteElement(id: audio.id)
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(MeeshyColors.error)
+                                .frame(width: 28, height: 28)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+        }
+        } // VStack bgAudioPanel
     }
 
     // MARK: - Text Panel
@@ -853,6 +900,7 @@ public struct StoryComposerView: View {
         if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
         else { viewModel.backgroundColor = "#0F0C29" }
         selectedImage = viewModel.slideImages[slide.id]
+        viewModel.hasBackgroundImage = selectedImage != nil
         stickerObjects = e.stickerObjects ?? []
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
         openingEffect = e.opening
@@ -899,6 +947,7 @@ public struct StoryComposerView: View {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else { return }
             selectedImage = image
+            viewModel.hasBackgroundImage = true
             viewModel.setImage(image, for: viewModel.currentSlide.id)
         }
     }
@@ -963,6 +1012,22 @@ public struct StoryComposerView: View {
                     }
                 }
                 confirmedMediaAudioURL = nil
+            }
+        }
+    }
+
+    private func addRecordingToBackground(url: URL) {
+        Task {
+            let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            await MainActor.run {
+                if let obj = viewModel.addAudioObject(placement: "background") {
+                    viewModel.loadedAudioURLs[obj.id] = url
+                    var effects = viewModel.currentEffects
+                    if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
+                        effects.audioPlayerObjects?[idx].waveformSamples = samples
+                        viewModel.currentEffects = effects
+                    }
+                }
             }
         }
     }

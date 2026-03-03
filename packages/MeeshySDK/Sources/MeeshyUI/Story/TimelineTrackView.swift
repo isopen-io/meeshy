@@ -4,12 +4,13 @@ import MeeshySDK
 // MARK: - Track Type
 
 enum TrackType: String {
-    case bgVideo, bgImage, bgAudio, fgImage, fgVideo, fgAudio, text
+    case bgVideo, bgImage, drawing, bgAudio, fgImage, fgVideo, fgAudio, text
 
     var icon: String {
         switch self {
         case .bgVideo:  return "tv.fill"
         case .bgImage:  return "photo.fill"
+        case .drawing:  return "pencil.tip"
         case .bgAudio:  return "music.note"
         case .fgImage:  return "photo"
         case .fgVideo:  return "video.fill"
@@ -22,6 +23,7 @@ enum TrackType: String {
         switch self {
         case .bgVideo:  return MeeshyColors.indigo700
         case .bgImage:  return MeeshyColors.indigo600
+        case .drawing:  return MeeshyColors.indigo500
         case .bgAudio:  return MeeshyColors.indigo500
         case .fgImage:  return MeeshyColors.indigo400
         case .fgVideo:  return MeeshyColors.indigo400
@@ -34,11 +36,12 @@ enum TrackType: String {
         switch self {
         case .bgVideo:  return 0
         case .bgImage:  return 1
-        case .bgAudio:  return 2
-        case .fgImage:  return 3
-        case .fgVideo:  return 4
-        case .fgAudio:  return 5
-        case .text:     return 6
+        case .drawing:  return 2
+        case .bgAudio:  return 3
+        case .fgImage:  return 4
+        case .fgVideo:  return 5
+        case .fgAudio:  return 6
+        case .text:     return 7
         }
     }
 }
@@ -141,7 +144,7 @@ struct TimelineTrackBar: View {
                 videoFrameStrip(barWidth: barWidth)
             }
 
-            if track.type == .fgImage || track.type == .bgImage {
+            if track.type == .fgImage || track.type == .bgImage || track.type == .drawing {
                 HStack(spacing: 3) {
                     Image(systemName: track.type.icon)
                         .font(.system(size: 8, weight: .medium))
@@ -338,19 +341,15 @@ struct TrackLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: track.type.icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(track.type.color)
+                .font(.system(size: 10, weight: isSelected ? .bold : .semibold))
+                .foregroundStyle(isSelected ? track.type.color : track.type.color.opacity(0.6))
             Text(track.name)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary)
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? track.type.color : theme.textSecondary)
                 .lineLimit(1)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .frame(width: 72, alignment: .leading)
-        .background(
-            Capsule()
-                .fill(isSelected ? MeeshyColors.indigo900.opacity(0.5) : Color.clear)
-        )
     }
 }

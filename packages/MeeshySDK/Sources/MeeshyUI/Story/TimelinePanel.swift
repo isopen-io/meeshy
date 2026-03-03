@@ -24,6 +24,8 @@ struct TimelinePanel: View {
         var h = (e.textObjects?.count ?? 0)
         h = h &* 31 &+ (e.mediaObjects?.count ?? 0)
         h = h &* 31 &+ (e.audioPlayerObjects?.count ?? 0)
+        h = h &* 31 &+ (viewModel.hasBackgroundImage ? 1 : 0)
+        h = h &* 31 &+ (viewModel.drawingData != nil ? 1 : 0)
         for t in e.textObjects ?? [] { h = h &* 31 &+ t.id.hashValue &+ t.content.hashValue }
         for m in e.mediaObjects ?? [] { h = h &* 31 &+ m.id.hashValue }
         for a in e.audioPlayerObjects ?? [] { h = h &* 31 &+ a.id.hashValue }
@@ -119,6 +121,20 @@ struct TimelinePanel: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(MeeshyColors.indigo400.opacity(0.15)))
             }
+
+            Button {
+                withAnimation(.spring(response: 0.25)) {
+                    viewModel.timelineAdvanced.toggle()
+                }
+            } label: {
+                Image(systemName: viewModel.timelineAdvanced ? "slider.horizontal.3" : "slider.horizontal.2.square")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(viewModel.timelineAdvanced ? MeeshyColors.brandPrimary : theme.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(viewModel.timelineAdvanced ? MeeshyColors.brandPrimary.opacity(0.15) : Color.clear)
+                    )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -177,7 +193,7 @@ struct TimelinePanel: View {
 
         for (i, t) in tracks.enumerated() {
             switch t.type {
-            case .bgVideo, .bgImage, .bgAudio: bgTracks.append(i)
+            case .bgVideo, .bgImage, .drawing, .bgAudio: bgTracks.append(i)
             case .fgImage, .fgVideo, .fgAudio, .text: fgTracks.append(i)
             }
         }
@@ -457,6 +473,16 @@ struct TimelinePanel: View {
         var result: [TimelineTrack] = []
         let effects = viewModel.currentEffects
 
+        // FOND: Main background image (selectedImage — not a media object)
+        if viewModel.hasBackgroundImage {
+            result.append(TimelineTrack(
+                id: "bg-image-main", name: "Image Fond", type: .bgImage,
+                startTime: 0, duration: nil,
+                volume: nil, loop: false,
+                fadeIn: nil, fadeOut: nil
+            ))
+        }
+
         // FOND: Background video
         if let bgVid = effects.mediaObjects?.first(where: {
             $0.placement == "background" && $0.mediaType == "video"
@@ -470,7 +496,7 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FOND: Background images
+        // FOND: Background images (media objects)
         for bgImg in effects.mediaObjects?.filter({
             $0.placement == "background" && $0.mediaType == "image"
         }) ?? [] {
@@ -479,6 +505,16 @@ struct TimelinePanel: View {
                 startTime: bgImg.startTime ?? 0, duration: bgImg.duration,
                 volume: nil, loop: false,
                 fadeIn: bgImg.fadeIn, fadeOut: bgImg.fadeOut
+            ))
+        }
+
+        // FOND: Drawing layer
+        if viewModel.drawingData != nil {
+            result.append(TimelineTrack(
+                id: "drawing", name: "Dessin", type: .drawing,
+                startTime: 0, duration: nil,
+                volume: nil, loop: false,
+                fadeIn: nil, fadeOut: nil
             ))
         }
 
