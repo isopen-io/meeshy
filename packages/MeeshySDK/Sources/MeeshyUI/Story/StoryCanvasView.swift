@@ -149,6 +149,12 @@ struct StoryCanvasView: View {
         .onChange(of: selectedFilter) { _, _ in
             updateFilteredImage()
         }
+        .onChange(of: viewModel.isTimelinePlaying) { _, isPlaying in
+            NotificationCenter.default.post(
+                name: isPlaying ? .timelineDidStartPlaying : .timelineDidStopPlaying,
+                object: nil
+            )
+        }
     }
 
     private func updateFilteredImage() {

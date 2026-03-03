@@ -10,6 +10,9 @@ public extension Notification.Name {
     /// Envoyée par le composer pour muter/démuter les sons du canvas (ex: pendant la preview).
     static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
     static let storyComposerUnmuteCanvas = Notification.Name("storyComposerUnmuteCanvas")
+    /// Envoyée par la timeline quand le playback démarre/s'arrête dans le composer.
+    static let timelineDidStartPlaying = Notification.Name("timelineDidStartPlaying")
+    static let timelineDidStopPlaying = Notification.Name("timelineDidStopPlaying")
 }
 
 /// Reconstruit pixel-perfect le canvas d'une story (lecture seule).

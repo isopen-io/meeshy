@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
 
 struct TimelinePanel: View {
@@ -7,6 +8,7 @@ struct TimelinePanel: View {
     @State private var engine = TimelinePlaybackEngine()
     @State private var detailTrackId: String?
     @State private var zoomScale: CGFloat = 1.0
+    @State private var mediaDurationCache: [String: Float] = [:]
     @Environment(\.theme) private var theme
 
     private let labelWidth: CGFloat = 72
@@ -487,12 +489,14 @@ struct TimelinePanel: View {
         if let bgVid = effects.mediaObjects?.first(where: {
             $0.placement == "background" && $0.mediaType == "video"
         }) {
+            let bgVidURL = viewModel.loadedVideoURLs[bgVid.id]
             result.append(TimelineTrack(
                 id: bgVid.id, name: "Video BG", type: .bgVideo,
                 startTime: bgVid.startTime ?? 0, duration: bgVid.duration,
                 volume: bgVid.volume, loop: bgVid.loop ?? false,
                 fadeIn: bgVid.fadeIn, fadeOut: bgVid.fadeOut,
-                videoURL: viewModel.loadedVideoURLs[bgVid.id]
+                videoURL: bgVidURL,
+                mediaDuration: mediaDurationCache[bgVid.id] ?? intrinsicDuration(url: bgVidURL)
             ))
         }
 
@@ -531,12 +535,14 @@ struct TimelinePanel: View {
 
         // FOND: Background audio (custom recordings)
         for bgAudio in effects.audioPlayerObjects?.filter({ $0.placement == "background" }) ?? [] {
+            let bgAudURL = viewModel.loadedAudioURLs[bgAudio.id]
             result.append(TimelineTrack(
                 id: bgAudio.id, name: "Audio BG", type: .bgAudio,
                 startTime: bgAudio.startTime ?? 0, duration: bgAudio.duration,
                 volume: bgAudio.volume, loop: bgAudio.loop ?? true,
                 fadeIn: bgAudio.fadeIn, fadeOut: bgAudio.fadeOut,
-                waveformSamples: bgAudio.waveformSamples
+                waveformSamples: bgAudio.waveformSamples,
+                mediaDuration: mediaDurationCache[bgAudio.id] ?? intrinsicDuration(url: bgAudURL)
             ))
         }
 
@@ -552,27 +558,31 @@ struct TimelinePanel: View {
             ))
         }
 
-        // CONTENU: Foreground videos
+        // FRONT: Foreground videos
         for vid in effects.mediaObjects?.filter({
             $0.placement == "foreground" && $0.mediaType == "video"
         }) ?? [] {
+            let vidURL = viewModel.loadedVideoURLs[vid.id]
             result.append(TimelineTrack(
                 id: vid.id, name: "Video", type: .fgVideo,
                 startTime: vid.startTime ?? 0, duration: vid.duration,
                 volume: vid.volume, loop: vid.loop ?? false,
                 fadeIn: vid.fadeIn, fadeOut: vid.fadeOut,
-                videoURL: viewModel.loadedVideoURLs[vid.id]
+                videoURL: vidURL,
+                mediaDuration: mediaDurationCache[vid.id] ?? intrinsicDuration(url: vidURL)
             ))
         }
 
-        // CONTENU: Foreground audio
+        // FRONT: Foreground audio
         for aud in effects.audioPlayerObjects?.filter({ $0.placement == "foreground" }) ?? [] {
+            let audURL = viewModel.loadedAudioURLs[aud.id]
             result.append(TimelineTrack(
                 id: aud.id, name: "Audio", type: .fgAudio,
                 startTime: aud.startTime ?? 0, duration: aud.duration,
                 volume: aud.volume, loop: aud.loop ?? false,
                 fadeIn: aud.fadeIn, fadeOut: aud.fadeOut,
-                waveformSamples: aud.waveformSamples
+                waveformSamples: aud.waveformSamples,
+                mediaDuration: mediaDurationCache[aud.id] ?? intrinsicDuration(url: audURL)
             ))
         }
 
@@ -650,5 +660,17 @@ struct TimelinePanel: View {
     private func formatTimeShort(_ sec: Float) -> String {
         if sec < 60 { return String(format: "%.0fs", sec) }
         return String(format: "%d:%02d", Int(sec) / 60, Int(sec) % 60)
+    }
+
+    /// Synchronous intrinsic duration from a local media URL. Caches result.
+    private func intrinsicDuration(url: URL?) -> Float? {
+        guard let url else { return nil }
+        let key = url.lastPathComponent
+        if let cached = mediaDurationCache[key] { return cached }
+        let asset = AVURLAsset(url: url)
+        let dur = Float(CMTimeGetSeconds(asset.duration))
+        guard dur > 0, dur.isFinite else { return nil }
+        DispatchQueue.main.async { mediaDurationCache[key] = dur }
+        return dur
     }
 }

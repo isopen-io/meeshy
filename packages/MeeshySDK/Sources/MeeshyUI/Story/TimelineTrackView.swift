@@ -60,6 +60,8 @@ struct TimelineTrack: Identifiable {
     var fadeOut: Float?
     var waveformSamples: [Float]?
     var videoURL: URL?
+    /// Intrinsic media duration (audio/video file length). Nil = no constraint.
+    var mediaDuration: Float?
 }
 
 // MARK: - Timeline Track Bar
@@ -277,8 +279,12 @@ struct TimelineTrackBar: View {
                 let delta = Float(value.translation.width / pixelsPerSecond)
                 let currentEnd = dragStartValue + (dragStartDuration > 0 ? dragStartDuration : (totalDuration - dragStartValue))
                 let newStart = max(0, dragStartValue + delta)
-                let newDur = currentEnd - newStart
+                var newDur = currentEnd - newStart
                 guard newDur >= 0.5 else { return }
+                // Cap to media duration (can't stretch beyond actual file length)
+                if let maxDur = track.mediaDuration, !track.loop {
+                    newDur = min(newDur, maxDur)
+                }
                 track.startTime = newStart
                 track.duration = newDur
             }
@@ -299,7 +305,11 @@ struct TimelineTrackBar: View {
             .onChanged { value in
                 let delta = Float(value.translation.width / pixelsPerSecond)
                 let baseDur = dragStartDuration > 0 ? dragStartDuration : (totalDuration - track.startTime)
-                let newDur = max(0.5, baseDur + delta)
+                var newDur = max(0.5, baseDur + delta)
+                // Cap to media duration (can't stretch beyond actual file length)
+                if let maxDur = track.mediaDuration, !track.loop {
+                    newDur = min(newDur, maxDur)
+                }
                 track.duration = min(newDur, totalDuration - track.startTime)
             }
             .onEnded { _ in onChanged(track) }

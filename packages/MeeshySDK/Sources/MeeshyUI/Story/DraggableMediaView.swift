@@ -101,6 +101,17 @@ public struct DraggableMediaView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerUnmuteCanvas)) { _ in
                     internalPlayer?.isMuted = false
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .timelineDidStartPlaying)) { _ in
+                    if let player = internalPlayer, !isPlaying {
+                        player.seek(to: .zero)
+                        player.play()
+                        isPlaying = true
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .timelineDidStopPlaying)) { _ in
+                    internalPlayer?.pause()
+                    isPlaying = false
+                }
         }
     }
 

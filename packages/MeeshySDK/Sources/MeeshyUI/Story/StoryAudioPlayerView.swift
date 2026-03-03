@@ -44,6 +44,21 @@ public struct StoryAudioPlayerView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerUnmuteCanvas)) { _ in
                     // Ne pas reprendre automatiquement — l'utilisateur relancera manuellement
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .timelineDidStartPlaying)) { _ in
+                    guard let url else { return }
+                    if player == nil {
+                        let newPlayer = AVPlayer(url: url)
+                        newPlayer.volume = audioObject.volume
+                        player = newPlayer
+                    }
+                    player?.seek(to: .zero)
+                    player?.play()
+                    isPlaying = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .timelineDidStopPlaying)) { _ in
+                    player?.pause()
+                    isPlaying = false
+                }
         }
     }
 
