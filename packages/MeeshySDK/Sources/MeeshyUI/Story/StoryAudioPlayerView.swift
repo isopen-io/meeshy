@@ -154,6 +154,9 @@ public struct StoryAudioPlayerView: View {
 
         isPlaying.toggle()
         if isPlaying {
+            StoryMediaCoordinator.shared.activate {
+                NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
+            }
             Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
             player?.play()
         } else {

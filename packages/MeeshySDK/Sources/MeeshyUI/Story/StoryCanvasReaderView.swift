@@ -59,6 +59,9 @@ public struct StoryCanvasReaderView: View {
             await state.loadForegroundImages(story: story, preloadedImages: preloadedImages)
         }
         .onAppear {
+            StoryMediaCoordinator.shared.activate { [weak state] in
+                state?.stopAllMedia()
+            }
             state.startPlaybackTimer()
             state.startBackgroundAudio(
                 effects: story.storyEffects,
@@ -70,6 +73,7 @@ public struct StoryCanvasReaderView: View {
             state.subscribeToTranslationUpdates(postId: story.id)
         }
         .onDisappear {
+            StoryMediaCoordinator.shared.deactivate()
             state.stopAllMedia()
         }
     }

@@ -303,7 +303,9 @@ public struct StoryAudioPanel: View {
         if previewingId == item.id {
             previewPlayer.stop()
             previewingId = nil
+            NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
         } else {
+            NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
             previewPlayer.stop()
             previewingId = item.id
             let baseURL = APIClient.shared.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

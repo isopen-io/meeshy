@@ -281,6 +281,9 @@ public struct DraggableMediaView: View {
             player.pause()
             isPlaying = false
         } else {
+            StoryMediaCoordinator.shared.activate {
+                NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
+            }
             player.play()
             isPlaying = true
         }

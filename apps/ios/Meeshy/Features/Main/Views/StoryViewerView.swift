@@ -170,6 +170,7 @@ struct StoryViewerView: View {
         }
         .onDisappear {
             timerCancellable?.cancel()
+            StoryMediaCoordinator.shared.deactivate()
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: {
             resumeTimer()

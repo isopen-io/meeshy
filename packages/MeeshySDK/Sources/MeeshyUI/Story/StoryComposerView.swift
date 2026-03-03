@@ -249,7 +249,10 @@ public struct StoryComposerView: View {
             }
         }
         .statusBarHidden()
-        .onDisappear { cancelPublishIfNeeded() }
+        .onDisappear {
+            StoryMediaCoordinator.shared.deactivate()
+            cancelPublishIfNeeded()
+        }
         .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
         .onChange(of: fgPhotoItem) { _, item in addForegroundMedia(from: item, type: "image") }
         .onChange(of: fgVideoItem) { _, item in addForegroundMedia(from: item, type: "video") }
