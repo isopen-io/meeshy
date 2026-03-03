@@ -443,39 +443,13 @@ extension ConversationView {
 
     // MARK: - Attachment Preview Tile
     func attachmentPreviewTile(_ attachment: MessageAttachment) -> some View {
-        HStack(spacing: 0) {
-            // Delete button -- left side, prominent
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    let id = attachment.id
-                    if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
-                    composerState.pendingAttachments.removeAll { $0.id == id }
-                    if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
-                        try? FileManager.default.removeItem(at: url)
-                    }
-                    composerState.pendingThumbnails.removeValue(forKey: id)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(MeeshyColors.coral)
-                            .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 4, y: 2)
-                    )
-            }
-            .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")
-            .padding(.trailing, 8)
-
-            // Tappable preview area
-            Button {
-                HapticFeedback.light()
-                handleAttachmentPreviewTap(attachment)
-            } label: {
-                VStack(spacing: 4) {
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                // Tappable preview area
+                Button {
+                    HapticFeedback.light()
+                    handleAttachmentPreviewTap(attachment)
+                } label: {
                     ZStack {
                         if let thumb = composerState.pendingThumbnails[attachment.id] {
                             Image(uiImage: thumb)
@@ -489,7 +463,6 @@ extension ConversationView {
                                     .font(.system(size: 20))
                                     .foregroundStyle(.white, .black.opacity(0.4))
                             } else if attachment.type == .image {
-                                // Subtle edit hint
                                 Image(systemName: "eye.fill")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
@@ -519,14 +492,40 @@ extension ConversationView {
                         }
                     }
                     .frame(width: 56, height: 56)
-
-                    Text(labelForAttachment(attachment))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
-                        .frame(width: 60)
                 }
+
+                // Delete button — top-right corner
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        let id = attachment.id
+                        if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
+                        composerState.pendingAttachments.removeAll { $0.id == id }
+                        if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
+                            try? FileManager.default.removeItem(at: url)
+                        }
+                        composerState.pendingThumbnails.removeValue(forKey: id)
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.coral)
+                                .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 3, y: 1)
+                        )
+                }
+                .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")
+                .offset(x: 5, y: -5)
             }
+
+            Text(labelForAttachment(attachment))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 60)
         }
     }
 
