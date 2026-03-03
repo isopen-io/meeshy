@@ -545,10 +545,8 @@ public struct StoryComposerView: View {
             bgAudioPanel
         case .text:
             textPanel.padding(.bottom, 8)
-        case .image:
-            fgImagePanel
-        case .video:
-            fgVideoPanel
+        case .media:
+            mediaPanel
         case .audio:
             fgAudioPanel
         case .filter:
@@ -612,6 +610,8 @@ public struct StoryComposerView: View {
                 }
                 .padding(.horizontal, 16)
             }
+
+            mediaElementList(placement: "background")
         }
         .padding(.vertical, 12)
     }
@@ -656,52 +656,7 @@ public struct StoryComposerView: View {
         )
         .frame(maxHeight: 280)
 
-        // Show existing background audio objects with timeline shortcut
-        let bgAudios = viewModel.currentEffects.audioPlayerObjects?.filter { $0.placement == "background" } ?? []
-        if !bgAudios.isEmpty {
-            VStack(spacing: 4) {
-                ForEach(bgAudios, id: \.id) { audio in
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(MeeshyColors.indigo400)
-                        Text("Enregistrement")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Button {
-                            viewModel.selectedElementId = audio.id
-                            viewModel.selectTool(.timeline)
-                        } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: "timeline.selection")
-                                    .font(.system(size: 9, weight: .semibold))
-                                Text("Timeline")
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundStyle(MeeshyColors.indigo400)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(MeeshyColors.indigo400.opacity(0.15)))
-                        }
-                        Button {
-                            viewModel.deleteElement(id: audio.id)
-                            HapticFeedback.medium()
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(MeeshyColors.error)
-                                .frame(width: 28, height: 28)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.06)))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 4)
-        }
+        audioElementList(placement: "background")
         } // VStack bgAudioPanel
     }
 
@@ -738,48 +693,42 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Foreground Image Panel
+    // MARK: - Media Panel (Image + Video merged)
 
-    private var fgImagePanel: some View {
-        VStack(spacing: 12) {
-            PhotosPicker(selection: $fgPhotoItem, matching: .images) {
-                HStack(spacing: 8) {
-                    Image(systemName: "photo.badge.plus").font(.system(size: 16, weight: .medium))
-                    Text("Selectionner une image").font(.system(size: 13, weight: .medium))
+    private var mediaPanel: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $fgPhotoItem, matching: .images) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo.badge.plus").font(.system(size: 14, weight: .medium))
+                        Text("Image").font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
-                .padding(.horizontal, 16)
-            }
-        }
-        .padding(.vertical, 12)
-    }
 
-    // MARK: - Foreground Video Panel
-
-    private var fgVideoPanel: some View {
-        VStack(spacing: 12) {
-            PhotosPicker(selection: $fgVideoItem, matching: .videos) {
-                HStack(spacing: 8) {
-                    Image(systemName: "video.badge.plus").font(.system(size: 16, weight: .medium))
-                    Text("Selectionner une video").font(.system(size: 13, weight: .medium))
+                PhotosPicker(selection: $fgVideoItem, matching: .videos) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "video.badge.plus").font(.system(size: 14, weight: .medium))
+                        Text("Video").font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.brandGradient))
-                .padding(.horizontal, 16)
             }
+            .padding(.horizontal, 16)
+
+            mediaElementList(placement: "foreground")
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Foreground Audio Panel
 
     private var fgAudioPanel: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             HStack(spacing: 10) {
                 Button { showAudioDocumentPicker = true } label: {
                     HStack(spacing: 6) {
@@ -802,8 +751,117 @@ public struct StoryComposerView: View {
                 }
             }
             .padding(.horizontal, 16)
+
+            audioElementList(placement: "foreground")
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Element Lists
+
+    @ViewBuilder
+    private func mediaElementList(placement: String) -> some View {
+        let items = viewModel.currentEffects.mediaObjects?.filter { $0.placement == placement } ?? []
+        if !items.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(items, id: \.id) { obj in
+                    let isSelected = viewModel.selectedElementId == obj.id
+                    HStack(spacing: 8) {
+                        if let img = viewModel.loadedImages[obj.id] {
+                            Image(uiImage: img)
+                                .resizable().scaledToFill()
+                                .frame(width: 32, height: 32)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        } else {
+                            Image(systemName: obj.mediaType == "video" ? "video.fill" : "photo")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(MeeshyColors.indigo400)
+                                .frame(width: 32, height: 32)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                        }
+                        Text(obj.mediaType == "video" ? "Video" : "Image")
+                            .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                            .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+                        Spacer()
+                        Button {
+                            viewModel.selectedElementId = obj.id
+                            viewModel.selectTool(.timeline)
+                        } label: {
+                            Image(systemName: "timeline.selection")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(MeeshyColors.indigo400)
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
+                        }
+                        Button {
+                            viewModel.deleteElement(id: obj.id)
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(MeeshyColors.error)
+                                .frame(width: 28, height: 28)
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
+                    .onTapGesture {
+                        viewModel.selectedElementId = obj.id
+                        viewModel.bringToFront(id: obj.id)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    @ViewBuilder
+    private func audioElementList(placement: String) -> some View {
+        let items = viewModel.currentEffects.audioPlayerObjects?.filter { $0.placement == placement } ?? []
+        if !items.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(items, id: \.id) { obj in
+                    let isSelected = viewModel.selectedElementId == obj.id
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(MeeshyColors.indigo400)
+                            .frame(width: 32, height: 32)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                        Text("Audio")
+                            .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                            .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
+                        Spacer()
+                        Button {
+                            viewModel.selectedElementId = obj.id
+                            viewModel.selectTool(.timeline)
+                        } label: {
+                            Image(systemName: "timeline.selection")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(MeeshyColors.indigo400)
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
+                        }
+                        Button {
+                            viewModel.deleteElement(id: obj.id)
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(MeeshyColors.error)
+                                .frame(width: 28, height: 28)
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
+                    .onTapGesture {
+                        viewModel.selectedElementId = obj.id
+                        viewModel.bringToFront(id: obj.id)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+        }
     }
 
     // MARK: - Transition Picker

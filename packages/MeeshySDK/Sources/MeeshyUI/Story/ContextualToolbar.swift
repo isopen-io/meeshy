@@ -34,8 +34,7 @@ struct ContextualToolbar: View {
                 if expandedGroup == .front {
                     HStack(spacing: 6) {
                         toolPill(.text, icon: "textformat", label: "Texte", badge: textCount)
-                        toolPill(.image, icon: "photo", label: "Image", badge: fgImageCount)
-                        toolPill(.video, icon: "video.fill", label: "Video", badge: fgVideoCount)
+                        toolPill(.media, icon: "photo.on.rectangle", label: "Media", badge: fgMediaCount)
                         toolPill(.audio, icon: "waveform", label: "Audio", badge: fgAudioCount)
                     }
                     .transition(.asymmetric(
@@ -182,7 +181,7 @@ struct ContextualToolbar: View {
         case .fond:
             return bgMediaCount + (hasDrawing ? 1 : 0) + (hasBgAudio ? 1 : 0)
         case .front:
-            return textCount + fgImageCount + fgVideoCount + fgAudioCount
+            return textCount + fgMediaCount + fgAudioCount
         case .plus:
             return (hasFilter ? 1 : 0) + (hasEffects ? 1 : 0)
         }
@@ -194,15 +193,9 @@ struct ContextualToolbar: View {
         viewModel.currentEffects.textObjects?.count ?? 0
     }
 
-    private var fgImageCount: Int {
+    private var fgMediaCount: Int {
         viewModel.currentEffects.mediaObjects?
-            .filter { $0.mediaType == "image" && $0.placement == "foreground" }
-            .count ?? 0
-    }
-
-    private var fgVideoCount: Int {
-        viewModel.currentEffects.mediaObjects?
-            .filter { $0.mediaType == "video" && $0.placement == "foreground" }
+            .filter { $0.placement == "foreground" }
             .count ?? 0
     }
 
@@ -240,8 +233,7 @@ struct ContextualToolbar: View {
     private func isToolDisabled(_ tool: StoryToolMode) -> Bool {
         switch tool {
         case .text: return !viewModel.canAddText
-        case .image: return !viewModel.canAddImage
-        case .video: return !viewModel.canAddVideo
+        case .media: return !viewModel.canAddMedia
         case .audio: return !viewModel.canAddAudio
         default: return false
         }

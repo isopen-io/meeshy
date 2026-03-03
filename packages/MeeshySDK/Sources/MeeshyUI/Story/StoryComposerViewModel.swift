@@ -11,8 +11,7 @@ enum StoryToolMode: String, CaseIterable {
     case bgAudio
     // Front
     case text
-    case image
-    case video
+    case media
     case audio
     // Plus
     case filter
@@ -22,7 +21,7 @@ enum StoryToolMode: String, CaseIterable {
     var group: StoryToolGroup {
         switch self {
         case .bgMedia, .drawing, .bgAudio: return .fond
-        case .text, .image, .video, .audio: return .front
+        case .text, .media, .audio: return .front
         case .filter, .effects, .timeline: return .plus
         }
     }
