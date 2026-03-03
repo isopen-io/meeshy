@@ -174,13 +174,11 @@ struct TimelinePanel: View {
         var groups: [TrackGroup] = []
         var bgTracks: [Int] = []
         var fgTracks: [Int] = []
-        var textTracks: [Int] = []
 
         for (i, t) in tracks.enumerated() {
             switch t.type {
             case .bgVideo, .bgImage, .bgAudio: bgTracks.append(i)
-            case .fgImage, .fgVideo, .fgAudio: fgTracks.append(i)
-            case .text: textTracks.append(i)
+            case .fgImage, .fgVideo, .fgAudio, .text: fgTracks.append(i)
             }
         }
 
@@ -188,10 +186,7 @@ struct TimelinePanel: View {
             groups.append(TrackGroup(id: "bg", label: "FOND", icon: "square.stack.fill", tracks: bgTracks))
         }
         if !fgTracks.isEmpty {
-            groups.append(TrackGroup(id: "fg", label: "CONTENU", icon: "square.on.square.fill", tracks: fgTracks))
-        }
-        if !textTracks.isEmpty {
-            groups.append(TrackGroup(id: "txt", label: "TEXTE", icon: "textformat", tracks: textTracks))
+            groups.append(TrackGroup(id: "fg", label: "FRONT", icon: "square.on.square.fill", tracks: fgTracks))
         }
         return groups
     }
