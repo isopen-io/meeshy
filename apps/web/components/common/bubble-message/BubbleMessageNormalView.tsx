@@ -58,6 +58,8 @@ interface BubbleMessageNormalViewProps {
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
   onImageClick?: (attachmentId: string) => void;
 }
 
@@ -85,7 +87,9 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   onLanguageSwitch,
   onReplyMessage,
   onNavigateToMessage,
-  onImageClick
+  onImageClick,
+  isFirstInGroup = true,
+  isLastInGroup = true
 }: BubbleMessageNormalViewProps) {
   const { t: tBubble } = useI18n('bubbleStream');
   const { t: tReport } = useI18n('reportMessage');
@@ -144,6 +148,8 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
     currentDisplayLanguage,
   });
 
+  const hasReactions = message.reactionSummary && Object.keys(message.reactionSummary).length > 0;
+
   // Handler pour les quick reactions
   const handleQuickReaction = useCallback((emoji: string) => {
     messageReactionsHook.addReaction(emoji);
@@ -160,7 +166,10 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
         id={`message-${message.id}`}
         ref={messageRef}
         className={cn(
-          "bubble-message group/message grid grid-cols-10 gap-1 sm:gap-1.5 mb-2 px-2 sm:px-4"
+          "bubble-message group/message grid grid-cols-10 gap-1 sm:gap-1.5 px-2 sm:px-4",
+          isLastInGroup
+            ? (hasReactions ? "mb-5" : "mb-2.5")
+            : (hasReactions ? "mb-4" : "mb-0.5")
         )}
       >
         {/* Empty space for sent messages (20% mobile = 2 cols / 40% desktop = 4 cols) */}
@@ -171,24 +180,30 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
           "col-span-8 sm:col-span-6 flex gap-1 sm:gap-1.5 max-w-[90vw]",
           isOwnMessage ? "flex-row-reverse" : "flex-row"
         )}>
-          {/* Message Header with Avatar */}
-          <MessageHeader
-            message={message as any}
-            isOwnMessage={isOwnMessage}
-            t={tBubble}
-          />
+          {/* Message Header with Avatar - hidden for grouped messages */}
+          {isFirstInGroup ? (
+            <MessageHeader
+              message={message as any}
+              isOwnMessage={isOwnMessage}
+              t={tBubble}
+            />
+          ) : (
+            !isOwnMessage && <div className="w-8 sm:w-9 flex-shrink-0" />
+          )}
 
           {/* Message content wrapper */}
           <div className={cn(
             "flex flex-col flex-1",
             isOwnMessage ? "items-end" : "items-start"
           )}>
-            {/* Name and Date */}
-            <MessageNameDate
-              message={message as any}
-              isOwnMessage={isOwnMessage}
-              t={tBubble}
-            />
+            {/* Name and Date - only for first message in group */}
+            {isFirstInGroup && (
+              <MessageNameDate
+                message={message as any}
+                isOwnMessage={isOwnMessage}
+                t={tBubble}
+              />
+            )}
 
             {/* Attachments (before text bubble) */}
             <MessageAttachmentsSection

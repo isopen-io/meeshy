@@ -311,15 +311,16 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
-            guard let self else { return }
-            self.isGeocoding = false
-            if let placemark = placemarks?.first {
+            let address = placemarks?.first.map { placemark in
                 let parts = [placemark.name, placemark.thoroughfare, placemark.locality, placemark.country]
                     .compactMap { $0 }
-                let unique = parts.reduce(into: [String]()) { acc, part in
+                return parts.reduce(into: [String]()) { acc, part in
                     if !acc.contains(part) { acc.append(part) }
-                }
-                self.addressString = unique.joined(separator: ", ")
+                }.joined(separator: ", ")
+            }
+            Task { @MainActor [weak self] in
+                self?.isGeocoding = false
+                if let address { self?.addressString = address }
             }
         }
     }

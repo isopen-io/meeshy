@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// API Client dédié au protocole de chiffrement de bout en bout (E2EE Signal)
-public final class E2EAPI {
+public final class E2EAPI: @unchecked Sendable {
     public static let shared = E2EAPI()
     
     private init() {}

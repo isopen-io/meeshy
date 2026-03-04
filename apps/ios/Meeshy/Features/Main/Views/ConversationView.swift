@@ -145,6 +145,10 @@ struct ConversationView: View {
     // MARK: - Composer Height Measurement
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
+        // N'ajoute la safe area que si le clavier est absent — quand le clavier est visible
+        // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
+        // ce qui provoquerait des mises à jour en boucle de composerHeight.
+        guard keyboardHeight == 0 else { return }
         let safeBottom = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
@@ -550,7 +554,7 @@ struct ConversationView: View {
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 0) {
                     if viewModel.hasOlderMessages {
                         if viewModel.isLoadingOlder {
                             HStack(spacing: 8) {
@@ -676,7 +680,9 @@ struct ConversationView: View {
                 }
             }
             .onChange(of: composerHeight) { oldHeight, newHeight in
-                guard newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
+                // Ignore pendant que le clavier est visible : le GeometryReader fire en boucle
+                // pendant l'animation du clavier, ce qui déclencherait plusieurs spring animations.
+                guard keyboardHeight == 0, newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     proxy.scrollTo("bottom_spacer", anchor: .bottom)

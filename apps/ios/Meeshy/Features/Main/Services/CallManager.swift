@@ -521,7 +521,7 @@ final class CallManager: ObservableObject {
 
 // MARK: - CallKit Delegate Proxy
 
-private class CallKitDelegateProxy: NSObject, CXProviderDelegate {
+private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
     weak var manager: CallManager?
 
     func providerDidReset(_ provider: CXProvider) {
@@ -546,9 +546,10 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        let isMuted = action.isMuted
         Task { @MainActor [weak self] in
             guard let manager = self?.manager else { return }
-            if manager.isMuted != action.isMuted {
+            if manager.isMuted != isMuted {
                 manager.toggleMute()
             }
         }

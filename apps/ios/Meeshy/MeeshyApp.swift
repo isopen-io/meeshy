@@ -82,7 +82,10 @@ struct MeeshyApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
                         Task { await requestPushPermissionIfNeeded() }
+                        Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
+                    } else {
+                        NotificationManager.shared.reset()
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in

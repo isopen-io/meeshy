@@ -216,9 +216,10 @@ struct OnboardingFlowView: View {
             forName: UIResponder.keyboardWillShowNotification,
             object: nil, queue: .main
         ) { notification in
-            if let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    keyboardHeight = frame.height
+            let height = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height
+            Task { @MainActor in
+                if let height {
+                    withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
                 }
             }
         }
@@ -226,8 +227,8 @@ struct OnboardingFlowView: View {
             forName: UIResponder.keyboardWillHideNotification,
             object: nil, queue: .main
         ) { _ in
-            withAnimation(.easeOut(duration: 0.25)) {
-                keyboardHeight = 0
+            Task { @MainActor in
+                withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = 0 }
             }
         }
     }

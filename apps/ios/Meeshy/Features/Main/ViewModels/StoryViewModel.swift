@@ -363,7 +363,7 @@ class StoryViewModel: ObservableObject {
 
         socialSocket.storyViewed
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { _ in
                 // Story view counts are shown in the story viewer, refresh if needed
                 // For now this is a no-op — the seen-by list is fetched on demand
             }

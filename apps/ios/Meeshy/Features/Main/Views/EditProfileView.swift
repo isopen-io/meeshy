@@ -125,6 +125,7 @@ struct EditProfileView: View {
                     )
                 }
 
+                let bgPrimary = theme.backgroundPrimary
                 PhotosPicker(
                     selection: $selectedPhotoItem,
                     matching: .images,
@@ -140,7 +141,7 @@ struct EditProfileView: View {
                         )
                         .overlay(
                             Circle()
-                                .stroke(theme.backgroundPrimary, lineWidth: 2)
+                                .stroke(bgPrimary, lineWidth: 2)
                         )
                 }
             }

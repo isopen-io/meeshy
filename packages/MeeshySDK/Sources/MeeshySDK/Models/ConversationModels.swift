@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Conversation Models
 
-public struct APIConversationUser: Decodable {
+public struct APIConversationUser: Decodable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -17,11 +17,11 @@ public struct APIConversationUser: Decodable {
     public var resolvedAvatar: String? { avatar ?? avatarUrl }
 }
 
-public struct APIMessageCount: Decodable {
+public struct APIMessageCount: Decodable, Sendable {
     public let attachments: Int?
 }
 
-public struct APIConversationLastMessage: Decodable {
+public struct APIConversationLastMessage: Decodable, Sendable {
     public let id: String
     public let content: String?
     public let senderId: String?
@@ -41,13 +41,13 @@ public struct APIConversationLastMessage: Decodable {
     }
 }
 
-public struct APIConversationMember: Decodable {
+public struct APIConversationMember: Decodable, Sendable {
     public let userId: String
     public let role: String?
     public let user: APIConversationUser?
 }
 
-public struct APIConversationPreferences: Decodable {
+public struct APIConversationPreferences: Decodable, Sendable {
     public let isPinned: Bool?
     public let isMuted: Bool?
     public let isArchived: Bool?
@@ -56,7 +56,7 @@ public struct APIConversationPreferences: Decodable {
     public let categoryId: String?
 }
 
-public struct APIConversation: Decodable {
+public struct APIConversation: Decodable, Sendable {
     public let id: String
     public let type: String
     public let identifier: String?

@@ -78,7 +78,7 @@ public struct TranslationEvent: Decodable {
 
 // MARK: - Transcription Event Data
 
-public struct TranscriptionSegment: Decodable {
+public struct TranscriptionSegment: Decodable, Sendable {
     public let text: String
     public let startTime: Double?
     public let endTime: Double?

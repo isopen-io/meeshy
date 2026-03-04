@@ -233,11 +233,12 @@ struct ProfileView: View {
                 )
 
                 if isEditing {
+                    let textPrimary = theme.textPrimary
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         Image(systemName: "pencil.circle.fill")
                             .font(.system(size: 28))
                             .foregroundColor(Color(hex: accentColor))
-                            .background(Circle().fill(theme.textPrimary.opacity(0.1)))
+                            .background(Circle().fill(textPrimary.opacity(0.1)))
                     }
                     .offset(x: 4, y: 4)
                 }

@@ -65,7 +65,7 @@ public enum APIError: Error, LocalizedError {
 
 // MARK: - API Client
 
-public final class APIClient {
+public final class APIClient: @unchecked Sendable {
     public static let shared = APIClient()
 
     public var baseURL: String {

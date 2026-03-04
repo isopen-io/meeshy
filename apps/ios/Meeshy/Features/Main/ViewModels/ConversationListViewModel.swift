@@ -76,14 +76,10 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
-        // Offload filtering and grouping to a background queue to prevent Main Thread freezes
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
-            // Only debounce if there is text to avoid delay on initial load or simple filter taps
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
-            .map { [weak self] (convs, text, filter) -> [Conversation] in
-                guard self != nil else { return [] }
-                return convs.filter { c in
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .map { (convs, text, filter) -> [Conversation] in
+                convs.filter { c in
                     let filterMatch: Bool
                     switch filter {
                     case .all: filterMatch = c.isActive
@@ -99,11 +95,9 @@ class ConversationListViewModel: ObservableObject {
                     return filterMatch && searchMatch
                 }
             }
-            .receive(on: DispatchQueue.main)
             .assign(to: &$filteredConversations)
 
         Publishers.CombineLatest($filteredConversations, $userCategories)
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
                 var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
@@ -143,7 +137,6 @@ class ConversationListViewModel: ObservableObject {
 
                 return result
             }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] newGroups in
                 self?.groupedConversations = newGroups
             }

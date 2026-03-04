@@ -217,7 +217,7 @@ struct CameraView: View {
 
 @MainActor
 final class CameraModel: NSObject, ObservableObject {
-    let session = AVCaptureSession()
+    nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     var capturedVideoURL: URL?
     @Published var capturedPhotoId: String?

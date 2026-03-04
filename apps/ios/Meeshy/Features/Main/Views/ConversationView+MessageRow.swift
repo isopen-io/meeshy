@@ -2,7 +2,7 @@
 import SwiftUI
 import MeeshySDK
 
-private var searchDebounceKey: UInt8 = 0
+nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
 
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
@@ -108,6 +108,7 @@ extension ConversationView {
                         scrollState.scrollToMessageId = messageId
                     },
                     activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil,
+                    isLastInGroup: isLastInGroup,
                     isLastReceivedMessage: isLastReceived
                 )
                 .onLongPressGesture(minimumDuration: 0.5) {

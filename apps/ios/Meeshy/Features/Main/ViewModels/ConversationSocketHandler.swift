@@ -37,11 +37,11 @@ final class ConversationSocketHandler {
     weak var delegate: ConversationSocketDelegate?
 
     // Typing emission state
-    private var typingTimer: Timer?
-    private var isEmittingTyping = false
+    nonisolated(unsafe) private var typingTimer: Timer?
+    nonisolated(unsafe) private var isEmittingTyping = false
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
-    private var typingSafetyTimers: [String: Timer] = [:]
+    nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
 
     // MARK: - Init / Deinit
 
@@ -51,11 +51,14 @@ final class ConversationSocketHandler {
         joinRoom()
         subscribeToSocket()
         subscribeToReconnect()
+        NotificationManager.shared.onConversationOpened(conversationId)
     }
 
     deinit {
         leaveRoom()
-        MessageSocketManager.shared.activeConversationId = nil
+        Task { @MainActor in
+            NotificationManager.shared.onConversationClosed()
+        }
         typingTimer?.invalidate()
         if isEmittingTyping {
             MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -66,7 +69,6 @@ final class ConversationSocketHandler {
     // MARK: - Room Management
 
     private func joinRoom() {
-        MessageSocketManager.shared.activeConversationId = conversationId
         MessageSocketManager.shared.joinConversation(conversationId)
     }
 

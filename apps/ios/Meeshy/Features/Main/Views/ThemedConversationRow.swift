@@ -535,7 +535,7 @@ struct ThemedConversationRow: View {
 }
 
 // MARK: - Equatable (permet .equatable() pour éviter les re-renders superflus)
-extension ThemedConversationRow: Equatable {
+extension ThemedConversationRow: @MainActor Equatable {
     static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
         lhs.conversation.id == rhs.conversation.id &&
         lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&

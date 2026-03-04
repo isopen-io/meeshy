@@ -32,7 +32,7 @@ public struct AddReactionRequest: Encodable {
 
 // MARK: - Mobile Transcription
 
-public struct MobileTranscriptionSegment: Encodable {
+public struct MobileTranscriptionSegment: Encodable, Sendable {
     public let text: String
     public let start: Double?
     public let end: Double?
@@ -48,7 +48,7 @@ public struct MobileTranscriptionSegment: Encodable {
     }
 }
 
-public struct MobileTranscriptionPayload: Encodable {
+public struct MobileTranscriptionPayload: Encodable, Sendable {
     public let text: String
     public let language: String
     public let confidence: Double?

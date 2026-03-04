@@ -15,13 +15,11 @@ struct RootView: View {
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
-    @State private var notificationCount = 0
-    @State private var notificationToast: SocketNotificationEvent?
-    @State private var notificationToastDismissTask: Task<Void, Never>?
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
     @State private var selectedStoryUserIdFromConv: String?
@@ -242,10 +240,9 @@ struct RootView: View {
 
             // 9. Notification toast overlay (socket real-time)
             VStack {
-                if let toast = notificationToast {
+                if let toast = notificationManager.currentToast {
                     NotificationToastView(event: toast) {
-                        notificationToast = nil
-                        notificationToastDismissTask?.cancel()
+                        notificationManager.dismissToast()
                         handleSocketNotificationTap(toast)
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -253,7 +250,7 @@ struct RootView: View {
                 }
                 Spacer()
             }
-            .animation(MeeshyAnimation.springDefault, value: notificationToast?.id)
+            .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
             .zIndex(201)
         }
         .environment(\.openURL, OpenURLAction { url in
@@ -277,7 +274,7 @@ struct RootView: View {
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
-            await fetchUnreadNotificationCount()
+            await notificationManager.refreshUnreadCount()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
             if let userId = selectedStoryUserIdFromConv,
@@ -347,9 +344,6 @@ struct RootView: View {
         .onOpenURL { url in
             router.handleDeepLink(url)
         }
-        .onReceive(MessageSocketManager.shared.notificationReceived) { event in
-            showNotificationToast(event)
-        }
         .sheet(item: $router.deepLinkProfileUser) { user in
             ProfileFetchingSheet(user: user)
                 .environmentObject(statusViewModel)
@@ -380,7 +374,7 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showNotifications, onDismiss: {
-            Task { await fetchUnreadNotificationCount() }
+            Task { await notificationManager.refreshUnreadCount() }
         }) {
             NotificationListView(
                 onNotificationTap: { notification in
@@ -470,17 +464,6 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Fetch Unread Notification Count
-
-    private func fetchUnreadNotificationCount() async {
-        do {
-            let count = try await NotificationService.shared.unreadCount()
-            notificationCount = count
-        } catch {
-            // Silently fail — badge stays at current value
-        }
-    }
-
     // MARK: - Handle Notification Tap
 
     private func handleNotificationTap(_ notification: APINotification) {
@@ -538,9 +521,9 @@ struct RootView: View {
 
     private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
         switch event.notificationType {
-        case .newMessage, .message, .messageReply, .messageReaction, .reaction,
-             .mention, .mentionAlias, .missedCall,
-             .newConversationDirect, .newConversationGroup, .newConversation, .memberJoined:
+        case .newMessage, .messageReply, .messageReaction, .reaction,
+             .mention, .missedCall,
+             .newConversation, .addedToConversation, .memberJoined:
             if let conversationId = event.conversationId {
                 navigateToConversationById(conversationId)
             }
@@ -553,27 +536,8 @@ struct RootView: View {
                 )
             }
 
-        case .system:
+        default:
             break
-        }
-    }
-
-    // MARK: - Show Notification Toast
-
-    private func showNotificationToast(_ event: SocketNotificationEvent) {
-        notificationToastDismissTask?.cancel()
-        withAnimation(MeeshyAnimation.springDefault) {
-            notificationToast = event
-            notificationCount += 1
-        }
-        notificationToastDismissTask = Task {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                withAnimation(MeeshyAnimation.springDefault) {
-                    notificationToast = nil
-                }
-            }
         }
     }
 
@@ -675,8 +639,8 @@ struct RootView: View {
                         .foregroundColor(.white)
 
                     // Badge
-                    if !showMenu && notificationCount > 0 {
-                        NotificationBadge(count: notificationCount)
+                    if !showMenu && notificationManager.unreadCount > 0 {
+                        NotificationBadge(count: notificationManager.unreadCount)
                     }
                 }
             }
@@ -705,7 +669,7 @@ struct RootView: View {
                 ThemedFloatingButton(
                     icon: showMenu ? "person.3.fill" : "gearshape.fill",
                     colors: showMenu ? ["FF6B6B", "4ECDC4"] : ["9B59B6", "4ECDC4"],
-                    badge: showMenu ? 0 : notificationCount
+                    badge: showMenu ? 0 : notificationManager.unreadCount
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu.toggle()
@@ -776,7 +740,7 @@ struct RootView: View {
 
                 // Special handling for notifications badge
                 if item.icon == "bell.fill" {
-                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationCount, action: item.action)
+                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
                         .position(x: menuX, y: itemY)
                         .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
                 } else {

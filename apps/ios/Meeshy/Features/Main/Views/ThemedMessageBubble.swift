@@ -30,6 +30,7 @@ struct ThemedMessageBubble: View {
     var allAudioItems: [ConversationViewModel.AudioItem] = []
     var onScrollToMessage: ((String) -> Void)? = nil
     var activeAudioLanguage: String? = nil
+    var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
     var isLastReceivedMessage: Bool = false
 
@@ -59,6 +60,15 @@ struct ThemedMessageBubble: View {
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
+
+    private var hasReactions: Bool { !message.reactions.isEmpty }
+
+    private var bottomSpacing: CGFloat {
+        if isLastInGroup {
+            return hasReactions ? 22 : 10
+        }
+        return hasReactions ? 20 : 2
+    }
 
     private var currentDisplayLangCode: String {
         activeDisplayLangCode ?? preferredTranslation?.targetLanguage.lowercased() ?? message.originalLanguage.lowercased()
@@ -557,7 +567,7 @@ struct ThemedMessageBubble: View {
 
             if !message.isMe { Spacer(minLength: 50) }
         }
-        .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
+        .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
         .onChange(of: selectedProfileUser) { _, newValue in

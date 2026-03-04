@@ -2,14 +2,14 @@ import Foundation
 
 // MARK: - API Message Models
 
-public struct APIMessageSender: Decodable {
+public struct APIMessageSender: Decodable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
 }
 
-public struct APIAttachmentTranscription: Decodable {
+public struct APIAttachmentTranscription: Decodable, Sendable {
     public let text: String?
     public let transcribedText: String?
     public let language: String?
@@ -21,7 +21,7 @@ public struct APIAttachmentTranscription: Decodable {
     public var resolvedText: String { text ?? transcribedText ?? "" }
 }
 
-public struct APIAttachmentTranslation: Decodable {
+public struct APIAttachmentTranslation: Decodable, Sendable {
     public let type: String?
     public let transcription: String?
     public let url: String?
@@ -33,7 +33,7 @@ public struct APIAttachmentTranslation: Decodable {
     public let segments: [TranscriptionSegment]?
 }
 
-public struct APIMessageAttachment: Decodable {
+public struct APIMessageAttachment: Decodable, Sendable {
     public let id: String
     public let fileName: String?
     public let originalName: String?
@@ -50,7 +50,7 @@ public struct APIMessageAttachment: Decodable {
     public let translations: [String: APIAttachmentTranslation]?
 }
 
-public struct APIMessageReplyTo: Decodable {
+public struct APIMessageReplyTo: Decodable, Sendable {
     public let id: String
     public let content: String?
     public let senderId: String?
@@ -58,7 +58,7 @@ public struct APIMessageReplyTo: Decodable {
     public let attachments: [APIMessageAttachment]?
 }
 
-public struct APIForwardedFrom: Decodable {
+public struct APIForwardedFrom: Decodable, Sendable {
     public let id: String
     public let content: String?
     public let messageType: String?
@@ -67,7 +67,7 @@ public struct APIForwardedFrom: Decodable {
     public let attachments: [APIMessageAttachment]?
 }
 
-public struct APIForwardedFromConversation: Decodable {
+public struct APIForwardedFromConversation: Decodable, Sendable {
     public let id: String
     public let title: String?
     public let identifier: String?
@@ -75,7 +75,7 @@ public struct APIForwardedFromConversation: Decodable {
     public let avatar: String?
 }
 
-public struct APITextTranslation: Decodable, Identifiable {
+public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let id: String
     public let messageId: String
     public let targetLanguage: String
@@ -85,7 +85,7 @@ public struct APITextTranslation: Decodable, Identifiable {
     public let sourceLanguage: String?
 }
 
-public struct APIMessage: Decodable {
+public struct APIMessage: Decodable, Sendable {
     public let id: String
     public let conversationId: String
     public let senderId: String?
@@ -124,7 +124,7 @@ public struct APIMessage: Decodable {
     public let translations: [APITextTranslation]?
 }
 
-public struct MessagesAPIResponse: Decodable {
+public struct MessagesAPIResponse: Decodable, Sendable {
     public let success: Bool
     public let data: [APIMessage]
     public let pagination: OffsetPagination?
@@ -132,7 +132,7 @@ public struct MessagesAPIResponse: Decodable {
     public let hasNewer: Bool?
 }
 
-public struct SendMessageRequest: Encodable {
+public struct SendMessageRequest: Encodable, Sendable {
     public let content: String?
     public let originalLanguage: String?
     public let replyToId: String?
@@ -158,7 +158,7 @@ public struct SendMessageRequest: Encodable {
     }
 }
 
-public struct SendMessageResponseData: Decodable {
+public struct SendMessageResponseData: Decodable, Sendable {
     public let id: String
     public let conversationId: String
     public let senderId: String?
@@ -167,7 +167,7 @@ public struct SendMessageResponseData: Decodable {
     public let createdAt: Date
 }
 
-public struct ConsumeViewOnceResponse: Decodable {
+public struct ConsumeViewOnceResponse: Decodable, Sendable {
     public let messageId: String
     public let viewOnceCount: Int
     public let maxViewOnceCount: Int

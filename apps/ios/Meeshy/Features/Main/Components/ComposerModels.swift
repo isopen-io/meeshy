@@ -99,6 +99,7 @@ struct LanguageOption: Identifiable {
 // MARK: - Keyboard Observer
 // ============================================================================
 
+@MainActor
 class KeyboardObserver: ObservableObject {
     @Published var height: CGFloat = 0
     @Published var isVisible = false
@@ -110,6 +111,7 @@ class KeyboardObserver: ObservableObject {
 
     init() {
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 guard let self = self,
                       let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,

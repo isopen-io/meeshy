@@ -3,7 +3,7 @@ import UIKit
 
 // MARK: - Tag Model
 
-public struct MeeshyConversationTag: Identifiable, Hashable, Codable {
+public struct MeeshyConversationTag: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public let name: String
     public let color: String
@@ -41,7 +41,7 @@ public struct MeeshyConversationTag: Identifiable, Hashable, Codable {
 
 // MARK: - Conversation Section Model
 
-public struct MeeshyConversationSection: Identifiable, Hashable {
+public struct MeeshyConversationSection: Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
     public let icon: String
@@ -70,7 +70,7 @@ public struct MeeshyConversationSection: Identifiable, Hashable {
 
 // MARK: - Recent Message Preview
 
-public struct RecentMessagePreview: Identifiable, Hashable, Codable {
+public struct RecentMessagePreview: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public let content: String
     public let senderName: String
@@ -89,7 +89,7 @@ public struct RecentMessagePreview: Identifiable, Hashable, Codable {
 
 // MARK: - Conversation Model
 
-public struct MeeshyConversation: Identifiable, Hashable, Codable {
+public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public let identifier: String
     public let type: ConversationType
@@ -131,7 +131,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
     public var language: ConversationContext.ConversationLanguage = .french
     public var theme: ConversationContext.ConversationTheme = .general
 
-    public enum ConversationType: String, Codable, CaseIterable {
+    public enum ConversationType: String, Codable, CaseIterable, Sendable {
         case direct, group, `public`, global, community, channel, bot
     }
 
@@ -234,7 +234,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable {
 
 // MARK: - Community Model
 
-public struct MeeshyCommunity: Identifiable, Hashable {
+public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public let id: String
     public let identifier: String
     public let name: String
@@ -273,7 +273,7 @@ public struct MeeshyCommunity: Identifiable, Hashable {
 
 // MARK: - Message Model
 
-public struct MeeshyMessage: Identifiable, Codable {
+public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public let id: String
     public let conversationId: String
     public var senderId: String?
@@ -414,7 +414,7 @@ public enum EphemeralDuration: Int, CaseIterable, Identifiable {
 
 // MARK: - Message Attachment
 
-public struct MeeshyMessageAttachment: Identifiable, Codable {
+public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
     public let fileName: String
@@ -528,7 +528,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable {
 
 // MARK: - Reply Reference
 
-public struct ReplyReference: Codable {
+public struct ReplyReference: Codable, Sendable {
     public let messageId: String
     public let authorName: String
     public let authorColor: String
@@ -552,7 +552,7 @@ public struct ReplyReference: Codable {
 
 // MARK: - Forward Reference
 
-public struct ForwardReference: Codable {
+public struct ForwardReference: Codable, Sendable {
     public let originalMessageId: String
     public let senderName: String
     public let senderAvatar: String?
@@ -578,7 +578,7 @@ public struct ForwardReference: Codable {
 
 // MARK: - Reaction Model
 
-public struct MeeshyReaction: Identifiable, Codable {
+public struct MeeshyReaction: Identifiable, Codable, Sendable {
     public let id: String
     public let messageId: String
     public var userId: String?
@@ -596,7 +596,7 @@ public struct MeeshyReaction: Identifiable, Codable {
 
 // MARK: - Reaction Summary
 
-public struct MeeshyReactionSummary {
+public struct MeeshyReactionSummary: Sendable {
     public let emoji: String
     public let count: Int
     public let includesMe: Bool
@@ -610,7 +610,7 @@ public typealias MeeshyMessageReaction = MeeshyReactionSummary
 
 // MARK: - Enriched Reaction Models
 
-public struct ReactionUserDetail: Codable, Identifiable {
+public struct ReactionUserDetail: Codable, Identifiable, Sendable {
     public let userId: String
     public let username: String
     public let avatar: String?
@@ -626,7 +626,7 @@ public struct ReactionUserDetail: Codable, Identifiable {
     }
 }
 
-public struct ReactionGroup: Codable, Identifiable {
+public struct ReactionGroup: Codable, Identifiable, Sendable {
     public let emoji: String
     public let count: Int
     public let users: [ReactionUserDetail]
@@ -640,7 +640,7 @@ public struct ReactionGroup: Codable, Identifiable {
     }
 }
 
-public struct ReactionSyncResponse: Codable {
+public struct ReactionSyncResponse: Codable, Sendable {
     public let messageId: String
     public let reactions: [ReactionGroup]
     public let totalCount: Int
@@ -649,7 +649,7 @@ public struct ReactionSyncResponse: Codable {
 
 // MARK: - Feed Item Model
 
-public struct MeeshyFeedItem: Identifiable {
+public struct MeeshyFeedItem: Identifiable, Sendable {
     public let id = UUID()
     public let author: String
     public let content: String
@@ -693,7 +693,7 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
 
 // MARK: - Shared Contact Model
 
-public struct SharedContact: Codable, Identifiable {
+public struct SharedContact: Codable, Identifiable, Sendable {
     public let id: String
     public let fullName: String
     public var phoneNumbers: [String]

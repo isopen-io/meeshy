@@ -61,7 +61,7 @@ protocol WebRTCServiceDelegate: AnyObject {
 
 // MARK: - WebRTC Service
 
-final class WebRTCService {
+final class WebRTCService: @unchecked Sendable {
     weak var delegate: WebRTCServiceDelegate?
 
     private(set) var localDescription: RTCSessionDescription?
