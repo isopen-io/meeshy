@@ -148,11 +148,15 @@ private struct AudioFullscreenPage: View {
         return isSeeking ? seekValue : player.progress
     }
 
-    private var currentLangColor: Color {
+    private var currentLangColorHex: String {
         if selectedLanguage == "orig" {
-            return Color(hex: LanguageDisplay.colorHex(for: message.originalLanguage))
+            return LanguageDisplay.colorHex(for: message.originalLanguage)
         }
-        return Color(hex: LanguageDisplay.colorHex(for: selectedLanguage))
+        return LanguageDisplay.colorHex(for: selectedLanguage)
+    }
+
+    private var currentLangColor: Color {
+        Color(hex: currentLangColorHex)
     }
 
     private var originalFlag: String {
@@ -584,39 +588,13 @@ private struct AudioFullscreenPage: View {
     // MARK: - Transcription Section (flexible height, scrollable)
 
     private var transcriptionSection: some View {
-        let activeIdx = displaySegments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
-
-        return ScrollView(.vertical, showsIndicators: true) {
-            FlowLayout(spacing: 0) {
-                ForEach(Array(displaySegments.enumerated()), id: \.element.id) { index, segment in
-                    let isActive = index == activeIdx
-                    let isPast = activeIdx != nil && index < activeIdx!
-
-                    Button {
-                        player.seekToTime(segment.startTime)
-                        HapticFeedback.light()
-                    } label: {
-                        Text(segment.text + " ")
-                            .font(.system(size: 15, weight: isActive ? .bold : .regular))
-                            .foregroundColor(transcriptionColor(isActive: isActive, isPast: isPast))
-                            .padding(.horizontal, isActive ? 3 : 0)
-                            .padding(.vertical, isActive ? 2 : 0)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(currentLangColor.opacity(isActive ? 0.2 : 0))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .animation(.easeInOut(duration: 0.15), value: isActive)
-                }
+        MediaTranscriptionView(
+            segments: displaySegments,
+            currentTime: player.currentTime,
+            accentColor: currentLangColorHex,
+            onSeek: { time in
+                player.seekToTime(time)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(currentLangColor.opacity(0.08))
         )
     }
 
@@ -714,12 +692,6 @@ private struct AudioFullscreenPage: View {
             }
         }
         .padding(.horizontal, 8)
-    }
-
-    private func transcriptionColor(isActive: Bool, isPast: Bool) -> Color {
-        if isActive { return currentLangColor }
-        if isPast { return .white.opacity(0.7) }
-        return .white.opacity(0.35)
     }
 
     private func languagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {

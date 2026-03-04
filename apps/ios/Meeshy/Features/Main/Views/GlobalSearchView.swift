@@ -244,28 +244,12 @@ struct GlobalSearchView: View {
     // MARK: - Empty Results
 
     private var emptyResultsView: some View {
-        VStack(spacing: 16) {
-            Spacer().frame(height: 40)
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [MeeshyColors.coral.opacity(0.5), MeeshyColors.teal.opacity(0.5)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .accessibilityHidden(true)
-            Text(String(localized: "search.no_results", defaultValue: "Aucun resultat"))
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-            Text(String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
-                .font(.system(size: 13))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        EmptyStateView(
+            icon: "magnifyingglass",
+            title: String(localized: "search.no_results", defaultValue: "Aucun resultat"),
+            subtitle: String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche")
+        )
+        .padding(.top, 40)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun resultat") + ". " + String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
     }
@@ -313,26 +297,12 @@ struct GlobalSearchView: View {
                 }
                 .padding(.top, 8)
             } else {
-                VStack(spacing: 16) {
-                    Spacer().frame(height: 60)
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 40))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [MeeshyColors.coral.opacity(0.3), MeeshyColors.teal.opacity(0.3)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .accessibilityHidden(true)
-                    Text(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy"))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
-                    Text(String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs"))
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textMuted)
-                }
-                .frame(maxWidth: .infinity)
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy"),
+                    subtitle: String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs")
+                )
+                .padding(.top, 60)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "search.global.title", defaultValue: "Rechercher dans Meeshy") + ". " + String(localized: "search.global.subtitle", defaultValue: "Messages, conversations, utilisateurs"))
             }

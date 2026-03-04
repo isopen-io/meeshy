@@ -1,6 +1,6 @@
 import Foundation
 
-public final class PreferenceService {
+public final class PreferenceService: @unchecked Sendable {
     public static let shared = PreferenceService()
     private init() {}
     private var api: APIClient { APIClient.shared }
@@ -20,6 +20,13 @@ public final class PreferenceService {
     public func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {
         let _: APIResponse<[String: String]> = try await api.put(
             endpoint: "/user-preferences/conversations/\(conversationId)", body: request
+        )
+    }
+
+    public func patchCategory(id: String, isExpanded: Bool) async throws {
+        let body = ["isExpanded": isExpanded]
+        let _: APIResponse<[String: String]> = try await api.patch(
+            endpoint: "/me/preferences/categories/\(id)", body: body
         )
     }
 

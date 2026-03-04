@@ -210,16 +210,11 @@ struct SharePickerView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 40))
-                .foregroundColor(theme.textMuted)
-            Text("Aucune conversation")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
+        EmptyStateView(
+            icon: "bubble.left.and.bubble.right",
+            title: "Aucune conversation",
+            subtitle: ""
+        )
     }
 
     // MARK: - Conversation List

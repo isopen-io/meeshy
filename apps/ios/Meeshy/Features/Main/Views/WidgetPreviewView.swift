@@ -178,19 +178,12 @@ struct WidgetPreviewView: View {
             }
 
             if recentConversations.isEmpty {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 6) {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 24))
-                            .foregroundColor(theme.textMuted.opacity(0.5))
-                        Text("Aucune conversation")
-                            .font(.system(size: 13))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.vertical, 16)
-                    Spacer()
-                }
+                EmptyStateView(
+                    icon: "bubble.left.and.bubble.right",
+                    title: "Aucune conversation",
+                    subtitle: ""
+                )
+                .padding(.vertical, 16)
             } else {
                 ForEach(Array(recentConversations.enumerated()), id: \.element.id) { index, conv in
                     recentConversationRow(conv, index: index)

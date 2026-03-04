@@ -132,6 +132,7 @@ public struct ConversationCategory: Decodable, Identifiable {
     public let color: String?
     public let icon: String?
     public let order: Int?
+    public let isExpanded: Bool?
 }
 
 // MARK: - Translation

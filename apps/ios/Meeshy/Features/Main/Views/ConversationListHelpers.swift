@@ -248,15 +248,11 @@ struct ConversationPreviewView: View {
                     }
                     .padding(.bottom, 8)
                 } else if messages.isEmpty {
-                    VStack(spacing: 6) {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 22))
-                            .foregroundColor(theme.textMuted.opacity(0.3))
-                        Text(String(localized: "preview.no_messages", defaultValue: "Aucun message"))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .frame(maxWidth: .infinity)
+                    EmptyStateView(
+                        icon: "bubble.left.and.bubble.right",
+                        title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
+                        subtitle: ""
+                    )
                     .padding(.bottom, 10)
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {

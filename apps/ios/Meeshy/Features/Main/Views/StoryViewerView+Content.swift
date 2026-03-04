@@ -835,19 +835,11 @@ struct StoryViewersSheet: View {
                     ProgressView("Chargement des vues...")
                         .tint(accentColor)
                 } else if viewers.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "eye.slash")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary.opacity(0.5))
-                        Text("Aucune vue pour le moment")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text("Les personnes qui regardent votre story apparaîtront ici.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    }
+                    EmptyStateView(
+                        icon: "eye.slash",
+                        title: "Aucune vue pour le moment",
+                        subtitle: "Les personnes qui regardent votre story apparaîtront ici."
+                    )
                 } else {
                     List {
                         Section(header: Text("\(viewers.count) Vues")

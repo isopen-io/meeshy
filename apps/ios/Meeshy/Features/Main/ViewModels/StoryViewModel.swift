@@ -11,7 +11,7 @@ class StoryViewModel: ObservableObject {
     @Published var publishError: String?
     @Published var showStoryComposer = false
 
-    private let api = APIClient.shared
+    private let storyService = StoryService.shared
     private let postService = PostService.shared
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket = SocialSocketManager.shared
@@ -23,18 +23,9 @@ class StoryViewModel: ObservableObject {
         isLoading = true
 
         do {
-            let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
-                endpoint: "/posts/feed/stories",
-                limit: 50
-            )
+            let response = try await storyService.list(limit: 50)
 
             if response.success {
-                // DEBUG Bug3: log decoded storyEffects.mediaObjects from server
-                for apiPost in response.data {
-                    if let objects = apiPost.storyEffects?.mediaObjects, !objects.isEmpty {
-                        NSLog("[Bug3][loadStories] postId=%@ mediaObjects=%@", apiPost.id, objects.map { "id=\($0.id) x=\($0.x) y=\($0.y) scale=\($0.scale) rotation=\($0.rotation) postMediaId=\($0.postMediaId)" }.joined(separator: " | "))
-                    }
-                }
                 storyGroups = response.data.toStoryGroups()
             } else {
                 fallbackToSampleData()
@@ -52,10 +43,7 @@ class StoryViewModel: ObservableObject {
         // Fire & forget
         Task {
             do {
-                let _: APIResponse<[String: AnyCodable]> = try await api.request(
-                    endpoint: "/posts/\(storyId)/view",
-                    method: "POST"
-                )
+                try await storyService.markViewed(storyId: storyId)
             } catch {
                 // Silent failure
             }
@@ -305,7 +293,7 @@ class StoryViewModel: ObservableObject {
 
     func deleteStory(storyId: String) async -> Bool {
         do {
-            let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
+            try await storyService.delete(storyId: storyId)
             
             // Remove from local state
             for i in storyGroups.indices {
