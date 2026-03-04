@@ -165,6 +165,28 @@ public struct MessageConsumedEvent: Decodable {
     public let isFullyConsumed: Bool
 }
 
+// MARK: - Notification Socket Event Data
+
+public struct SocketNotificationEvent: Decodable {
+    public let id: String
+    public let userId: String
+    public let type: String
+    public let title: String
+    public let content: String
+    public let priority: String?
+    public let isRead: Bool?
+    public let senderUsername: String?
+    public let senderDisplayName: String?
+    public let senderAvatar: String?
+    public let messagePreview: String?
+    public let conversationId: String?
+    public let messageId: String?
+
+    public var notificationType: MeeshyNotificationType {
+        MeeshyNotificationType(rawValue: type) ?? .system
+    }
+}
+
 // MARK: - Connection State
 
 public enum ConnectionState: Equatable {
@@ -219,6 +241,9 @@ public final class MessageSocketManager: ObservableObject {
 
     // Combine publisher — reconnection (fires after successful reconnect)
     public let didReconnect = PassthroughSubject<Void, Never>()
+
+    // Combine publishers — notifications
+    public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -547,6 +572,14 @@ public final class MessageSocketManager: ObservableObject {
         socket.on("location:live-stopped") { [weak self] data, _ in
             self?.decode(LiveLocationStoppedEvent.self, from: data) { event in
                 self?.liveLocationStopped.send(event)
+            }
+        }
+
+        // --- Notification events ---
+
+        socket.on("notification") { [weak self] data, _ in
+            self?.decode(SocketNotificationEvent.self, from: data) { event in
+                self?.notificationReceived.send(event)
             }
         }
     }

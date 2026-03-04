@@ -19,7 +19,9 @@ struct RootView: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
-    @State private var notificationCount = 3
+    @State private var notificationCount = 0
+    @State private var notificationToast: SocketNotificationEvent?
+    @State private var notificationToastDismissTask: Task<Void, Never>?
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
     @State private var selectedStoryUserIdFromConv: String?
@@ -223,7 +225,7 @@ struct RootView: View {
                 .zIndex(190)
             }
 
-            // 8. Toast overlay
+            // 8. Toast overlay (system toasts)
             VStack {
                 if let toast = toastManager.currentToast {
                     ToastView(toast: toast)
@@ -237,6 +239,22 @@ struct RootView: View {
             }
             .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
             .zIndex(200)
+
+            // 9. Notification toast overlay (socket real-time)
+            VStack {
+                if let toast = notificationToast {
+                    NotificationToastView(event: toast) {
+                        notificationToast = nil
+                        notificationToastDismissTask?.cancel()
+                        handleSocketNotificationTap(toast)
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, MeeshySpacing.xxl)
+                }
+                Spacer()
+            }
+            .animation(MeeshyAnimation.springDefault, value: notificationToast?.id)
+            .zIndex(201)
         }
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkParser.parse(url)
@@ -327,6 +345,9 @@ struct RootView: View {
         }
         .onOpenURL { url in
             router.handleDeepLink(url)
+        }
+        .onReceive(MessageSocketManager.shared.notificationReceived) { event in
+            showNotificationToast(event)
         }
         .sheet(item: $router.deepLinkProfileUser) { user in
             ProfileFetchingSheet(user: user)
@@ -446,44 +467,68 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Handle Notification Tap
+    // MARK: - Handle Notification Tap (REST model)
 
     private func handleNotificationTap(_ notification: APINotification) {
-        let data = notification.data
-
         switch notification.notificationType {
-        case .newMessage, .messageReaction, .mention, .translationReady, .storyReply:
-            guard let conversationId = data?.conversationId else { return }
-            navigateToConversationById(conversationId)
-
-        case .friendRequest, .friendAccepted, .statusUpdate:
-            if let senderId = notification.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
-            }
-
-        case .groupInvite, .groupJoined, .groupLeft:
-            if let conversationId = data?.conversationId {
+        case .newMessage, .message, .messageReply, .messageReaction, .reaction,
+             .mention, .mentionAlias, .missedCall,
+             .newConversationDirect, .newConversationGroup, .newConversation, .memberJoined:
+            if let conversationId = notification.context?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .postComment:
-            if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+            if let actorId = notification.actor?.id {
+                let username = notification.actor?.username ?? actorId
+                router.deepLinkProfileUser = ProfileSheetUser(userId: actorId, username: username)
             }
 
-        case .callMissed, .callIncoming:
-            if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .achievementUnlocked:
-            router.push(.userStats)
-
-        case .affiliateSignup:
-            router.push(.affiliate)
-
-        case .systemAlert:
+        case .system:
             break
+        }
+    }
+
+    // MARK: - Handle Socket Notification Tap
+
+    private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
+        switch event.notificationType {
+        case .newMessage, .message, .messageReply, .messageReaction, .reaction,
+             .mention, .mentionAlias, .missedCall,
+             .newConversationDirect, .newConversationGroup, .newConversation, .memberJoined:
+            if let conversationId = event.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+            if let username = event.senderUsername {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: event.userId,
+                    username: username
+                )
+            }
+
+        case .system:
+            break
+        }
+    }
+
+    // MARK: - Show Notification Toast
+
+    private func showNotificationToast(_ event: SocketNotificationEvent) {
+        notificationToastDismissTask?.cancel()
+        withAnimation(MeeshyAnimation.springDefault) {
+            notificationToast = event
+            notificationCount += 1
+        }
+        notificationToastDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation(MeeshyAnimation.springDefault) {
+                    notificationToast = nil
+                }
+            }
         }
     }
 

@@ -8,7 +8,7 @@ public struct NotificationListView: View {
     public var onNotificationTap: ((APINotification) -> Void)?
     public var onDismiss: (() -> Void)?
 
-    private let accentColor = "FF6B6B"
+    private let brandColor = Color(hex: "6366F1")
 
     public init(
         onNotificationTap: ((APINotification) -> Void)? = nil,
@@ -39,7 +39,7 @@ public struct NotificationListView: View {
                 } label: {
                     Text("Tout lire")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(brandColor)
                 }
             } else {
                 Color.clear.frame(width: 50, height: 24)
@@ -47,9 +47,16 @@ public struct NotificationListView: View {
 
             Spacer()
 
-            Text("Notifications")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+            VStack(spacing: 2) {
+                Text("Notifications")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                if viewModel.unreadCount > 0 {
+                    Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
+                        .font(.system(size: 11))
+                        .foregroundColor(brandColor)
+                }
+            }
 
             Spacer()
 
@@ -75,13 +82,8 @@ public struct NotificationListView: View {
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                filterChip(label: "Toutes", isSelected: !viewModel.unreadOnly) {
-                    viewModel.unreadOnly = false
-                    Task { await viewModel.loadInitial() }
-                }
-                filterChip(label: "Non lues", isSelected: viewModel.unreadOnly) {
-                    viewModel.unreadOnly = true
-                    Task { await viewModel.loadInitial() }
+                ForEach(NotificationFilter.allCases, id: \.self) { filter in
+                    filterChip(filter: filter)
                 }
             }
             .padding(.horizontal, 16)
@@ -89,18 +91,40 @@ public struct NotificationListView: View {
         }
     }
 
-    private func filterChip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(isSelected ? .white : Color(hex: accentColor))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color(hex: accentColor) : Color(hex: accentColor).opacity(0.12))
-                )
+    private func filterChip(filter: NotificationFilter) -> some View {
+        let isSelected = viewModel.activeFilter == filter
+        let count = viewModel.unreadCountFor(filter: filter)
+
+        return Button {
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                viewModel.activeFilter = filter
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(filter.label)
+                    .font(.system(size: 13, weight: .semibold))
+
+                if count > 0 {
+                    Text("\(min(count, 99))")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(isSelected ? brandColor : .white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(isSelected ? .white : brandColor)
+                        )
+                }
+            }
+            .foregroundColor(isSelected ? .white : brandColor)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isSelected ? brandColor : brandColor.opacity(0.12))
+            )
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - List
@@ -109,12 +133,12 @@ public struct NotificationListView: View {
         Group {
             if viewModel.isLoading && viewModel.notifications.isEmpty {
                 loadingState
-            } else if viewModel.notifications.isEmpty {
+            } else if viewModel.filteredNotifications.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(viewModel.notifications) { notification in
+                        ForEach(viewModel.filteredNotifications) { notification in
                             NotificationRowView(
                                 notification: notification,
                                 onTap: {
@@ -133,7 +157,7 @@ public struct NotificationListView: View {
                                 .background(theme.textMuted.opacity(0.1))
                         }
 
-                        if viewModel.hasMore {
+                        if viewModel.hasMore && viewModel.activeFilter == .all {
                             ProgressView()
                                 .padding()
                                 .onAppear {
@@ -155,7 +179,7 @@ public struct NotificationListView: View {
         VStack(spacing: 12) {
             Spacer()
             ProgressView()
-                .tint(Color(hex: accentColor))
+                .tint(brandColor)
             Text("Chargement...")
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
@@ -166,18 +190,63 @@ public struct NotificationListView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image(systemName: "bell.slash")
+            Image(systemName: viewModel.activeFilter == .all ? "bell.slash" : "tray")
                 .font(.system(size: 48))
-                .foregroundColor(Color(hex: accentColor).opacity(0.4))
+                .foregroundColor(brandColor.opacity(0.4))
 
-            Text(viewModel.unreadOnly ? "Aucune notification non lue" : "Aucune notification")
+            Text(emptyTitle)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Vos notifications apparaitront ici")
+            Text("Vos notifications apparaîtront ici")
                 .font(.system(size: 13))
                 .foregroundColor(theme.textMuted)
             Spacer()
+        }
+    }
+
+    private var emptyTitle: String {
+        switch viewModel.activeFilter {
+        case .all: return "Aucune notification"
+        case .message: return "Aucun message"
+        case .reaction: return "Aucune réaction"
+        case .mention: return "Aucune mention"
+        case .call: return "Aucun appel manqué"
+        case .contact: return "Aucun contact"
+        }
+    }
+}
+
+// MARK: - Notification Filter
+
+public enum NotificationFilter: CaseIterable, Hashable {
+    case all, message, reaction, mention, call, contact
+
+    var label: String {
+        switch self {
+        case .all: return "Toutes"
+        case .message: return "Messages"
+        case .reaction: return "Réactions"
+        case .mention: return "Mentions"
+        case .call: return "Appels"
+        case .contact: return "Contacts"
+        }
+    }
+
+    func matches(_ notification: APINotification) -> Bool {
+        switch self {
+        case .all: return true
+        case .message:
+            return [.newMessage, .message, .messageReply].contains(notification.notificationType)
+        case .reaction:
+            return [.messageReaction, .reaction].contains(notification.notificationType)
+        case .mention:
+            return [.mention, .mentionAlias].contains(notification.notificationType)
+        case .call:
+            return notification.notificationType == .missedCall
+        case .contact:
+            return [.friendRequest, .contactRequest, .friendAccepted, .contactAccepted]
+                .contains(notification.notificationType)
         }
     }
 }
@@ -190,25 +259,31 @@ final class NotificationListViewModel: ObservableObject {
     @Published var unreadCount: Int = 0
     @Published var isLoading = false
     @Published var hasMore = false
-    @Published var unreadOnly = false
+    @Published var activeFilter: NotificationFilter = .all
 
     private var offset = 0
-    private let limit = 20
+    private let limit = 30
+
+    var filteredNotifications: [APINotification] {
+        notifications.filter { activeFilter.matches($0) }
+    }
+
+    func unreadCountFor(filter: NotificationFilter) -> Int {
+        notifications.filter { filter.matches($0) && !$0.isRead }.count
+    }
 
     func loadInitial() async {
         isLoading = true
         offset = 0
         do {
             let response = try await NotificationService.shared.list(
-                offset: 0, limit: limit, unreadOnly: unreadOnly
+                offset: 0, limit: limit, unreadOnly: false
             )
             notifications = response.data
             unreadCount = response.unreadCount ?? 0
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
-        } catch {
-            // Silently fail - UI shows empty state
-        }
+        } catch {}
         isLoading = false
     }
 
@@ -217,7 +292,7 @@ final class NotificationListViewModel: ObservableObject {
         isLoading = true
         do {
             let response = try await NotificationService.shared.list(
-                offset: offset, limit: limit, unreadOnly: unreadOnly
+                offset: offset, limit: limit, unreadOnly: false
             )
             notifications.append(contentsOf: response.data)
             hasMore = response.pagination?.hasMore ?? false
@@ -230,9 +305,7 @@ final class NotificationListViewModel: ObservableObject {
         guard !notification.isRead else { return }
         do {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
-            if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
-                await loadInitial()
-            }
+            await loadInitial()
         } catch {}
     }
 

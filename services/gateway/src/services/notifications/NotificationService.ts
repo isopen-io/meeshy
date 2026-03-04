@@ -519,17 +519,28 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
-    const reactor = await this.prisma.user.findUnique({
-      where: { id: params.reactorUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [reactor, conversation, message] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.reactorUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+      this.prisma.message.findUnique({
+        where: { id: params.messageId },
+        select: { content: true },
+      }),
+    ]);
 
     if (!reactor) return null;
 
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
+    const messagePreview = message?.content
+      ? message.content.length > 100
+        ? message.content.substring(0, 100) + '…'
+        : message.content
+      : null;
 
     return this.createNotification({
       userId: params.messageAuthorId,
@@ -554,6 +565,7 @@ export class NotificationService {
       metadata: {
         action: 'view_message',
         reactionEmoji: params.reactionEmoji,
+        ...(messagePreview && { messageContent: messagePreview }),
       },
     });
   }
