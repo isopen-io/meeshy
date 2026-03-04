@@ -605,6 +605,14 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         data: { password: hashedPassword }
       });
 
+      // Notification sécurité
+      const notificationService = (fastify as any).notificationService;
+      if (notificationService) {
+        notificationService.createPasswordChangedNotification({
+          recipientUserId: userId,
+        }).catch((err: unknown) => console.error('[Profile] Notification error (password_changed):', err));
+      }
+
       return reply.send({
         success: true,
         data: { message: 'Password updated successfully' }

@@ -4,7 +4,8 @@
   "roots": ["<rootDir>/src"],
   "testMatch": ["**/__tests__/**/*.test.ts"],
   "moduleNameMapper": {
-    "^@meeshy/shared(.*)$": "<rootDir>/../../packages/shared/src$1"
+    "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
+    "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index"
   },
   "transform": {
     "^.+\\.tsx?$": ["ts-jest", { "tsconfig": "tsconfig.json" }]

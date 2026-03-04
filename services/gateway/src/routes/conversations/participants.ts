@@ -471,6 +471,31 @@ export function registerParticipantsRoutes(
         }
       });
 
+      // Notifications
+      const notificationService = (request.server as any).notificationService;
+      if (notificationService) {
+        // Notifier le nouveau membre qu'il a été ajouté
+        notificationService.createAddedToConversationNotification({
+          recipientUserId: userId,
+          addedByUserId: currentUserId,
+          conversationId,
+        }).catch((err: unknown) => console.error('[Participants] Notification error (added):', err));
+
+        // Notifier les membres existants qu'un nouveau membre a rejoint
+        const existingMembers = await prisma.conversationMember.findMany({
+          where: { conversationId, isActive: true, userId: { notIn: [userId, currentUserId] } },
+          select: { userId: true },
+        });
+        for (const member of existingMembers) {
+          notificationService.createMemberJoinedNotification({
+            recipientUserId: member.userId,
+            newMemberUserId: userId,
+            conversationId,
+            joinMethod: 'invited' as const,
+          }).catch((err: unknown) => console.error('[Participants] Notification error (joined):', err));
+        }
+      }
+
       reply.send({
         success: true,
         data: { message: 'Participant ajouté avec succès' }
@@ -586,6 +611,35 @@ export function registerParticipantsRoutes(
           leftAt: new Date()
         }
       });
+
+      // Notifications
+      const notificationService = (request.server as any).notificationService;
+      if (notificationService) {
+        // Notifier le membre retiré
+        notificationService.createRemovedFromConversationNotification({
+          recipientUserId: userId,
+          removedByUserId: currentUserId,
+          conversationId,
+        }).catch((err: unknown) => console.error('[Participants] Notification error (removed):', err));
+
+        // Notifier les admins/modos restants
+        const adminMembers = await prisma.conversationMember.findMany({
+          where: {
+            conversationId,
+            isActive: true,
+            role: { in: ['CREATOR', 'ADMIN', 'MODERATOR'] },
+            userId: { not: currentUserId },
+          },
+          select: { userId: true },
+        });
+        for (const admin of adminMembers) {
+          notificationService.createMemberRemovedNotification({
+            recipientUserId: admin.userId,
+            removedByUserId: currentUserId,
+            conversationId,
+          }).catch((err: unknown) => console.error('[Participants] Notification error (member_removed):', err));
+        }
+      }
 
       reply.send({
         success: true,
@@ -770,6 +824,18 @@ export function registerParticipantsRoutes(
           updatedBy: currentUserId,
           participant: updatedMembership
         });
+      }
+
+      // Notification de changement de rôle
+      const notificationService = (request.server as any).notificationService;
+      if (notificationService) {
+        notificationService.createMemberRoleChangedNotification({
+          recipientUserId: userId,
+          changedByUserId: currentUserId,
+          conversationId,
+          newRole: role,
+          previousRole: targetMembership.role,
+        }).catch((err: unknown) => console.error('[Participants] Notification error (role_changed):', err));
       }
 
       reply.send({

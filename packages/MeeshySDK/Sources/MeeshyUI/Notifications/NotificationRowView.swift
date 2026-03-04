@@ -117,42 +117,76 @@ public struct NotificationRowView: View {
 
     private var contextualMessage: String {
         switch notifType {
-        case .newMessage:
+        case .newMessage, .legacyNewMessage, .messageReply:
             return notification.data?.preview ?? "Nouveau message"
-        case .messageReaction:
+        case .messageReaction, .reaction, .legacyMessageReaction:
             return "A reagi a votre message"
-        case .mention:
+        case .userMentioned, .mention, .legacyMention:
             return "Vous a mentionne"
-        case .friendRequest:
+        case .friendRequest, .contactRequest, .legacyFriendRequest:
             return "Demande d'ami"
-        case .friendAccepted:
+        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
             return "A accepte votre demande"
-        case .groupInvite:
+        case .communityInvite, .legacyGroupInvite:
             return "Invitation de groupe"
-        case .groupJoined:
+        case .communityJoined, .memberJoined, .legacyGroupJoined:
             return "A rejoint le groupe"
-        case .groupLeft:
+        case .communityLeft, .memberLeft, .legacyGroupLeft:
             return "A quitte le groupe"
-        case .callMissed:
+        case .missedCall, .callDeclined, .legacyCallMissed:
             return "Appel manque"
-        case .callIncoming:
+        case .incomingCall, .callEnded, .legacyCallIncoming:
             return "Appel entrant"
-        case .postLike:
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
             return "A aime votre publication"
-        case .postComment:
+        case .postComment, .commentReply, .legacyPostComment:
             return "A commente votre publication"
-        case .storyReply:
+        case .legacyStoryReply:
             return "A repondu a votre story"
-        case .affiliateSignup:
+        case .legacyAffiliateSignup:
             return "Inscription via votre lien"
-        case .achievementUnlocked:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             return "Nouveau badge debloque !"
-        case .systemAlert:
+        case .securityAlert, .legacySystemAlert:
             return "Alerte systeme"
-        case .statusUpdate:
+        case .loginNewDevice:
+            return "Connexion nouvel appareil"
+        case .passwordChanged:
+            return "Mot de passe modifie"
+        case .twoFactorEnabled:
+            return "Verification en 2 etapes activee"
+        case .twoFactorDisabled:
+            return "Verification en 2 etapes desactivee"
+        case .legacyStatusUpdate:
             return "Mise a jour de statut"
-        case .translationReady:
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
             return "Traduction disponible"
+        case .system, .maintenance, .updateAvailable:
+            return "Notification systeme"
+        case .voiceCloneReady:
+            return "Clone vocal pret"
+        case .postRepost:
+            return "A repartage votre publication"
+        case .addedToConversation, .newConversation:
+            return "Ajoute a une conversation"
+        case .removedFromConversation, .memberRemoved:
+            return "Retire de la conversation"
+        case .memberPromoted:
+            return "Promu dans le groupe"
+        case .memberDemoted:
+            return "Retrogade dans le groupe"
+        case .memberRoleChanged:
+            return "Role modifie"
+        case .messageEdited:
+            return "Message modifie"
+        case .messageDeleted:
+            return "Message supprime"
+        case .messagePinned:
+            return "Message epingle"
+        case .messageForwarded:
+            return "Message transfere"
+        case .reply:
+            return notification.data?.preview ?? "A repondu a votre message"
         }
     }
 

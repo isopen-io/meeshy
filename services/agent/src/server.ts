@@ -12,6 +12,8 @@ import { RedisStateManager } from './memory/redis-state';
 import { MongoPersistence } from './memory/mongo-persistence';
 import type { AgentNewMessage } from './zmq/types';
 import type { MessageEntry } from './graph/state';
+import { configRoutes } from './routes/config';
+import { rolesRoutes } from './routes/roles';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -23,6 +25,9 @@ server.get('/health', async () => ({
   uptime: process.uptime(),
   provider: env.LLM_PROVIDER,
 }));
+
+server.register(configRoutes);
+server.register(rolesRoutes);
 
 async function start() {
   const llm = createLlmProvider({

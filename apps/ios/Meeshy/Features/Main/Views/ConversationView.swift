@@ -134,11 +134,22 @@ struct ConversationView: View {
 
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
+    @State var composerHeight: CGFloat = 130
+    @State private var keyboardHeight: CGFloat = 0
 
     let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
+
+    // MARK: - Composer Height Measurement
+
+    private func updateComposerHeight(_ contentHeight: CGFloat) {
+        let safeBottom = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
+        composerHeight = contentHeight + safeBottom
+    }
 
     // MARK: - Computed Properties
 
@@ -191,14 +202,6 @@ struct ConversationView: View {
     private var isCurrentUserAdminOrMod: Bool {
         let role = conversation?.currentUserRole?.uppercased() ?? ""
         return ["ADMIN", "MODERATOR", "BIGBOSS"].contains(role)
-    }
-
-    var composerHeight: CGFloat {
-        var height: CGFloat = 130 // UCB base + topToolbar
-        if !composerState.pendingAttachments.isEmpty { height += 110 }
-        if composerState.editingMessageId != nil { height += 52 }
-        if composerState.pendingReplyReference != nil && composerState.editingMessageId == nil { height += 52 }
-        return height
     }
 
     // MARK: - Init
@@ -377,6 +380,13 @@ struct ConversationView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                keyboardHeight = frame.height
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardHeight = 0
+            }
             .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
                 if let userId = headerState.storyUserIdForHeader,
                    let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
@@ -516,13 +526,15 @@ struct ConversationView: View {
                     }
                     themedComposer
                 }
-                .background(
-                    theme.mode.isDark
-                        ? Color.black.opacity(0.6)
-                        : Color(UIColor.systemBackground).opacity(0.95)
-                )
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea(.container, edges: .bottom)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { updateComposerHeight(geo.size.height) }
+                            .onChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
+                    }
+                )
             }
             .zIndex(50)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
@@ -647,6 +659,27 @@ struct ConversationView: View {
                 viewModel.markProgrammaticScroll()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     proxy.scrollTo("typing_indicator", anchor: .bottom)
+                }
+            }
+            .onChange(of: composerState.isUploading) { wasUploading, isUploading in
+                guard wasUploading && !isUploading else { return }
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
+                }
+            }
+            .onChange(of: keyboardHeight) { oldHeight, newHeight in
+                guard newHeight > oldHeight, scrollState.isNearBottom else { return }
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
+                }
+            }
+            .onChange(of: composerHeight) { oldHeight, newHeight in
+                guard newHeight > oldHeight + 20, scrollState.isNearBottom else { return }
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    proxy.scrollTo("bottom_spacer", anchor: .bottom)
                 }
             }
         }
