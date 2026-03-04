@@ -62,6 +62,7 @@ class ConversationListViewModel: ObservableObject {
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
+        observeMarkAsRead()
     }
 
     // MARK: - Background Processing
@@ -629,9 +630,33 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Mark as Read (local update from ConversationView)
+
+    private func observeMarkAsRead() {
+        NotificationCenter.default.addObserver(
+            forName: .conversationMarkedRead,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let cid = notification.object as? String else { return }
+            guard let idx = self.convIndex(for: cid) else { return }
+            self.conversations[idx].unreadCount = 0
+            for i in 0..<self.groupedConversations.count {
+                if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
+                    self.groupedConversations[i].conversations[rowIdx].unreadCount = 0
+                    break
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private var currentUserId: String {
         AuthManager.shared.currentUser?.id ?? ""
     }
+}
+
+extension Notification.Name {
+    static let conversationMarkedRead = Notification.Name("conversationMarkedRead")
 }

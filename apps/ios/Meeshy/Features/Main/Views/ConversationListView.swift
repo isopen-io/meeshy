@@ -636,9 +636,11 @@ struct ConversationListView: View {
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 HapticFeedback.medium()
-                await conversationViewModel.forceRefresh()
-                
-                // Show the search bar seamlessly after reloading finishes
+                async let convRefresh: Void = conversationViewModel.forceRefresh()
+                async let storyRefresh: Void = storyViewModel.loadStories()
+                async let statusRefresh: Void = statusViewModel.refresh()
+                _ = await (convRefresh, storyRefresh, statusRefresh)
+
                 if isScrollingDown {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         isScrollingDown = false

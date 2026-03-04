@@ -815,6 +815,8 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead() {
+        // Notify ConversationListViewModel immediately to clear the badge in the list
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
         Task {
             try? await ConversationService.shared.markRead(conversationId: conversationId)
         }
