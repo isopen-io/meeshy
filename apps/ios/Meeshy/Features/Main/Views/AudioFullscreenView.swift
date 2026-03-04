@@ -8,6 +8,7 @@ struct AudioFullscreenView: View {
     let allAudioItems: [ConversationViewModel.AudioItem]
     let startAttachmentId: String
     let contactColor: String
+    var mentionDisplayNames: [String: String] = [:]
     var onDismissToMessage: ((String) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -28,6 +29,7 @@ struct AudioFullscreenView: View {
                             AudioFullscreenPage(
                                 item: item,
                                 contactColor: contactColor,
+                                mentionDisplayNames: mentionDisplayNames,
                                 isActive: index == currentIndex,
                                 pageIndex: index,
                                 totalPages: allAudioItems.count,
@@ -115,6 +117,7 @@ struct AudioFullscreenView: View {
 private struct AudioFullscreenPage: View {
     let item: ConversationViewModel.AudioItem
     let contactColor: String
+    var mentionDisplayNames: [String: String] = [:]
     let isActive: Bool
     let pageIndex: Int
     let totalPages: Int
@@ -214,6 +217,25 @@ private struct AudioFullscreenPage: View {
             authorInfoRow
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
+
+            // Caption (texte du message contenant cet audio)
+            let captionText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !captionText.isEmpty {
+                MessageTextRenderer.render(
+                    captionText,
+                    fontSize: 13,
+                    color: .white.opacity(0.8),
+                    mentionColor: Color(hex: "818CF8"),
+                    accentColor: accent,
+                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                )
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .tint(accent)
+            }
 
             // Transcription (capped height)
             if !displaySegments.isEmpty {

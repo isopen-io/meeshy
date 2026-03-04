@@ -267,6 +267,7 @@ struct AudioMediaView: View {
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    var mentionDisplayNames: [String: String] = [:]
     var onScrollToMessage: ((String) -> Void)?
     var onShareFile: ((URL) -> Void)?
     var onShowTranslationDetail: ((String) -> Void)?
@@ -328,13 +329,20 @@ struct AudioMediaView: View {
                 .padding(.bottom, 6)
             }
 
-            if !message.content.isEmpty && visualAttachments.isEmpty {
-                Text(message.content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(3)
-                    .padding(.leading, 4)
-                    .padding(.top, 2)
+            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && visualAttachments.isEmpty {
+                MessageTextRenderer.render(
+                    message.content,
+                    fontSize: 13,
+                    color: theme.textMuted,
+                    mentionColor: Color(hex: "818CF8"),
+                    accentColor: Color(hex: contactColor),
+                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                )
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 4)
+                .padding(.top, 2)
+                .tint(Color(hex: contactColor))
             }
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {
@@ -342,6 +350,7 @@ struct AudioMediaView: View {
                 allAudioItems: allAudioItems,
                 startAttachmentId: attachment.id,
                 contactColor: contactColor,
+                mentionDisplayNames: mentionDisplayNames,
                 onDismissToMessage: onScrollToMessage
             )
         }

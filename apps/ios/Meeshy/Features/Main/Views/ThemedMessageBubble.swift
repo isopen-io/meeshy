@@ -606,10 +606,13 @@ struct ThemedMessageBubble: View {
                 )
             case .video:
                 if !attachment.fileUrl.isEmpty {
+                    let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                     VideoFullscreenPlayerView(
                         urlString: attachment.fileUrl,
                         accentColor: contactColor,
-                        fileName: attachment.originalName
+                        fileName: attachment.originalName,
+                        caption: caption,
+                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                     )
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
@@ -1425,6 +1428,7 @@ struct ThemedMessageBubble: View {
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 textTranslations: textTranslations,
                 allAudioItems: allAudioItems,
+                mentionDisplayNames: mentionDisplayNames,
                 onScrollToMessage: onScrollToMessage,
                 onShareFile: { url in
                     shareURL = url
