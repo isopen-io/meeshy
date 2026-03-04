@@ -26,17 +26,19 @@ public enum MessageTextRenderer {
     /// Links use the `.link` attribute on `AttributedString` so they open in Safari.
     /// Pass `mentionColor` to override mention (`@username`) link color.
     /// Pass `accentColor` to override m+token and URL link color.
+    /// Pass `mentionDisplayNames` to resolve `@username` → display name (e.g. `["atabeth": "Ata Beth"]`).
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
         fontSize: CGFloat = 15,
         color: Color,
         mentionColor: Color? = nil,
-        accentColor: Color? = nil
+        accentColor: Color? = nil,
+        mentionDisplayNames: [String: String]? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text)
-        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor)
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames)
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -214,7 +216,8 @@ public enum MessageTextRenderer {
         fontSize: CGFloat,
         color: Color,
         mentionColor: Color?,
-        accentColor: Color?
+        accentColor: Color?,
+        mentionDisplayNames: [String: String]?
     ) -> Text {
         var result = AttributedString()
 
@@ -233,10 +236,12 @@ public enum MessageTextRenderer {
                 if styles.contains(.underline) { attr.underlineStyle = .single }
                 result.append(attr)
 
-            case .mentionLink(let display, let url, _):
-                var attr = AttributedString(display)
+            case .mentionLink(let display, let url, let username):
+                let resolvedDisplay = mentionDisplayNames?[username].map { "@\($0)" } ?? display
+                var attr = AttributedString(resolvedDisplay)
                 attr.link = url
-                attr.font = .system(size: fontSize, weight: .medium)
+                attr.font = .system(size: fontSize, weight: .semibold)
+                attr.underlineStyle = .single
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
                 }
@@ -246,6 +251,7 @@ public enum MessageTextRenderer {
                 var attr = AttributedString(display)
                 attr.link = url
                 attr.font = .system(size: fontSize, weight: .medium)
+                attr.underlineStyle = .single
                 if let accentColor {
                     attr.foregroundColor = accentColor
                 }
@@ -255,6 +261,7 @@ public enum MessageTextRenderer {
                 var attr = AttributedString(display)
                 attr.link = url
                 attr.font = .system(size: fontSize, weight: .medium)
+                attr.underlineStyle = .single
                 if let accentColor {
                     attr.foregroundColor = accentColor
                 }

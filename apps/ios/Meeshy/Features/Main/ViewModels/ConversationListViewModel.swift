@@ -636,15 +636,18 @@ class ConversationListViewModel: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: .conversationMarkedRead,
             object: nil,
-            queue: .main
+            queue: nil
         ) { [weak self] notification in
-            guard let self, let cid = notification.object as? String else { return }
-            guard let idx = self.convIndex(for: cid) else { return }
-            self.conversations[idx].unreadCount = 0
-            for i in 0..<self.groupedConversations.count {
-                if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                    self.groupedConversations[i].conversations[rowIdx].unreadCount = 0
-                    break
+            guard let cid = notification.object as? String else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let idx = self.convIndex(for: cid) else { return }
+                self.conversations[idx].unreadCount = 0
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
+                        self.groupedConversations[i].conversations[rowIdx].unreadCount = 0
+                        break
+                    }
                 }
             }
         }

@@ -165,6 +165,8 @@ public struct ImageViewerView: View {
 public struct ImageFullscreen: View {
     public let imageUrl: URL?
     public let accentColor: String
+    public var caption: String? = nil
+    public var mentionDisplayNames: [String: String]? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1.0
@@ -176,8 +178,9 @@ public struct ImageFullscreen: View {
         case idle, saving, saved, failed
     }
 
-    public init(imageUrl: URL?, accentColor: String) {
+    public init(imageUrl: URL?, accentColor: String, caption: String? = nil, mentionDisplayNames: [String: String]? = nil) {
         self.imageUrl = imageUrl; self.accentColor = accentColor
+        self.caption = caption; self.mentionDisplayNames = mentionDisplayNames
     }
 
     public var body: some View {
@@ -258,6 +261,23 @@ public struct ImageFullscreen: View {
                         .disabled(saveState == .saving || saveState == .saved)
                     }
                     Spacer()
+
+                    if let caption {
+                        MessageTextRenderer.render(
+                            caption,
+                            fontSize: 14,
+                            color: .white,
+                            mentionColor: Color(hex: "818CF8"),
+                            accentColor: Color(hex: accentColor),
+                            mentionDisplayNames: mentionDisplayNames
+                        )
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial)
+                        .tint(Color(hex: accentColor))
+                    }
                 }
                 .transition(.opacity)
             }

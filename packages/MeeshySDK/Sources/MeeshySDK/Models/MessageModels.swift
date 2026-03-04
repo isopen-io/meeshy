@@ -271,7 +271,7 @@ extension APIMessage {
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments, reactions: uiReactions, replyTo: uiReplyTo,
             forwardedFrom: uiForwardRef,
-            senderName: senderDisplayName, senderColor: senderColor,
+            senderName: senderDisplayName, senderUsername: sender?.username, senderColor: senderColor,
             senderAvatarURL: sender?.avatar,
             isMe: senderId == currentUserId
         )

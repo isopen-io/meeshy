@@ -109,7 +109,8 @@ extension ConversationView {
                     },
                     activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil,
                     isLastInGroup: isLastInGroup,
-                    isLastReceivedMessage: isLastReceived
+                    isLastReceivedMessage: isLastReceived,
+                    mentionDisplayNames: viewModel.mentionDisplayNames
                 )
                 .onLongPressGesture(minimumDuration: 0.5) {
                     guard overlayState.longPressEnabled else { return }
