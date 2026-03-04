@@ -49,7 +49,8 @@ export const ConversationStateAnnotation = Annotation.Root({
   messages: Annotation<MessageEntry[]>({
     reducer: (current, update) => {
       const combined = [...current, ...update];
-      return combined.slice(-50);
+      // Keep up to 250 messages for sliding window flexibility
+      return combined.slice(-250);
     },
     default: () => [],
   }),
@@ -80,6 +81,18 @@ export const ConversationStateAnnotation = Annotation.Root({
   selectedUserId: Annotation<string | null>({
     reducer: (_current, update) => update,
     default: () => null,
+  }),
+  contextWindowSize: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 50,
+  }),
+  agentType: Annotation<string>({
+    reducer: (_current, update) => update,
+    default: () => 'personal',
+  }),
+  useFullHistory: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => false,
   }),
 });
 

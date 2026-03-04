@@ -45,6 +45,8 @@ model User {
   /// User profile banner/cover image
   banner                    String?
   isOnline                  Boolean  @default(false)
+  /// If true, this user is managed by an AI agent (Support, FAQ, etc.)
+  isAgentic                 Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
   lastActiveAt              DateTime @default(now())
   /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
@@ -2878,6 +2880,13 @@ model AgentConfig {
   conversationId           String   @db.ObjectId
   enabled                  Boolean  @default(false)
   configuredBy             String   @db.ObjectId
+
+  /// Type of agent behavior: "support", "faq", "personal", "animator"
+  agentType                String   @default("personal")
+  /// Number of previous messages to include in context
+  contextWindowSize        Int      @default(50)
+  /// If true, the agent tries to use the full history (sliding window still recommended for tokens)
+  useFullHistory           Boolean  @default(false)
 
   manualUserIds            String[] @db.ObjectId
   autoPickupEnabled        Boolean  @default(false)
