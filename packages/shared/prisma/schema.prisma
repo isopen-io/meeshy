@@ -312,6 +312,7 @@ model Conversation {
 
   // Agent service
   agentConfig     AgentConfig?
+  agentAnalytic   AgentAnalytic?
 
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
@@ -2877,8 +2878,9 @@ model AccountDeletionRequest {
 model AgentConfig {
   id                       String   @id @default(auto()) @map("_id") @db.ObjectId
   conversationId           String   @db.ObjectId
-  enabled                  Boolean  @default(false)
-  configuredBy             String   @db.ObjectId
+  /// Enabled by default for all conversations (Animator)
+  enabled                  Boolean  @default(true)
+  configuredBy             String?  @db.ObjectId
 
   /// Type of agent behavior: "support", "faq", "personal", "animator"
   agentType                String   @default("personal")
@@ -2979,4 +2981,21 @@ model AgentLlmConfig {
   updatedAt        DateTime @updatedAt
 
   @@map("agent_llm_configs")
+}
+
+model AgentAnalytic {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String   @db.ObjectId
+
+  messagesSent    Int      @default(0)
+  totalWordsSent  Int      @default(0)
+  avgConfidence   Float    @default(0.0)
+  lastResponseAt  DateTime?
+
+  updatedAt       DateTime @updatedAt
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId])
+  @@map("agent_analytics")
 }

@@ -18,6 +18,12 @@ L'agent utilise une fenêtre glissante de messages pour maintenir la pertinence 
 -   **SAV / Support**: Recommandé `100-200` messages. Nécessaire pour comprendre les problèmes complexes et l'historique de résolution.
 -   **FAQ**: Recommandé `50-100` messages. Équilibre entre précision technique et concision.
 
+## 📊 Analytics & Activation
+
+Chaque conversation dispose d'une section **Agent Analytic** permettant de suivre les performances de l'IA (taux de réponse, confiance du ton, etc.).
+
+L'agent **Animateur** est activé par défaut sur toutes les conversations pour engager les utilisateurs inactifs. Il est configuré pour produire des réponses d'une longueur comprise entre **3 et 400 mots**, imitant parfaitement le style de l'utilisateur ciblé.
+
 ## 🤖 Types d'Agents
 
 1.  **Impersonator**: Imite un utilisateur absent. Se base sur le `ToneProfile` extrait.
