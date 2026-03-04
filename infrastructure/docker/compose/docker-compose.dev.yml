@@ -11,6 +11,7 @@
 # Services accessibles (HTTP):
 #   http://localhost:3100        - Frontend
 #   http://localhost:3000        - Gateway API
+#   http://localhost:3200        - Agent Service
 #   http://localhost:8000        - Translator ML
 #   http://localhost:3001        - MongoDB UI (NoSQLClient)
 #   http://localhost:7843        - Redis UI
@@ -255,6 +256,46 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # ===========================================================================
+  # AGENT - Conversation Agent Service (profile: full)
+  # ===========================================================================
+  agent:
+    build:
+      context: ../../..
+      dockerfile: services/agent/Dockerfile
+    container_name: meeshy-dev-agent
+    restart: unless-stopped
+    profiles: ["full"]
+    environment:
+      <<: *common-env
+      NODE_ENV: development
+      PORT: 3200
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4o-mini
+      ZMQ_PULL_PORT: 5560
+      ZMQ_PUB_PORT: 5561
+      ZMQ_HOST: 0.0.0.0
+      DATABASE_URL: mongodb://database:27017/meeshy?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3200:3200"
+      - "5560:5560"
+      - "5561:5561"
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - meeshy-dev-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # ===========================================================================
   # FRONTEND - Next.js (profile: full)

@@ -277,6 +277,7 @@ struct RootView: View {
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
+            await fetchUnreadNotificationCount()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
             if let userId = selectedStoryUserIdFromConv,
@@ -378,7 +379,9 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $showNotifications) {
+        .sheet(isPresented: $showNotifications, onDismiss: {
+            Task { await fetchUnreadNotificationCount() }
+        }) {
             NotificationListView(
                 onNotificationTap: { notification in
                     showNotifications = false
@@ -467,24 +470,66 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Handle Notification Tap (REST model)
+    // MARK: - Fetch Unread Notification Count
+
+    private func fetchUnreadNotificationCount() async {
+        do {
+            let count = try await NotificationService.shared.unreadCount()
+            notificationCount = count
+        } catch {
+            // Silently fail — badge stays at current value
+        }
+    }
+
+    // MARK: - Handle Notification Tap
 
     private func handleNotificationTap(_ notification: APINotification) {
+        let data = notification.data
         switch notification.notificationType {
-        case .newMessage, .message, .messageReply, .messageReaction, .reaction,
-             .mention, .mentionAlias, .missedCall,
-             .newConversationDirect, .newConversationGroup, .newConversation, .memberJoined:
-            if let conversationId = notification.context?.conversationId {
+        case .newMessage, .legacyNewMessage, .messageReply,
+             .messageReaction, .reaction, .legacyMessageReaction,
+             .userMentioned, .mention, .legacyMention,
+             .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
+             .legacyStoryReply, .reply,
+             .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
+            guard let conversationId = data?.conversationId else { return }
+            navigateToConversationById(conversationId)
+
+        case .friendRequest, .contactRequest, .legacyFriendRequest,
+             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+             .legacyStatusUpdate:
+            if let senderId = notification.senderId {
+                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
+            }
+
+        case .communityInvite, .communityJoined, .communityLeft, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
+             .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
+             .addedToConversation, .newConversation, .removedFromConversation:
+            if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            if let actorId = notification.actor?.id {
-                let username = notification.actor?.username ?? actorId
-                router.deepLinkProfileUser = ProfileSheetUser(userId: actorId, username: username)
+        case .postLike, .legacyPostLike, .postComment, .legacyPostComment, .postRepost,
+             .storyReaction, .statusReaction, .commentLike, .commentReply:
+            if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
             }
 
-        case .system:
+        case .missedCall, .callDeclined, .legacyCallMissed,
+             .incomingCall, .callEnded, .legacyCallIncoming:
+            if let conversationId = data?.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            router.push(.userStats)
+
+        case .legacyAffiliateSignup:
+            router.push(.affiliate)
+
+        case .securityAlert, .loginNewDevice, .legacySystemAlert,
+             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .system, .maintenance, .updateAvailable, .voiceCloneReady:
             break
         }
     }
@@ -578,8 +623,15 @@ struct RootView: View {
                 }
             },
             onRightTap: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showMenu.toggle()
+                if showMenu {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu = false
+                    }
+                    router.push(.communityList)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu.toggle()
+                    }
                 }
             },
             isSearchBarVisible: !isScrollingDown,
@@ -705,9 +757,8 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
-                ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
+                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
                 (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         theme.cyclePreference(systemScheme: systemColorScheme)

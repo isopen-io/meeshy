@@ -115,6 +115,18 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
 
+      // Notification login nouvel appareil (session non trustée = nouvel appareil)
+      if (!session.isTrusted) {
+        const notificationService = (fastify as any).notificationService;
+        if (notificationService) {
+          notificationService.createLoginNewDeviceNotification({
+            recipientUserId: user.id,
+            deviceInfo: requestContext.userAgent,
+            ipAddress: requestContext.ip,
+          }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device):', err));
+        }
+      }
+
       const jwtToken = authService.generateToken(user);
 
       // Mark session as trusted in background (non-blocking)
@@ -219,6 +231,18 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const { user, sessionToken, session } = authResult;
 
       console.log('[AUTH] ✅ Connexion 2FA réussie pour:', user.username);
+
+      // Notification login nouvel appareil (session non trustée = nouvel appareil)
+      if (!session.isTrusted) {
+        const notificationService = (fastify as any).notificationService;
+        if (notificationService) {
+          notificationService.createLoginNewDeviceNotification({
+            recipientUserId: user.id,
+            deviceInfo: requestContext.userAgent,
+            ipAddress: requestContext.ip,
+          }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device 2FA):', err));
+        }
+      }
 
       const jwtToken = authService.generateToken(user);
 

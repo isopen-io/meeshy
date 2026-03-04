@@ -111,6 +111,17 @@ export class NotificationService {
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
       case 'comment_like':      return prefs.commentLikeEnabled ?? false;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
+      case 'added_to_conversation':
+      case 'removed_from_conversation':
+      case 'member_removed':
+      case 'member_left':           return prefs.memberJoinedEnabled;
+      case 'member_promoted':
+      case 'member_demoted':
+      case 'member_role_changed':   return prefs.memberJoinedEnabled;
+      case 'password_changed':
+      case 'two_factor_enabled':
+      case 'two_factor_disabled':
+      case 'login_new_device':      return true; // sécurité = toujours actif
       default:                  return true;
     }
   }
@@ -1090,6 +1101,275 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
+      },
+    });
+  }
+
+  // ==============================================
+  // ADDED_TO_CONVERSATION
+  // ==============================================
+
+  async createAddedToConversationNotification(params: {
+    recipientUserId: string;
+    addedByUserId: string;
+    conversationId: string;
+  }): Promise<Notification | null> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.addedByUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: { title: true, type: true },
+    });
+
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'added_to_conversation',
+      priority: 'normal',
+      content: '',
+      actor: {
+        id: params.addedByUserId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: conversation?.title,
+        conversationType: conversation?.type as any,
+      },
+      metadata: { action: 'view_conversation' },
+    });
+  }
+
+  // ==============================================
+  // REMOVED_FROM_CONVERSATION
+  // ==============================================
+
+  async createRemovedFromConversationNotification(params: {
+    recipientUserId: string;
+    removedByUserId: string;
+    conversationId: string;
+  }): Promise<Notification | null> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.removedByUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: { title: true, type: true },
+    });
+
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'removed_from_conversation',
+      priority: 'normal',
+      content: '',
+      actor: {
+        id: params.removedByUserId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: conversation?.title,
+        conversationType: conversation?.type as any,
+      },
+      metadata: { action: 'view_details' },
+    });
+  }
+
+  // ==============================================
+  // MEMBER_REMOVED (notifie les autres membres)
+  // ==============================================
+
+  async createMemberRemovedNotification(params: {
+    recipientUserId: string;
+    removedByUserId: string;
+    conversationId: string;
+  }): Promise<Notification | null> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.removedByUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: { title: true, type: true },
+    });
+
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'member_removed',
+      priority: 'normal',
+      content: '',
+      actor: {
+        id: params.removedByUserId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: conversation?.title,
+        conversationType: conversation?.type as any,
+      },
+      metadata: { action: 'view_conversation' },
+    });
+  }
+
+  // ==============================================
+  // MEMBER_ROLE_CHANGED / PROMOTED / DEMOTED
+  // ==============================================
+
+  async createMemberRoleChangedNotification(params: {
+    recipientUserId: string;
+    changedByUserId: string;
+    conversationId: string;
+    newRole: 'ADMIN' | 'MODERATOR' | 'MEMBER';
+    previousRole: string;
+  }): Promise<Notification | null> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.changedByUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!actor) return null;
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: { title: true, type: true },
+    });
+
+    const roleHierarchy: Record<string, number> = { MEMBER: 0, MODERATOR: 1, ADMIN: 2, CREATOR: 3 };
+    const oldLevel = roleHierarchy[params.previousRole] ?? 0;
+    const newLevel = roleHierarchy[params.newRole] ?? 0;
+    const type = newLevel > oldLevel ? 'member_promoted' : newLevel < oldLevel ? 'member_demoted' : 'member_role_changed';
+
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type,
+      priority: 'normal',
+      content: '',
+      actor: {
+        id: params.changedByUserId,
+        username: actor.username,
+        displayName: actor.displayName,
+        avatar: actor.avatar,
+      },
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: conversation?.title,
+        conversationType: conversation?.type as any,
+      },
+      metadata: {
+        action: 'view_conversation',
+        newRole: params.newRole,
+        previousRole: params.previousRole,
+      },
+    });
+  }
+
+  // ==============================================
+  // MEMBER_LEFT
+  // ==============================================
+
+  async createMemberLeftNotification(params: {
+    recipientUserId: string;
+    memberUserId: string;
+    conversationId: string;
+  }): Promise<Notification | null> {
+    const member = await this.prisma.user.findUnique({
+      where: { id: params.memberUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+    if (!member) return null;
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: { title: true, type: true },
+    });
+
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'member_left',
+      priority: 'low',
+      content: '',
+      actor: {
+        id: params.memberUserId,
+        username: member.username,
+        displayName: member.displayName,
+        avatar: member.avatar,
+      },
+      context: {
+        conversationId: params.conversationId,
+        conversationTitle: conversation?.title,
+        conversationType: conversation?.type as any,
+      },
+      metadata: { action: 'view_conversation' },
+    });
+  }
+
+  // ==============================================
+  // SECURITY — PASSWORD_CHANGED
+  // ==============================================
+
+  async createPasswordChangedNotification(params: {
+    recipientUserId: string;
+  }): Promise<Notification | null> {
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'password_changed',
+      priority: 'high',
+      content: '',
+      context: {},
+      metadata: { action: 'view_details' },
+    });
+  }
+
+  // ==============================================
+  // SECURITY — TWO_FACTOR_ENABLED / DISABLED
+  // ==============================================
+
+  async createTwoFactorNotification(params: {
+    recipientUserId: string;
+    enabled: boolean;
+  }): Promise<Notification | null> {
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: params.enabled ? 'two_factor_enabled' : 'two_factor_disabled',
+      priority: 'high',
+      content: '',
+      context: {},
+      metadata: { action: 'view_details' },
+    });
+  }
+
+  // ==============================================
+  // SECURITY — LOGIN_NEW_DEVICE
+  // ==============================================
+
+  async createLoginNewDeviceNotification(params: {
+    recipientUserId: string;
+    deviceInfo?: string;
+    ipAddress?: string;
+  }): Promise<Notification | null> {
+    return this.createNotification({
+      userId: params.recipientUserId,
+      type: 'login_new_device',
+      priority: 'high',
+      content: '',
+      context: {},
+      metadata: {
+        action: 'view_details',
+        ...(params.deviceInfo && { deviceInfo: params.deviceInfo }),
+        ...(params.ipAddress && { ipAddress: params.ipAddress }),
       },
     });
   }

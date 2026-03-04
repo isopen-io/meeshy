@@ -5,7 +5,9 @@ import MeeshySDK
 
 public struct ProfileSheetUser: Identifiable, Equatable {
     public static func == (lhs: ProfileSheetUser, rhs: ProfileSheetUser) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id &&
+        lhs.avatarURL == rhs.avatarURL &&
+        lhs.bannerURL == rhs.bannerURL
     }
 
     public var id: String { userId ?? username }

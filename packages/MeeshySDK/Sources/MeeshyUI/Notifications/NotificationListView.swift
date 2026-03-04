@@ -1,6 +1,132 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Notification Category Filter
+
+enum NotificationCategory: String, CaseIterable {
+    case all
+    case unread
+    case messages
+    case reactions
+    case mentions
+    case social
+    case contacts
+    case groups
+    case calls
+    case translations
+    case system
+
+    var label: String {
+        switch self {
+        case .all: return "Toutes"
+        case .unread: return "Non lues"
+        case .messages: return "Messages"
+        case .reactions: return "Reactions"
+        case .mentions: return "Mentions"
+        case .social: return "Social"
+        case .contacts: return "Contacts"
+        case .groups: return "Groupes"
+        case .calls: return "Appels"
+        case .translations: return "Traductions"
+        case .system: return "Systeme"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "bell.fill"
+        case .unread: return "circle.fill"
+        case .messages: return "bubble.left.fill"
+        case .reactions: return "heart.fill"
+        case .mentions: return "at"
+        case .social: return "hand.thumbsup.fill"
+        case .contacts: return "person.badge.plus"
+        case .groups: return "person.3.fill"
+        case .calls: return "phone.fill"
+        case .translations: return "globe"
+        case .system: return "gear"
+        }
+    }
+
+    var color: String {
+        switch self {
+        case .all: return "6366F1"
+        case .unread: return "FF6B6B"
+        case .messages: return "3498DB"
+        case .reactions: return "FF6B6B"
+        case .mentions: return "9B59B6"
+        case .social: return "F8B500"
+        case .contacts: return "4ECDC4"
+        case .groups: return "F8B500"
+        case .calls: return "E91E63"
+        case .translations: return "08D9D6"
+        case .system: return "6366F1"
+        }
+    }
+
+    var matchingTypes: Set<MeeshyNotificationType> {
+        switch self {
+        case .all, .unread:
+            return Set(MeeshyNotificationType.allCases)
+        case .messages:
+            return [
+                .newMessage, .legacyNewMessage, .messageReply, .reply,
+                .messageEdited, .messageDeleted, .messagePinned, .messageForwarded
+            ]
+        case .reactions:
+            return [
+                .messageReaction, .reaction, .legacyMessageReaction,
+                .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike
+            ]
+        case .mentions:
+            return [
+                .userMentioned, .mention, .legacyMention
+            ]
+        case .social:
+            return [
+                .postComment, .legacyPostComment, .postRepost, .commentReply,
+                .legacyStoryReply
+            ]
+        case .contacts:
+            return [
+                .friendRequest, .contactRequest, .legacyFriendRequest,
+                .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+                .legacyStatusUpdate
+            ]
+        case .groups:
+            return [
+                .communityInvite, .communityJoined, .communityLeft,
+                .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
+                .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
+                .addedToConversation, .newConversation, .removedFromConversation
+            ]
+        case .calls:
+            return [
+                .missedCall, .callDeclined, .legacyCallMissed,
+                .incomingCall, .callEnded, .legacyCallIncoming
+            ]
+        case .translations:
+            return [
+                .translationCompleted, .translationReady, .legacyTranslationReady,
+                .transcriptionCompleted, .voiceCloneReady
+            ]
+        case .system:
+            return [
+                .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+                .system, .maintenance, .updateAvailable,
+                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned,
+                .legacyAffiliateSignup
+            ]
+        }
+    }
+
+    func matches(_ notification: APINotification) -> Bool {
+        matchingTypes.contains(notification.notificationType)
+    }
+}
+
+// MARK: - NotificationListView
+
 public struct NotificationListView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var viewModel = NotificationListViewModel()
@@ -82,8 +208,8 @@ public struct NotificationListView: View {
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(NotificationFilter.allCases, id: \.self) { filter in
-                    filterChip(filter: filter)
+                ForEach(NotificationCategory.allCases, id: \.self) { category in
+                    filterChip(category: category)
                 }
             }
             .padding(.horizontal, 16)
@@ -91,37 +217,28 @@ public struct NotificationListView: View {
         }
     }
 
-    private func filterChip(filter: NotificationFilter) -> some View {
-        let isSelected = viewModel.activeFilter == filter
-        let count = viewModel.unreadCountFor(filter: filter)
+    private func filterChip(category: NotificationCategory) -> some View {
+        let isSelected = viewModel.selectedCategory == category
+        let chipColor = category.color
 
         return Button {
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                viewModel.activeFilter = filter
-            }
+            viewModel.selectedCategory = category
+            viewModel.unreadOnly = category == .unread
+            Task { await viewModel.loadInitial() }
         } label: {
             HStack(spacing: 5) {
-                Text(filter.label)
-                    .font(.system(size: 13, weight: .semibold))
-
-                if count > 0 {
-                    Text("\(min(count, 99))")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isSelected ? brandColor : .white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule().fill(isSelected ? .white : brandColor)
-                        )
-                }
+                Image(systemName: category.icon)
+                    .font(.system(size: 10, weight: .bold))
+                Text(category.label)
+                    .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundColor(isSelected ? .white : brandColor)
-            .padding(.horizontal, 14)
+            .foregroundColor(isSelected ? .white : Color(hex: chipColor))
+            .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isSelected ? brandColor : brandColor.opacity(0.12))
+                    .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(0.12))
             )
         }
         .buttonStyle(.plain)
@@ -129,46 +246,45 @@ public struct NotificationListView: View {
 
     // MARK: - List
 
+    private var filteredNotifications: [APINotification] {
+        viewModel.filteredNotifications
+    }
+
     private var notificationList: some View {
         Group {
             if viewModel.isLoading && viewModel.notifications.isEmpty {
                 loadingState
-            } else if viewModel.filteredNotifications.isEmpty {
+            } else if filteredNotifications.isEmpty {
                 emptyState
             } else {
-                List {
-                    ForEach(viewModel.filteredNotifications) { notification in
-                        NotificationRowView(
-                            notification: notification,
-                            onTap: {
-                                Task { await viewModel.markRead(notification) }
-                                onNotificationTap?(notification)
-                            },
-                            onMarkRead: {
-                                Task { await viewModel.markRead(notification) }
-                            },
-                            onDelete: {
-                                Task { await viewModel.deleteNotification(notification) }
-                            }
-                        )
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparatorTint(theme.textMuted.opacity(0.1))
-                    }
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredNotifications) { notification in
+                            NotificationRowView(
+                                notification: notification,
+                                onTap: {
+                                    Task { await viewModel.markRead(notification) }
+                                    onNotificationTap?(notification)
+                                },
+                                onMarkRead: {
+                                    Task { await viewModel.markRead(notification) }
+                                },
+                                onDelete: {
+                                    Task { await viewModel.deleteNotification(notification) }
+                                }
+                            )
+                        }
 
-                    if viewModel.hasMore && viewModel.activeFilter == .all {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .onAppear {
-                                Task { await viewModel.loadMore() }
-                            }
+                        if viewModel.hasMore && viewModel.selectedCategory == .all {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .onAppear {
+                                    Task { await viewModel.loadMore() }
+                                }
+                        }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
                 .refreshable {
                     await viewModel.loadInitial()
                 }
@@ -191,65 +307,37 @@ public struct NotificationListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: viewModel.activeFilter == .all ? "bell.slash" : "tray")
-                .font(.system(size: 48))
-                .foregroundColor(brandColor.opacity(0.4))
+        let category = viewModel.selectedCategory
+        let emptyMessage: String = {
+            switch category {
+            case .all: return "Aucune notification"
+            case .unread: return "Aucune notification non lue"
+            case .messages: return "Aucune notification de message"
+            case .reactions: return "Aucune reaction"
+            case .mentions: return "Aucune mention"
+            case .social: return "Aucune notification sociale"
+            case .contacts: return "Aucune notification de contact"
+            case .groups: return "Aucune notification de groupe"
+            case .calls: return "Aucun appel manque"
+            case .translations: return "Aucune traduction"
+            case .system: return "Aucune notification systeme"
+            }
+        }()
 
-            Text(emptyTitle)
+        return VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: category.icon)
+                .font(.system(size: 48))
+                .foregroundColor(Color(hex: category.color).opacity(0.4))
+
+            Text(emptyMessage)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Vos notifications apparaîtront ici")
+            Text("Vos notifications apparaitront ici")
                 .font(.system(size: 13))
                 .foregroundColor(theme.textMuted)
             Spacer()
-        }
-    }
-
-    private var emptyTitle: String {
-        switch viewModel.activeFilter {
-        case .all: return "Aucune notification"
-        case .message: return "Aucun message"
-        case .reaction: return "Aucune réaction"
-        case .mention: return "Aucune mention"
-        case .call: return "Aucun appel manqué"
-        case .contact: return "Aucun contact"
-        }
-    }
-}
-
-// MARK: - Notification Filter
-
-public enum NotificationFilter: CaseIterable, Hashable {
-    case all, message, reaction, mention, call, contact
-
-    var label: String {
-        switch self {
-        case .all: return "Toutes"
-        case .message: return "Messages"
-        case .reaction: return "Réactions"
-        case .mention: return "Mentions"
-        case .call: return "Appels"
-        case .contact: return "Contacts"
-        }
-    }
-
-    func matches(_ notification: APINotification) -> Bool {
-        switch self {
-        case .all: return true
-        case .message:
-            return [.newMessage, .message, .messageReply].contains(notification.notificationType)
-        case .reaction:
-            return [.messageReaction, .reaction].contains(notification.notificationType)
-        case .mention:
-            return [.mention, .mentionAlias].contains(notification.notificationType)
-        case .call:
-            return notification.notificationType == .missedCall
-        case .contact:
-            return [.friendRequest, .contactRequest, .friendAccepted, .contactAccepted]
-                .contains(notification.notificationType)
         }
     }
 }
@@ -262,17 +350,17 @@ final class NotificationListViewModel: ObservableObject {
     @Published var unreadCount: Int = 0
     @Published var isLoading = false
     @Published var hasMore = false
-    @Published var activeFilter: NotificationFilter = .all
+    @Published var unreadOnly = false
+    @Published var selectedCategory: NotificationCategory = .all
 
     private var offset = 0
     private let limit = 30
 
     var filteredNotifications: [APINotification] {
-        notifications.filter { activeFilter.matches($0) }
-    }
-
-    func unreadCountFor(filter: NotificationFilter) -> Int {
-        notifications.filter { filter.matches($0) && !$0.isRead }.count
+        guard selectedCategory != .all && selectedCategory != .unread else {
+            return notifications
+        }
+        return notifications.filter { selectedCategory.matches($0) }
     }
 
     func loadInitial() async {
@@ -308,7 +396,9 @@ final class NotificationListViewModel: ObservableObject {
         guard !notification.isRead else { return }
         do {
             try await NotificationService.shared.markAsRead(notificationId: notification.id)
-            await loadInitial()
+            if let _ = notifications.firstIndex(where: { $0.id == notification.id }) {
+                await loadInitial()
+            }
         } catch {}
     }
 

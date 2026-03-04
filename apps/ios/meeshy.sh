@@ -226,6 +226,7 @@ do_device_deploy_only() {
         -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
         -derivedDataPath "$DERIVED_DATA" \
         -allowProvisioningUpdates \
+        -allowProvisioningDeviceRegistration \
         -skipPackagePluginValidation \
         -skipMacroValidation \
         -jobs "$ncpu" \

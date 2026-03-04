@@ -234,7 +234,7 @@ struct ConversationListView: View {
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: displayConversation),
                 moodStatus: conversationMoodStatus(for: displayConversation),
-                isTyping: conversationViewModel.typingConversationIds.contains(displayConversation.id)
+                typingUsername: conversationViewModel.typingUsernames[displayConversation.id]
             )
             .equatable()
             .contentShape(Rectangle())

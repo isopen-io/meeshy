@@ -140,9 +140,22 @@ final class ConversationSocketHandler {
             .sink { [weak self] apiMsg in
                 Task { [weak self] in
                     guard let self, let delegate = self.delegate else { return }
-                    guard !delegate.containsMessage(id: apiMsg.id) else { return }
+
+                    // Message already exists: update own optimistic message with attachment data from socket
+                    if delegate.containsMessage(id: apiMsg.id) {
+                        if apiMsg.senderId == userId,
+                           let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,
+                           let idx = delegate.messageIndex(for: apiMsg.id),
+                           delegate.messages[idx].attachments.isEmpty {
+                            await MainActor.run {
+                                delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId)
+                            }
+                        }
+                        return
+                    }
+
                     if apiMsg.senderId == userId { return }
-                    
+
                     var msg = apiMsg.toMessage(currentUserId: userId)
                     var msgArray = [msg]
                     await delegate.decryptMessagesIfNeeded(&msgArray)

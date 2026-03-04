@@ -48,104 +48,248 @@ public struct NotificationPreferences: Codable {
 // Raw values match backend lowercase strings exactly
 
 public enum MeeshyNotificationType: String, Codable, CaseIterable {
+    // Message events
     case newMessage = "new_message"
-    case message = "message"
     case messageReply = "message_reply"
+    case messageEdited = "message_edited"
+    case messageDeleted = "message_deleted"
+    case messagePinned = "message_pinned"
+    case messageForwarded = "message_forwarded"
+
+    // Conversation events
+    case newConversation = "new_conversation"
+    case addedToConversation = "added_to_conversation"
+    case removedFromConversation = "removed_from_conversation"
+
+    // Contact/Friend events
+    case contactRequest = "contact_request"
+    case contactAccepted = "contact_accepted"
+    case friendRequest = "friend_request"
+    case friendAccepted = "friend_accepted"
+
+    // Interaction events
+    case userMentioned = "user_mentioned"
+    case mention = "mention"
     case messageReaction = "message_reaction"
     case reaction = "reaction"
-    case mention = "user_mentioned"
-    case mentionAlias = "mention"
-    case friendRequest = "friend_request"
-    case contactRequest = "contact_request"
-    case friendAccepted = "friend_accepted"
-    case contactAccepted = "contact_accepted"
-    case newConversationDirect = "new_conversation_direct"
-    case newConversationGroup = "new_conversation_group"
-    case newConversation = "new_conversation"
-    case memberJoined = "member_joined"
+    case reply = "reply"
+
+    // Social/Post events
+    case postLike = "post_like"
+    case postComment = "post_comment"
+    case postRepost = "post_repost"
+    case storyReaction = "story_reaction"
+    case statusReaction = "status_reaction"
+    case commentLike = "comment_like"
+    case commentReply = "comment_reply"
+
+    // Call events
     case missedCall = "missed_call"
+    case incomingCall = "incoming_call"
+    case callEnded = "call_ended"
+    case callDeclined = "call_declined"
+
+    // Translation events
+    case translationCompleted = "translation_completed"
+    case translationReady = "translation_ready"
+    case transcriptionCompleted = "transcription_completed"
+    case voiceCloneReady = "voice_clone_ready"
+
+    // Security events
+    case securityAlert = "security_alert"
+    case loginNewDevice = "login_new_device"
+    case passwordChanged = "password_changed"
+    case twoFactorEnabled = "two_factor_enabled"
+    case twoFactorDisabled = "two_factor_disabled"
+
+    // Community events
+    case communityInvite = "community_invite"
+    case communityJoined = "community_joined"
+    case communityLeft = "community_left"
+
+    // Member events
+    case memberJoined = "member_joined"
+    case memberLeft = "member_left"
+    case memberRemoved = "member_removed"
+    case memberPromoted = "member_promoted"
+    case memberDemoted = "member_demoted"
+    case memberRoleChanged = "member_role_changed"
+
+    // System events
     case system = "system"
+    case maintenance = "maintenance"
+    case updateAvailable = "update_available"
+
+    // Engagement
+    case achievementUnlocked = "achievement_unlocked"
+    case streakMilestone = "streak_milestone"
+    case badgeEarned = "badge_earned"
+
+    // Legacy uppercase (backward compat)
+    case legacyNewMessage = "NEW_MESSAGE"
+    case legacyMention = "MENTION"
+    case legacyMessageReaction = "MESSAGE_REACTION"
+    case legacyFriendRequest = "FRIEND_REQUEST"
+    case legacyFriendAccepted = "FRIEND_ACCEPTED"
+    case legacyGroupInvite = "GROUP_INVITE"
+    case legacyGroupJoined = "GROUP_JOINED"
+    case legacyGroupLeft = "GROUP_LEFT"
+    case legacyCallMissed = "CALL_MISSED"
+    case legacyCallIncoming = "CALL_INCOMING"
+    case legacyPostLike = "POST_LIKE"
+    case legacyPostComment = "POST_COMMENT"
+    case legacyStoryReply = "STORY_REPLY"
+    case legacyAffiliateSignup = "AFFILIATE_SIGNUP"
+    case legacyAchievementUnlocked = "ACHIEVEMENT_UNLOCKED"
+    case legacySystemAlert = "SYSTEM_ALERT"
+    case legacyStatusUpdate = "STATUS_UPDATE"
+    case legacyTranslationReady = "TRANSLATION_READY"
 
     public var systemIcon: String {
         switch self {
-        case .newMessage, .message, .messageReply:
-            return "bubble.left.fill"
-        case .messageReaction, .reaction:
-            return "heart.fill"
-        case .mention, .mentionAlias:
-            return "at"
-        case .friendRequest, .contactRequest:
-            return "person.badge.plus"
-        case .friendAccepted, .contactAccepted:
-            return "person.2.fill"
-        case .newConversationDirect:
-            return "bubble.left.and.bubble.right.fill"
-        case .newConversationGroup, .newConversation:
-            return "person.3.fill"
-        case .memberJoined:
-            return "person.badge.checkmark"
-        case .missedCall:
-            return "phone.arrow.down.left"
-        case .system:
-            return "bell.fill"
+        case .newMessage, .legacyNewMessage, .messageReply: return "bubble.left.fill"
+        case .messageReaction, .reaction, .legacyMessageReaction: return "heart.fill"
+        case .userMentioned, .mention, .legacyMention: return "at"
+        case .friendRequest, .contactRequest, .legacyFriendRequest: return "person.badge.plus"
+        case .friendAccepted, .contactAccepted, .legacyFriendAccepted: return "person.2.fill"
+        case .communityInvite, .legacyGroupInvite: return "person.3.fill"
+        case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
+        case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
+        case .missedCall, .callDeclined, .legacyCallMissed: return "phone.arrow.down.left"
+        case .incomingCall, .callEnded, .legacyCallIncoming: return "phone.fill"
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike: return "hand.thumbsup.fill"
+        case .postComment, .commentReply, .legacyPostComment, .legacyStoryReply: return "text.bubble.fill"
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned: return "trophy.fill"
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
+        case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
+        case .system, .maintenance, .updateAvailable: return "bell.fill"
+        case .legacyAffiliateSignup: return "link.badge.plus"
+        case .legacyStatusUpdate: return "circle.fill"
+        case .voiceCloneReady: return "waveform"
+        case .postRepost: return "arrow.2.squarepath"
+        case .addedToConversation, .newConversation: return "bubble.left.and.bubble.right.fill"
+        case .removedFromConversation: return "person.badge.minus"
+        case .memberRemoved: return "person.badge.minus"
+        case .memberPromoted: return "star.fill"
+        case .memberDemoted: return "arrow.down.circle.fill"
+        case .memberRoleChanged: return "person.badge.shield.checkmark"
+        case .messageEdited: return "pencil"
+        case .messageDeleted: return "trash"
+        case .messagePinned: return "pin.fill"
+        case .messageForwarded: return "arrowshape.turn.up.right.fill"
+        case .reply: return "arrowshape.turn.up.left.fill"
         }
     }
 
     public var accentHex: String {
         switch self {
-        case .newMessage, .message, .messageReply:
+        case .newMessage, .legacyNewMessage, .messageReply, .reply, .postComment, .commentReply, .legacyPostComment, .legacyStoryReply:
+            return "3498DB"
+        case .messageReaction, .reaction, .legacyMessageReaction, .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
+            return "FF6B6B"
+        case .userMentioned, .mention, .legacyMention:
+            return "9B59B6"
+        case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate:
+            return "4ECDC4"
+        case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            return "F8B500"
+        case .missedCall, .callDeclined, .incomingCall, .callEnded, .legacyCallMissed, .legacyCallIncoming:
+            return "E91E63"
+        case .legacyAffiliateSignup:
+            return "2ECC71"
+        case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled:
+            return "EF4444"
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
+            return "08D9D6"
+        case .system, .maintenance, .updateAvailable:
             return "6366F1"
-        case .messageReaction, .reaction:
-            return "F87171"
-        case .mention, .mentionAlias:
-            return "FBBF24"
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            return "34D399"
-        case .newConversationDirect, .newConversationGroup, .newConversation:
-            return "818CF8"
-        case .memberJoined:
-            return "60A5FA"
-        case .missedCall:
-            return "F87171"
-        case .system:
-            return "A5B4FC"
+        case .postRepost:
+            return "9B59B6"
+        case .addedToConversation, .newConversation, .removedFromConversation:
+            return "4ECDC4"
+        case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
+            return "3498DB"
         }
     }
 }
 
-// MARK: - API Notification (matches backend grouped structure)
+// MARK: - Notification Actor (who triggered)
 
-public struct APINotificationActor: Decodable {
-    public let id: String?
-    public let username: String?
+public struct NotificationActor: Decodable {
+    public let id: String
+    public let username: String
     public let displayName: String?
     public let avatar: String?
 
     public var displayedName: String {
-        displayName ?? username ?? "Utilisateur"
+        displayName ?? username
     }
 }
 
-public struct APINotificationContext: Decodable {
+// MARK: - Notification Context (where it happened)
+
+public struct NotificationContext: Decodable {
     public let conversationId: String?
     public let conversationTitle: String?
     public let conversationType: String?
     public let messageId: String?
+    public let originalMessageId: String?
+    public let callSessionId: String?
+    public let friendRequestId: String?
+    public let reactionId: String?
     public let postId: String?
+    public let commentId: String?
 }
 
-public struct APINotificationState: Decodable {
+// MARK: - Notification State
+
+public struct NotificationState: Decodable {
     public let isRead: Bool
     public let readAt: String?
     public let createdAt: String
+    public let expiresAt: String?
 }
 
-public struct APINotificationMetadata: Decodable {
-    public let reactionEmoji: String?
-    public let messageContent: String?
-    public let callType: String?
-    public let action: String?
+// MARK: - Notification Delivery
+
+public struct NotificationDelivery: Decodable {
+    public let emailSent: Bool
+    public let pushSent: Bool
 }
+
+// MARK: - Notification Metadata
+
+public struct NotificationMetadata: Decodable {
+    public let messagePreview: String?
+    public let action: String?
+    public let reactionEmoji: String?
+    public let callType: String?
+    public let memberCount: Int?
+    public let postId: String?
+    public let commentId: String?
+    public let commentPreview: String?
+    public let emoji: String?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
+        action = try container.decodeIfPresent(String.self, forKey: .action)
+        reactionEmoji = try container.decodeIfPresent(String.self, forKey: .reactionEmoji)
+        callType = try container.decodeIfPresent(String.self, forKey: .callType)
+        memberCount = try container.decodeIfPresent(Int.self, forKey: .memberCount)
+        postId = try container.decodeIfPresent(String.self, forKey: .postId)
+        commentId = try container.decodeIfPresent(String.self, forKey: .commentId)
+        commentPreview = try container.decodeIfPresent(String.self, forKey: .commentPreview)
+        emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case messagePreview, action, reactionEmoji, callType, memberCount
+        case postId, commentId, commentPreview, emoji
+    }
+}
+
+// MARK: - API Notification (matches gateway NotificationFormatter output)
 
 public struct APINotification: Decodable, Identifiable {
     public let id: String
@@ -153,17 +297,38 @@ public struct APINotification: Decodable, Identifiable {
     public let type: String
     public let priority: String?
     public let content: String?
-    public let actor: APINotificationActor?
-    public let context: APINotificationContext?
-    public let state: APINotificationState
-    public let metadata: APINotificationMetadata?
+    public let actor: NotificationActor?
+    public let context: NotificationContext?
+    public let metadata: NotificationMetadata?
+    public let state: NotificationState
+    public let delivery: NotificationDelivery?
 
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
     }
 
     public var isRead: Bool { state.isRead }
+    public var readAt: String? { state.readAt }
     public var createdAt: String { state.createdAt }
+
+    public var senderId: String? { actor?.id }
+    public var senderName: String? { actor?.displayName ?? actor?.username }
+    public var senderAvatar: String? { actor?.avatar }
+
+    public var message: String? { content ?? metadata?.messagePreview }
+
+    public var data: NotificationData? {
+        guard let context else { return nil }
+        return NotificationData(
+            conversationId: context.conversationId,
+            messageId: context.messageId,
+            postId: context.postId,
+            achievementId: nil,
+            callId: context.callSessionId,
+            friendRequestId: context.friendRequestId,
+            preview: metadata?.messagePreview
+        )
+    }
 
     // MARK: - Formatted title for display
 
@@ -172,29 +337,77 @@ public struct APINotification: Decodable, Identifiable {
         let conversationTitle = context?.conversationTitle ?? "la conversation"
 
         switch notificationType {
-        case .newMessage, .message:
+        case .newMessage, .legacyNewMessage:
             return "Message de \(actorName)"
-        case .messageReply:
-            return "Réponse de \(actorName)"
-        case .messageReaction, .reaction:
-            let emoji = metadata?.reactionEmoji ?? content ?? "❤️"
-            return "\(actorName) a réagit \(emoji) à votre message"
-        case .mention, .mentionAlias:
-            return "\(actorName) vous a mentionné"
-        case .friendRequest, .contactRequest:
+        case .messageReply, .reply, .legacyStoryReply:
+            return "Reponse de \(actorName)"
+        case .messageReaction, .reaction, .legacyMessageReaction:
+            let emoji = metadata?.reactionEmoji ?? metadata?.emoji ?? content ?? "heart.fill"
+            return "\(actorName) a reagi \(emoji) a votre message"
+        case .userMentioned, .mention, .legacyMention:
+            return "\(actorName) vous a mentionne"
+        case .friendRequest, .contactRequest, .legacyFriendRequest:
             return "\(actorName) veut se connecter"
-        case .friendAccepted, .contactAccepted:
-            return "\(actorName) a accepté votre invitation"
-        case .newConversationDirect:
-            return "Nouvelle conversation avec \(actorName)"
-        case .newConversationGroup, .newConversation:
-            return "Invitation à « \(conversationTitle) »"
-        case .memberJoined:
-            return "Nouveau membre dans « \(conversationTitle) »"
-        case .missedCall:
-            return "Appel manqué de \(actorName)"
-        case .system:
-            return content ?? "Notification système"
+        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
+            return "\(actorName) a accepte votre invitation"
+        case .addedToConversation, .newConversation:
+            return "Invitation a \(conversationTitle)"
+        case .removedFromConversation:
+            return "Retire de \(conversationTitle)"
+        case .communityInvite, .legacyGroupInvite:
+            return "Invitation a \(conversationTitle)"
+        case .communityJoined, .memberJoined, .legacyGroupJoined:
+            return "Nouveau membre dans \(conversationTitle)"
+        case .communityLeft, .memberLeft, .legacyGroupLeft:
+            return "\(actorName) a quitte \(conversationTitle)"
+        case .memberRemoved:
+            return "\(actorName) a ete retire de \(conversationTitle)"
+        case .memberPromoted:
+            return "\(actorName) a ete promu"
+        case .memberDemoted:
+            return "\(actorName) a ete retrogade"
+        case .memberRoleChanged:
+            return "Role modifie pour \(actorName)"
+        case .missedCall, .callDeclined, .legacyCallMissed:
+            return "Appel manque de \(actorName)"
+        case .incomingCall, .callEnded, .legacyCallIncoming:
+            return "Appel de \(actorName)"
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
+            return "\(actorName) a aime votre publication"
+        case .postComment, .commentReply, .legacyPostComment:
+            return "\(actorName) a commente votre publication"
+        case .postRepost:
+            return "\(actorName) a repartage votre publication"
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
+            return "Traduction disponible"
+        case .voiceCloneReady:
+            return "Clone vocal pret"
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            return "Nouveau badge debloque !"
+        case .securityAlert, .legacySystemAlert:
+            return "Alerte de securite"
+        case .loginNewDevice:
+            return "Connexion depuis un nouvel appareil"
+        case .passwordChanged:
+            return "Mot de passe modifie"
+        case .twoFactorEnabled:
+            return "Verification en 2 etapes activee"
+        case .twoFactorDisabled:
+            return "Verification en 2 etapes desactivee"
+        case .legacyAffiliateSignup:
+            return "Inscription via votre lien"
+        case .legacyStatusUpdate:
+            return "Mise a jour de statut"
+        case .messageEdited:
+            return "Message modifie"
+        case .messageDeleted:
+            return "Message supprime"
+        case .messagePinned:
+            return "Message epingle"
+        case .messageForwarded:
+            return "Message transfere"
+        case .system, .maintenance, .updateAvailable:
+            return content ?? "Notification systeme"
         }
     }
 
@@ -202,14 +415,28 @@ public struct APINotification: Decodable, Identifiable {
 
     public var formattedBody: String? {
         switch notificationType {
-        case .messageReaction, .reaction:
-            return metadata?.messageContent
-        case .newMessage, .message, .messageReply, .mention, .mentionAlias:
-            return content?.isEmpty == false ? content : nil
+        case .messageReaction, .reaction, .legacyMessageReaction:
+            return metadata?.messagePreview
+        case .newMessage, .legacyNewMessage, .messageReply, .userMentioned, .mention, .legacyMention, .reply, .legacyStoryReply:
+            return content?.isEmpty == false ? content : metadata?.messagePreview
+        case .postComment, .commentReply, .legacyPostComment:
+            return metadata?.commentPreview
         default:
             return nil
         }
     }
+}
+
+// MARK: - Legacy NotificationData (computed from context)
+
+public struct NotificationData: Decodable {
+    public let conversationId: String?
+    public let messageId: String?
+    public let postId: String?
+    public let achievementId: String?
+    public let callId: String?
+    public let friendRequestId: String?
+    public let preview: String?
 }
 
 // MARK: - Notification Response

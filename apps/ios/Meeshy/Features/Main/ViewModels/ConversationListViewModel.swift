@@ -30,7 +30,7 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
-    @Published var typingConversationIds: Set<String> = []
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
@@ -237,12 +237,12 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Typing indicator — affiche "est en train d'écrire" dans le row
+        // Typing indicator — affiche "<Auteur> écrit..." dans le row
         socketManager.typingStarted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                typingConversationIds.insert(event.conversationId)
+                typingUsernames[event.conversationId] = event.username
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -269,7 +269,7 @@ class ConversationListViewModel: ObservableObject {
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
-        typingConversationIds.remove(conversationId)
+        typingUsernames.removeValue(forKey: conversationId)
     }
 
     // MARK: - Badge Sync

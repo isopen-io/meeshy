@@ -113,13 +113,28 @@ struct MeeshyApp: App {
         let notifType = MeeshyNotificationType(rawValue: payload.type ?? "")
 
         switch notifType {
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+        case .friendRequest, .friendAccepted, .legacyFriendRequest, .legacyFriendAccepted,
+             .contactRequest, .contactAccepted, .legacyStatusUpdate:
             if let senderId = payload.senderId {
                 NotificationCenter.default.post(
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": senderId, "username": payload.senderUsername ?? senderId]
                 )
             }
+            pushManager.clearPendingNotification()
+
+        case .achievementUnlocked, .legacyAchievementUnlocked:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "userStats"
+            )
+            pushManager.clearPendingNotification()
+
+        case .legacyAffiliateSignup:
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "affiliate"
+            )
             pushManager.clearPendingNotification()
 
         default:

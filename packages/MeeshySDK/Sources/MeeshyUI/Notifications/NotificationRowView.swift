@@ -115,6 +115,88 @@ public struct NotificationRowView: View {
 
     // MARK: - Computed
 
+    private var messageText: String {
+        if let message = notification.message, !message.isEmpty {
+            return message
+        }
+        return contextualMessage
+    }
+
+    private var contextualMessage: String {
+        switch notifType {
+        case .newMessage, .legacyNewMessage, .messageReply:
+            return notification.data?.preview ?? "Nouveau message"
+        case .messageReaction, .reaction, .legacyMessageReaction:
+            return "A reagi a votre message"
+        case .userMentioned, .mention, .legacyMention:
+            return "Vous a mentionne"
+        case .friendRequest, .contactRequest, .legacyFriendRequest:
+            return "Demande d'ami"
+        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
+            return "A accepte votre demande"
+        case .communityInvite, .legacyGroupInvite:
+            return "Invitation de groupe"
+        case .communityJoined, .memberJoined, .legacyGroupJoined:
+            return "A rejoint le groupe"
+        case .communityLeft, .memberLeft, .legacyGroupLeft:
+            return "A quitte le groupe"
+        case .missedCall, .callDeclined, .legacyCallMissed:
+            return "Appel manque"
+        case .incomingCall, .callEnded, .legacyCallIncoming:
+            return "Appel entrant"
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
+            return "A aime votre publication"
+        case .postComment, .commentReply, .legacyPostComment:
+            return "A commente votre publication"
+        case .legacyStoryReply:
+            return "A repondu a votre story"
+        case .legacyAffiliateSignup:
+            return "Inscription via votre lien"
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            return "Nouveau badge debloque !"
+        case .securityAlert, .legacySystemAlert:
+            return "Alerte systeme"
+        case .loginNewDevice:
+            return "Connexion nouvel appareil"
+        case .passwordChanged:
+            return "Mot de passe modifie"
+        case .twoFactorEnabled:
+            return "Verification en 2 etapes activee"
+        case .twoFactorDisabled:
+            return "Verification en 2 etapes desactivee"
+        case .legacyStatusUpdate:
+            return "Mise a jour de statut"
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
+            return "Traduction disponible"
+        case .system, .maintenance, .updateAvailable:
+            return "Notification systeme"
+        case .voiceCloneReady:
+            return "Clone vocal pret"
+        case .postRepost:
+            return "A repartage votre publication"
+        case .addedToConversation, .newConversation:
+            return "Ajoute a une conversation"
+        case .removedFromConversation, .memberRemoved:
+            return "Retire de la conversation"
+        case .memberPromoted:
+            return "Promu dans le groupe"
+        case .memberDemoted:
+            return "Retrogade dans le groupe"
+        case .memberRoleChanged:
+            return "Role modifie"
+        case .messageEdited:
+            return "Message modifie"
+        case .messageDeleted:
+            return "Message supprime"
+        case .messagePinned:
+            return "Message epingle"
+        case .messageForwarded:
+            return "Message transfere"
+        case .reply:
+            return notification.data?.preview ?? "A repondu a votre message"
+        }
+    }
+
     private var relativeTime: String {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
