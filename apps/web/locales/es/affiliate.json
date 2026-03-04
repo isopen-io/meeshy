@@ -11,7 +11,10 @@
       "feature2": "100+ idiomas",
       "feature3": "Gratis",
       "terms": "Términos de servicio",
-      "privacy": "Política de privacidad"
+      "privacy": "Política de privacidad",
+      "about": "Acerca de",
+      "contact": "Contacto",
+      "goHome": "Ir a la página de inicio"
     },
     "copy": "Copiar",
     "copyLink": "Copiar el enlace",
