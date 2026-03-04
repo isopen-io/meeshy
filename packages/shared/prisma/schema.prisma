@@ -22,6 +22,7 @@ enum UserRole {
   BIGBOSS
   AUDIT
   ANALYST
+  AGENT      // Utilisateur géré par une IA (SAV, FAQ, etc.)
 }
 
 /// Utilisateur enregistré de la plateforme
@@ -45,8 +46,6 @@ model User {
   /// User profile banner/cover image
   banner                    String?
   isOnline                  Boolean  @default(false)
-  /// If true, this user is managed by an AI agent (Support, FAQ, etc.)
-  isAgentic                 Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
   lastActiveAt              DateTime @default(now())
   /// User's timezone (IANA format, e.g., "America/New_York", "Europe/Paris")
