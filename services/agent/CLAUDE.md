@@ -22,14 +22,14 @@ L'agent utilise une fenêtre glissante de messages pour maintenir la pertinence 
 
 1.  **Impersonator**: Imite un utilisateur absent. Se base sur le `ToneProfile` extrait.
 2.  **Animator**: Anime une conversation de groupe (ex: Mairie, Entreprise).
-3.  **Support (SAV)**: Agent dédié à la résolution de tickets ou à l'aide utilisateur. Utilise souvent `isAgentic: true` sur son profil.
+3.  **Support (SAV)**: Agent dédié à la résolution de tickets ou à l'aide utilisateur. Utilise souvent le rôle `AGENT` sur son profil.
 4.  **FAQ**: Répond aux questions fréquentes basées sur une base de connaissances.
 
 ## 👤 Utilisateurs Agentic
 
-Un utilisateur est dit "Agentic" (`user.isAgentic = true`) lorsqu'il n'est pas un humain mais un bot géré par le service d'agent.
+Un utilisateur est considéré comme "Agentic" lorsqu'il possède le rôle global `AGENT`. Il n'est pas un humain mais un bot géré par le service d'agent.
 
--   **Configuration**: Les administrateurs peuvent configurer un agent pour "prendre le contrôle" d'un utilisateur agentic.
+-   **Configuration**: Les administrateurs peuvent configurer un agent pour "prendre le contrôle" d'un utilisateur ayant le rôle `AGENT`.
 -   **Usage**: SAV institutionnel, FAQ d'entreprise, bots de modération.
 
 ## 📝 Prompt Engineering
