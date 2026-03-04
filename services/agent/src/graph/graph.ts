@@ -1,21 +1,20 @@
 import { StateGraph, START, END } from '@langchain/langgraph';
 import { ConversationStateAnnotation } from './state';
 import { routeDecision, routeQualityGate } from './router';
+import { createObserverNode } from '../agents/observer';
+import { createDecideNode } from '../agents/decide';
+import { createImpersonatorNode } from '../agents/impersonator';
+import { createAnimatorNode } from '../agents/animator';
+import { createQualityGateNode } from '../agents/quality-gate';
 import type { LlmProvider } from '../llm/types';
 
-export function buildAgentGraph(_llm: LlmProvider) {
-  const observe = async (state: typeof ConversationStateAnnotation.State) => state;
-  const decide = async (state: typeof ConversationStateAnnotation.State) => state;
-  const impersonate = async (state: typeof ConversationStateAnnotation.State) => state;
-  const animate = async (state: typeof ConversationStateAnnotation.State) => state;
-  const qualityGate = async (state: typeof ConversationStateAnnotation.State) => state;
-
+export function buildAgentGraph(llm: LlmProvider) {
   const graph = new StateGraph(ConversationStateAnnotation)
-    .addNode('observe', observe)
-    .addNode('decide', decide)
-    .addNode('impersonate', impersonate)
-    .addNode('animate', animate)
-    .addNode('qualityGate', qualityGate)
+    .addNode('observe', createObserverNode(llm))
+    .addNode('decide', createDecideNode())
+    .addNode('impersonate', createImpersonatorNode(llm))
+    .addNode('animate', createAnimatorNode(llm))
+    .addNode('qualityGate', createQualityGateNode(llm))
     .addEdge(START, 'observe')
     .addEdge('observe', 'decide')
     .addConditionalEdges('decide', routeDecision, {
