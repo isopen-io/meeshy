@@ -136,36 +136,39 @@ public struct NotificationListView: View {
             } else if viewModel.filteredNotifications.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(viewModel.filteredNotifications) { notification in
-                            NotificationRowView(
-                                notification: notification,
-                                onTap: {
-                                    Task { await viewModel.markRead(notification) }
-                                    onNotificationTap?(notification)
-                                },
-                                onMarkRead: {
-                                    Task { await viewModel.markRead(notification) }
-                                },
-                                onDelete: {
-                                    Task { await viewModel.deleteNotification(notification) }
-                                }
-                            )
+                List {
+                    ForEach(viewModel.filteredNotifications) { notification in
+                        NotificationRowView(
+                            notification: notification,
+                            onTap: {
+                                Task { await viewModel.markRead(notification) }
+                                onNotificationTap?(notification)
+                            },
+                            onMarkRead: {
+                                Task { await viewModel.markRead(notification) }
+                            },
+                            onDelete: {
+                                Task { await viewModel.deleteNotification(notification) }
+                            }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparatorTint(theme.textMuted.opacity(0.1))
+                    }
 
-                            Divider()
-                                .background(theme.textMuted.opacity(0.1))
-                        }
-
-                        if viewModel.hasMore && viewModel.activeFilter == .all {
-                            ProgressView()
-                                .padding()
-                                .onAppear {
-                                    Task { await viewModel.loadMore() }
-                                }
-                        }
+                    if viewModel.hasMore && viewModel.activeFilter == .all {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .onAppear {
+                                Task { await viewModel.loadMore() }
+                            }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .refreshable {
                     await viewModel.loadInitial()
                 }
