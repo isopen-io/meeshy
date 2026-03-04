@@ -2909,7 +2909,6 @@ model AgentConfig {
   conversation             Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
-  @@map("agent_configs")
 }
 
 model AgentUserRole {
@@ -2941,7 +2940,6 @@ model AgentUserRole {
 
   @@unique([userId, conversationId])
   @@index([conversationId])
-  @@map("agent_user_roles")
 }
 
 model AgentConversationSummary {
@@ -2957,7 +2955,6 @@ model AgentConversationSummary {
   updatedAt       DateTime @updatedAt
 
   @@unique([conversationId])
-  @@map("agent_conversation_summaries")
 }
 
 model AgentLlmConfig {
@@ -2979,8 +2976,6 @@ model AgentLlmConfig {
   configuredBy     String   @db.ObjectId
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-
-  @@map("agent_llm_configs")
 }
 
 model AgentAnalytic {
@@ -2997,5 +2992,4 @@ model AgentAnalytic {
   conversation    Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
-  @@map("agent_analytics")
 }
