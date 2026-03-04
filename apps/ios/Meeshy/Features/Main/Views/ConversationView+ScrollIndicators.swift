@@ -212,9 +212,9 @@ extension ConversationView {
     var typingLabel: String {
         let names = viewModel.typingUsernames
         switch names.count {
-        case 1: return "\(names[0]) ecrit..."
-        case 2: return "\(names[0]) et \(names[1])..."
-        default: return "\(names.count) personnes..."
+        case 1: return "\(names[0]) écrit"
+        case 2: return "\(names[0]) et \(names[1]) écrivent"
+        default: return "\(names.count) personnes écrivent"
         }
     }
 
@@ -245,14 +245,19 @@ extension ConversationView {
         let isDark = theme.mode.isDark
         let accent = Color(hex: accentColor)
 
-        return HStack(spacing: 8) {
-            // Animated dots bubble (wave bounce)
+        return HStack(spacing: 6) {
+            // Author name + "écrit"
+            Text(typingLabel)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isDark ? accent.opacity(0.7) : accent.opacity(0.6))
+
+            // Animated dots (inline, after text)
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(accent.opacity(headerState.inlineTypingDotPhase == i ? 1.0 : 0.35))
-                        .frame(width: 6, height: 6)
-                        .offset(y: headerState.inlineTypingDotPhase == i ? -4 : 0)
+                        .frame(width: 5, height: 5)
+                        .offset(y: headerState.inlineTypingDotPhase == i ? -3 : 0)
                         .animation(
                             .spring(response: 0.3, dampingFraction: 0.5)
                                 .delay(Double(i) * 0.1),
@@ -260,26 +265,11 @@ extension ConversationView {
                         )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
-                    .overlay(
-                        Capsule()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                    )
-            )
             .onReceive(typingDotTimer) { _ in
                 if !viewModel.typingUsernames.isEmpty {
                     headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
                 }
             }
-
-            // Typing label
-            Text(typingLabel)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isDark ? accent.opacity(0.7) : accent.opacity(0.6))
 
             Spacer()
         }

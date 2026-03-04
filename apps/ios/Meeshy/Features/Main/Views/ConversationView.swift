@@ -642,6 +642,13 @@ struct ConversationView: View {
                 scrollState.scrollToMessageId = nil
                 scrollToAndHighlight(targetId, proxy: proxy)
             }
+            .onChange(of: viewModel.typingUsernames.isEmpty) { _, isEmpty in
+                guard !isEmpty, scrollState.isNearBottom else { return }
+                viewModel.markProgrammaticScroll()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    proxy.scrollTo("typing_indicator", anchor: .bottom)
+                }
+            }
         }
     }
 

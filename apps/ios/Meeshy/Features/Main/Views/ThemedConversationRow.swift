@@ -22,7 +22,7 @@ struct ThemedConversationRow: View {
     var isDark: Bool = false
     var storyRingState: StoryRingState = .none
     var moodStatus: StatusEntry? = nil
-    var isTyping: Bool = false
+    var typingUsername: String? = nil
 
     private var accentColor: String { conversation.accentColor }
     private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
@@ -384,11 +384,11 @@ struct ThemedConversationRow: View {
     @ViewBuilder
     private var typingIndicatorView: some View {
         HStack(spacing: 5) {
-            TypingDotsView(accentColor: accentColor)
-            Text(String(localized: "typing.in_progress", defaultValue: "est en train d'écrire"))
+            Text(typingUsername.map { "\($0) écrit" } ?? "est en train d'écrire")
                 .font(.system(size: 13).italic())
                 .foregroundColor(Color(hex: accentColor))
                 .lineLimit(1)
+            TypingDotsView(accentColor: accentColor)
         }
     }
 
@@ -430,7 +430,7 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private var lastMessagePreviewView: some View {
-        if isTyping {
+        if typingUsername != nil {
             typingIndicatorView
         } else {
             switch lastMessageEffect {
@@ -556,7 +556,7 @@ extension ThemedConversationRow: Equatable {
     static func == (lhs: ThemedConversationRow, rhs: ThemedConversationRow) -> Bool {
         lhs.conversation.id == rhs.conversation.id &&
         lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&
-        lhs.isTyping == rhs.isTyping &&
+        lhs.typingUsername == rhs.typingUsername &&
         lhs.availableWidth == rhs.availableWidth &&
         lhs.isDragging == rhs.isDragging &&
         lhs.isDark == rhs.isDark &&
