@@ -91,6 +91,8 @@ public struct VideoFullscreenPlayerView: View {
     public let urlString: String
     public let accentColor: String
     public let fileName: String
+    public var caption: String? = nil
+    public var mentionDisplayNames: [String: String]? = nil
 
     @ObservedObject private var manager = SharedAVPlayerManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -119,11 +121,15 @@ public struct VideoFullscreenPlayerView: View {
     public init(
         urlString: String,
         accentColor: String = "08D9D6",
-        fileName: String = ""
+        fileName: String = "",
+        caption: String? = nil,
+        mentionDisplayNames: [String: String]? = nil
     ) {
         self.urlString = urlString
         self.accentColor = accentColor
         self.fileName = fileName
+        self.caption = caption
+        self.mentionDisplayNames = mentionDisplayNames
     }
 
     // MARK: - Body
@@ -216,8 +222,28 @@ public struct VideoFullscreenPlayerView: View {
 
                     speedRow
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+
+                    if let caption, !caption.isEmpty {
+                        MessageTextRenderer.render(
+                            caption,
+                            fontSize: 13,
+                            color: .white.opacity(0.9),
+                            mentionColor: Color(hex: "818CF8"),
+                            accentColor: accent,
+                            mentionDisplayNames: mentionDisplayNames
+                        )
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(4)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 16)
+                        .tint(accent)
+                    }
                 }
+                .padding(.bottom, 16)
             }
         }
     }
