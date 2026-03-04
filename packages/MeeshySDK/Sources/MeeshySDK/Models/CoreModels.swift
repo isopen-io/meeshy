@@ -305,6 +305,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var replyTo: ReplyReference?
     public var forwardedFrom: ForwardReference?
     public var senderName: String?
+    public var senderUsername: String?
     public var senderColor: String?
     public var senderAvatarURL: String?
     public var deliveryStatus: DeliveryStatus = .sent
@@ -341,7 +342,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
-                senderName: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
+                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0) {
@@ -357,7 +358,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
-        self.senderName = senderName; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
+        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
