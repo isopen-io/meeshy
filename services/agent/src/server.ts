@@ -64,7 +64,10 @@ async function start() {
       replyToId: msg.replyToId,
     };
     messages.push(newEntry);
-    const window = messages.slice(-env.AGENT_SLIDING_WINDOW_SIZE);
+    // Use dynamic window size from config or global default
+    // If useFullHistory is enabled, we still cap at 250 for Redis/State performance but allow much larger than default 50
+    const windowSize = config.useFullHistory ? 250 : (config.contextWindowSize ?? env.AGENT_SLIDING_WINDOW_SIZE);
+    const window = messages.slice(-windowSize);
     await stateManager.setMessages(msg.conversationId, window);
 
     await triggerEngine.onMessage(msg.conversationId, {
@@ -78,6 +81,7 @@ async function start() {
     const messages = await stateManager.getMessages(conversationId);
     const summary = await stateManager.getSummary(conversationId);
     const toneProfiles = await stateManager.getToneProfiles(conversationId);
+    const config = await persistence.getAgentConfig(conversationId);
 
     const result = await graph.invoke({
       conversationId,
@@ -89,6 +93,9 @@ async function start() {
       pendingResponse: null,
       decision: 'skip',
       selectedUserId: null,
+      contextWindowSize: config?.contextWindowSize ?? 50,
+      agentType: config?.agentType ?? 'personal',
+      useFullHistory: config?.useFullHistory ?? false,
     });
 
     if (result.summary) await stateManager.setSummary(conversationId, result.summary);

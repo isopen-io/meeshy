@@ -11,8 +11,9 @@ export function createAnimatorNode(llm: LlmProvider) {
     if (!user) return { pendingResponse: null };
 
     const role = user.role;
+    const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
     const conversationContext = state.messages
-      .slice(-20)
+      .slice(-windowSize)
       .map((m) => `[${m.senderName}]: ${m.content}`)
       .join('\n');
 

@@ -10,8 +10,9 @@ export function createImpersonatorNode(llm: LlmProvider) {
     const profile = state.toneProfiles[userId];
     if (!profile) return { pendingResponse: null };
 
+    const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
     const conversationContext = state.messages
-      .slice(-20)
+      .slice(-windowSize)
       .map((m) => `[${m.senderName}]: ${m.content}`)
       .join('\n');
 
