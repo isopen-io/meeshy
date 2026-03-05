@@ -40,6 +40,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     timeoutSeconds: 300,
     triggerOnUserMessage: false,
     triggerOnReplyTo: true,
+    agentType: 'personal',
+    contextWindowSize: 50,
+    useFullHistory: false,
     excludedRoles: [],
     excludedUserIds: [],
     manualUserIds: [],
@@ -59,6 +62,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         timeoutSeconds: config.timeoutSeconds,
         triggerOnUserMessage: config.triggerOnUserMessage,
         triggerOnReplyTo: config.triggerOnReplyTo,
+        agentType: config.agentType,
+        contextWindowSize: config.contextWindowSize,
+        useFullHistory: config.useFullHistory,
         excludedRoles: config.excludedRoles,
         excludedUserIds: config.excludedUserIds,
         manualUserIds: config.manualUserIds,
@@ -67,7 +73,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     } else {
       setConversationId('');
       setForm({
-        enabled: false,
+        enabled: true,
         autoPickupEnabled: false,
         inactivityThresholdHours: 72,
         minHistoricalMessages: 0,
@@ -76,6 +82,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         timeoutSeconds: 300,
         triggerOnUserMessage: false,
         triggerOnReplyTo: true,
+        agentType: 'personal',
+        contextWindowSize: 50,
+        useFullHistory: false,
         excludedRoles: [],
         excludedUserIds: [],
         manualUserIds: [],
@@ -137,6 +146,40 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="flex items-center justify-between">
               <Label>Auto-pickup</Label>
               <Switch checked={form.autoPickupEnabled} onCheckedChange={v => updateField('autoPickupEnabled', v)} />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Comportement */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Comportement & Contexte</h3>
+            <div className="space-y-2">
+              <Label>Type d&apos;agent</Label>
+              <select
+                className="w-full p-2 border rounded-md bg-transparent"
+                value={form.agentType}
+                onChange={e => updateField('agentType', e.target.value)}
+              >
+                <option value="personal">Personnel</option>
+                <option value="support">SAV / Support</option>
+                <option value="faq">FAQ</option>
+                <option value="animator">Animateur</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Taille fenêtre contextuelle (messages)</Label>
+              <Input
+                type="number"
+                value={form.contextWindowSize}
+                onChange={e => updateField('contextWindowSize', parseInt(e.target.value) || 50)}
+                min={10}
+                max={200}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Utiliser l&apos;historique complet (Max 250)</Label>
+              <Switch checked={form.useFullHistory} onCheckedChange={v => updateField('useFullHistory', v)} />
             </div>
           </div>
 
