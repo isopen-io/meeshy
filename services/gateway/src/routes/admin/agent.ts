@@ -27,6 +27,9 @@ const agentConfigSchema = z.object({
   triggerOnUserMessage: z.boolean().optional(),
   triggerFromUserIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
   triggerOnReplyTo: z.boolean().optional(),
+  agentType: z.string().optional(),
+  contextWindowSize: z.number().int().min(10).max(250).optional(),
+  useFullHistory: z.boolean().optional(),
 });
 
 const llmConfigSchema = z.object({

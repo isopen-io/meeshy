@@ -411,6 +411,47 @@ services:
       # Service partagé par les deux routers
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3100"
 
+  # ===========================================================================
+  # AGENT STAGING - Conversation Agent Service
+  # ===========================================================================
+  agent-staging:
+    image: ${AGENT_IMAGE:-isopen/meeshy-agent:staging}
+    container_name: meeshy-agent-staging
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
+      - REDIS_URL=redis://redis-staging:6379
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-sonnet-20240620}
+      - ZMQ_HOST=0.0.0.0
+      - ZMQ_PULL_PORT=5560
+      - ZMQ_PUB_PORT=5561
+      - NODE_ENV=staging
+      - PORT=3200
+    depends_on:
+      mongo-init-staging:
+        condition: service_completed_successfully
+      redis-staging:
+        condition: service_healthy
+    networks:
+      - meeshy-staging-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.env=staging"
+      - "traefik.http.routers.agent-staging.rule=Host(`agent.staging.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.agent-staging.entrypoints=websecure"
+      - "traefik.http.routers.agent-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agent-staging.loadbalancer.server.port=3200"
+
 # =============================================================================
 # VOLUMES - Tous préfixés "staging_" pour isolation
 # =============================================================================
