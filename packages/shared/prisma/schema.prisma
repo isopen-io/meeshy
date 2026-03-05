@@ -480,7 +480,6 @@ model Message {
   messageSource               String    @default("user")
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
-  isDeleted                   Boolean   @default(false)
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
   /// ID of the story/post being replied to
@@ -593,7 +592,7 @@ model Message {
   userDeletions UserMessageDeletion[]
 
   @@index([conversationId])
-  @@index([conversationId, isDeleted, createdAt]) // Optimisation: requête lastMessage avec tri
+  @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])
   @@index([messageSource])
   @@index([createdAt])
@@ -1668,10 +1667,7 @@ model UserConversationPreferences {
   /// Archive conversation (hide from main list)
   isArchived Boolean @default(false)
 
-  /// User has deleted this conversation from their view (soft delete)
-  isDeletedForUser Boolean @default(false)
-
-  /// When the user deleted this conversation
+  /// When the user deleted this conversation from their view (soft delete, null = not deleted)
   deletedForUserAt DateTime?
 
   /// Hide all messages before this timestamp (clear history feature)

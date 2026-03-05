@@ -58,7 +58,7 @@ export interface ConversationPreferencesDefaults {
   isPinned: boolean;
   isMuted: boolean;
   isArchived: boolean;
-  isDeletedForUser: boolean;
+  deletedForUserAt: Date | null;
   tags: string[];
   categoryId: string | null;
   orderInCategory: number | null;
@@ -70,7 +70,7 @@ export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults 
   isPinned: false,
   isMuted: false,
   isArchived: false,
-  isDeletedForUser: false,
+  deletedForUserAt: null,
   tags: [],
   categoryId: null,
   orderInCategory: null,

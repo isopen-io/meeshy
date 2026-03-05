@@ -143,6 +143,8 @@ export class ServiceName {
 }
 ```
 
+**No redundant boolean + timestamp pairs** - use nullable `DateTime?`: `null` = false, non-null = true with timestamp (e.g. `deletedAt` NOT `isDeleted` + `deletedAt`)
+
 ## Error Handling
 ```typescript
 // Custom hierarchy

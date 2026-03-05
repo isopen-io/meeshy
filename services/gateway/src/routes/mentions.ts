@@ -126,7 +126,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false,
+          deletedAt: null,
           conversation: {
             members: {
               some: {

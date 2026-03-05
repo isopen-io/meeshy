@@ -294,14 +294,15 @@ export function registerCoreRoutes(
               isPinned: true,
               isMuted: true,
               isArchived: true,
-              isDeletedForUser: true,
+              deletedForUserAt: true,
               tags: true,
-              categoryId: true
+              categoryId: true,
+              reaction: true
             }
           },
           messages: {
             where: {
-              isDeleted: false
+              deletedAt: null
             },
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -572,9 +573,10 @@ export function registerCoreRoutes(
               isPinned: true,
               isMuted: true,
               isArchived: true,
-              isDeletedForUser: true,
+              deletedForUserAt: true,
               tags: true,
-              categoryId: true
+              categoryId: true,
+              reaction: true
             }
           }
         }

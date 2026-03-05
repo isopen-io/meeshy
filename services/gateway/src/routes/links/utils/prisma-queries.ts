@@ -96,7 +96,7 @@ export async function getConversationMessages(
   return prisma.message.findMany({
     where: {
       conversationId,
-      isDeleted: false
+      deletedAt: null
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -144,7 +144,7 @@ export async function getConversationMessagesWithDetails(
   return prisma.message.findMany({
     where: {
       conversationId,
-      isDeleted: false
+      deletedAt: null
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -285,7 +285,7 @@ export async function countConversationMessages(
   return prisma.message.count({
     where: {
       conversationId,
-      isDeleted: false
+      deletedAt: null
     }
   });
 }

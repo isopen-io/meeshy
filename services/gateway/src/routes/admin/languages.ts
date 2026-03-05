@@ -58,7 +58,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         by: ['originalLanguage'],
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false,
+          deletedAt: null,
           originalLanguage: { not: null }
         },
         _count: {
@@ -86,7 +86,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
             where: {
               originalLanguage: lang.originalLanguage,
               createdAt: { gte: startDate },
-              isDeleted: false,
+              deletedAt: null,
               senderId: { not: null }
             },
             select: {
@@ -189,7 +189,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
             gte: previousPeriodStart,
             lt: startDate
           },
-          isDeleted: false,
+          deletedAt: null,
           originalLanguage: { not: null }
         },
         _count: {
@@ -276,7 +276,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       // Récupérer tous les messages de la période
       const where: any = {
         createdAt: { gte: startDate },
-        isDeleted: false,
+        deletedAt: null,
         originalLanguage: { not: null }
       };
 

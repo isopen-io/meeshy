@@ -27,6 +27,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private let api = APIClient.shared
+    private let conversationService = ConversationService.shared
     private let preferenceService = PreferenceService.shared
     private let pageLimit = 100
     /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
@@ -80,6 +81,7 @@ class ConversationListViewModel: ObservableObject {
                     case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
                     case .globales: filterMatch = c.type == .global && c.isActive
                     case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
+                    case .favoris: filterMatch = c.reaction != nil && c.isActive
                     case .archived: filterMatch = !c.isActive
                     }
                     let searchMatch = text.isEmpty || c.name.localizedCaseInsensitiveContains(text)
@@ -487,10 +489,7 @@ class ConversationListViewModel: ObservableObject {
         conversations[index].unreadCount = 0
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.post(
-                endpoint: "/conversations/\(conversationId)/mark-read",
-                body: [String: String]()
-            )
+            try await conversationService.markRead(conversationId: conversationId)
         } catch {
             conversations[index].unreadCount = previousCount
         }
@@ -508,10 +507,7 @@ class ConversationListViewModel: ObservableObject {
         }
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.post(
-                endpoint: "/conversations/\(conversationId)/mark-unread",
-                body: [String: String]()
-            )
+            try await conversationService.markUnread(conversationId: conversationId)
         } catch {
             conversations[index].unreadCount = previousCount
         }
@@ -560,9 +556,7 @@ class ConversationListViewModel: ObservableObject {
         let removed = conversations.remove(at: index)
 
         do {
-            let _ = try await api.delete(
-                endpoint: "/conversations/\(conversationId)/delete-for-me"
-            )
+            try await conversationService.deleteForMe(conversationId: conversationId)
         } catch {
             conversations.insert(removed, at: min(index, conversations.count))
         }
@@ -588,15 +582,20 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    // MARK: - React to Last Message
+    // MARK: - Favorite Reaction
 
-    func reactToLastMessage(conversationId: String, messageId: String, emoji: String) async {
+    func setFavoriteReaction(conversationId: String, emoji: String?) async {
+        guard let index = convIndex(for: conversationId) else { return }
+        let previous = conversations[index].reaction
+        conversations[index].reaction = emoji
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.post(
-                endpoint: "/conversations/\(conversationId)/messages/\(messageId)/reactions",
-                body: ["emoji": emoji]
+            try await preferenceService.updateConversationPreferences(
+                conversationId: conversationId,
+                request: .init(reaction: emoji)
             )
-        } catch { }
+        } catch {
+            conversations[index].reaction = previous
+        }
     }
 
     // MARK: - Message Prefetch

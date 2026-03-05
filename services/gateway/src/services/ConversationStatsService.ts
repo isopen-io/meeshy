@@ -157,7 +157,7 @@ export class ConversationStatsService {
     // Messages per language
     const messagesAgg = await prisma.message.groupBy({
       by: ['originalLanguage'],
-      where: { conversationId: realConversationId, isDeleted: false },
+      where: { conversationId: realConversationId, deletedAt: null },
       _count: { _all: true }
     }).catch(() => [] as any[]);
 

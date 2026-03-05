@@ -48,7 +48,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           user,
         ] = await Promise.all([
           fastify.prisma.message.count({
-            where: { senderId: userId, isDeleted: false },
+            where: { senderId: userId, deletedAt: null },
           }),
           fastify.prisma.conversationMember.count({
             where: { userId },
@@ -56,7 +56,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.count({
             where: {
               senderId: userId,
-              isDeleted: false,
+              deletedAt: null,
               NOT: { translations: null },
             },
           }),
@@ -67,7 +67,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             by: ['originalLanguage'],
             where: {
               senderId: userId,
-              isDeleted: false,
+              deletedAt: null,
             },
           }),
           fastify.prisma.user.findUnique({
@@ -145,7 +145,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         const messages = await fastify.prisma.message.findMany({
           where: {
             senderId: userId,
-            isDeleted: false,
+            deletedAt: null,
             createdAt: { gte: startDate },
           },
           select: { createdAt: true },
@@ -215,7 +215,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           user,
         ] = await Promise.all([
           fastify.prisma.message.count({
-            where: { senderId: userId, isDeleted: false },
+            where: { senderId: userId, deletedAt: null },
           }),
           fastify.prisma.conversationMember.count({
             where: { userId },
@@ -223,7 +223,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.count({
             where: {
               senderId: userId,
-              isDeleted: false,
+              deletedAt: null,
               NOT: { translations: null },
             },
           }),
@@ -234,7 +234,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
             by: ['originalLanguage'],
             where: {
               senderId: userId,
-              isDeleted: false,
+              deletedAt: null,
             },
           }),
           fastify.prisma.user.findUnique({

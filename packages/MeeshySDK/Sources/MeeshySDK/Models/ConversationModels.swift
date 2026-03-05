@@ -51,9 +51,10 @@ public struct APIConversationPreferences: Decodable, Sendable {
     public let isPinned: Bool?
     public let isMuted: Bool?
     public let isArchived: Bool?
-    public let isDeletedForUser: Bool?
+    public let deletedForUserAt: Date?
     public let tags: [String]?
     public let categoryId: String?
+    public let reaction: String?
 }
 
 public struct APIConversation: Decodable, Sendable {
@@ -166,7 +167,8 @@ extension APIConversation {
             isMuted: prefs?.isMuted ?? false,
             participantUserId: otherMember?.userId,
             participantAvatarURL: participantAvatar,
-            currentUserRole: currentRole
+            currentUserRole: currentRole,
+            reaction: prefs?.reaction
         )
     }
 }

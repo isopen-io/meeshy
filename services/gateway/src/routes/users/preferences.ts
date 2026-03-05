@@ -142,7 +142,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                   createdAt: {
                     gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
                   },
-                  isDeleted: false
+                  deletedAt: null
                 }
               }
             }
@@ -238,13 +238,13 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             senderId: userId,
-            isDeleted: false
+            deletedAt: null
           }
         }),
         fastify.prisma.message.count({
           where: {
             senderId: userId,
-            isDeleted: false,
+            deletedAt: null,
             createdAt: {
               gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
             }
@@ -258,7 +258,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             senderId: userId,
-            isDeleted: false,
+            deletedAt: null,
             createdAt: {
               gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
             }
@@ -423,7 +423,7 @@ export async function getUserStats(fastify: FastifyInstance) {
         languagesRaw,
       ] = await Promise.all([
         fastify.prisma.message.count({
-          where: { senderId: userId, isDeleted: false },
+          where: { senderId: userId, deletedAt: null },
         }),
         fastify.prisma.conversationMember.count({
           where: { userId },
@@ -431,7 +431,7 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             senderId: userId,
-            isDeleted: false,
+            deletedAt: null,
             translations: { isSet: true },
           },
         }),
@@ -442,7 +442,7 @@ export async function getUserStats(fastify: FastifyInstance) {
           by: ['originalLanguage'],
           where: {
             senderId: userId,
-            isDeleted: false,
+            deletedAt: null,
             originalLanguage: { not: null },
           },
         }),

@@ -95,6 +95,7 @@ export const CommonSchemas = {
 - **Branded types** for sensitive IDs: `type ConversationId = string & { __brand: 'ConversationId' }`
 - **JSDoc with `@see schema.prisma`** references
 - **Single export location** - avoid duplicating types
+- **No redundant boolean + timestamp pairs** - use nullable `DateTime?`: `null` = false, non-null = true with timestamp (e.g. `deletedAt` NOT `isDeleted` + `deletedAt`)
 
 ## Adding New Types
 1. Create file in `types/new-type.ts`

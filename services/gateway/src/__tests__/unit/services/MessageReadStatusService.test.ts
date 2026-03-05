@@ -150,7 +150,7 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.message.count).toHaveBeenCalledWith({
         where: {
           conversationId: testConversationId,
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: testUserId }
         }
       });
@@ -258,7 +258,7 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsReceived(testUserId, testConversationId);
 
       expect(mockPrisma.message.findFirst).toHaveBeenCalledWith({
-        where: { conversationId: testConversationId, isDeleted: false },
+        where: { conversationId: testConversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         select: { id: true }
       });

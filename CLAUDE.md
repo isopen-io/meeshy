@@ -97,6 +97,7 @@ Each increment leaves the codebase in a working state.
 - No comments - code should be self-documenting
 - Prefer options objects over positional parameters
 - Use array methods (`map`, `filter`, `reduce`) over loops
+- **No redundant boolean + timestamp pairs** - a nullable `DateTime?` field is sufficient: `null` = false, non-null = true with timestamp. Never add a separate boolean (e.g. use `deletedAt: DateTime?` NOT `isDeleted: Boolean` + `deletedAt: DateTime?`)
 
 ### Preferred Tools
 - **Language**: TypeScript strict mode (JS services), Swift (iOS), Python (translator)

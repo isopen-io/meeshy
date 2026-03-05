@@ -72,20 +72,32 @@ extension ConversationListView {
             }
         }
 
-        // React to last message
-        if let lastMsgId = conversation.lastMessageId {
-            Menu {
-                ForEach(["❤️", "👍", "😂", "😮", "😢", "🔥", "🎉", "💯"], id: \.self) { emoji in
-                    Button {
-                        HapticFeedback.light()
-                        Task { await conversationViewModel.reactToLastMessage(conversationId: conversation.id, messageId: lastMsgId, emoji: emoji) }
-                    } label: {
-                        Text(emoji)
-                    }
+        // Favorite with emoji
+        Menu {
+            ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
+                Button {
+                    HapticFeedback.light()
+                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                } label: {
+                    Text(emoji)
                 }
-            } label: {
-                Label(String(localized: "context.react", defaultValue: "R\u{00e9}agir"), systemImage: "face.smiling.fill")
             }
+            if conversation.reaction != nil {
+                Divider()
+                Button(role: .destructive) {
+                    HapticFeedback.light()
+                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                } label: {
+                    Label(String(localized: "context.remove_favorite", defaultValue: "Retirer le favori"), systemImage: "star.slash")
+                }
+            }
+        } label: {
+            Label(
+                conversation.reaction != nil
+                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.reaction!)")
+                    : String(localized: "context.favorite", defaultValue: "Favori"),
+                systemImage: conversation.reaction != nil ? "star.fill" : "star"
+            )
         }
 
         Divider()

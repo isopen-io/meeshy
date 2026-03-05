@@ -60,7 +60,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
 
       // 3. Statistiques des messages
       const totalMessages = await fastify.prisma.message.count({
-        where: { isDeleted: false }
+        where: { deletedAt: null }
       });
 
       // 4. Statistiques des communautés
@@ -100,7 +100,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
           where: { createdAt: { gte: last24Hours } }
         }),
         fastify.prisma.message.count({
-          where: { createdAt: { gte: last24Hours }, isDeleted: false }
+          where: { createdAt: { gte: last24Hours }, deletedAt: null }
         }),
         fastify.prisma.anonymousParticipant.count({
           where: { joinedAt: { gte: last24Hours } }
