@@ -84,24 +84,28 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(status.moodEmoji)
-                    .font(.system(size: 18))
-                Spacer()
-                Text(status.timeAgo)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-            }
-
+        Group {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
-                audioPlayerRow(urlString: audioUrl)
-            } else if let content = status.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    audioPlayerRow(urlString: audioUrl)
+                    Text(status.timeAgo)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let content = status.content, !content.isEmpty {
+                        Text(content)
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 4)
+                    Text(status.timeAgo)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
             }
         }
         .padding(.horizontal, 12)
