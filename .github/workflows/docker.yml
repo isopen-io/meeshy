@@ -24,6 +24,7 @@ on:
       - 'apps/web/**'
       - 'services/gateway/**'
       - 'services/translator/**'
+      - 'services/agent/**'
       - 'packages/shared/**'
       - 'infrastructure/docker/**'
       - '.github/workflows/docker.yml'
@@ -40,6 +41,7 @@ on:
           - web
           - gateway
           - translator
+          - agent
           - web,gateway
           - web,translator
           - gateway,translator
@@ -126,20 +128,24 @@ jobs:
               echo "web=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
+              echo "agent=true" >> $GITHUB_OUTPUT
             else
               echo "web=$([[ "$SERVICES" == *"web"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SERVICES" == *"gateway"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SERVICES" == *"translator"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "agent=$([[ "$SERVICES" == *"agent"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             fi
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "web=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
+            echo "agent=true" >> $GITHUB_OUTPUT
           else
             CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
           fi
 
       - name: Build services list
@@ -167,6 +173,15 @@ jobs:
             VERSION=$(cat services/gateway/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
             SERVICES+='{"service":"gateway","context":".","dockerfile":"./services/gateway/Dockerfile","image":"meeshy-gateway","version":"'$VERSION'"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ steps.changes.outputs.agent }}" == "true" ]]; then
+            HAS_CHANGES=true
+            VERSION=$(cat services/agent/package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[", ]//g')
+            [[ -z "$VERSION" ]] && VERSION="1.0.0"
+            [[ "$FIRST" == "false" ]] && SERVICES+=','
+            SERVICES+='{"service":"agent","context":".","dockerfile":"./services/agent/Dockerfile","image":"meeshy-agent","version":"'$VERSION'"}'
             FIRST=false
           fi
 
