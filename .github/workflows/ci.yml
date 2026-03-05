@@ -140,6 +140,9 @@ jobs:
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
+          - name: agent
+            path: services/agent
+            filter: '@meeshy/agent'
 
     steps:
       - name: Checkout
@@ -916,6 +919,19 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: |
           cd services/gateway
+          pnpm run build
+
+      # Build agent (like in Dockerfiles)
+      - name: Build agent (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd services/agent
+          bun run build
+
+      - name: Build agent (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          cd services/agent
           pnpm run build
 
       # Build web frontend (like in Dockerfiles)
