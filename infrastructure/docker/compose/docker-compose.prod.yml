@@ -384,6 +384,46 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
       - "traefik.http.routers.frontend.priority=1"
 
+  # ===========================================================================
+  # AGENT - Conversation Agent Service (agent.meeshy.me)
+  # ===========================================================================
+  agent:
+    image: ${AGENT_IMAGE:-isopen/meeshy-agent:latest}
+    container_name: meeshy-agent
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD}@database:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true&authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-sonnet-20240620}
+      - ZMQ_HOST=0.0.0.0
+      - ZMQ_PULL_PORT=5560
+      - ZMQ_PUB_PORT=5561
+      - NODE_ENV=production
+      - PORT=3200
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - meeshy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent.rule=Host(`agent.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.agent.entrypoints=websecure"
+      - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agent.loadbalancer.server.port=3200"
+
 # =============================================================================
 # VOLUMES
 # =============================================================================
