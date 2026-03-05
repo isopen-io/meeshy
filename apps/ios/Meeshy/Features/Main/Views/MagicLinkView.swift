@@ -76,7 +76,7 @@ struct MagicLinkView: View {
                 .font(.system(size: 56, weight: .light))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [MeeshyColors.purple, MeeshyColors.cyan],
+                        colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -128,7 +128,7 @@ struct MagicLinkView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.coral)
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -139,13 +139,13 @@ struct MagicLinkView: View {
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(
                             LinearGradient(
-                                colors: [MeeshyColors.purple, MeeshyColors.cyan],
+                                colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .frame(height: 52)
-                        .shadow(color: MeeshyColors.purple.opacity(0.3), radius: 12, y: 6)
+                        .shadow(color: MeeshyColors.indigo600.opacity(0.3), radius: 12, y: 6)
 
                     if isLoading {
                         ProgressView()
@@ -179,14 +179,14 @@ struct MagicLinkView: View {
             // Animated envelope icon
             ZStack {
                 Circle()
-                    .fill(MeeshyColors.purple.opacity(0.1))
+                    .fill(MeeshyColors.indigo600.opacity(0.1))
                     .frame(width: 120, height: 120)
 
                 Image(systemName: "envelope.open.fill")
                     .font(.system(size: 48, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [MeeshyColors.purple, MeeshyColors.cyan],
+                            colors: [MeeshyColors.indigo600, MeeshyColors.indigo400],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -206,12 +206,12 @@ struct MagicLinkView: View {
 
             Text(email)
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(MeeshyColors.cyan)
+                .foregroundColor(MeeshyColors.indigo400)
 
             if linkExpired {
                 Text("Lien expire, renvoyez-en un nouveau")
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.coral)
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.top, MeeshySpacing.sm)
             } else {
@@ -224,7 +224,7 @@ struct MagicLinkView: View {
                 if countdownRemaining > 0 {
                     Text(formattedCountdown)
                         .font(.system(size: MeeshyFont.titleSize, weight: .bold).monospacedDigit())
-                        .foregroundColor(MeeshyColors.purple)
+                        .foregroundColor(MeeshyColors.indigo600)
                         .padding(.top, MeeshySpacing.sm)
                 }
             }
@@ -237,7 +237,7 @@ struct MagicLinkView: View {
                     Text("Renvoyer")
                 }
                 .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.cyan)
+                .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
             }
             .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)

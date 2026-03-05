@@ -227,7 +227,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -240,7 +240,7 @@ extension ConversationListView {
                     } label: {
                         Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(MeeshyColors.teal)
+                            .foregroundColor(MeeshyColors.indigo300)
                     }
                     .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
 
@@ -254,7 +254,7 @@ extension ConversationListView {
                             .font(.system(size: 18))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [MeeshyColors.coral, MeeshyColors.coral.opacity(0.7)],
+                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -319,7 +319,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(
                         isActive ?
-                        AnyShapeStyle(LinearGradient(colors: [MeeshyColors.coral, MeeshyColors.teal], startPoint: .leading, endPoint: .trailing)) :
+                        AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
                         AnyShapeStyle(theme.textMuted)
                     )
                     .scaleEffect(isActive ? 1.15 : 1.0)
@@ -339,7 +339,7 @@ extension ConversationListView {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { conversationViewModel.searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(MeeshyColors.coral)
+                        .foregroundColor(MeeshyColors.error)
                         .scaleEffect(1.0)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
@@ -355,7 +355,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [MeeshyColors.orange, MeeshyColors.pink],
+                            colors: [MeeshyColors.warning, MeeshyColors.indigo500],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -373,7 +373,7 @@ extension ConversationListView {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [MeeshyColors.purple, MeeshyColors.teal],
+                            colors: [MeeshyColors.indigo600, MeeshyColors.indigo300],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -391,12 +391,12 @@ extension ConversationListView {
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(
                             isActive ?
-                            AnyShapeStyle(LinearGradient(colors: [MeeshyColors.coral, MeeshyColors.teal], startPoint: .leading, endPoint: .trailing)) :
+                            AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
                             AnyShapeStyle(theme.inputBorder),
                             lineWidth: isActive ? 2 : 1
                         )
                 )
-                .shadow(color: isActive ? MeeshyColors.teal.opacity(0.25) : .clear, radius: 12, y: 5)
+                .shadow(color: isActive ? MeeshyColors.indigo300.opacity(0.25) : .clear, radius: 12, y: 5)
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)

@@ -605,7 +605,7 @@ struct RootView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [MeeshyColors.coral, MeeshyColors.teal],
+                                colors: [MeeshyColors.error, MeeshyColors.indigo300],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -628,7 +628,7 @@ struct RootView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: showMenu ? [MeeshyColors.coral, MeeshyColors.teal] : [MeeshyColors.purple, MeeshyColors.teal],
+                                colors: showMenu ? [MeeshyColors.error, MeeshyColors.indigo300] : [MeeshyColors.indigo600, MeeshyColors.indigo300],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )

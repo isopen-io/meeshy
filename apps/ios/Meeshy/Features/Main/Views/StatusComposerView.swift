@@ -114,7 +114,7 @@ struct StatusComposerView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(
                             selectedEmoji == emoji ?
-                                MeeshyColors.pink.opacity(0.15) :
+                                MeeshyColors.indigo500.opacity(0.15) :
                                 Color.clear
                         )
                 )
@@ -157,7 +157,7 @@ struct StatusComposerView: View {
                 if !statusText.isEmpty {
                     Text("\(statusText.count)/122")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(statusText.count > 100 ? MeeshyColors.coral : theme.textMuted)
+                        .foregroundColor(statusText.count > 100 ? MeeshyColors.error : theme.textMuted)
                         .padding(.trailing, 14)
                         .padding(.bottom, -18)
                 }
@@ -177,7 +177,7 @@ struct StatusComposerView: View {
                 // Avatar avec badge emoji en bas à droite (comme dans la liste de conversations)
                 ZStack(alignment: .bottomTrailing) {
                     Circle()
-                        .fill(MeeshyColors.primaryGradient)
+                        .fill(MeeshyColors.brandGradient)
                         .frame(width: 44, height: 44)
                         .overlay(
                             Text(viewModel.currentUserInitial)
@@ -253,7 +253,7 @@ struct StatusComposerView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         selectedEmoji != nil ?
-                            MeeshyColors.primaryGradient :
+                            MeeshyColors.brandGradient :
                             LinearGradient(colors: [Color.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
                     )
             )
@@ -288,7 +288,7 @@ struct StatusComposerView: View {
                         .background(
                             Capsule()
                                 .fill(selectedVisibility == vis ?
-                                    AnyShapeStyle(MeeshyColors.primaryGradient) :
+                                    AnyShapeStyle(MeeshyColors.brandGradient) :
                                     AnyShapeStyle(theme.inputBackground))
                         )
                     }

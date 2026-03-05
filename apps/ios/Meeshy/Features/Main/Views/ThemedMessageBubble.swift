@@ -960,7 +960,7 @@ struct ThemedMessageBubble: View {
             case .failed:
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(MeeshyColors.coral)
+                    .foregroundColor(MeeshyColors.error)
             }
         }
         .accessibilityLabel(deliveryStatusAccessibilityLabel)
@@ -1019,7 +1019,7 @@ struct ThemedMessageBubble: View {
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.coral)
+                .foregroundColor(MeeshyColors.error)
         }
     }
 

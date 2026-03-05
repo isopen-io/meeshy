@@ -550,7 +550,7 @@ struct FeedView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -600,13 +600,13 @@ struct FeedView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
+                                colors: [MeeshyColors.indigo300, MeeshyColors.info],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 40, height: 40)
-                        .shadow(color: MeeshyColors.teal.opacity(0.4), radius: 8, y: 4)
+                        .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .bold))
@@ -702,7 +702,7 @@ struct FeedView: View {
                     // Loading more indicator
                     if viewModel.isLoadingMore {
                         ProgressView()
-                            .tint(MeeshyColors.teal)
+                            .tint(MeeshyColors.indigo300)
                             .padding()
                     }
                 }
@@ -738,12 +738,12 @@ struct FeedView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [MeeshyColors.teal, MeeshyColors.infoBlue],
+                                        colors: [MeeshyColors.indigo300, MeeshyColors.info],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: MeeshyColors.teal.opacity(0.5), radius: 12, y: 4)
+                                .shadow(color: MeeshyColors.indigo300.opacity(0.5), radius: 12, y: 4)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -830,12 +830,12 @@ struct FeedView: View {
                     } label: {
                         if isUploading {
                             ProgressView()
-                                .tint(MeeshyColors.teal)
+                                .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
                             Text("Publier")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(composerHasContent ? MeeshyColors.teal : theme.textMuted)
+                                .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
                     .disabled(!composerHasContent || isUploading)
@@ -851,7 +851,7 @@ struct FeedView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [MeeshyColors.coral, MeeshyColors.teal],
+                                    colors: [MeeshyColors.error, MeeshyColors.indigo300],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -965,7 +965,7 @@ struct FeedView: View {
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
-            .shadow(color: MeeshyColors.teal.opacity(0.2), radius: 30, y: 20)
+            .shadow(color: MeeshyColors.indigo300.opacity(0.2), radius: 30, y: 20)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
         .zIndex(200)

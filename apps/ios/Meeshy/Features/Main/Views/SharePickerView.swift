@@ -86,7 +86,7 @@ struct SharePickerView: View {
     private var contentPreviewBanner: some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(MeeshyColors.cyan)
+                .fill(MeeshyColors.indigo400)
                 .frame(width: 3, height: 32)
 
             contentIcon
@@ -94,7 +94,7 @@ struct SharePickerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(contentLabel)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(MeeshyColors.cyan)
+                    .foregroundColor(MeeshyColors.indigo400)
                     .lineLimit(1)
 
                 Text(contentPreview)
@@ -116,11 +116,11 @@ struct SharePickerView: View {
         case .text:
             Image(systemName: "text.bubble.fill")
                 .font(.system(size: 16))
-                .foregroundColor(MeeshyColors.cyan)
+                .foregroundColor(MeeshyColors.indigo400)
         case .url:
             Image(systemName: "link.circle.fill")
                 .font(.system(size: 16))
-                .foregroundColor(MeeshyColors.purple)
+                .foregroundColor(MeeshyColors.indigo600)
         case .image(let image):
             Image(uiImage: image)
                 .resizable()
@@ -130,11 +130,11 @@ struct SharePickerView: View {
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
                 .font(.system(size: 16))
-                .foregroundColor(MeeshyColors.orange)
+                .foregroundColor(MeeshyColors.warning)
         case .story:
             Image(systemName: "play.rectangle.fill")
                 .font(.system(size: 16))
-                .foregroundColor(MeeshyColors.pink)
+                .foregroundColor(MeeshyColors.indigo500)
         }
     }
 
@@ -204,7 +204,7 @@ struct SharePickerView: View {
         VStack {
             Spacer()
             ProgressView()
-                .tint(MeeshyColors.cyan)
+                .tint(MeeshyColors.indigo400)
             Spacer()
         }
     }
@@ -277,7 +277,7 @@ struct SharePickerView: View {
         if sentToIds.contains(conv.id) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 26))
-                .foregroundColor(MeeshyColors.green)
+                .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
         } else if sendingToId == conv.id {
             ProgressView()
@@ -289,7 +289,7 @@ struct SharePickerView: View {
             } label: {
                 Image(systemName: "paperplane.circle.fill")
                     .font(.system(size: 26))
-                    .foregroundColor(MeeshyColors.cyan)
+                    .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
             .accessibilityLabel("Envoyer a \(conv.name)")

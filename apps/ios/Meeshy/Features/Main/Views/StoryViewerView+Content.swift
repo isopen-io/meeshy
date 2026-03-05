@@ -587,22 +587,28 @@ extension StoryViewerView {
 
         // Pour les vidéos/audios locales en preview, utiliser AVURLAsset si FeedMedia.duration est nil
         if isPreviewMode {
-            // Vidéos foreground préchargées
-            for (_, url) in preloadedVideoURLs {
-                let asset = AVURLAsset(url: url)
-                let dur = CMTimeGetSeconds(asset.duration)
-                if dur > 0 && dur.isFinite {
-                    maxDuration = max(maxDuration, dur)
+            let capturedVideoURLs = preloadedVideoURLs
+            let capturedAudioURLs = preloadedAudioURLs
+            let capturedMaxDuration = maxDuration
+            Task { @MainActor in
+                var asyncMax = capturedMaxDuration
+                for (_, url) in capturedVideoURLs {
+                    let asset = AVURLAsset(url: url)
+                    if let cmDur = try? await asset.load(.duration) {
+                        let dur = CMTimeGetSeconds(cmDur)
+                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
+                    }
                 }
-            }
-            // Audios foreground préchargées
-            for (_, url) in preloadedAudioURLs {
-                let asset = AVURLAsset(url: url)
-                let dur = CMTimeGetSeconds(asset.duration)
-                if dur > 0 && dur.isFinite {
-                    maxDuration = max(maxDuration, dur)
+                for (_, url) in capturedAudioURLs {
+                    let asset = AVURLAsset(url: url)
+                    if let cmDur = try? await asset.load(.duration) {
+                        let dur = CMTimeGetSeconds(cmDur)
+                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
+                    }
                 }
+                computedStoryDuration = asyncMax
             }
+            return
         }
 
         computedStoryDuration = maxDuration

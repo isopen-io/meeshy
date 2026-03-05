@@ -170,7 +170,7 @@ struct WidgetPreviewView: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(MeeshyColors.cyan)
+                    .foregroundColor(MeeshyColors.indigo400)
                 Text("Conversations r\u{00e9}centes")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
@@ -252,7 +252,7 @@ struct WidgetPreviewView: View {
                         .frame(minWidth: 20, minHeight: 20)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.pink)
+                                .fill(MeeshyColors.indigo500)
                         )
                 }
             }
@@ -269,7 +269,7 @@ struct WidgetPreviewView: View {
             HStack {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(MeeshyColors.orange)
+                    .foregroundColor(MeeshyColors.warning)
                 Text("Actions rapides")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
@@ -508,7 +508,7 @@ struct WidgetPreviewView: View {
                 .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [MeeshyColors.cyan, MeeshyColors.purple],
+                        colors: [MeeshyColors.indigo400, MeeshyColors.indigo600],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

@@ -408,7 +408,7 @@ struct LoginView: View {
                         .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "A855F7"), MeeshyColors.cyan],
+                                colors: [Color(hex: "A855F7"), MeeshyColors.indigo400],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -431,7 +431,7 @@ struct LoginView: View {
             if let error = authManager.errorMessage, showError {
                 Text(error)
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.coral)
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -444,13 +444,13 @@ struct LoginView: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.cyan],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo400],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .frame(height: 52)
-                    .shadow(color: MeeshyColors.coral.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
+                    .shadow(color: MeeshyColors.error.opacity(isDark ? 0.4 : 0.2), radius: 12, y: 6)
 
                 if authManager.isLoading {
                     ProgressView().tint(.white)

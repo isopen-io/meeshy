@@ -32,15 +32,15 @@ struct ConnectionBanner: View {
             .background(
                 LinearGradient(
                     colors: [
-                        MeeshyColors.orange.opacity(0.9),
-                        MeeshyColors.coral.opacity(0.85)
+                        MeeshyColors.warning.opacity(0.9),
+                        MeeshyColors.error.opacity(0.85)
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .shadow(color: MeeshyColors.orange.opacity(0.3), radius: 6, y: 2)
+            .shadow(color: MeeshyColors.warning.opacity(0.3), radius: 6, y: 2)
             .padding(.horizontal, 16)
             .transition(.move(edge: .top).combined(with: .opacity))
             .onReceive(dotTimer) { _ in

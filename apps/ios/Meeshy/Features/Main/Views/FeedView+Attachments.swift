@@ -371,8 +371,8 @@ extension FeedView {
                     .frame(width: 28, height: 28)
                     .background(
                         Circle()
-                            .fill(MeeshyColors.coral)
-                            .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 4, y: 2)
+                            .fill(MeeshyColors.error)
+                            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
                     )
             }
             .padding(.trailing, 8)
@@ -556,12 +556,12 @@ struct FeedComposerSheet: View {
                     } label: {
                         if isUploading {
                             ProgressView()
-                                .tint(MeeshyColors.teal)
+                                .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
                             Text("Publier")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(hasContent ? MeeshyColors.teal : theme.textMuted)
+                                .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
                     .disabled(!hasContent || isUploading)
@@ -817,7 +817,7 @@ struct FeedComposerSheet: View {
                         .frame(width: 20, height: 20)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.coral)
+                                .fill(MeeshyColors.error)
                                 .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                         )
                 }

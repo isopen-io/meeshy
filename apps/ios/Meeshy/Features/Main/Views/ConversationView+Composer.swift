@@ -397,7 +397,7 @@ extension ConversationView {
             }
 
         case "file":
-            replyAttachmentFallbackBadge(icon: "doc.fill", color: MeeshyColors.infoBlue)
+            replyAttachmentFallbackBadge(icon: "doc.fill", color: MeeshyColors.info)
 
         default:
             EmptyView()
@@ -513,8 +513,8 @@ extension ConversationView {
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.coral)
-                                .shadow(color: MeeshyColors.coral.opacity(0.4), radius: 3, y: 1)
+                                .fill(MeeshyColors.error)
+                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
                         )
                 }
                 .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")

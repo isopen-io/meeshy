@@ -66,12 +66,12 @@ struct ThemedFloatingButton: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [MeeshyColors.coral, MeeshyColors.pink],
+                                        colors: [MeeshyColors.error, MeeshyColors.indigo500],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 4)
+                                .shadow(color: MeeshyColors.error.opacity(0.5), radius: 4)
                         )
                         .offset(x: 16, y: -16)
                 }
@@ -174,7 +174,7 @@ struct ThemedFeedOverlay: View {
                     .floating(range: 20, duration: 5.0)
 
                 Circle()
-                    .fill(MeeshyColors.coral.opacity(theme.mode.isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.error.opacity(theme.mode.isDark ? 0.1 : 0.06))
                     .frame(width: 250, height: 250)
                     .blur(radius: 70)
                     .offset(x: 100, y: 200)
@@ -402,13 +402,13 @@ struct ThemedFeedComposer: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            colors: [MeeshyColors.coral, MeeshyColors.pink],
+                                            colors: [MeeshyColors.error, MeeshyColors.indigo500],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .frame(width: 32, height: 32)
-                                    .shadow(color: MeeshyColors.coral.opacity(0.5), radius: 6, y: 3)
+                                    .shadow(color: MeeshyColors.error.opacity(0.5), radius: 6, y: 3)
 
                                 Image(systemName: "paperplane.fill")
                                     .font(.system(size: 13, weight: .semibold))
