@@ -331,12 +331,20 @@ export function MessagesDisplay({
   }
 
   return (
-    <div className={`${className} bubble-message-container flex flex-col gap-2 pb-6 max-w-full overflow-visible`}>
-      {displayMessages.map((message) => {
+    <div className={`${className} bubble-message-container flex flex-col pb-6 max-w-full overflow-visible`}>
+      {displayMessages.map((message, index) => {
         const state = messageDisplayStates[message.id] || {
           currentDisplayLanguage: message.originalLanguage,
           isTranslating: false
         };
+
+        const prevMsg = index > 0 ? displayMessages[index - 1] : null;
+        const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
+        const senderId = message.anonymousSender?.id || message.sender?.id;
+        const prevSenderId = prevMsg ? (prevMsg.anonymousSender?.id || prevMsg.sender?.id) : null;
+        const nextSenderId = nextMsg ? (nextMsg.anonymousSender?.id || nextMsg.sender?.id) : null;
+        const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
+        const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
 
         return (
           <BubbleMessage
@@ -360,6 +368,8 @@ export function MessagesDisplay({
             conversationId={conversationId}
             isAnonymous={isAnonymous}
             currentAnonymousUserId={currentAnonymousUserId}
+            isFirstInGroup={isFirstInGroup}
+            isLastInGroup={isLastInGroup}
           />
         );
       })}

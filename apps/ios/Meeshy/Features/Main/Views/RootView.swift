@@ -15,11 +15,11 @@ struct RootView: View {
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
     @State private var showMenu = false
-    @State private var notificationCount = 3
     @State private var pendingReplyContext: ReplyContext?
     @State private var showStoryViewerFromConv = false
     @State private var selectedStoryUserIdFromConv: String?
@@ -223,7 +223,7 @@ struct RootView: View {
                 .zIndex(190)
             }
 
-            // 8. Toast overlay
+            // 8. Toast overlay (system toasts)
             VStack {
                 if let toast = toastManager.currentToast {
                     ToastView(toast: toast)
@@ -237,6 +237,21 @@ struct RootView: View {
             }
             .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
             .zIndex(200)
+
+            // 9. Notification toast overlay (socket real-time)
+            VStack {
+                if let toast = notificationManager.currentToast {
+                    NotificationToastView(event: toast) {
+                        notificationManager.dismissToast()
+                        handleSocketNotificationTap(toast)
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, MeeshySpacing.xxl)
+                }
+                Spacer()
+            }
+            .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
+            .zIndex(201)
         }
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkParser.parse(url)
@@ -259,6 +274,7 @@ struct RootView: View {
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
+            await notificationManager.refreshUnreadCount()
         }
         .fullScreenCover(isPresented: $showStoryViewerFromConv) {
             if let userId = selectedStoryUserIdFromConv,
@@ -357,7 +373,9 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $showNotifications) {
+        .sheet(isPresented: $showNotifications, onDismiss: {
+            Task { await notificationManager.refreshUnreadCount() }
+        }) {
             NotificationListView(
                 onNotificationTap: { notification in
                     showNotifications = false
@@ -450,39 +468,75 @@ struct RootView: View {
 
     private func handleNotificationTap(_ notification: APINotification) {
         let data = notification.data
-
         switch notification.notificationType {
-        case .newMessage, .messageReaction, .mention, .translationReady, .storyReply:
+        case .newMessage, .legacyNewMessage, .messageReply,
+             .messageReaction, .reaction, .legacyMessageReaction,
+             .userMentioned, .mention, .legacyMention,
+             .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
+             .legacyStoryReply, .reply,
+             .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             guard let conversationId = data?.conversationId else { return }
             navigateToConversationById(conversationId)
 
-        case .friendRequest, .friendAccepted, .statusUpdate:
+        case .friendRequest, .contactRequest, .legacyFriendRequest,
+             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+             .legacyStatusUpdate:
             if let senderId = notification.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
             }
 
-        case .groupInvite, .groupJoined, .groupLeft:
+        case .communityInvite, .communityJoined, .communityLeft, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
+             .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
+             .addedToConversation, .newConversation, .removedFromConversation:
             if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .postComment:
+        case .postLike, .legacyPostLike, .postComment, .legacyPostComment, .postRepost,
+             .storyReaction, .statusReaction, .commentLike, .commentReply:
             if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
-        case .callMissed, .callIncoming:
+        case .missedCall, .callDeclined, .legacyCallMissed,
+             .incomingCall, .callEnded, .legacyCallIncoming:
             if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
 
-        case .achievementUnlocked:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             router.push(.userStats)
 
-        case .affiliateSignup:
+        case .legacyAffiliateSignup:
             router.push(.affiliate)
 
-        case .systemAlert:
+        case .securityAlert, .loginNewDevice, .legacySystemAlert,
+             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+            break
+        }
+    }
+
+    // MARK: - Handle Socket Notification Tap
+
+    private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
+        switch event.notificationType {
+        case .newMessage, .messageReply, .messageReaction, .reaction,
+             .mention, .missedCall,
+             .newConversation, .addedToConversation, .memberJoined:
+            if let conversationId = event.conversationId {
+                navigateToConversationById(conversationId)
+            }
+
+        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
+            if let username = event.senderUsername {
+                router.deepLinkProfileUser = ProfileSheetUser(
+                    userId: event.userId,
+                    username: username
+                )
+            }
+
+        default:
             break
         }
     }
@@ -533,8 +587,15 @@ struct RootView: View {
                 }
             },
             onRightTap: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showMenu.toggle()
+                if showMenu {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu = false
+                    }
+                    router.push(.communityList)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu.toggle()
+                    }
                 }
             },
             isSearchBarVisible: !isScrollingDown,
@@ -578,8 +639,8 @@ struct RootView: View {
                         .foregroundColor(.white)
 
                     // Badge
-                    if !showMenu && notificationCount > 0 {
-                        NotificationBadge(count: notificationCount)
+                    if !showMenu && notificationManager.unreadCount > 0 {
+                        NotificationBadge(count: notificationManager.unreadCount)
                     }
                 }
             }
@@ -608,7 +669,7 @@ struct RootView: View {
                 ThemedFloatingButton(
                     icon: showMenu ? "person.3.fill" : "gearshape.fill",
                     colors: showMenu ? ["FF6B6B", "4ECDC4"] : ["9B59B6", "4ECDC4"],
-                    badge: showMenu ? 0 : notificationCount
+                    badge: showMenu ? 0 : notificationManager.unreadCount
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu.toggle()
@@ -660,9 +721,8 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("person.fill", "9B59B6", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.profile) }),
                 ("plus.message.fill", "4ECDC4", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.newConversation) }),
-                ("person.3.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { notificationCount = 0; withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
+                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; showNotifications = true }),
                 (theme.preference.icon, theme.preference.tintColor, {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         theme.cyclePreference(systemScheme: systemColorScheme)
@@ -680,7 +740,7 @@ struct RootView: View {
 
                 // Special handling for notifications badge
                 if item.icon == "bell.fill" {
-                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationCount, action: item.action)
+                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
                         .position(x: menuX, y: itemY)
                         .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
                 } else {

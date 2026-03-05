@@ -1,0 +1,43 @@
+{
+  "name": "@meeshy/agent",
+  "version": "1.0.0",
+  "description": "Autonomous conversation agent service for Meeshy",
+  "private": true,
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node -r dotenv/config dist/src/server.js",
+    "dev": "tsx watch -r dotenv/config src/server.ts",
+    "generate": "prisma generate --schema=../../packages/shared/prisma/schema.prisma",
+    "test": "jest --config=jest.config.json",
+    "test:watch": "jest --config=jest.config.json --watch",
+    "test:coverage": "jest --config=jest.config.json --coverage",
+    "lint": "eslint src/",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules coverage"
+  },
+  "dependencies": {
+    "@langchain/langgraph": "^0.2.0",
+    "@langchain/core": "^0.3.0",
+    "@meeshy/shared": "workspace:*",
+    "@prisma/client": "^6.19.2",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.7.1",
+    "ioredis": "^5.9.2",
+    "openai": "^4.80.0",
+    "pino": "^9.14.0",
+    "pino-pretty": "^11.3.0",
+    "zeromq": "^6.5.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.30",
+    "jest": "^30.2.0",
+    "prisma": "^6.19.2",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

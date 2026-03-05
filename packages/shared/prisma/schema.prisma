@@ -309,6 +309,9 @@ model Conversation {
   // Shares of this conversation to communities
   shares ConversationShare[] @relation("SharedConversation")
 
+  // Agent service
+  agentConfig     AgentConfig?
+
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
   @@index([lastMessageAt]) // Optimisation: trier par activité récente
@@ -2864,4 +2867,108 @@ model AccountDeletionRequest {
   @@index([status])
   @@index([gracePeriodEndsAt])
   @@map("account_deletion_requests")
+}
+
+// =============================================================================
+// AGENT SERVICE MODELS
+// =============================================================================
+
+model AgentConfig {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId           String   @db.ObjectId
+  enabled                  Boolean  @default(false)
+  configuredBy             String   @db.ObjectId
+
+  manualUserIds            String[] @db.ObjectId
+  autoPickupEnabled        Boolean  @default(false)
+  inactivityThresholdHours Int      @default(72)
+  minHistoricalMessages    Int      @default(0)
+  maxControlledUsers       Int      @default(5)
+  excludedRoles            String[]
+  excludedUserIds          String[] @db.ObjectId
+
+  triggerOnTimeout         Boolean  @default(true)
+  timeoutSeconds           Int      @default(300)
+  triggerOnUserMessage     Boolean  @default(false)
+  triggerFromUserIds       String[] @db.ObjectId
+  triggerOnReplyTo         Boolean  @default(true)
+
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId])
+  @@map("agent_configs")
+}
+
+model AgentUserRole {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String   @db.ObjectId
+  conversationId    String   @db.ObjectId
+
+  origin            String
+  archetypeId       String?
+
+  personaSummary    String
+  tone              String
+  vocabularyLevel   String
+  typicalLength     String
+  emojiUsage        String
+  topicsOfExpertise String[]
+  topicsAvoided     String[]
+  relationshipMap   Json
+  catchphrases      String[]
+  responseTriggers  String[]
+  silenceTriggers   String[]
+
+  messagesAnalyzed  Int      @default(0)
+  confidence        Float    @default(0.0)
+  locked            Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, conversationId])
+  @@index([conversationId])
+  @@map("agent_user_roles")
+}
+
+model AgentConversationSummary {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String   @db.ObjectId
+
+  summary         String
+  currentTopics   String[]
+  overallTone     String
+  lastMessageId   String   @db.ObjectId
+  messageCount    Int
+
+  updatedAt       DateTime @updatedAt
+
+  @@unique([conversationId])
+  @@map("agent_conversation_summaries")
+}
+
+model AgentLlmConfig {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  provider         String   @default("openai")
+  model            String   @default("gpt-4o-mini")
+  apiKeyEncrypted  String
+  baseUrl          String?
+  maxTokens        Int      @default(1024)
+  temperature      Float    @default(0.7)
+
+  dailyBudgetUsd   Float    @default(20.0)
+  maxCostPerCall   Float    @default(0.05)
+
+  fallbackProvider String?
+  fallbackModel    String?
+  fallbackApiKeyEncrypted String?
+
+  configuredBy     String   @db.ObjectId
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("agent_llm_configs")
 }

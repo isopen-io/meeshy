@@ -1,11 +1,11 @@
 import Foundation
 
-public final class StatusService {
+public final class StatusService: @unchecked Sendable {
     public static let shared = StatusService()
     private init() {}
     private var api: APIClient { APIClient.shared }
 
-    public enum Mode: String {
+    public enum Mode: String, Sendable {
         case friends
         case discover
 
@@ -31,7 +31,9 @@ public final class StatusService {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(statusId)")
     }
 
-    public func react(statusId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(statusId)/like", method: "POST")
+    public func react(statusId: String, emoji: String) async throws {
+        let body = ["emoji": emoji]
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(statusId)/like", method: "POST", body: bodyData)
     }
 }

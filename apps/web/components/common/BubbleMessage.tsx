@@ -47,6 +47,8 @@ interface BubbleMessageProps {
   conversationId?: string;
   isAnonymous?: boolean;
   currentAnonymousUserId?: string;
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
 }
 
 const BubbleMessageInner = memo(function BubbleMessageInner({
@@ -68,7 +70,9 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   userRole = 'USER',
   conversationId,
   isAnonymous = false,
-  currentAnonymousUserId
+  currentAnonymousUserId,
+  isFirstInGroup = true,
+  isLastInGroup = true
 }: BubbleMessageProps) {
   
   const { t } = useI18n();
@@ -240,6 +244,8 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           onEnterReportMode={!isOwnMessage && !isAnonymous ? enterReportMode : undefined}
           onEditMessage={canEdit ? onEditMessage : undefined}
           onDeleteMessage={canDelete ? onDeleteMessage : undefined}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
         />
       )}
 

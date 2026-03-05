@@ -41,11 +41,14 @@
       "callsShort": "📞",
       "friendRequests": "Friend requests",
       "friendRequestsShort": "Friends",
+      "reactions": "Reactions",
+      "reactionsShort": "❤️",
+      "system": "System",
       "new_message": "Messages",
       "friend_request": "Friend requests",
       "missed_call": "Missed calls",
-      "system": "System",
-      "conversation": "Conversations"
+      "conversation": "Conversations",
+      "message_reaction": "Reactions"
     },
     "types": {
       "new_message": "New message",
@@ -71,7 +74,7 @@
       "newMessage": "Message from @{sender}",
       "reply": "Reply from @{sender}",
       "mentioned": "@{sender} mentioned you",
-      "reaction": "@{sender} reacted {emoji}",
+      "reaction": "@{sender} reacted {emoji} to your message",
       "contactRequest": "@{sender} wants to connect",
       "contactAccepted": "@{sender} accepted your invitation",
       "newConversationDirect": "New conversation with @{sender}",

@@ -213,6 +213,15 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Notification sécurité
+      const notificationService = (fastify as any).notificationService;
+      if (notificationService) {
+        notificationService.createTwoFactorNotification({
+          recipientUserId: userId,
+          enabled: true,
+        }).catch((err: unknown) => console.error('[2FA] Notification error (enabled):', err));
+      }
+
       return reply.send({
         success: true,
         data: {
@@ -280,6 +289,15 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
           success: false,
           error: result.error
         });
+      }
+
+      // Notification sécurité
+      const notificationService = (fastify as any).notificationService;
+      if (notificationService) {
+        notificationService.createTwoFactorNotification({
+          recipientUserId: userId,
+          enabled: false,
+        }).catch((err: unknown) => console.error('[2FA] Notification error (disabled):', err));
       }
 
       return reply.send({

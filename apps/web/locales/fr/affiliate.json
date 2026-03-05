@@ -11,7 +11,10 @@
       "feature2": "100+ langues",
       "feature3": "Gratuit",
       "terms": "Conditions d'utilisation",
-      "privacy": "Politique de confidentialité"
+      "privacy": "Politique de confidentialité",
+      "about": "À propos",
+      "contact": "Contact",
+      "goHome": "Aller à la page d'accueil"
     },
     "copy": "Copier",
     "copyLink": "Copier le lien",

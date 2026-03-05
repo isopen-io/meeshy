@@ -5,7 +5,7 @@ import MeeshySDK
 
 /// Gère les opérations cryptographiques de base pour le chiffrement E2EE.
 /// Utilise CryptoKit (Curve25519) pour l'échange de clés (X25519) et les signatures (Ed25519).
-public final class E2EEService {
+public final class E2EEService: @unchecked Sendable {
     public static let shared = E2EEService()
 
     // Key identifiers

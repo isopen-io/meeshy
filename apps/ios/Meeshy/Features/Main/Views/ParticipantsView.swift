@@ -370,15 +370,11 @@ struct ParticipantsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 32, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-            Text("Aucun membre")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(
+            icon: "person.2.slash",
+            title: "Aucun membre",
+            subtitle: ""
+        )
         .padding(.top, 60)
     }
 

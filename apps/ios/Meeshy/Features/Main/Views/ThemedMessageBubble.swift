@@ -30,8 +30,10 @@ struct ThemedMessageBubble: View {
     var allAudioItems: [ConversationViewModel.AudioItem] = []
     var onScrollToMessage: ((String) -> Void)? = nil
     var activeAudioLanguage: String? = nil
+    var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
     var isLastReceivedMessage: Bool = false
+    var mentionDisplayNames: [String: String] = [:]
 
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
@@ -59,6 +61,15 @@ struct ThemedMessageBubble: View {
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
     let gridSpacing: CGFloat = 2 // internal for cross-file extension access
+
+    private var hasReactions: Bool { !message.reactions.isEmpty }
+
+    private var bottomSpacing: CGFloat {
+        if isLastInGroup {
+            return hasReactions ? 22 : 10
+        }
+        return hasReactions ? 20 : 2
+    }
 
     private var currentDisplayLangCode: String {
         activeDisplayLangCode ?? preferredTranslation?.targetLanguage.lowercased() ?? message.originalLanguage.lowercased()
@@ -557,7 +568,7 @@ struct ThemedMessageBubble: View {
 
             if !message.isMe { Spacer(minLength: 50) }
         }
-        .padding(.bottom, message.reactions.isEmpty ? 16 : 26)
+        .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
         .onChange(of: selectedProfileUser) { _, newValue in
@@ -586,9 +597,12 @@ struct ThemedMessageBubble: View {
             switch attachment.type {
             case .image:
                 let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                 ImageFullscreen(
                     imageUrl: urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr),
-                    accentColor: contactColor
+                    accentColor: contactColor,
+                    caption: caption,
+                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
             case .video:
                 if !attachment.fileUrl.isEmpty {
@@ -647,7 +661,11 @@ struct ThemedMessageBubble: View {
     private static let textTruncateLimit = 512
 
     private var linkTint: Color {
-        message.isMe ? .white : Color(hex: contactColor)
+        message.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
+    }
+
+    private var mentionTint: Color {
+        Color(hex: "818CF8") // indigo400 — distinct des liens URL
     }
 
     @ViewBuilder
@@ -659,7 +677,7 @@ struct ThemedMessageBubble: View {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, accentColor: linkTint)
+                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -678,7 +696,7 @@ struct ThemedMessageBubble: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, accentColor: linkTint)
+                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
                 + timestampSpacerText)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -782,7 +800,7 @@ struct ThemedMessageBubble: View {
                                 .foregroundColor(langColor)
                         }
                     }
-                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor, accentColor: linkTint)
+                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 8)
@@ -1087,10 +1105,14 @@ struct ThemedMessageBubble: View {
                                 .foregroundColor(previewColor)
                         }
 
-                        Text(reply.previewText.isEmpty ? "Media" : reply.previewText)
-                            .font(.system(size: 12))
-                            .foregroundColor(previewColor)
-                            .lineLimit(2)
+                        MessageTextRenderer.render(
+                            reply.previewText.isEmpty ? "Media" : reply.previewText,
+                            fontSize: 12, color: previewColor,
+                            mentionColor: mentionTint, accentColor: previewColor,
+                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                        )
+                        .lineLimit(2)
+                        .tint(previewColor)
                     }
                 }
 

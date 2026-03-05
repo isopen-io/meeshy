@@ -98,26 +98,12 @@ extension ConversationView {
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    // Encryption badge first
+                    // Lock icon (encryption only, no text)
                     if isEncrypted {
-                        HStack(spacing: 2) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 7, weight: .bold))
-                            Text("E2EE")
-                                .font(.system(size: 8, weight: .bold))
-                        }
-                        .foregroundColor(Color(hex: "4ECDC4"))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: "4ECDC4").opacity(0.2))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color(hex: "4ECDC4").opacity(0.3), lineWidth: 0.5)
-                                )
-                        )
-                        .accessibilityLabel("Conversation chiffree")
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(theme.success)
+                            .accessibilityLabel("Conversation chiffrée")
                     }
 
                     // Category tag

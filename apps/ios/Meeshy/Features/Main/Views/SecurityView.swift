@@ -24,6 +24,7 @@ struct SecurityView: View {
     @State private var emailSent = false
     @State private var emailError: String?
     @State private var resendCooldown = 0
+    @State private var resendTimer: Timer?
 
     // Phone change
     @State private var isEditingPhone = false
@@ -769,9 +770,15 @@ struct SecurityView: View {
 
     private func startResendCooldown() {
         resendCooldown = 60
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-            resendCooldown -= 1
-            if resendCooldown <= 0 { timer.invalidate() }
+        resendTimer?.invalidate()
+        resendTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            Task { @MainActor in
+                self.resendCooldown -= 1
+                if self.resendCooldown <= 0 {
+                    self.resendTimer?.invalidate()
+                    self.resendTimer = nil
+                }
+            }
         }
     }
 

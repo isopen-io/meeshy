@@ -1,6 +1,6 @@
 import Foundation
 
-public final class FriendService {
+public final class FriendService: @unchecked Sendable {
     public static let shared = FriendService()
     private init() {}
     private var api: APIClient { APIClient.shared }

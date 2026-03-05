@@ -798,9 +798,9 @@ private class OverlayAudioPlayer: ObservableObject {
     @Published var playbackRate: Float = 1.0
     @Published var isLoading = false
 
-    private var avPlayer: AVPlayer?
-    private var timeObserver: Any?
-    private var statusObservation: NSKeyValueObservation?
+    nonisolated(unsafe) private var avPlayer: AVPlayer?
+    nonisolated(unsafe) private var timeObserver: Any?
+    nonisolated(unsafe) private var statusObservation: NSKeyValueObservation?
     private var currentURL: String?
 
     var percentInt: Int { Int(progress * 100) }

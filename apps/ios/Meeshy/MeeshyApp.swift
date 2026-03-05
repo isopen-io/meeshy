@@ -82,7 +82,10 @@ struct MeeshyApp: App {
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
                         Task { await requestPushPermissionIfNeeded() }
+                        Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
+                    } else {
+                        NotificationManager.shared.reset()
                     }
                 }
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
@@ -113,7 +116,8 @@ struct MeeshyApp: App {
         let notifType = MeeshyNotificationType(rawValue: payload.type ?? "")
 
         switch notifType {
-        case .friendRequest, .friendAccepted, .statusUpdate:
+        case .friendRequest, .friendAccepted, .legacyFriendRequest, .legacyFriendAccepted,
+             .contactRequest, .contactAccepted, .legacyStatusUpdate:
             if let senderId = payload.senderId {
                 NotificationCenter.default.post(
                     name: Notification.Name("openProfileSheet"),
@@ -122,14 +126,14 @@ struct MeeshyApp: App {
             }
             pushManager.clearPendingNotification()
 
-        case .achievementUnlocked:
+        case .achievementUnlocked, .legacyAchievementUnlocked:
             NotificationCenter.default.post(
                 name: Notification.Name("pushNavigateToRoute"),
                 object: "userStats"
             )
             pushManager.clearPendingNotification()
 
-        case .affiliateSignup:
+        case .legacyAffiliateSignup:
             NotificationCenter.default.post(
                 name: Notification.Name("pushNavigateToRoute"),
                 object: "affiliate"

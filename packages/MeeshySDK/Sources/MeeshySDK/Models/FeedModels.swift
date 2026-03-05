@@ -6,7 +6,7 @@ public enum FeedMediaType: String {
 }
 
 // MARK: - Feed Media Model
-public struct FeedMedia: Identifiable {
+public struct FeedMedia: Identifiable, Sendable {
     public let id: String
     public let type: FeedMediaType
     public let url: String?
@@ -65,7 +65,7 @@ public struct FeedMedia: Identifiable {
 }
 
 // MARK: - Repost Content Model
-public struct RepostContent: Identifiable {
+public struct RepostContent: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
@@ -85,7 +85,7 @@ public struct RepostContent: Identifiable {
 }
 
 // MARK: - Feed Comment Model
-public struct FeedComment: Identifiable {
+public struct FeedComment: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String
@@ -106,7 +106,7 @@ public struct FeedComment: Identifiable {
 }
 
 // MARK: - Feed Post Model
-public struct FeedPost: Identifiable {
+public struct FeedPost: Identifiable, Sendable {
     public let id: String
     public let author: String
     public let authorId: String

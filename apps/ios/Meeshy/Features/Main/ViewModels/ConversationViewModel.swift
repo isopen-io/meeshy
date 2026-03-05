@@ -250,6 +250,17 @@ class ConversationViewModel: ObservableObject {
 
     private var currentUserId: String { AuthManager.shared.currentUser?.id ?? "" }
 
+    // MARK: - Mention Display Names (username → displayName)
+
+    var mentionDisplayNames: [String: String] {
+        var map: [String: String] = [:]
+        for msg in messages {
+            guard let username = msg.senderUsername, let displayName = msg.senderName else { continue }
+            map[username] = displayName
+        }
+        return map
+    }
+
     // MARK: - Top Active Members (cached)
 
     private var _topActiveMembers: [ConversationActiveMember]?
@@ -815,6 +826,8 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead() {
+        // Notify ConversationListViewModel immediately to clear the badge in the list
+        NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
         Task {
             try? await ConversationService.shared.markRead(conversationId: conversationId)
         }

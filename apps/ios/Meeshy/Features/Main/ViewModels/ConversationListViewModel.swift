@@ -4,17 +4,6 @@ import Combine
 import WidgetKit
 import MeeshySDK
 
-// MARK: - API Category Model
-
-struct APICategory: Decodable {
-    let id: String
-    let name: String
-    let color: String?
-    let icon: String?
-    let order: Int
-    let isExpanded: Bool?
-}
-
 @MainActor
 class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = [] {
@@ -30,7 +19,7 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
-    @Published var typingConversationIds: Set<String> = []
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
@@ -38,6 +27,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private let api = APIClient.shared
+    private let preferenceService = PreferenceService.shared
     private let pageLimit = 100
     /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
     private let autoLoadCap = 1000
@@ -72,18 +62,15 @@ class ConversationListViewModel: ObservableObject {
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
+        observeMarkAsRead()
     }
 
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
-        // Offload filtering and grouping to a background queue to prevent Main Thread freezes
         Publishers.CombineLatest3($conversations, $searchText, $selectedFilter)
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
-            // Only debounce if there is text to avoid delay on initial load or simple filter taps
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.global(qos: .userInitiated))
-            .map { [weak self] (convs, text, filter) -> [Conversation] in
-                guard self != nil else { return [] }
-                return convs.filter { c in
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .map { (convs, text, filter) -> [Conversation] in
+                convs.filter { c in
                     let filterMatch: Bool
                     switch filter {
                     case .all: filterMatch = c.isActive
@@ -99,11 +86,9 @@ class ConversationListViewModel: ObservableObject {
                     return filterMatch && searchMatch
                 }
             }
-            .receive(on: DispatchQueue.main)
             .assign(to: &$filteredConversations)
 
         Publishers.CombineLatest($filteredConversations, $userCategories)
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .map { (filtered, categories) -> [(section: ConversationSection, conversations: [Conversation])] in
                 var result: [(section: ConversationSection, conversations: [Conversation])] = []
 
@@ -143,7 +128,6 @@ class ConversationListViewModel: ObservableObject {
 
                 return result
             }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] newGroups in
                 self?.groupedConversations = newGroups
             }
@@ -237,12 +221,12 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Typing indicator — affiche "est en train d'écrire" dans le row
+        // Typing indicator — affiche "<Auteur> écrit..." dans le row
         socketManager.typingStarted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                typingConversationIds.insert(event.conversationId)
+                typingUsernames[event.conversationId] = event.username
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -269,7 +253,7 @@ class ConversationListViewModel: ObservableObject {
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
-        typingConversationIds.remove(conversationId)
+        typingUsernames.removeValue(forKey: conversationId)
     }
 
     // MARK: - Badge Sync
@@ -294,22 +278,17 @@ class ConversationListViewModel: ObservableObject {
 
     func loadCategories() async {
         do {
-            let response: APIResponse<[APICategory]> = try await api.request(
-                endpoint: "/me/preferences/categories"
-            )
-            if response.success {
-                let categories = response.data
-                userCategories = categories.map { cat in
-                    ConversationSection(
-                        id: cat.id,
-                        name: cat.name,
-                        icon: cat.icon ?? "folder.fill",
-                        color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
-                        isExpanded: cat.isExpanded ?? true,
-                        order: cat.order
-                    )
-                }.sorted { $0.order < $1.order }
-            }
+            let categories = try await preferenceService.getCategories()
+            userCategories = categories.map { cat in
+                ConversationSection(
+                    id: cat.id,
+                    name: cat.name,
+                    icon: cat.icon ?? "folder.fill",
+                    color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
+                    isExpanded: cat.isExpanded ?? true,
+                    order: cat.order ?? 0
+                )
+            }.sorted { $0.order < $1.order }
         } catch {
             // Categories are optional, keep empty
         }
@@ -469,13 +448,12 @@ class ConversationListViewModel: ObservableObject {
         guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].isPinned
 
-        // Optimistic local update
         conversations[index].isPinned = newValue
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.put(
-                endpoint: "/user-preferences/conversations/\(conversationId)",
-                body: ["isPinned": newValue]
+            try await preferenceService.updateConversationPreferences(
+                conversationId: conversationId,
+                request: .init(isPinned: newValue)
             )
         } catch {
             conversations[index].isPinned = !newValue
@@ -491,9 +469,9 @@ class ConversationListViewModel: ObservableObject {
         conversations[index].isMuted = newValue
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.put(
-                endpoint: "/user-preferences/conversations/\(conversationId)",
-                body: ["isMuted": newValue]
+            try await preferenceService.updateConversationPreferences(
+                conversationId: conversationId,
+                request: .init(isMuted: newValue)
             )
         } catch {
             conversations[index].isMuted = !newValue
@@ -548,9 +526,9 @@ class ConversationListViewModel: ObservableObject {
         conversations[index].isActive = false
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.put(
-                endpoint: "/user-preferences/conversations/\(conversationId)",
-                body: ["isArchived": true]
+            try await preferenceService.updateConversationPreferences(
+                conversationId: conversationId,
+                request: .init(isArchived: true)
             )
         } catch {
             conversations[index].isActive = wasActive
@@ -566,9 +544,9 @@ class ConversationListViewModel: ObservableObject {
         conversations[index].isActive = true
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await api.put(
-                endpoint: "/user-preferences/conversations/\(conversationId)",
-                body: ["isArchived": false]
+            try await preferenceService.updateConversationPreferences(
+                conversationId: conversationId,
+                request: .init(isArchived: false)
             )
         } catch {
             conversations[index].isActive = wasActive
@@ -600,10 +578,9 @@ class ConversationListViewModel: ObservableObject {
 
         Task {
             do {
-                let body: [String: String?] = ["categoryId": newSectionId]
-                let _: APIResponse<[String: AnyCodable]> = try await api.put(
-                    endpoint: "/user-preferences/conversations/\(conversationId)",
-                    body: body
+                try await preferenceService.updateConversationPreferences(
+                    conversationId: conversationId,
+                    request: .init(categoryId: newSectionId)
                 )
             } catch {
                 conversations[index].sectionId = previousSectionId
@@ -653,9 +630,36 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Mark as Read (local update from ConversationView)
+
+    private func observeMarkAsRead() {
+        NotificationCenter.default.addObserver(
+            forName: .conversationMarkedRead,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let cid = notification.object as? String else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let idx = self.convIndex(for: cid) else { return }
+                self.conversations[idx].unreadCount = 0
+                for i in 0..<self.groupedConversations.count {
+                    if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
+                        self.groupedConversations[i].conversations[rowIdx].unreadCount = 0
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private var currentUserId: String {
         AuthManager.shared.currentUser?.id ?? ""
     }
+}
+
+extension Notification.Name {
+    static let conversationMarkedRead = Notification.Name("conversationMarkedRead")
 }

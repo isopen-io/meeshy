@@ -286,6 +286,14 @@ export function buildNotificationContent(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Pour les réactions : afficher le contenu du message original (stocké dans metadata)
+  if (
+    notification.type === NotificationTypeEnum.MESSAGE_REACTION ||
+    notification.type === 'reaction' as NotificationType
+  ) {
+    return (notification.metadata?.messageContent as string) || '';
+  }
+
   // Le content est stocké dans le champ content (aperçu du message)
   if (notification.content) {
     return formatMessagePreview(notification.content, notification.metadata?.attachments);

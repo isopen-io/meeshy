@@ -40,8 +40,7 @@ final class AuthManager: ObservableObject {
             APIClient.shared.authToken = data.token
             APIClient.shared.sessionToken = data.sessionToken
 
-            if let encoded = try? JSONEncoder().encode(data.user),
-               let jsonString = String(data: encoded, encoding: .utf8) {
+            if let jsonString = encodeUserForKeychain(data.user) {
                 try? keychain.save(jsonString, forKey: userKey)
             }
 
@@ -95,8 +94,7 @@ final class AuthManager: ObservableObject {
                 endpoint: "/auth/me"
             )
             currentUser = response.data.user
-            if let encoded = try? JSONEncoder().encode(response.data.user),
-               let jsonString = String(data: encoded, encoding: .utf8) {
+            if let jsonString = encodeUserForKeychain(response.data.user) {
                 try? keychain.save(jsonString, forKey: userKey)
             }
             isAuthenticated = true
@@ -150,6 +148,27 @@ final class AuthManager: ObservableObject {
     }
 
     // MARK: - JWT Decode
+
+    // MARK: - Keychain Helpers
+
+    /// Sérialise l'utilisateur pour le Keychain en évitant les data URIs volumineuses.
+    private func encodeUserForKeychain(_ user: MeeshyUser) -> String? {
+        var dict: [String: Any] = [:]
+        if let data = try? JSONEncoder().encode(user),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            dict = obj
+        } else { return nil }
+        // Supprimer les data URIs (avatar/banner) pour ne pas surcharger le Keychain
+        if let avatar = dict["avatar"] as? String, avatar.hasPrefix("data:") {
+            dict.removeValue(forKey: "avatar")
+        }
+        if let banner = dict["banner"] as? String, banner.hasPrefix("data:") {
+            dict.removeValue(forKey: "banner")
+        }
+        guard let cleaned = try? JSONSerialization.data(withJSONObject: dict),
+              let jsonString = String(data: cleaned, encoding: .utf8) else { return nil }
+        return jsonString
+    }
 
     private func jwtExpirationDate(from token: String) -> Date? {
         let parts = token.split(separator: ".")

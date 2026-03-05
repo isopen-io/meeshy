@@ -49,7 +49,7 @@ enum DeepLinkParser {
         let destination = parse(url)
         switch destination {
         case .external(let externalURL):
-            UIApplication.shared.open(externalURL)
+            Task { @MainActor in UIApplication.shared.open(externalURL) }
         default:
             navigate(destination)
         }

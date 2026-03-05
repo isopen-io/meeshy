@@ -418,7 +418,7 @@ struct VideoPreviewView: View {
     private func addTimeObserver(_ avPlayer: AVPlayer) {
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = avPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            currentTime = time.seconds
+            Task { @MainActor in self.currentTime = time.seconds }
         }
     }
 

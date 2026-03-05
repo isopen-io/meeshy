@@ -518,7 +518,7 @@ public struct NotificationBadge: View {
         if count > 0 {
             ZStack {
                 Circle()
-                    .fill(Color(hex: "FF2E63").opacity(isPulsing ? 0 : 0.4))
+                    .fill(Color(hex: "FF2E63").opacity(isPulsing ? 0.4 : 1.0))
                     .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
 
                 Text("\(min(count, 99))")

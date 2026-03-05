@@ -54,6 +54,12 @@
       "require": "./dist/encryption/*.js",
       "default": "./dist/encryption/*.js"
     },
+    "./agent/*": {
+      "types": "./dist/agent/*.d.ts",
+      "import": "./dist/agent/*.js",
+      "require": "./dist/agent/*.js",
+      "default": "./dist/agent/*.js"
+    },
     "./prisma": {
       "types": "./prisma/schema.prisma"
     },
@@ -69,7 +75,8 @@
     "prisma",
     "types",
     "utils",
-    "encryption"
+    "encryption",
+    "agent"
   ],
   "scripts": {
     "build": "tsc --project tsconfig.json",

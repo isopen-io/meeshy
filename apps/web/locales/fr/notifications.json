@@ -52,11 +52,14 @@
       "callsShort": "📞",
       "friendRequests": "Demandes d'amis",
       "friendRequestsShort": "Amis",
+      "reactions": "Réactions",
+      "reactionsShort": "❤️",
       "system": "Système",
       "new_message": "Messages",
       "friend_request": "Demandes d'amis",
       "missed_call": "Appels manqués",
-      "conversation": "Conversations"
+      "conversation": "Conversations",
+      "message_reaction": "Réactions"
     },
     "types": {
       "new_message": "Message",
@@ -85,7 +88,7 @@
       "newMessage": "Message de @{sender}",
       "reply": "Réponse de @{sender}",
       "mentioned": "@{sender} vous a mentionné",
-      "reaction": "@{sender} a réagi {emoji}",
+      "reaction": "@{sender} a réagit {emoji} à votre message",
       "contactRequest": "@{sender} veut se connecter",
       "contactAccepted": "@{sender} a accepté votre invitation",
       "newConversationDirect": "Nouvelle conversation avec @{sender}",

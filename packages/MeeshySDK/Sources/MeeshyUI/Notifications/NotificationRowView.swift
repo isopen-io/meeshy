@@ -21,23 +21,20 @@ public struct NotificationRowView: View {
         self.onDelete = onDelete
     }
 
-    private var notifType: MeeshyNotificationType {
-        notification.notificationType
-    }
+    private var notifType: MeeshyNotificationType { notification.notificationType }
+    private var accentColor: Color { Color(hex: notifType.accentHex) }
 
     public var body: some View {
-        Button {
-            onTap?()
-        } label: {
+        Button { onTap?() } label: {
             HStack(alignment: .top, spacing: 12) {
                 iconView
                 contentView
                 Spacer(minLength: 4)
                 timestampView
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(notification.isRead ? Color.clear : Color(hex: notifType.color).opacity(0.05))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(notification.isRead ? Color.clear : accentColor.opacity(0.05))
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -52,7 +49,7 @@ public struct NotificationRowView: View {
                 Button { onMarkRead() } label: {
                     Label("Lu", systemImage: "envelope.open")
                 }
-                .tint(Color(hex: "4ECDC4"))
+                .tint(Color(hex: "4338CA"))
             }
         }
         .accessibilityElement(children: .combine)
@@ -62,20 +59,21 @@ public struct NotificationRowView: View {
     // MARK: - Icon
 
     private var iconView: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             Circle()
-                .fill(Color(hex: notifType.color).opacity(0.15))
-                .frame(width: 40, height: 40)
-
-            Image(systemName: notifType.icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: notifType.color))
+                .fill(accentColor.opacity(0.12))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: notifType.systemIcon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(accentColor)
+                )
 
             if !notification.isRead {
                 Circle()
-                    .fill(Color(hex: notifType.color))
-                    .frame(width: 8, height: 8)
-                    .offset(x: 14, y: -14)
+                    .fill(accentColor)
+                    .frame(width: 9, height: 9)
+                    .offset(x: 2, y: -2)
             }
         }
     }
@@ -84,17 +82,26 @@ public struct NotificationRowView: View {
 
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 3) {
-            if let senderName = notification.senderName {
-                Text(senderName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+            Text(notification.formattedTitle)
+                .font(.system(size: 14, weight: notification.isRead ? .medium : .semibold))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(2)
+
+            if let body = notification.formattedBody, !body.isEmpty {
+                Text(body)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(2)
             }
 
-            Text(messageText)
-                .font(.system(size: 13, weight: notification.isRead ? .regular : .medium))
-                .foregroundColor(notification.isRead ? theme.textMuted : theme.textPrimary)
-                .lineLimit(2)
+            if let conversationTitle = notification.context?.conversationTitle,
+               notification.context?.conversationType != "direct" {
+                Label(conversationTitle, systemImage: "bubble.left.and.bubble.right")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .padding(.top, 1)
+            }
         }
     }
 
@@ -117,54 +124,90 @@ public struct NotificationRowView: View {
 
     private var contextualMessage: String {
         switch notifType {
-        case .newMessage:
+        case .newMessage, .legacyNewMessage, .messageReply:
             return notification.data?.preview ?? "Nouveau message"
-        case .messageReaction:
+        case .messageReaction, .reaction, .legacyMessageReaction:
             return "A reagi a votre message"
-        case .mention:
+        case .userMentioned, .mention, .legacyMention:
             return "Vous a mentionne"
-        case .friendRequest:
+        case .friendRequest, .contactRequest, .legacyFriendRequest:
             return "Demande d'ami"
-        case .friendAccepted:
+        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
             return "A accepte votre demande"
-        case .groupInvite:
+        case .communityInvite, .legacyGroupInvite:
             return "Invitation de groupe"
-        case .groupJoined:
+        case .communityJoined, .memberJoined, .legacyGroupJoined:
             return "A rejoint le groupe"
-        case .groupLeft:
+        case .communityLeft, .memberLeft, .legacyGroupLeft:
             return "A quitte le groupe"
-        case .callMissed:
+        case .missedCall, .callDeclined, .legacyCallMissed:
             return "Appel manque"
-        case .callIncoming:
+        case .incomingCall, .callEnded, .legacyCallIncoming:
             return "Appel entrant"
-        case .postLike:
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
             return "A aime votre publication"
-        case .postComment:
+        case .postComment, .commentReply, .legacyPostComment:
             return "A commente votre publication"
-        case .storyReply:
+        case .legacyStoryReply:
             return "A repondu a votre story"
-        case .affiliateSignup:
+        case .legacyAffiliateSignup:
             return "Inscription via votre lien"
-        case .achievementUnlocked:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             return "Nouveau badge debloque !"
-        case .systemAlert:
+        case .securityAlert, .legacySystemAlert:
             return "Alerte systeme"
-        case .statusUpdate:
+        case .loginNewDevice:
+            return "Connexion nouvel appareil"
+        case .passwordChanged:
+            return "Mot de passe modifie"
+        case .twoFactorEnabled:
+            return "Verification en 2 etapes activee"
+        case .twoFactorDisabled:
+            return "Verification en 2 etapes desactivee"
+        case .legacyStatusUpdate:
             return "Mise a jour de statut"
-        case .translationReady:
+        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
             return "Traduction disponible"
+        case .system, .maintenance, .updateAvailable:
+            return "Notification systeme"
+        case .voiceCloneReady:
+            return "Clone vocal pret"
+        case .postRepost:
+            return "A repartage votre publication"
+        case .addedToConversation, .newConversation:
+            return "Ajoute a une conversation"
+        case .removedFromConversation, .memberRemoved:
+            return "Retire de la conversation"
+        case .memberPromoted:
+            return "Promu dans le groupe"
+        case .memberDemoted:
+            return "Retrogade dans le groupe"
+        case .memberRoleChanged:
+            return "Role modifie"
+        case .messageEdited:
+            return "Message modifie"
+        case .messageDeleted:
+            return "Message supprime"
+        case .messagePinned:
+            return "Message epingle"
+        case .messageForwarded:
+            return "Message transfere"
+        case .reply:
+            return notification.data?.preview ?? "A repondu a votre message"
         }
     }
 
     private var relativeTime: String {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = iso.date(from: notification.createdAt) else {
-            iso.formatOptions = [.withInternetDateTime]
-            guard let fallback = iso.date(from: notification.createdAt) else { return "" }
-            return formatRelative(fallback)
+        if let date = iso.date(from: notification.createdAt) {
+            return formatRelative(date)
         }
-        return formatRelative(date)
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: notification.createdAt) {
+            return formatRelative(date)
+        }
+        return ""
     }
 
     private func formatRelative(_ date: Date) -> String {
@@ -177,8 +220,8 @@ public struct NotificationRowView: View {
     }
 
     private var accessibilityDescription: String {
-        let readState = notification.isRead ? "" : "Non lu."
-        let sender = notification.senderName ?? ""
-        return "\(readState) \(sender) \(messageText) \(relativeTime)"
+        let readState = notification.isRead ? "" : "Non lu. "
+        let body = notification.formattedBody.map { ". \($0)" } ?? ""
+        return "\(readState)\(notification.formattedTitle)\(body). \(relativeTime)"
     }
 }

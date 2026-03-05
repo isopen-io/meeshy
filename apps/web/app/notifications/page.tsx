@@ -12,6 +12,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import type { Notification } from '@/services/notification.service';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { cn } from '@/lib/utils';
+import { buildNotificationTitle, buildNotificationContent, getNotificationIcon } from '@/utils/notification-helpers';
 import {
   Bell,
   Search,
@@ -21,10 +22,11 @@ import {
   Phone,
   Check,
   Trash2,
-  UserPlus
+  UserPlus,
+  Heart
 } from 'lucide-react';
 
-type FilterType = 'all' | 'new_message' | 'conversation' | 'missed_call' | 'friend_request' | 'mention';
+type FilterType = 'all' | 'new_message' | 'conversation' | 'missed_call' | 'friend_request' | 'mention' | 'reaction';
 
 interface FilterOption {
   value: FilterType;
@@ -67,6 +69,7 @@ function NotificationsPageContent() {
     { value: 'all', label: t('filters.all'), labelShort: t('filters.all'), icon: Bell },
     { value: 'new_message', label: t('filters.messages'), labelShort: t('filters.messagesShort'), icon: MessageSquare },
     { value: 'mention', label: t('filters.mentions'), labelShort: t('filters.mentionsShort'), icon: MessageSquare },
+    { value: 'reaction', label: t('filters.reactions'), labelShort: t('filters.reactionsShort'), icon: Heart },
     { value: 'conversation', label: t('filters.conversations'), labelShort: t('filters.conversationsShort'), icon: Users },
     { value: 'missed_call', label: t('filters.calls'), labelShort: t('filters.callsShort'), icon: Phone },
     { value: 'friend_request', label: t('filters.friendRequests'), labelShort: t('filters.friendRequestsShort'), icon: UserPlus },
@@ -82,6 +85,7 @@ function NotificationsPageContent() {
         const typeMatch =
           (activeFilter === 'new_message' && (n.type === 'new_message' || n.type === 'message')) ||
           (activeFilter === 'mention' && (n.type === 'user_mentioned' || n.type === 'mention')) ||
+          (activeFilter === 'reaction' && (n.type === 'message_reaction' || n.type === 'reaction')) ||
           (activeFilter === 'conversation' && (n.type === 'conversation' || n.type === 'new_conversation')) ||
           (activeFilter === 'missed_call' && n.type === 'missed_call') ||
           (activeFilter === 'friend_request' && n.type === 'friend_request');
@@ -107,6 +111,7 @@ function NotificationsPageContent() {
     all: notifications.length,
     new_message: notifications.filter(n => n.type === 'new_message' || n.type === 'message').length,
     mention: notifications.filter(n => n.type === 'user_mentioned' || n.type === 'mention').length,
+    reaction: notifications.filter(n => n.type === 'message_reaction' || n.type === 'reaction').length,
     conversation: notifications.filter(n => n.type === 'conversation' || n.type === 'new_conversation').length,
     missed_call: notifications.filter(n => n.type === 'missed_call').length,
     friend_request: notifications.filter(n => n.type === 'friend_request').length,
@@ -352,47 +357,58 @@ function NotificationsPageContent() {
                     )}
                   >
                     <div className="p-4 flex items-start gap-4">
-                      {/* Avatar */}
-                      <Avatar className="h-12 w-12 ring-2 ring-white/50 dark:ring-gray-800/50">
-                        <AvatarImage src={notification.actor?.avatar || undefined} />
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                          {(notification.actor?.displayName || notification.actor?.username || 'U').charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      {/* Avatar with type icon overlay */}
+                      <div className="relative flex-shrink-0">
+                        <Avatar className="h-12 w-12 ring-2 ring-white/50 dark:ring-gray-800/50">
+                          <AvatarImage src={notification.actor?.avatar || undefined} />
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
+                            {(notification.actor?.displayName || notification.actor?.username || 'U').charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {/* Type icon badge */}
+                        <span className="absolute -bottom-1 -right-1 text-sm leading-none select-none">
+                          {getNotificationIcon(notification).emoji}
+                        </span>
+                      </div>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <span className={cn(
-                              "font-semibold truncate",
+                              "font-semibold text-sm leading-snug",
                               !notification.state.isRead
                                 ? "text-gray-900 dark:text-white"
                                 : "text-gray-700 dark:text-gray-300"
                             )}>
-                              {notification.actor?.displayName || notification.actor?.username}
+                              {buildNotificationTitle(notification, t)}
                             </span>
                             {!notification.state.isRead && (
-                              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                              <span className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                             )}
                           </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums">
+                          <span className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap tabular-nums">
                             {formatTimeAgo(notification.state.createdAt)}
                           </span>
                         </div>
 
-                        <p className={cn(
-                          "text-sm mb-1 line-clamp-2",
-                          !notification.state.isRead
-                            ? "text-gray-800 dark:text-gray-200"
-                            : "text-gray-600 dark:text-gray-400"
-                        )}>
-                          {notification.content}
-                        </p>
+                        {(() => {
+                          const body = buildNotificationContent(notification, t);
+                          return body ? (
+                            <p className={cn(
+                              "text-sm mb-1 line-clamp-2",
+                              !notification.state.isRead
+                                ? "text-gray-800 dark:text-gray-200"
+                                : "text-gray-600 dark:text-gray-400"
+                            )}>
+                              {body}
+                            </p>
+                          ) : null;
+                        })()}
 
                         {notification.context?.conversationTitle && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            <Users className="h-3 w-3" />
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <Users className="h-3 w-3 flex-shrink-0" />
                             <span className="truncate">
                               {notification.context.conversationType === 'direct'
                                 ? t('conversationTypes.private')

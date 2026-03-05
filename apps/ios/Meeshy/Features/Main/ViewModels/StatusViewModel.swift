@@ -3,18 +3,6 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-enum StatusFeedMode {
-    case friends    // /posts/feed/statuses
-    case discover   // /posts/feed/statuses/discover
-
-    var endpoint: String {
-        switch self {
-        case .friends: return "/posts/feed/statuses"
-        case .discover: return "/posts/feed/statuses/discover"
-        }
-    }
-}
-
 @MainActor
 class StatusViewModel: ObservableObject {
     @Published var statuses: [StatusEntry] = []
@@ -22,8 +10,8 @@ class StatusViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
 
-    let mode: StatusFeedMode
-    private let api = APIClient.shared
+    let mode: StatusService.Mode
+    private let statusService = StatusService.shared
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket = SocialSocketManager.shared
 
@@ -36,7 +24,7 @@ class StatusViewModel: ObservableObject {
         "💭", "🎵", "📚", "✈️", "❤️"
     ]
 
-    init(mode: StatusFeedMode = .friends) {
+    init(mode: StatusService.Mode = .friends) {
         self.mode = mode
     }
 
@@ -49,10 +37,7 @@ class StatusViewModel: ObservableObject {
         hasMore = true
 
         do {
-            let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
-                endpoint: mode.endpoint,
-                limit: 20
-            )
+            let response = try await statusService.list(mode: mode, limit: 20)
 
             if response.success {
                 statuses = response.data.compactMap { $0.toStatusEntry() }
@@ -84,11 +69,7 @@ class StatusViewModel: ObservableObject {
         isLoadingMore = true
 
         do {
-            let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
-                endpoint: mode.endpoint,
-                cursor: nextCursor,
-                limit: 20
-            )
+            let response = try await statusService.list(mode: mode, cursor: nextCursor, limit: 20)
 
             if response.success {
                 let newStatuses = response.data.compactMap { $0.toStatusEntry() }
@@ -116,15 +97,10 @@ class StatusViewModel: ObservableObject {
     // MARK: - Set Status
 
     func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil) async {
-        let request = StatusCreateRequest(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds)
-
         do {
-            let response: APIResponse<APIPost> = try await api.post(
-                endpoint: "/posts",
-                body: request
-            )
+            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds)
 
-            if response.success, let entry = response.data.toStatusEntry() {
+            if let entry = post.toStatusEntry() {
                 myStatus = entry
                 statuses.insert(entry, at: 0)
             }
@@ -151,7 +127,7 @@ class StatusViewModel: ObservableObject {
         guard let status = myStatus else { return }
 
         do {
-            let _ = try await api.delete(endpoint: "/posts/\(status.id)")
+            try await statusService.delete(statusId: status.id)
         } catch {
             // Silent failure
         }
@@ -237,14 +213,8 @@ class StatusViewModel: ObservableObject {
     // MARK: - React to Status
 
     func reactToStatus(_ statusId: String, emoji: String) async {
-        let body: [String: String] = ["emoji": emoji]
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: AnyCodable]> = try await api.request(
-                endpoint: "/posts/\(statusId)/like",
-                method: "POST",
-                body: bodyData
-            )
+            try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
             // Silent failure
         }

@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - Scroll Offset Preference Key
 private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -234,7 +234,7 @@ struct ConversationListView: View {
                 isDark: theme.mode.isDark,
                 storyRingState: storyRingState(for: displayConversation),
                 moodStatus: conversationMoodStatus(for: displayConversation),
-                isTyping: conversationViewModel.typingConversationIds.contains(displayConversation.id)
+                typingUsername: conversationViewModel.typingUsernames[displayConversation.id]
             )
             .equatable()
             .contentShape(Rectangle())
@@ -636,9 +636,11 @@ struct ConversationListView: View {
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 HapticFeedback.medium()
-                await conversationViewModel.forceRefresh()
-                
-                // Show the search bar seamlessly after reloading finishes
+                async let convRefresh: Void = conversationViewModel.forceRefresh()
+                async let storyRefresh: Void = storyViewModel.loadStories()
+                async let statusRefresh: Void = statusViewModel.refresh()
+                _ = await (convRefresh, storyRefresh, statusRefresh)
+
                 if isScrollingDown {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         isScrollingDown = false

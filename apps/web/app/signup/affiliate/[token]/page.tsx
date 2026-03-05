@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowRight, Zap, Globe, Sparkles, User } from 'lucide-react';
+import { ArrowRight, Home, Zap, Globe, Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LargeLogo } from '@/components/branding';
@@ -200,6 +200,15 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
                 {t('landing.ctaLogin')}
               </Button>
             </motion.div>
+
+            {/* Homepage link */}
+            <a
+              href="/"
+              className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Home className="h-3.5 w-3.5" />
+              {t('landing.goHome')}
+            </a>
           </div>
         </motion.div>
 
@@ -211,6 +220,14 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
           className="mt-8 text-center text-sm text-muted-foreground"
         >
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            <a href="/about" className="hover:text-foreground transition-colors">
+              {t('landing.about')}
+            </a>
+            <span className="hidden sm:inline">·</span>
+            <a href="/contact" className="hover:text-foreground transition-colors">
+              {t('landing.contact')}
+            </a>
+            <span className="hidden sm:inline">·</span>
             <a href="/terms" className="hover:text-foreground transition-colors">
               {t('landing.terms')}
             </a>

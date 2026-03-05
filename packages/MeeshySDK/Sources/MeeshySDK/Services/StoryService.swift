@@ -1,6 +1,6 @@
 import Foundation
 
-public final class StoryService {
+public final class StoryService: @unchecked Sendable {
     public static let shared = StoryService()
     private init() {}
     private var api: APIClient { APIClient.shared }
@@ -11,6 +11,10 @@ public final class StoryService {
 
     public func markViewed(storyId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(storyId)/view", method: "POST")
+    }
+
+    public func delete(storyId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
     }
 
     public func react(storyId: String, emoji: String) async throws {

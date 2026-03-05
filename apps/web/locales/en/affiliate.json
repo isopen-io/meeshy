@@ -11,7 +11,10 @@
       "feature2": "100+ languages",
       "feature3": "Free",
       "terms": "Terms of Service",
-      "privacy": "Privacy Policy"
+      "privacy": "Privacy Policy",
+      "about": "About",
+      "contact": "Contact",
+      "goHome": "Go to homepage"
     },
     "shareApp": "Share Meeshy",
     "shareTitle": "Share Meeshy",

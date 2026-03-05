@@ -25,7 +25,8 @@ import {
   Laptop,
   Trophy,
   Mail,
-  Link2
+  Link2,
+  Bot
 } from 'lucide-react';
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
@@ -129,6 +130,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
       label: 'Paramètres système',
       href: '/admin/settings',
       permission: 'canManageTranslations',
+    },
+    {
+      icon: Bot,
+      label: 'Agent IA',
+      href: '/admin/agent',
+      permission: 'canAccessAdmin',
     },
   ];
 
@@ -316,6 +323,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     {currentPage === '/admin/broadcasts' && 'Broadcasts Email'}
                     {currentPage === '/admin/tracking-links' && 'Tracking Links'}
                     {currentPage === '/admin/settings' && 'Paramètres système'}
+                    {currentPage === '/admin/agent' && 'Agent IA'}
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">
                     Administration Meeshy - Niveau d&apos;accès: {PermissionsService.getRoleDisplayName(user.role)}

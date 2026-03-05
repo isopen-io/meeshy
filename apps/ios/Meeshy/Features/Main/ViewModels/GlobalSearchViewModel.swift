@@ -31,7 +31,7 @@ enum SearchTab: String, CaseIterable, Identifiable {
 
 // MARK: - Global Search Message Result
 
-struct GlobalSearchMessageResult: Identifiable {
+struct GlobalSearchMessageResult: Identifiable, Sendable {
     let id: String
     let conversationId: String
     let conversationName: String
@@ -44,7 +44,7 @@ struct GlobalSearchMessageResult: Identifiable {
 
 // MARK: - Global Search Conversation Result
 
-struct GlobalSearchConversationResult: Identifiable {
+struct GlobalSearchConversationResult: Identifiable, Sendable {
     let id: String
     let name: String
     let avatar: String?
@@ -58,7 +58,7 @@ struct GlobalSearchConversationResult: Identifiable {
 
 // MARK: - Global Search User Result
 
-struct GlobalSearchUserResult: Identifiable {
+struct GlobalSearchUserResult: Identifiable, Sendable {
     let id: String
     let username: String
     let displayName: String?

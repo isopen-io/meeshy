@@ -206,7 +206,7 @@ extension UniversalComposerBar {
         isRecording = true
         recordingDuration = 0
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            recordingDuration += 0.1
+            Task { @MainActor in self.recordingDuration += 0.1 }
         }
         onRecordingChange?(true)
         HapticFeedback.medium()
