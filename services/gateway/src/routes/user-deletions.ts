@@ -98,11 +98,9 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           create: {
             userId,
             conversationId,
-            isDeletedForUser: true,
             deletedForUserAt: new Date(),
           },
           update: {
-            isDeletedForUser: true,
             deletedForUserAt: new Date(),
           },
         });
@@ -173,7 +171,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        if (!prefs || !prefs.isDeletedForUser) {
+        if (!prefs || !prefs.deletedForUserAt) {
           return reply.status(400).send({
             success: false,
             error: 'Conversation is not deleted',
@@ -185,7 +183,6 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
             userId_conversationId: { userId, conversationId },
           },
           data: {
-            isDeletedForUser: false,
             deletedForUserAt: null,
           },
         });
@@ -678,7 +675,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const deletedPrefs = await prisma.userConversationPreferences.findMany({
           where: {
             userId,
-            isDeletedForUser: true,
+            deletedForUserAt: { not: null },
           },
           include: {
             conversation: {

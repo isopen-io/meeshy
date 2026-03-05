@@ -127,6 +127,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastSeenAt: Date? = nil
 
     public var currentUserRole: String? = nil
+    public var reaction: String? = nil
 
     public var language: ConversationContext.ConversationLanguage = .french
     public var theme: ConversationContext.ConversationTheme = .general
@@ -184,6 +185,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(avatar)
         h.combine(participantAvatarURL)
         h.combine(tags)
+        h.combine(reaction)
         return h.finalize()
     }
 
@@ -203,7 +205,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
-                currentUserRole: String? = nil,
+                currentUserRole: String? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general) {
         self.id = id; self.identifier = identifier; self.type = type
@@ -214,7 +216,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.isAnnouncementChannel = isAnnouncementChannel
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
         self.participantUserId = participantUserId; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
-        self.currentUserRole = currentUserRole
+        self.currentUserRole = currentUserRole; self.reaction = reaction
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
@@ -674,6 +676,7 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
     case ouvertes = "Ouvertes"
     case globales = "Globales"
     case channels = "Channels"
+    case favoris = "Favoris"
     case archived = "Archives"
 
     public var id: String { self.rawValue }
@@ -687,6 +690,7 @@ public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
         case .ouvertes: return "2ECC71"
         case .globales: return "E74C3C"
         case .channels: return "1ABC9C"
+        case .favoris: return "F59E0B"
         case .archived: return "9B59B6"
         }
     }

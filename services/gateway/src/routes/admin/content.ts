@@ -88,7 +88,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
-      const where: any = { isDeleted: false };
+      const where: any = { deletedAt: null };
 
       if (search) {
         where.content = { contains: search, mode: 'insensitive' };

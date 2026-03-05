@@ -243,7 +243,7 @@ export function registerMessagesRoutes(
       // Construire la requête avec pagination
       const whereClause: any = {
         conversationId: conversationId, // Utiliser l'ID résolu
-        isDeleted: false
+        deletedAt: null
       };
 
       if (before) {
@@ -276,13 +276,13 @@ export function registerMessagesRoutes(
 
           const [messagesBefore, messagesAfter] = await Promise.all([
             prisma.message.findMany({
-              where: { conversationId, isDeleted: false, createdAt: { lt: aroundMessage.createdAt } },
+              where: { conversationId, deletedAt: null, createdAt: { lt: aroundMessage.createdAt } },
               orderBy: { createdAt: 'desc' },
               take: halfLimit,
               select: { id: true }
             }),
             prisma.message.findMany({
-              where: { conversationId, isDeleted: false, createdAt: { gt: aroundMessage.createdAt } },
+              where: { conversationId, deletedAt: null, createdAt: { gt: aroundMessage.createdAt } },
               orderBy: { createdAt: 'asc' },
               take: halfLimit,
               select: { id: true }
@@ -316,7 +316,6 @@ export function registerMessagesRoutes(
         // ===== ÉDITION / SUPPRESSION =====
         isEdited: true,
         editedAt: true,
-        isDeleted: true,
         deletedAt: true,
 
         // ===== REPLY / FORWARD =====
@@ -542,7 +541,7 @@ export function registerMessagesRoutes(
           : prisma.message.count({
               where: {
                 conversationId: conversationId,
-                isDeleted: false
+                deletedAt: null
               }
             }),
         // 2. Récupérer les messages avec toutes les relations
@@ -679,7 +678,7 @@ export function registerMessagesRoutes(
           // Édition/Suppression
           isEdited: message.isEdited,
           editedAt: message.editedAt,
-          isDeleted: message.isDeleted,
+          isDeleted: message.deletedAt !== null,
           deletedAt: message.deletedAt,
 
           // Reply/Forward
@@ -872,13 +871,13 @@ export function registerMessagesRoutes(
         const lastMsg = mappedMessages[mappedMessages.length - 1];
         if (firstMsg) {
           const olderCount = await prisma.message.count({
-            where: { conversationId, isDeleted: false, createdAt: { lt: new Date(firstMsg.createdAt) } }
+            where: { conversationId, deletedAt: null, createdAt: { lt: new Date(firstMsg.createdAt) } }
           });
           responsePayload.cursorPagination.hasMore = olderCount > 0;
         }
         if (lastMsg) {
           const newerCount = await prisma.message.count({
-            where: { conversationId, isDeleted: false, createdAt: { gt: new Date(lastMsg.createdAt) } }
+            where: { conversationId, deletedAt: null, createdAt: { gt: new Date(lastMsg.createdAt) } }
           });
           responsePayload.hasNewer = newerCount > 0;
         }
@@ -957,7 +956,7 @@ export function registerMessagesRoutes(
       const unreadMessages = await prisma.message.findMany({
         where: {
           conversationId: conversationId,
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: userId }, // Ne pas marquer ses propres messages
           statusEntries: {
             none: {
@@ -1738,7 +1737,7 @@ export function registerMessagesRoutes(
       const latestMessage = await prisma.message.findFirst({
         where: {
           conversationId,
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: userId }
         },
         orderBy: { createdAt: 'desc' },
@@ -1761,7 +1760,7 @@ export function registerMessagesRoutes(
       const previousMessage = await prisma.message.findFirst({
         where: {
           conversationId,
-          isDeleted: false,
+          deletedAt: null,
           createdAt: { lt: latestMessage.createdAt }
         },
         orderBy: { createdAt: 'desc' },
@@ -2146,7 +2145,7 @@ export function registerMessagesRoutes(
       // Build where clause for content search
       const whereClause: any = {
         conversationId,
-        isDeleted: false,
+        deletedAt: null,
         content: { contains: queryLower, mode: 'insensitive' }
       };
 
@@ -2185,7 +2184,7 @@ export function registerMessagesRoutes(
         prisma.message.findMany({
           where: {
             conversationId,
-            isDeleted: false,
+            deletedAt: null,
             NOT: { content: { contains: queryLower, mode: 'insensitive' } },
             translations: { not: null },
             ...(cursor ? { createdAt: whereClause.createdAt } : {})

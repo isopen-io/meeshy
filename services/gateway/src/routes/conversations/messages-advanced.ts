@@ -119,7 +119,7 @@ export function registerMessagesAdvancedRoutes(
         where: {
           id: messageId,
           conversationId: conversationId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           sender: {
@@ -549,7 +549,7 @@ export function registerMessagesAdvancedRoutes(
         where: {
           id: messageId,
           conversationId: conversationId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           sender: {
@@ -622,7 +622,6 @@ export function registerMessagesAdvancedRoutes(
       await prisma.message.update({
         where: { id: messageId },
         data: {
-          isDeleted: true,
           deletedAt: new Date()
         }
       });
@@ -879,7 +878,7 @@ export function registerMessagesAdvancedRoutes(
         where: {
           message: {
             conversationId: conversationId,
-            isDeleted: false
+            deletedAt: null
           }
         },
         include: {
@@ -1041,7 +1040,7 @@ export function registerMessagesAdvancedRoutes(
         where: {
           id: messageId,
           conversationId: conversationId,
-          isDeleted: false
+          deletedAt: null
         },
         select: { id: true }
       });
@@ -1339,7 +1338,7 @@ export function registerMessagesAdvancedRoutes(
       const messages = await prisma.message.findMany({
         where: {
           conversationId: conversationId,
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           id: true,

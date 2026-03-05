@@ -60,20 +60,20 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false
+            deletedAt: null
           }
         }),
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: true
+            deletedAt: { not: null }
           }
         }),
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
             isEdited: true,
-            isDeleted: false
+            deletedAt: null
           }
         })
       ]);
@@ -83,7 +83,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         by: ['messageType'],
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false
+          deletedAt: null
         },
         _count: {
           id: true
@@ -99,7 +99,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const messages = await fastify.prisma.message.findMany({
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           createdAt: true,
@@ -160,7 +160,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         by: ['senderId'],
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: null }
         },
         _count: {
@@ -198,7 +198,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const messagesWithAttachments = await fastify.prisma.message.count({
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false,
+          deletedAt: null,
           attachments: {
             some: {}
           }
@@ -248,7 +248,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const messages = await fastify.prisma.message.findMany({
         where: {
           createdAt: { gte: sevenDaysAgo },
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           createdAt: true
@@ -353,13 +353,13 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false
+            deletedAt: null
           }
         }),
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false,
+            deletedAt: null,
             reactions: {
               some: {}
             }
@@ -368,7 +368,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false,
+            deletedAt: null,
             replies: {
               some: {}
             }
@@ -382,7 +382,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false,
+            deletedAt: null,
             replyToId: { not: null }
           }
         })

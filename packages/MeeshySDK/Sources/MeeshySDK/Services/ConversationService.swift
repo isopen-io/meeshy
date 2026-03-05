@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ConversationService {
+public final class ConversationService: @unchecked Sendable {
     public static let shared = ConversationService()
     private init() {}
     private var api: APIClient { APIClient.shared }
@@ -27,7 +27,7 @@ public final class ConversationService {
     }
 
     public func markRead(conversationId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-read", method: "POST")
+        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {
@@ -40,6 +40,12 @@ public final class ConversationService {
             queryItems: [URLQueryItem(name: "limit", value: "\(limit)")]
         )
         return response.data
+    }
+
+    public func deleteForMe(conversationId: String) async throws {
+        let _ = try await api.delete(
+            endpoint: "/conversations/\(conversationId)/delete-for-me"
+        )
     }
 
     /// Récupère les conversations en commun avec un utilisateur spécifique

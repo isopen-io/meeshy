@@ -120,7 +120,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
     case 'messages': {
       const topSenders = await fastify.prisma.message.groupBy({
         by: ['senderId'],
-        where: { ...msgDateFilter, isDeleted: false, senderId: { not: null } },
+        where: { ...msgDateFilter, deletedAt: null, senderId: { not: null } },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
@@ -295,7 +295,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         by: ['senderId'],
         where: {
           ...msgDateFilter,
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: null },
           messageType: { in: ['image', 'file', 'video', 'audio'] }
         },
@@ -501,7 +501,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
     case 'messages': {
       const topConvos = await fastify.prisma.message.groupBy({
         by: ['conversationId'],
-        where: { ...dateWhere(startDate), isDeleted: false },
+        where: { ...dateWhere(startDate), deletedAt: null },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
@@ -553,7 +553,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         by: ['conversationId'],
         where: {
           ...dateWhere(startDate),
-          isDeleted: false,
+          deletedAt: null,
           messageType: { in: ['image', 'file', 'video', 'audio'] }
         },
         _count: { id: true },

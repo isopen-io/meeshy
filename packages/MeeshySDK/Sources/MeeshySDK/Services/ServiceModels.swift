@@ -117,10 +117,11 @@ public struct UpdateConversationPreferencesRequest: Encodable {
     public var isArchived: Bool?
     public var categoryId: String?
     public var tags: [String]?
+    public var reaction: String?
 
-    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil) {
+    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil) {
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
-        self.categoryId = categoryId; self.tags = tags
+        self.categoryId = categoryId; self.tags = tags; self.reaction = reaction
     }
 }
 

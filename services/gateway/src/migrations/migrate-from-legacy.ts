@@ -322,7 +322,7 @@ function transformMessage(doc: LegacyMessage) {
     content: doc.content || '',
     type: doc.type || 'text',
     status: doc.status || 'sent',
-    isDeleted: doc.isDeleted || false,
+    deletedAt: doc.isDeleted ? new Date() : null,
     isPinned: doc.isPinned || false,
     replyToId: objectIdToString(doc.replyToId) || null,
     createdAt: doc.createdAt || new Date(),

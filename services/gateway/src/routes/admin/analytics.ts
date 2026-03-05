@@ -47,7 +47,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const messagesLastHour = await fastify.prisma.message.count({
         where: {
           createdAt: { gte: oneHourAgo },
-          isDeleted: false
+          deletedAt: null
         }
       });
 
@@ -57,7 +57,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           messages: {
             some: {
               createdAt: { gte: oneHourAgo },
-              isDeleted: false
+              deletedAt: null
             }
           }
         }
@@ -96,7 +96,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const messages = await fastify.prisma.message.findMany({
         where: {
           createdAt: { gte: twentyFourHoursAgo },
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           createdAt: true
@@ -180,7 +180,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         by: ['messageType'],
         where: {
           createdAt: { gte: startDate },
-          isDeleted: false
+          deletedAt: null
         },
         _count: {
           id: true
@@ -291,7 +291,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const languages = await fastify.prisma.message.groupBy({
         by: ['originalLanguage'],
         where: {
-          isDeleted: false,
+          deletedAt: null,
           originalLanguage: { not: null }
         },
         _count: {
@@ -359,7 +359,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: {
             createdAt: { gte: startDate },
-            isDeleted: false
+            deletedAt: null
           }
         }),
         fastify.prisma.user.count(),
@@ -427,7 +427,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const messages = await fastify.prisma.message.findMany({
         where: {
           createdAt: { gte: sevenDaysAgo },
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           createdAt: true,

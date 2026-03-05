@@ -98,7 +98,7 @@ export class MessageReadStatusService {
       return await this.prisma.message.count({
         where: {
           conversationId,
-          isDeleted: false,
+          deletedAt: null,
           senderId: { not: userId },
         },
       });
@@ -172,7 +172,7 @@ export class MessageReadStatusService {
       let messageId = latestMessageId;
       if (!messageId) {
         const latestMessage = await this.prisma.message.findFirst({
-          where: { conversationId, isDeleted: false },
+          where: { conversationId, deletedAt: null },
           orderBy: { createdAt: "desc" },
           select: { id: true },
         });
@@ -244,7 +244,7 @@ export class MessageReadStatusService {
 
       if (!messageId) {
         const latestMessage = await this.prisma.message.findFirst({
-          where: { conversationId, isDeleted: false },
+          where: { conversationId, deletedAt: null },
           orderBy: { createdAt: "desc" },
           select: { id: true },
         });
@@ -930,7 +930,7 @@ export class MessageReadStatusService {
         unreadCount = await this.prisma.message.count({
           where: {
             conversationId,
-            isDeleted: false,
+            deletedAt: null,
             senderId: { not: userId },
           },
         });
@@ -938,7 +938,7 @@ export class MessageReadStatusService {
         unreadCount = await this.prisma.message.count({
           where: {
             conversationId,
-            isDeleted: false,
+            deletedAt: null,
             senderId: { not: userId },
             createdAt: { gt: cursor.lastReadAt },
           },
@@ -1136,7 +1136,7 @@ export class MessageReadStatusService {
       const existingMessages = await this.prisma.message.findMany({
         where: {
           id: { in: messageIds },
-          isDeleted: false,
+          deletedAt: null,
         },
         select: { id: true },
       });

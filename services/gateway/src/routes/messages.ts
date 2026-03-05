@@ -82,7 +82,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           id: true,
@@ -95,7 +95,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           messageSource: true,
           isEdited: true,
           editedAt: true,
-          isDeleted: true,
           deletedAt: true,
           replyToId: true,
           forwardedFromId: true,
@@ -231,7 +230,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         where: {
           id: messageId,
           senderId: userId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           attachments: {
@@ -383,7 +382,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           sender: {
@@ -457,9 +456,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const deletedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
-          isDeleted: true,
           deletedAt: new Date()
-          // Note: deletedBy n'existe pas dans le schéma Prisma actuel
         }
       });
 
@@ -467,7 +464,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const lastNonDeletedMessage = await prisma.message.findFirst({
         where: {
           conversationId: message.conversationId,
-          isDeleted: false
+          deletedAt: null
         },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true }
@@ -533,7 +530,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           conversation: {
@@ -670,8 +667,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         editedAt: message.editedAt,
         createdAt: message.createdAt,
         deletedAt: message.deletedAt,
-        // Note: deletedBy n'existe pas dans le schéma actuel
-        isDeleted: message.isDeleted
+        isDeleted: message.deletedAt !== null
       };
 
       return reply.send({
@@ -703,7 +699,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false
+          deletedAt: null
         },
         select: {
           id: true,
@@ -785,7 +781,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const message = await prisma.message.findFirst({
         where: {
           id: messageId,
-          isDeleted: false
+          deletedAt: null
         },
         include: {
           conversation: {
