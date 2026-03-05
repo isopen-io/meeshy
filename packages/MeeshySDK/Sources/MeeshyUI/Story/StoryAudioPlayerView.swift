@@ -9,6 +9,7 @@ public struct StoryAudioPlayerView: View {
     public let onDragEnd: () -> Void
 
     @State private var isPlaying = false
+    @State private var isMuted = false
     @State private var playbackProgress: Double = 0
     @GestureState private var dragOffset = CGSize.zero
 
@@ -36,6 +37,9 @@ public struct StoryAudioPlayerView: View {
                     y: audioObject.y * geo.size.height + dragOffset.height
                 )
                 .gesture(isEditing ? dragGesture(geo: geo) : nil)
+                .onAppear {
+                    if !isEditing { startAutoPlay() }
+                }
                 .onDisappear { teardownPlayer() }
                 .onReceive(NotificationCenter.default.publisher(for: .storyComposerMuteCanvas)) { _ in
                     player?.pause()
@@ -62,6 +66,49 @@ public struct StoryAudioPlayerView: View {
         }
     }
 
+    // MARK: - Auto-play (viewer mode)
+
+    private func startAutoPlay() {
+        #if os(iOS)
+        guard let url else { return }
+
+        if player == nil {
+            let newPlayer = AVPlayer(url: url)
+            newPlayer.volume = audioObject.volume
+            newPlayer.isMuted = isMuted
+            player = newPlayer
+
+            let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+            playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+                guard let duration = newPlayer.currentItem?.duration.seconds,
+                      duration > 0 else { return }
+                playbackProgress = time.seconds / duration
+            }
+
+            let shouldLoop = audioObject.loop ?? false
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: newPlayer.currentItem,
+                queue: .main
+            ) { [weak newPlayer] _ in
+                if shouldLoop {
+                    newPlayer?.seek(to: .zero)
+                    newPlayer?.play()
+                } else {
+                    isPlaying = false
+                    playbackProgress = 0
+                    newPlayer?.seek(to: .zero)
+                }
+            }
+        }
+
+        player?.play()
+        isPlaying = true
+        #endif
+    }
+
+    // MARK: - Teardown
+
     private func teardownPlayer() {
         #if os(iOS)
         player?.pause()
@@ -79,16 +126,18 @@ public struct StoryAudioPlayerView: View {
         #endif
     }
 
+    // MARK: - UI
+
     private var playerContent: some View {
         HStack(spacing: 8) {
             Button(action: togglePlayback) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: buttonIcon)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
-            .accessibilityLabel(isPlaying ? "Pause" : "Lire")
+            .accessibilityLabel(buttonAccessibilityLabel)
 
             waveformView
                 .frame(width: 120, height: 32)
@@ -96,6 +145,22 @@ public struct StoryAudioPlayerView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    private var buttonIcon: String {
+        if isEditing {
+            return isPlaying ? "pause.fill" : "play.fill"
+        } else {
+            return isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+        }
+    }
+
+    private var buttonAccessibilityLabel: String {
+        if isEditing {
+            return isPlaying ? "Pause" : "Lire"
+        } else {
+            return isMuted ? "Activer le son" : "Couper le son"
+        }
     }
 
     private var waveformView: some View {
@@ -140,42 +205,51 @@ public struct StoryAudioPlayerView: View {
             }
     }
 
+    // MARK: - Toggle
+
     private func togglePlayback() {
         #if os(iOS)
-        guard let url else { return }
+        if isEditing {
+            // Mode éditeur : play/pause
+            guard let url else { return }
 
-        if player == nil {
-            let newPlayer = AVPlayer(url: url)
-            newPlayer.volume = audioObject.volume
-            player = newPlayer
+            if player == nil {
+                let newPlayer = AVPlayer(url: url)
+                newPlayer.volume = audioObject.volume
+                player = newPlayer
 
-            let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-                guard let duration = newPlayer.currentItem?.duration.seconds,
-                      duration > 0 else { return }
-                playbackProgress = time.seconds / duration
+                let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+                playerObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+                    guard let duration = newPlayer.currentItem?.duration.seconds,
+                          duration > 0 else { return }
+                    playbackProgress = time.seconds / duration
+                }
+
+                endObserver = NotificationCenter.default.addObserver(
+                    forName: .AVPlayerItemDidPlayToEndTime,
+                    object: newPlayer.currentItem,
+                    queue: .main
+                ) { [weak newPlayer] _ in
+                    isPlaying = false
+                    playbackProgress = 0
+                    newPlayer?.seek(to: .zero)
+                }
             }
 
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: newPlayer.currentItem,
-                queue: .main
-            ) { [weak newPlayer] _ in
-                isPlaying = false
-                playbackProgress = 0
-                newPlayer?.seek(to: .zero)
+            isPlaying.toggle()
+            if isPlaying {
+                StoryMediaCoordinator.shared.activate {
+                    NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
+                }
+                Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+                player?.play()
+            } else {
+                player?.pause()
             }
-        }
-
-        isPlaying.toggle()
-        if isPlaying {
-            StoryMediaCoordinator.shared.activate {
-                NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
-            }
-            Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
-            player?.play()
         } else {
-            player?.pause()
+            // Mode viewer : mute/unmute uniquement
+            isMuted.toggle()
+            player?.isMuted = isMuted
         }
         #endif
     }
