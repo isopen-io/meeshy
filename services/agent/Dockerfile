@@ -26,7 +26,7 @@ RUN apk add --no-cache \
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/shared/package.json packages/shared/
 COPY services/agent/package.json services/agent/
 
