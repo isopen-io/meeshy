@@ -169,13 +169,14 @@ public struct CommunitySettingsView: View {
                 // Avatar
                 settingsField(label: "Avatar") {
                     HStack {
-                        if !viewModel.avatarUrl.isEmpty {
-                            AsyncImage(url: URL(string: viewModel.avatarUrl)) { image in
-                                image.resizable().scaledToFill().frame(width: 40, height: 40).clipShape(Circle())
-                            } placeholder: {
-                                Circle().fill(theme.backgroundSecondary).frame(width: 40, height: 40)
-                            }
-                        }
+                        MeeshyAvatar(
+                            name: viewModel.name,
+                            mode: .custom(40),
+                            kind: .entity,
+                            accentColor: viewModel.localColor,
+                            avatarURL: viewModel.avatarUrl.isEmpty ? nil : viewModel.avatarUrl,
+                            enablePulse: false
+                        )
                         
                         PhotosPicker(selection: $avatarItem, matching: .images) {
                             Text(viewModel.isUploadingAvatar ? "Upload en cours..." : "Changer l'avatar")

@@ -469,35 +469,13 @@ struct LoginView: View {
     }
 
     private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
-        Group {
-            if let urlString = account.avatarURL, let url = URL(string: urlString) {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    initialsAvatar(account, size: size)
-                }
-            } else {
-                initialsAvatar(account, size: size)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-    }
-
-    private func initialsAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.coral.opacity(0.8), MeeshyColors.purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            Text(account.username.prefix(1).uppercased())
-                .font(.system(size: size * 0.4, weight: .bold))
-                .foregroundColor(.white)
-        }
+        MeeshyAvatar(
+            name: account.shortName,
+            mode: .custom(size),
+            kind: .user,
+            avatarURL: account.avatarURL,
+            enablePulse: false
+        )
     }
 
     // MARK: - Actions

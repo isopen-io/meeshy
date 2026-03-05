@@ -105,6 +105,13 @@ public enum StoryRingState: Equatable {
     case none, unread, read
 }
 
+// MARK: - Avatar Kind
+
+public enum AvatarKind: Sendable {
+    case user
+    case entity
+}
+
 // MARK: - Avatar Context Menu Item
 
 public struct AvatarContextMenuItem: Identifiable {
@@ -139,6 +146,7 @@ public struct MeeshyAvatar: View {
     /// Contrôle si le badge mood et le dot de présence animent un pulse.
     /// Mettre à `false` dans les listes pour éviter N animations simultanées.
     public var enablePulse: Bool = true
+    public var kind: AvatarKind = .user
 
     // Legacy init (AvatarSize)
     public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
@@ -160,13 +168,14 @@ public struct MeeshyAvatar: View {
     }
 
     // Primary init (AvatarMode)
-    public init(name: String, mode: AvatarMode, accentColor: String = "", secondaryColor: String? = nil,
-                avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
+    public init(name: String, mode: AvatarMode, kind: AvatarKind = .user, accentColor: String = "",
+                secondaryColor: String? = nil, avatarURL: String? = nil,
+                storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 presenceState: PresenceState = .offline, enablePulse: Bool = true,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
                 onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
-        self.name = name; self.mode = mode; self.accentColor = accentColor
+        self.name = name; self.mode = mode; self.kind = kind; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
         self.enablePulse = enablePulse
@@ -192,15 +201,18 @@ public struct MeeshyAvatar: View {
     }
 
     private var effectiveStoryState: StoryRingState {
-        mode.showsStoryRing ? storyState : .none
+        guard kind == .user else { return .none }
+        return mode.showsStoryRing ? storyState : .none
     }
 
     private var effectiveMoodEmoji: String? {
-        mode.showsMoodBadge ? moodEmoji : nil
+        guard kind == .user else { return nil }
+        return mode.showsMoodBadge ? moodEmoji : nil
     }
 
     private var effectivePresence: PresenceState {
-        mode.showsOnlineDot ? presenceState : .offline
+        guard kind == .user else { return .offline }
+        return mode.showsOnlineDot ? presenceState : .offline
     }
 
     private var hasTapHandler: Bool {
@@ -212,7 +224,7 @@ public struct MeeshyAvatar: View {
         if let onViewProfile {
             items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
         }
-        if let onViewStory {
+        if let onViewStory, kind == .user {
             items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
         }
         if let custom = contextMenuItems {
