@@ -51,7 +51,14 @@ async function start() {
     if (event.type !== 'agent:new-message') return;
 
     const msg = event as AgentNewMessage;
-    const config = await persistence.getAgentConfig(msg.conversationId);
+    let config = await persistence.getAgentConfig(msg.conversationId);
+
+    // Default config if none exists (Animator active by default)
+    if (!config) {
+      // @ts-ignore - Minimal default config
+      config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
+    }
+
     if (!config?.enabled) return;
 
     const messages = await stateManager.getMessages(msg.conversationId);
@@ -81,7 +88,12 @@ async function start() {
     const messages = await stateManager.getMessages(conversationId);
     const summary = await stateManager.getSummary(conversationId);
     const toneProfiles = await stateManager.getToneProfiles(conversationId);
-    const config = await persistence.getAgentConfig(conversationId);
+    let config = await persistence.getAgentConfig(conversationId);
+
+    if (!config) {
+      // @ts-ignore
+      config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
+    }
 
     const result = await graph.invoke({
       conversationId,

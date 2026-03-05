@@ -25,6 +25,9 @@ export interface AgentConfigData {
   triggerOnUserMessage: boolean;
   triggerFromUserIds: string[];
   triggerOnReplyTo: boolean;
+  agentType: string;
+  contextWindowSize: number;
+  useFullHistory: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +46,9 @@ export interface AgentConfigUpsert {
   triggerOnUserMessage?: boolean;
   triggerFromUserIds?: string[];
   triggerOnReplyTo?: boolean;
+  agentType?: string;
+  contextWindowSize?: number;
+  useFullHistory?: boolean;
 }
 
 export interface AgentRoleData {

@@ -19,6 +19,9 @@ const agentConfigSchema = z.object({
   triggerOnUserMessage: z.boolean().default(false),
   triggerFromUserIds: z.array(z.string()).default([]),
   triggerOnReplyTo: z.boolean().default(true),
+  agentType: z.string().default('personal'),
+  contextWindowSize: z.number().default(50),
+  useFullHistory: z.boolean().default(false),
 });
 
 export async function configRoutes(fastify: FastifyInstance) {
@@ -42,5 +45,11 @@ export async function configRoutes(fastify: FastifyInstance) {
     const { conversationId } = req.params as { conversationId: string };
     await prisma.agentConfig.delete({ where: { conversationId } });
     return { success: true };
+  });
+
+  fastify.get('/api/agent/analytics/:conversationId', async (req) => {
+    const { conversationId } = req.params as { conversationId: string };
+    const analytics = await prisma.agentAnalytic.findUnique({ where: { conversationId } });
+    return { success: true, data: analytics };
   });
 }
