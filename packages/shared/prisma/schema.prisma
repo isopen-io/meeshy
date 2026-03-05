@@ -22,6 +22,7 @@ enum UserRole {
   BIGBOSS
   AUDIT
   ANALYST
+  AGENT      // Utilisateur géré par une IA (SAV, FAQ, etc.)
 }
 
 /// Utilisateur enregistré de la plateforme
@@ -311,6 +312,7 @@ model Conversation {
 
   // Agent service
   agentConfig     AgentConfig?
+  agentAnalytic   AgentAnalytic?
 
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
@@ -2876,8 +2878,16 @@ model AccountDeletionRequest {
 model AgentConfig {
   id                       String   @id @default(auto()) @map("_id") @db.ObjectId
   conversationId           String   @db.ObjectId
-  enabled                  Boolean  @default(false)
-  configuredBy             String   @db.ObjectId
+  /// Enabled by default for all conversations (Animator)
+  enabled                  Boolean  @default(true)
+  configuredBy             String?  @db.ObjectId
+
+  /// Type of agent behavior: "support", "faq", "personal", "animator"
+  agentType                String   @default("personal")
+  /// Number of previous messages to include in context
+  contextWindowSize        Int      @default(50)
+  /// If true, the agent tries to use the full history (sliding window still recommended for tokens)
+  useFullHistory           Boolean  @default(false)
 
   manualUserIds            String[] @db.ObjectId
   autoPickupEnabled        Boolean  @default(false)
@@ -2899,7 +2909,6 @@ model AgentConfig {
   conversation             Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
-  @@map("agent_configs")
 }
 
 model AgentUserRole {
@@ -2931,7 +2940,6 @@ model AgentUserRole {
 
   @@unique([userId, conversationId])
   @@index([conversationId])
-  @@map("agent_user_roles")
 }
 
 model AgentConversationSummary {
@@ -2947,7 +2955,6 @@ model AgentConversationSummary {
   updatedAt       DateTime @updatedAt
 
   @@unique([conversationId])
-  @@map("agent_conversation_summaries")
 }
 
 model AgentLlmConfig {
@@ -2969,6 +2976,20 @@ model AgentLlmConfig {
   configuredBy     String   @db.ObjectId
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
 
-  @@map("agent_llm_configs")
+model AgentAnalytic {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId  String   @db.ObjectId
+
+  messagesSent    Int      @default(0)
+  totalWordsSent  Int      @default(0)
+  avgConfidence   Float    @default(0.0)
+  lastResponseAt  DateTime?
+
+  updatedAt       DateTime @updatedAt
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId])
 }

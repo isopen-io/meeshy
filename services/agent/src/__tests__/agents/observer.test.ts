@@ -42,6 +42,9 @@ describe('Observer Agent', () => {
     pendingResponse: null,
     decision: 'skip' as const,
     selectedUserId: null,
+    contextWindowSize: 50,
+    agentType: 'personal',
+    useFullHistory: false,
   };
 
   it('updates summary from conversation', async () => {

@@ -62,6 +62,7 @@ COPY --from=builder --chown=agent:nodejs /app/services/agent ./services/agent
 
 # Fix @meeshy/shared symlink: Docker COPY resolves symlinks to copies
 RUN rm -rf node_modules/@meeshy/shared && \
+    mkdir -p node_modules/@meeshy && \
     ln -s ../../packages/shared node_modules/@meeshy/shared
 
 WORKDIR /app/services/agent

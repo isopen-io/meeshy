@@ -11,8 +11,9 @@ export function createAnimatorNode(llm: LlmProvider) {
     if (!user) return { pendingResponse: null };
 
     const role = user.role;
+    const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
     const conversationContext = state.messages
-      .slice(-20)
+      .slice(-windowSize)
       .map((m) => `[${m.senderName}]: ${m.content}`)
       .join('\n');
 
@@ -32,6 +33,7 @@ REGLES ABSOLUES:
 - Réponds UNIQUEMENT dans le style décrit ci-dessus.
 - Ne sors JAMAIS de tes sujets de compétence.
 - Respecte la longueur typique (${role.typicalLength}).
+- Ta réponse doit obligatoirement faire entre 3 mots et 400 mots.
 - Si le sujet ne te concerne pas, ne réponds pas du tout (retourne "SKIP").
 - Ne révèle jamais que tu es un agent IA.
 
