@@ -34,7 +34,7 @@ struct OnboardingView: View {
             icon: "message.fill",
             title: "Bienvenue sur Meeshy",
             subtitle: "Le reseau social ou la langue n'est plus une barriere",
-            accentColor: MeeshyColors.coral,
+            accentColor: MeeshyColors.error,
             gradientColors: (
                 dark: [Color(hex: "2A0A0A"), Color(hex: "1A0533"), Color(hex: "0F0F14")],
                 light: [Color(hex: "FFF0EE"), Color(hex: "F5EEFF"), Color(hex: "F8F6F2")]
@@ -45,7 +45,7 @@ struct OnboardingView: View {
             icon: "globe.badge.chevron.backward",
             title: "100+ langues, zero barriere",
             subtitle: "Discutez avec le monde entier dans votre langue — traduction instantanee et invisible",
-            accentColor: MeeshyColors.cyan,
+            accentColor: MeeshyColors.indigo400,
             gradientColors: (
                 dark: [Color(hex: "031A19"), Color(hex: "0A3D3A"), Color(hex: "0F0F14")],
                 light: [Color(hex: "E8FFFE"), Color(hex: "D4FDFB"), Color(hex: "F8F6F2")]
@@ -56,7 +56,7 @@ struct OnboardingView: View {
             icon: "waveform.and.person.filled",
             title: "Votre voix, leurs langues",
             subtitle: "Envoyez un vocal en francais, vos amis l'ecoutent dans leur langue avec votre voix",
-            accentColor: MeeshyColors.purple,
+            accentColor: MeeshyColors.indigo600,
             gradientColors: (
                 dark: [Color(hex: "1A0533"), Color(hex: "2D1B69"), Color(hex: "0F0F14")],
                 light: [Color(hex: "F5EEFF"), Color(hex: "EDE0FF"), Color(hex: "F8F6F2")]
@@ -67,7 +67,7 @@ struct OnboardingView: View {
             icon: "lock.shield.fill",
             title: "Privee par nature",
             subtitle: "Chiffrement de bout en bout — vos conversations restent les votres",
-            accentColor: MeeshyColors.green,
+            accentColor: MeeshyColors.success,
             gradientColors: (
                 dark: [Color(hex: "0A1A0A"), Color(hex: "1A3A1A"), Color(hex: "0F0F14")],
                 light: [Color(hex: "EFFFEF"), Color(hex: "DFFFDF"), Color(hex: "F8F6F2")]
@@ -78,7 +78,7 @@ struct OnboardingView: View {
             icon: "bubble.left.and.bubble.right.fill",
             title: "Meeshy en action",
             subtitle: "",
-            accentColor: MeeshyColors.cyan,
+            accentColor: MeeshyColors.indigo400,
             gradientColors: (
                 dark: [Color(hex: "0A1020"), Color(hex: "1A0A2E"), Color(hex: "0F0F14")],
                 light: [Color(hex: "F0F5FF"), Color(hex: "FFF5F0"), Color(hex: "F8F6F2")]
@@ -248,27 +248,27 @@ struct OnboardingView: View {
         switch pageId {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.coral, Color(hex: "FF8A80")],
+                colors: [MeeshyColors.error, Color(hex: "FF8A80")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 1:
             return LinearGradient(
-                colors: [MeeshyColors.cyan, MeeshyColors.teal],
+                colors: [MeeshyColors.indigo400, MeeshyColors.indigo300],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 2:
             return LinearGradient(
-                colors: [MeeshyColors.purple, Color(hex: "8B5CF6")],
+                colors: [MeeshyColors.indigo600, Color(hex: "8B5CF6")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 3:
             return LinearGradient(
-                colors: [MeeshyColors.green, Color(hex: "22C55E")],
+                colors: [MeeshyColors.success, Color(hex: "22C55E")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         default:
             return LinearGradient(
-                colors: [MeeshyColors.coral, MeeshyColors.cyan],
+                colors: [MeeshyColors.error, MeeshyColors.indigo400],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         }
@@ -433,7 +433,7 @@ struct OnboardingView: View {
                     .fill(
                         isLastPage
                             ? LinearGradient(
-                                colors: [MeeshyColors.coral, MeeshyColors.cyan],
+                                colors: [MeeshyColors.error, MeeshyColors.indigo400],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -465,22 +465,22 @@ struct OnboardingView: View {
         switch currentPage {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.coral, Color(hex: "E55555")],
+                colors: [MeeshyColors.error, Color(hex: "E55555")],
                 startPoint: .leading, endPoint: .trailing
             )
         case 1:
             return LinearGradient(
-                colors: [MeeshyColors.cyan, Color(hex: "06B6B3")],
+                colors: [MeeshyColors.indigo400, Color(hex: "06B6B3")],
                 startPoint: .leading, endPoint: .trailing
             )
         case 2:
             return LinearGradient(
-                colors: [MeeshyColors.purple, Color(hex: "8B5CF6")],
+                colors: [MeeshyColors.indigo600, Color(hex: "8B5CF6")],
                 startPoint: .leading, endPoint: .trailing
             )
         default:
             return LinearGradient(
-                colors: [MeeshyColors.green, Color(hex: "22C55E")],
+                colors: [MeeshyColors.success, Color(hex: "22C55E")],
                 startPoint: .leading, endPoint: .trailing
             )
         }
@@ -488,11 +488,11 @@ struct OnboardingView: View {
 
     private var buttonShadowColor: Color {
         switch currentPage {
-        case 0: return MeeshyColors.coral
-        case 1: return MeeshyColors.cyan
-        case 2: return MeeshyColors.purple
-        case 3: return MeeshyColors.green
-        default: return MeeshyColors.cyan
+        case 0: return MeeshyColors.error
+        case 1: return MeeshyColors.indigo400
+        case 2: return MeeshyColors.indigo600
+        case 3: return MeeshyColors.success
+        default: return MeeshyColors.indigo400
         }
     }
 

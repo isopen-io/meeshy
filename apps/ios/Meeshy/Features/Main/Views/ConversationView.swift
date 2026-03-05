@@ -342,16 +342,16 @@ struct ConversationView: View {
     private var unreadSeparator: some View {
         HStack(spacing: 10) {
             Rectangle()
-                .fill(MeeshyColors.coral.opacity(0.5))
+                .fill(MeeshyColors.error.opacity(0.5))
                 .frame(height: 1)
                 .accessibilityHidden(true)
             Text("Nouveaux messages")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(MeeshyColors.coral)
+                .foregroundColor(MeeshyColors.error)
                 .lineLimit(1)
                 .fixedSize()
             Rectangle()
-                .fill(MeeshyColors.coral.opacity(0.5))
+                .fill(MeeshyColors.error.opacity(0.5))
                 .frame(height: 1)
                 .accessibilityHidden(true)
         }

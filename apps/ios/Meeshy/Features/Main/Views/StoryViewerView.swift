@@ -452,8 +452,8 @@ struct StoryViewerView: View {
                     icon: "heart.fill",
                     label: "React",
                     isActive: showEmojiStrip,
-                    activeColor: MeeshyColors.pink,
-                    activeGlow: MeeshyColors.pink
+                    activeColor: MeeshyColors.indigo500,
+                    activeGlow: MeeshyColors.indigo500
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         showEmojiStrip.toggle()
@@ -528,8 +528,8 @@ struct StoryViewerView: View {
                     icon: "textformat.abc",
                     label: "Traductions",
                     isActive: showLanguageOptions,
-                    activeColor: MeeshyColors.cyan,
-                    activeGlow: MeeshyColors.cyan
+                    activeColor: MeeshyColors.indigo400,
+                    activeGlow: MeeshyColors.indigo400
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -836,7 +836,7 @@ struct StoryViewerView: View {
                 }
             } else {
                 LinearGradient(
-                    colors: [MeeshyColors.darkBlue, MeeshyColors.deepPurple, Color(hex: "24243E")],
+                    colors: [MeeshyColors.indigo950, MeeshyColors.indigo900, Color(hex: "24243E")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -921,7 +921,7 @@ struct StoryViewerView: View {
                                 .fill(
                                     index == currentStoryIndex ?
                                     AnyShapeStyle(LinearGradient(
-                                        colors: [MeeshyColors.pink, MeeshyColors.coral, MeeshyColors.cyan],
+                                        colors: [MeeshyColors.indigo500, MeeshyColors.error, MeeshyColors.indigo400],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )) :
@@ -929,7 +929,7 @@ struct StoryViewerView: View {
                                 )
                                 .frame(width: w)
                                 .shadow(
-                                    color: index == currentStoryIndex ? MeeshyColors.pink.opacity(0.6) : .clear,
+                                    color: index == currentStoryIndex ? MeeshyColors.indigo500.opacity(0.6) : .clear,
                                     radius: 4, y: 0
                                 )
                         }
@@ -976,7 +976,7 @@ struct StoryViewerView: View {
                                         RadialGradient(
                                             colors: [
                                                 Color(hex: group.avatarColor).opacity(0.4),
-                                                MeeshyColors.pink.opacity(0.2),
+                                                MeeshyColors.indigo500.opacity(0.2),
                                                 .clear
                                             ],
                                             center: .center,
@@ -1005,7 +1005,7 @@ struct StoryViewerView: View {
                                 Circle()
                                     .stroke(
                                         LinearGradient(
-                                            colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         ),
@@ -1013,7 +1013,7 @@ struct StoryViewerView: View {
                                     )
                                     .frame(width: 44, height: 44)
                                     .shadow(
-                                        color: avatarLongPressGlow ? MeeshyColors.pink.opacity(0.6) : .clear,
+                                        color: avatarLongPressGlow ? MeeshyColors.indigo500.opacity(0.6) : .clear,
                                         radius: 12,
                                         y: 0
                                     )

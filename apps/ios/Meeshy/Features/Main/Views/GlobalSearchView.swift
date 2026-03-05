@@ -63,7 +63,7 @@ struct GlobalSearchView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -91,7 +91,7 @@ struct GlobalSearchView: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(MeeshyColors.coral)
+                            .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
                     .transition(.scale.combined(with: .opacity))
@@ -106,7 +106,7 @@ struct GlobalSearchView: View {
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
                                 LinearGradient(
-                                    colors: [MeeshyColors.coral.opacity(0.4), MeeshyColors.teal.opacity(0.4)],
+                                    colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
@@ -158,7 +158,7 @@ struct GlobalSearchView: View {
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -172,7 +172,7 @@ struct GlobalSearchView: View {
                     .fill(
                         isSelected ?
                         AnyShapeStyle(LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                             startPoint: .leading,
                             endPoint: .trailing
                         )) :
@@ -230,7 +230,7 @@ struct GlobalSearchView: View {
         VStack(spacing: 16) {
             Spacer().frame(height: 60)
             ProgressView()
-                .tint(MeeshyColors.cyan)
+                .tint(MeeshyColors.indigo400)
                 .scaleEffect(1.2)
             Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
                 .font(.system(size: 14, weight: .medium))
@@ -265,7 +265,7 @@ struct GlobalSearchView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [MeeshyColors.coral, MeeshyColors.teal],
+                                    colors: [MeeshyColors.error, MeeshyColors.indigo300],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -285,7 +285,7 @@ struct GlobalSearchView: View {
                         } label: {
                             Text(String(localized: "action.clear", defaultValue: "Effacer"))
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(MeeshyColors.coral)
+                                .foregroundColor(MeeshyColors.error)
                         }
                         .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches recentes"))
                     }
@@ -390,7 +390,7 @@ struct GlobalSearchView: View {
 
                 Text(result.senderName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(MeeshyColors.teal)
+                    .foregroundColor(MeeshyColors.indigo300)
                     .lineLimit(1)
 
                 Text(highlightedText(result.content, query: viewModel.searchText))
@@ -452,7 +452,7 @@ struct GlobalSearchView: View {
                             .padding(.vertical, 2)
                             .background(
                                 Capsule()
-                                    .fill(MeeshyColors.coral)
+                                    .fill(MeeshyColors.error)
                             )
                     }
                 }
@@ -537,7 +537,7 @@ struct GlobalSearchView: View {
             if result.isOnline {
                 Text(String(localized: "status.online", defaultValue: "En ligne"))
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(MeeshyColors.green)
+                    .foregroundColor(MeeshyColors.success)
             }
         }
         .padding(12)
@@ -634,7 +634,7 @@ struct GlobalSearchView: View {
     private func highlightedText(_ text: String, query: String) -> AttributedString {
         var attributed = AttributedString(text)
         if let range = attributed.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
-            attributed[range].foregroundColor = MeeshyColors.coral
+            attributed[range].foregroundColor = MeeshyColors.error
             attributed[range].font = .system(size: 13, weight: .bold)
         }
         return attributed

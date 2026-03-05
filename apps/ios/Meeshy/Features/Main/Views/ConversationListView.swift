@@ -358,7 +358,7 @@ struct ConversationListView: View {
                 label: isArchived
                     ? String(localized: "swipe.unarchive", defaultValue: "D\u{00e9}sarchiver")
                     : String(localized: "swipe.archive", defaultValue: "Archiver"),
-                color: MeeshyColors.orange
+                color: MeeshyColors.warning
             ) {
                 if isArchived {
                     Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
@@ -607,7 +607,7 @@ struct ConversationListView: View {
                         HStack {
                             Spacer()
                             ProgressView()
-                                .tint(MeeshyColors.cyan)
+                                .tint(MeeshyColors.indigo400)
                             Spacer()
                         }
                         .padding(.vertical, 16)

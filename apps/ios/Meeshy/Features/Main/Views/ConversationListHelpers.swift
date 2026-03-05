@@ -164,7 +164,7 @@ struct ConversationPreviewView: View {
                         if conversation.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(MeeshyColors.coral)
+                                .foregroundColor(MeeshyColors.error)
                         }
 
                         if conversation.isMuted {

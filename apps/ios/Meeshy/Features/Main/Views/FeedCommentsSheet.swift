@@ -136,7 +136,7 @@ struct CommentsSheetView: View {
                     Text("\(post.likes)")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(MeeshyColors.coral)
+                .foregroundColor(MeeshyColors.error)
 
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.right.fill")
@@ -200,7 +200,7 @@ struct CommentsSheetView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [MeeshyColors.coral, MeeshyColors.teal],
+                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -373,12 +373,12 @@ struct CommentRowView: View {
                         HStack(spacing: 4) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
                                 .font(.system(size: 14))
-                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.error : theme.textMuted)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(comment.likes + (isLiked ? 1 : 0))")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(isLiked ? MeeshyColors.coral : theme.textMuted)
+                                .foregroundColor(isLiked ? MeeshyColors.error : theme.textMuted)
                         }
                     }
 

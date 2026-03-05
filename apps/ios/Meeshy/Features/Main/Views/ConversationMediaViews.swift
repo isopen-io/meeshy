@@ -480,7 +480,7 @@ struct AudioMediaView: View {
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.coral)
+                .foregroundColor(MeeshyColors.error)
         }
     }
 

@@ -102,21 +102,39 @@ extension ConversationView {
                     }
 
                 var uploadedIds: [String] = []
+                var localAttachments: [MeeshyMessageAttachment] = []
 
                 if let audioURL {
+                    let audioData = try? Data(contentsOf: audioURL)
                     let result = try await uploader.uploadFile(
                         fileURL: audioURL, mimeType: "audio/mp4", token: token
                     )
                     uploadedIds.append(result.id)
+                    if let audioData {
+                        await MediaCacheManager.shared.store(audioData, for: result.fileUrl)
+                    }
+                    let userId = AuthManager.shared.currentUser?.id ?? ""
+                    localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
                     try? FileManager.default.removeItem(at: audioURL)
                 }
 
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                 for attachment in attachments where attachment.type != .audio {
                     if let fileURL = mediaFiles[attachment.id] {
+                        let fileData = try? Data(contentsOf: fileURL)
                         let result = try await uploader.uploadFile(
                             fileURL: fileURL, mimeType: attachment.mimeType, token: token
                         )
                         uploadedIds.append(result.id)
+                        if let fileData {
+                            await MediaCacheManager.shared.store(fileData, for: result.fileUrl)
+                            if let thumbUrl = result.thumbnailUrl,
+                               let thumbId = composerState.pendingThumbnails[attachment.id],
+                               let thumbData = thumbId.jpegData(compressionQuality: 0.8) {
+                                await MediaCacheManager.shared.store(thumbData, for: thumbUrl)
+                            }
+                        }
+                        localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
                         try? FileManager.default.removeItem(at: fileURL)
                     }
                 }
@@ -141,7 +159,8 @@ extension ConversationView {
                     sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,
-                        attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds
+                        attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
+                        localAttachments: localAttachments.isEmpty ? nil : localAttachments
                     )
                 }
 

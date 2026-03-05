@@ -74,7 +74,7 @@ struct ConversationLockSheet: View {
                 .font(.system(size: 44))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [MeeshyColors.coral, MeeshyColors.purple],
+                        colors: [MeeshyColors.error, MeeshyColors.indigo600],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -102,7 +102,7 @@ struct ConversationLockSheet: View {
                     .fill(
                         index < currentPin.count
                             ? AnyShapeStyle(LinearGradient(
-                                colors: [MeeshyColors.coral, MeeshyColors.purple],
+                                colors: [MeeshyColors.error, MeeshyColors.indigo600],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ))

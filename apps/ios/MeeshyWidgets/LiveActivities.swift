@@ -445,7 +445,7 @@ class LiveActivityManager {
         do {
             let activity = try Activity<MeeshyActivityAttributes>.request(
                 attributes: attributes,
-                contentState: contentState,
+                content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
             print("Started call Live Activity: \(activity.id)")
@@ -464,7 +464,7 @@ class LiveActivityManager {
             )
 
             for activity in Activity<MeeshyActivityAttributes>.activities where activity.id == activityId {
-                await activity.update(using: contentState)
+                await activity.update(ActivityContent(state: contentState, staleDate: nil))
             }
         }
     }
@@ -487,7 +487,7 @@ class LiveActivityManager {
         do {
             let activity = try Activity<MeeshyActivityAttributes>.request(
                 attributes: attributes,
-                contentState: contentState,
+                content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
             print("Started message delivery Live Activity: \(activity.id)")
@@ -507,12 +507,12 @@ class LiveActivityManager {
                     duration: 0,
                     messageStatus: status
                 )
-                await activity.update(using: contentState)
+                await activity.update(ActivityContent(state: contentState, staleDate: nil))
 
                 // End activity after successful delivery
                 if status == .delivered || status == .read {
                     try? await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2 seconds
-                    await activity.end(dismissalPolicy: .immediate)
+                    await activity.end(nil, dismissalPolicy: .immediate)
                 }
             }
         }
@@ -537,7 +537,7 @@ class LiveActivityManager {
         do {
             let activity = try Activity<MeeshyActivityAttributes>.request(
                 attributes: attributes,
-                contentState: contentState,
+                content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
             print("Started translation Live Activity: \(activity.id)")
@@ -551,14 +551,14 @@ class LiveActivityManager {
         Task {
             for activity in Activity<MeeshyActivityAttributes>.activities
                 where activity.attributes.conversationId == conversationId {
-                var state = activity.contentState
+                var state = activity.content.state
                 state.translationProgress = progress
-                await activity.update(using: state)
+                await activity.update(ActivityContent(state: state, staleDate: nil))
 
                 // End when complete
                 if progress >= 1.0 {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    await activity.end(dismissalPolicy: .immediate)
+                    await activity.end(nil, dismissalPolicy: .immediate)
                 }
             }
         }
@@ -569,7 +569,7 @@ class LiveActivityManager {
         Task {
             for activity in Activity<MeeshyActivityAttributes>.activities
                 where activity.attributes.conversationId == conversationId {
-                await activity.end(dismissalPolicy: .immediate)
+                await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
     }

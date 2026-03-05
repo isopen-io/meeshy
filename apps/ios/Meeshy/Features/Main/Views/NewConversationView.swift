@@ -89,7 +89,7 @@ struct NewConversationView: View {
         HStack(spacing: 10) {
             Image(systemName: "person.3.fill")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(MeeshyColors.purple)
+                .foregroundColor(MeeshyColors.indigo600)
 
             TextField("Nom du groupe", text: $groupTitle)
                 .font(.system(size: 15, weight: .medium))
