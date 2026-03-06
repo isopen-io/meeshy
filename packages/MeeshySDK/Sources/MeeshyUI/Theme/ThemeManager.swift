@@ -51,7 +51,7 @@ public enum ThemePreference: String, CaseIterable {
 
 // MARK: - Theme Manager
 
-public class ThemeManager: ObservableObject {
+public class ThemeManager: ObservableObject, @unchecked Sendable {
     public static let shared = ThemeManager()
 
     @Published public var mode: ThemeMode = {

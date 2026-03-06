@@ -5,7 +5,7 @@ import MeeshySDK
 
 // MARK: - Private Types
 
-private struct TimedSegment: Identifiable {
+private struct TimedSegment: Identifiable, Sendable {
     let id: Int
     let word: String
     let start: TimeInterval
@@ -689,20 +689,24 @@ public struct MeeshyAudioEditorView: View {
             let request = SFSpeechURLRecognitionRequest(url: transcribeURL)
             request.shouldReportPartialResults = false
             do {
-                let result: SFSpeechRecognitionResult = try await withCheckedThrowingContinuation { cont in
+                let (segs, text): ([TimedSegment], String) = try await withCheckedThrowingContinuation { cont in
                     var done = false
                     recognitionTask = recognizer.recognitionTask(with: request) { res, err in
                         guard !done else { return }
                         if let err { done = true; cont.resume(throwing: err) }
-                        else if let res, res.isFinal { done = true; cont.resume(returning: res) }
+                        else if let res, res.isFinal {
+                            done = true
+                            let segments = res.bestTranscription.segments.enumerated().map { (i, s) in
+                                TimedSegment(id: i, word: s.substring, start: s.timestamp, end: s.timestamp + s.duration)
+                            }
+                            let fullText = res.bestTranscription.formattedString
+                            cont.resume(returning: (segments, fullText))
+                        }
                     }
-                }
-                let segs = result.bestTranscription.segments.enumerated().map { (i, s) in
-                    TimedSegment(id: i, word: s.substring, start: s.timestamp, end: s.timestamp + s.duration)
                 }
                 await MainActor.run {
                     segments = segs
-                    fullText = result.bestTranscription.formattedString
+                    fullText = text
                     txState = .done
                 }
             } catch {

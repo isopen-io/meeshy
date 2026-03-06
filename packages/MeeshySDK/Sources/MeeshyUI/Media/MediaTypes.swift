@@ -219,7 +219,7 @@ public enum DocumentMediaType {
 
 // MARK: - Code Language Detection
 
-public enum CodeLanguage: String, CaseIterable {
+public enum CodeLanguage: String, CaseIterable, Sendable {
     case python, javascript, typescript, swift, c, cpp, java, go, rust
     case ruby, php, shell, css, html, json, yaml, xml, sql
     case markdown, kotlin, scala, dart, lua, perl, r, objectiveC

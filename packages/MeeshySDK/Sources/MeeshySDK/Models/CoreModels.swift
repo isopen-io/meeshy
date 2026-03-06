@@ -317,7 +317,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
 
-    public enum DeliveryStatus: String, Codable {
+    public enum DeliveryStatus: String, Codable, Sendable {
         case sending   // optimistic, not confirmed
         case sent      // server confirmed (single check)
         case delivered // recipient received (double gray check)
@@ -325,11 +325,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case failed    // send failed, retry available
     }
 
-    public enum MessageType: String, Codable, CaseIterable {
+    public enum MessageType: String, Codable, CaseIterable, Sendable {
         case text, image, file, audio, video, location
     }
 
-    public enum MessageSource: String, Codable, CaseIterable {
+    public enum MessageSource: String, Codable, CaseIterable, Sendable {
         case user, system, ads, app, agent, authority
     }
 

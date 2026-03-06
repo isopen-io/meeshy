@@ -219,6 +219,54 @@ MessageDetailSheet (onglet Language)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
+## TDD & Testing Standards
+
+### Test Organization
+```
+MeeshyTests/
+├── Unit/
+│   ├── ViewModels/     → ViewModel behavior tests
+│   └── Services/       → Service logic tests
+├── Mocks/              → Protocol-conforming mock classes
+├── Helpers/            → JSONStub, factory functions
+└── Snapshots/          → Visual regression tests (future)
+```
+
+### Mock Convention
+- Name: `Mock{ServiceName}` (e.g., `MockConversationService`)
+- Conform to `{ServiceName}Providing` protocol
+- Properties: `var {method}Result: Result<T, Error>`, `var {method}CallCount: Int`, `var last{Method}{Param}: Type?`
+- Include `func reset()` to clear all tracking state
+- Use `nonisolated` for protocol methods, `await MainActor.run {}` for state mutation
+
+### Test Pattern
+```swift
+@MainActor
+final class SomeViewModelTests: XCTestCase {
+    // Factory function — NOT setUp/tearDown mutation
+    private func makeSUT(...) -> (sut: SomeViewModel, mock: MockService) {
+        let mock = MockService()
+        let sut = SomeViewModel(service: mock)
+        return (sut, mock)
+    }
+
+    func test_loadData_success_populatesList() async {
+        let (sut, mock) = makeSUT()
+        mock.listResult = .success([...])
+        await sut.loadData()
+        XCTAssertEqual(sut.items.count, 2)
+    }
+}
+```
+
+### Rules
+- Test **behavior**, not implementation details
+- One assertion focus per test (multiple XCTAssert for same behavior is fine)
+- Use factory functions (`makeSUT()`, `makeMessage()`) — no shared mutable state
+- Fire-and-forget Tasks: use `XCTestExpectation` with callbacks, not `Task.sleep`
+- `@MainActor` on ALL test classes that test `@MainActor` ViewModels
+- Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
+
 ## App Extensions
 - MeeshyNotificationExtension (rich push)
 - MeeshyShareExtension (share to Meeshy)

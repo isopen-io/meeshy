@@ -1,7 +1,20 @@
 import Foundation
 import Combine
 
-public final class LocationService {
+// MARK: - Protocol
+
+public protocol LocationServiceProviding: Sendable {
+    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
+    var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
+    var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
+    var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
+    func shareLocation(conversationId: String, latitude: Double, longitude: Double, altitude: Double?, accuracy: Double?, placeName: String?, address: String?)
+    func startLiveLocation(conversationId: String, latitude: Double, longitude: Double, durationMinutes: Int)
+    func updateLiveLocation(conversationId: String, latitude: Double, longitude: Double, altitude: Double?, accuracy: Double?, speed: Double?, heading: Double?)
+    func stopLiveLocation(conversationId: String)
+}
+
+public final class LocationService: LocationServiceProviding, @unchecked Sendable {
     public static let shared = LocationService()
     private init() {}
     private let socketManager = MessageSocketManager.shared

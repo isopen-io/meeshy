@@ -214,6 +214,51 @@ do {
 }
 ```
 
+## Testing
+
+### Running Tests
+```bash
+# Via xcodebuild (required — swift test doesn't link UIKit)
+xcodebuild test -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet
+
+# Filter specific test suite
+xcodebuild test -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -only-testing:MeeshySDKTests/ConversationServiceTests
+```
+
+### Test Targets
+- `MeeshySDKTests` → Tests for MeeshySDK core (models, services, networking, auth)
+- `MeeshyUITests` → Tests for MeeshyUI components (placeholder for now)
+
+### Test Organization
+```
+Tests/
+├── MeeshySDKTests/
+│   ├── Models/        → Codable roundtrip, toDomain() conversion tests
+│   ├── Services/      → Service tests with MockAPIClient
+│   ├── Networking/    → APIResponse, APIError, APIClient tests
+│   ├── Auth/          → AuthService, AuthManager tests
+│   └── Mocks/         → MockAPIClient (shared test infrastructure)
+└── MeeshyUITests/     → UI component tests
+```
+
+### MockAPIClient
+All service tests use `MockAPIClient` (in `Tests/MeeshySDKTests/Mocks/`):
+```swift
+let mock = MockAPIClient()
+mock.stubResponse(endpoint: "/conversations", data: [...])
+let service = ConversationService(api: mock)
+let result = try await service.list(offset: 0, limit: 30)
+```
+
+### Convention
+- Swift Testing (`@Test`, `#expect`) for pure model decoding tests
+- XCTest for service tests requiring async/await patterns
+- JSONStub pattern for creating test fixtures from JSON strings
+- 506+ SDK tests currently passing
+
 ## Relation avec apps/ios
 - `apps/ios/Meeshy/` importe `MeeshySDK` et `MeeshyUI` via SPM local
 - Les modles dans `apps/ios/Features/Main/Models/` utilisent les types SDK comme base

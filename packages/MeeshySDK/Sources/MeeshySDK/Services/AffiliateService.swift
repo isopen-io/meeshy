@@ -1,6 +1,6 @@
 import Foundation
 
-public final class AffiliateService {
+public final class AffiliateService: @unchecked Sendable {
     public static let shared = AffiliateService()
     private init() {}
     private var api: APIClient { APIClient.shared }

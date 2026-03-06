@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct EmojiCategory: Identifiable {
+public struct EmojiCategory: Identifiable, Sendable {
     public var id: String { name }
     public let name: String
     public let icon: String

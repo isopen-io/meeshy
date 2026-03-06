@@ -18,7 +18,7 @@ public enum KeychainError: LocalizedError {
     }
 }
 
-public final class KeychainManager {
+public final class KeychainManager: @unchecked Sendable {
     public static let shared = KeychainManager()
 
     private let service = "me.meeshy.app"

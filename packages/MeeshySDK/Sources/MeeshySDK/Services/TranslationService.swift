@@ -1,6 +1,6 @@
 import Foundation
 
-public final class TranslationService {
+public final class TranslationService: @unchecked Sendable {
     public static let shared = TranslationService()
     private init() {}
     private var api: APIClient { APIClient.shared }

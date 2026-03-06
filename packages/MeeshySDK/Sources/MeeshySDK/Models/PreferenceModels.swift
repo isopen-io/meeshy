@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - CodableValue (type-erased JSON value for extensible preferences)
 
-public enum CodableValue: Codable, Equatable {
+public enum CodableValue: Codable, Equatable, Sendable {
     case bool(Bool)
     case int(Int)
     case double(Double)
@@ -53,51 +53,51 @@ public enum CodableValue: Codable, Equatable {
 
 // MARK: - Preference Category
 
-public enum PreferenceCategory: String, CaseIterable, Codable {
+public enum PreferenceCategory: String, CaseIterable, Codable, Sendable {
     case privacy, audio, message, notification, video, document, application
 }
 
 // MARK: - Enums
 
-public enum EncryptionPreference: String, Codable, CaseIterable {
+public enum EncryptionPreference: String, Codable, CaseIterable, Sendable {
     case disabled, optional, always
 }
 
-public enum AudioQuality: String, Codable, CaseIterable {
+public enum AudioQuality: String, Codable, CaseIterable, Sendable {
     case low, medium, high, lossless
 }
 
-public enum TranscriptionSource: String, Codable, CaseIterable {
+public enum TranscriptionSource: String, Codable, CaseIterable, Sendable {
     case auto, mobile, server
 }
 
-public enum TranslatedAudioFormat: String, Codable, CaseIterable {
+public enum TranslatedAudioFormat: String, Codable, CaseIterable, Sendable {
     case mp3, wav, ogg
 }
 
-public enum VoiceCloneQuality: String, Codable, CaseIterable {
+public enum VoiceCloneQuality: String, Codable, CaseIterable, Sendable {
     case fast, balanced, quality
 }
 
-public enum VideoQuality: String, Codable, CaseIterable {
+public enum VideoQuality: String, Codable, CaseIterable, Sendable {
     case low, medium, high, auto
 }
 
-public enum VideoFrameRate: String, Codable, CaseIterable {
+public enum VideoFrameRate: String, Codable, CaseIterable, Sendable {
     case fps15 = "15"
     case fps24 = "24"
     case fps30 = "30"
     case fps60 = "60"
 }
 
-public enum VideoResolution: String, Codable, CaseIterable {
+public enum VideoResolution: String, Codable, CaseIterable, Sendable {
     case r480p = "480p"
     case r720p = "720p"
     case r1080p = "1080p"
     case auto
 }
 
-public enum VideoCodec: String, Codable, CaseIterable {
+public enum VideoCodec: String, Codable, CaseIterable, Sendable {
     case vp8 = "VP8"
     case vp9 = "VP9"
     case h264 = "H264"
@@ -105,48 +105,48 @@ public enum VideoCodec: String, Codable, CaseIterable {
     case av1 = "AV1"
 }
 
-public enum VideoLayout: String, Codable, CaseIterable {
+public enum VideoLayout: String, Codable, CaseIterable, Sendable {
     case grid, speaker, sidebar
 }
 
-public enum SelfViewPosition: String, Codable, CaseIterable {
+public enum SelfViewPosition: String, Codable, CaseIterable, Sendable {
     case topLeft = "top-left"
     case topRight = "top-right"
     case bottomLeft = "bottom-left"
     case bottomRight = "bottom-right"
 }
 
-public enum EmojiSkinTone: String, Codable, CaseIterable {
+public enum EmojiSkinTone: String, Codable, CaseIterable, Sendable {
     case `default`, light, mediumLight = "medium-light", medium, mediumDark = "medium-dark", dark
 }
 
-public enum FontSize: String, Codable, CaseIterable {
+public enum FontSize: String, Codable, CaseIterable, Sendable {
     case small, medium, large
 }
 
-public enum TextAlign: String, Codable, CaseIterable {
+public enum TextAlign: String, Codable, CaseIterable, Sendable {
     case left, center, right
 }
 
-public enum AppThemeMode: String, Codable, CaseIterable {
+public enum AppThemeMode: String, Codable, CaseIterable, Sendable {
     case light, dark, auto
 }
 
-public enum LineHeight: String, Codable, CaseIterable {
+public enum LineHeight: String, Codable, CaseIterable, Sendable {
     case tight, normal, relaxed, loose
 }
 
-public enum SidebarPosition: String, Codable, CaseIterable {
+public enum SidebarPosition: String, Codable, CaseIterable, Sendable {
     case left, right
 }
 
-public enum DndDay: String, Codable, CaseIterable {
+public enum DndDay: String, Codable, CaseIterable, Sendable {
     case mon, tue, wed, thu, fri, sat, sun
 }
 
 // MARK: - Privacy Preferences
 
-public struct PrivacyPreferences: Codable, Equatable {
+public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public var showOnlineStatus: Bool
     public var showLastSeen: Bool
     public var showReadReceipts: Bool
@@ -226,7 +226,7 @@ public struct PrivacyPreferences: Codable, Equatable {
 
 // MARK: - Audio Preferences
 
-public struct AudioPreferences: Codable, Equatable {
+public struct AudioPreferences: Codable, Equatable, Sendable {
     public var transcriptionEnabled: Bool
     public var transcriptionSource: TranscriptionSource
     public var autoTranscribeIncoming: Bool
@@ -299,7 +299,7 @@ public struct AudioPreferences: Codable, Equatable {
 
 // MARK: - Message Preferences
 
-public struct MessagePreferences: Codable, Equatable {
+public struct MessagePreferences: Codable, Equatable, Sendable {
     public var sendOnEnter: Bool
     public var showFormattingToolbar: Bool
     public var enableMarkdown: Bool
@@ -378,7 +378,7 @@ public struct MessagePreferences: Codable, Equatable {
 
 // MARK: - Notification Preferences
 
-public struct UserNotificationPreferences: Codable, Equatable {
+public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var pushEnabled: Bool
     public var emailEnabled: Bool
     public var soundEnabled: Bool
@@ -502,7 +502,7 @@ public struct UserNotificationPreferences: Codable, Equatable {
 
 // MARK: - Video Preferences
 
-public struct VideoPreferences: Codable, Equatable {
+public struct VideoPreferences: Codable, Equatable, Sendable {
     public var videoQuality: VideoQuality
     public var videoBitrate: Int?
     public var videoFrameRate: VideoFrameRate
@@ -584,7 +584,7 @@ public struct VideoPreferences: Codable, Equatable {
 
 // MARK: - Document Preferences
 
-public struct DocumentPreferences: Codable, Equatable {
+public struct DocumentPreferences: Codable, Equatable, Sendable {
     public var autoDownloadEnabled: Bool
     public var autoDownloadOnWifi: Bool
     public var autoDownloadMaxSize: Int
@@ -664,7 +664,7 @@ public struct DocumentPreferences: Codable, Equatable {
 
 // MARK: - Application Preferences
 
-public struct ApplicationPreferences: Codable, Equatable {
+public struct ApplicationPreferences: Codable, Equatable, Sendable {
     public var theme: AppThemeMode
     public var accentColor: String
     public var interfaceLanguage: String
@@ -744,7 +744,7 @@ public struct ApplicationPreferences: Codable, Equatable {
 
 // MARK: - UserPreferences (aggregate wrapper)
 
-public struct UserPreferences: Codable, Equatable {
+public struct UserPreferences: Codable, Equatable, Sendable {
     public var privacy: PrivacyPreferences
     public var audio: AudioPreferences
     public var message: MessagePreferences

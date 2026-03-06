@@ -62,7 +62,7 @@ public actor TusUploadManager {
     private var activeCount = 0
     private var queue: [(URL, String, String, String?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
-    private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
+    nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
         progressSubject.eraseToAnyPublisher()

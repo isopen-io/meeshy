@@ -1,6 +1,6 @@
 import Foundation
 
-public final class NotificationService {
+public final class NotificationService: @unchecked Sendable {
     public static let shared = NotificationService()
     private init() {}
     private var api: APIClient { APIClient.shared }

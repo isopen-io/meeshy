@@ -71,11 +71,13 @@ public actor ClientInfoProvider {
         }
 
         // Check permission passively via instance property (iOS 14+) — never request
-        let manager = await MainActor.run { CLLocationManager() }
-        let status  = await MainActor.run { manager.authorizationStatus }
-        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
-
-        guard let location = await MainActor.run(body: { manager.location }) else { return }
+        let locationResult: CLLocation? = await MainActor.run {
+            let manager = CLLocationManager()
+            let status = manager.authorizationStatus
+            guard status == .authorizedWhenInUse || status == .authorizedAlways else { return nil }
+            return manager.location
+        }
+        guard let location = locationResult else { return }
 
         do {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)

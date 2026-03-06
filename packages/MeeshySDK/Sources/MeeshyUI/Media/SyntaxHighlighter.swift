@@ -32,7 +32,7 @@ public struct SyntaxToken {
 
 // MARK: - Theme Colors (GitHub-style)
 
-public struct SyntaxTheme {
+public struct SyntaxTheme: Sendable {
     public let keyword: Color
     public let string: Color
     public let comment: Color

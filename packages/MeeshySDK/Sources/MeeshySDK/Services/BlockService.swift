@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-public struct BlockedUser: Decodable, Identifiable {
+public struct BlockedUser: Decodable, Identifiable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -13,13 +13,26 @@ public struct BlockedUser: Decodable, Identifiable {
     }
 }
 
-public final class BlockService: ObservableObject {
+// MARK: - Protocol
+
+public protocol BlockServiceProviding: Sendable {
+    var blockedUserIds: Set<String> { get }
+    func blockUser(userId: String) async throws
+    func unblockUser(userId: String) async throws
+    func listBlockedUsers() async throws -> [BlockedUser]
+    func isBlocked(userId: String) -> Bool
+    func refreshCache() async
+}
+
+public final class BlockService: ObservableObject, BlockServiceProviding, @unchecked Sendable {
     public static let shared = BlockService()
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
 
     @Published public private(set) var blockedUserIds: Set<String> = []
 
-    private init() {}
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - Block
 

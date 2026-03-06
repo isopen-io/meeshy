@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - Button Position (stored as normalized 0-1 values)
-public struct ButtonPosition: Equatable {
+public struct ButtonPosition: Equatable, Sendable {
     public var x: CGFloat
     public var y: CGFloat
 

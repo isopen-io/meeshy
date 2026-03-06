@@ -21,13 +21,13 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let error: String?
 }
 
-public struct CursorPagination: Decodable {
+public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool
     public let limit: Int
 }
 
-public struct OffsetPagination: Decodable {
+public struct OffsetPagination: Decodable, Sendable {
     public let total: Int?
     public let hasMore: Bool
     public let limit: Int
@@ -63,9 +63,54 @@ public enum APIError: Error, LocalizedError {
     }
 }
 
+// MARK: - API Client Protocol
+
+public protocol APIClientProviding: Sendable {
+    var baseURL: String { get }
+    var authToken: String? { get set }
+    func request<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T
+    func paginatedRequest<T: Decodable>(endpoint: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
+    func offsetPaginatedRequest<T: Decodable>(endpoint: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
+    func post<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
+    func put<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
+    func patch<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
+    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]>
+    func delete<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
+}
+
+extension APIClientProviding {
+    public func request<T: Decodable>(endpoint: String) async throws -> T {
+        try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
+    }
+
+    public func request<T: Decodable>(endpoint: String, method: String) async throws -> T {
+        try await request(endpoint: endpoint, method: method, body: nil, queryItems: nil)
+    }
+
+    public func request<T: Decodable>(endpoint: String, method: String, body: Data?) async throws -> T {
+        try await request(endpoint: endpoint, method: method, body: body, queryItems: nil)
+    }
+
+    public func request<T: Decodable>(endpoint: String, queryItems: [URLQueryItem]?) async throws -> T {
+        try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: queryItems)
+    }
+
+    public func request<T: Decodable>(endpoint: String, method: String, queryItems: [URLQueryItem]?) async throws -> T {
+        try await request(endpoint: endpoint, method: method, body: nil, queryItems: queryItems)
+    }
+
+    public func paginatedRequest<T: Decodable>(endpoint: String) async throws -> PaginatedAPIResponse<[T]> {
+        try await paginatedRequest(endpoint: endpoint, cursor: nil, limit: 20)
+    }
+
+    public func offsetPaginatedRequest<T: Decodable>(endpoint: String) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        try await offsetPaginatedRequest(endpoint: endpoint, offset: 0, limit: 15)
+    }
+}
+
 // MARK: - API Client
 
-public final class APIClient: @unchecked Sendable {
+public final class APIClient: APIClientProviding, @unchecked Sendable {
     public static let shared = APIClient()
 
     public var baseURL: String {

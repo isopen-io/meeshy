@@ -3,7 +3,7 @@ import Photos
 import UIKit
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
-public final class PhotoLibraryManager {
+public final class PhotoLibraryManager: @unchecked Sendable {
     public static let shared = PhotoLibraryManager()
     private let albumName = "Meeshy"
 

@@ -6,7 +6,7 @@ import GRDB
 /// Persistance locale des brouillons Story via SQLite (GRDB).
 /// Remplace UserDefaults pour permettre le stockage de slides volumineux
 /// et garantir l'intégrité transactionnelle.
-public final class StoryDraftStore {
+public final class StoryDraftStore: @unchecked Sendable {
     public static let shared = StoryDraftStore()
 
     private let db: DatabaseQueue

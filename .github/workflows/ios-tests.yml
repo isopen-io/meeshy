@@ -1,0 +1,57 @@
+name: iOS Tests
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
+      - '.github/workflows/ios-tests.yml'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
+      - '.github/workflows/ios-tests.yml'
+
+jobs:
+  sdk-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Run SDK tests
+        run: |
+          xcodebuild test \
+            -scheme MeeshySDK-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -quiet
+        working-directory: packages/MeeshySDK
+
+  ios-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Boot Simulator
+        run: |
+          xcrun simctl boot "iPhone 16 Pro" 2>/dev/null || true
+
+      - name: Run iOS tests
+        run: |
+          xcodebuild test \
+            -project apps/ios/Meeshy.xcodeproj \
+            -scheme Meeshy \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -only-testing:MeeshyTests \
+            -quiet

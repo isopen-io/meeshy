@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ShareLinkService {
+public final class ShareLinkService: @unchecked Sendable {
     public static let shared = ShareLinkService()
     private init() {}
     private var api: APIClient { APIClient.shared }

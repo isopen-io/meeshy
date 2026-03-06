@@ -1,268 +1,371 @@
-//
-//  APIServiceTests.swift
-//  MeeshyTests
-//
-//  Unit tests for APIService
-//
-
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class APIServiceTests: XCTestCase {
-    var sut: APIService!
 
-    override func setUp() {
-        super.setUp()
-        // Note: In production, create testable instance
-        // sut = APIService()
+    private func makeMockClient() -> MockAPIClientForApp {
+        let mock = MockAPIClientForApp()
+        mock.reset()
+        return mock
     }
 
-    override func tearDown() {
-        sut = nil
-        super.tearDown()
+    private func makeAPIResponse<T: Codable>(success: Bool, data: T, error: String? = nil) -> APIResponse<T> {
+        let wrapper: [String: Any] = [
+            "success": success,
+            "data": try! JSONSerialization.jsonObject(with: JSONEncoder().encode(data)),
+            "error": error as Any
+        ]
+        let jsonData = try! JSONSerialization.data(withJSONObject: wrapper)
+        return try! JSONDecoder().decode(APIResponse<T>.self, from: jsonData)
     }
 
-    // MARK: - GET Request Tests
+    // MARK: - Request Tracking
 
-    func testGet_Success() async throws {
-        // Test successful GET request
-        // let user: User = try await sut.get("/api/users/profile")
-        // XCTAssertNotNil(user)
+    func test_request_tracksEndpointAndMethod() async throws {
+        let mock = makeMockClient()
+        mock.stub("/test", result: ["key": "value"])
+
+        let _: [String: String] = try await mock.request(
+            endpoint: "/test",
+            method: "GET",
+            body: nil,
+            queryItems: nil
+        )
+
+        XCTAssertEqual(mock.requestEndpoints, ["/test"])
+        XCTAssertEqual(mock.requestMethods, ["GET"])
+        XCTAssertEqual(mock.requestCount, 1)
     }
 
-    func testGet_WithParameters() async throws {
-        // Test GET with query parameters
-        // let messages: [Message] = try await sut.get("/api/messages", parameters: ["limit": "50"])
-        // XCTAssertNotNil(messages)
+    func test_request_multipleRequests_tracksAll() async throws {
+        let mock = makeMockClient()
+        mock.stub("/a", result: ["k": "v"])
+        mock.stub("/b", result: ["k": "v"])
+
+        let _: [String: String] = try await mock.request(endpoint: "/a", method: "GET", body: nil, queryItems: nil)
+        let _: [String: String] = try await mock.request(endpoint: "/b", method: "POST", body: nil, queryItems: nil)
+
+        XCTAssertEqual(mock.requestCount, 2)
+        XCTAssertEqual(mock.requestEndpoints, ["/a", "/b"])
+        XCTAssertEqual(mock.requestMethods, ["GET", "POST"])
     }
 
-    func testGet_401Unauthorized() async {
-        // Test automatic token refresh on 401
-        // Should automatically call refresh token endpoint
-    }
+    // MARK: - Error Handling
 
-    func testGet_404NotFound() async {
-        // Test 404 error handling
-        // Should throw APIError.notFound
-    }
+    func test_request_withError_throws() async {
+        let mock = makeMockClient()
+        mock.errorToThrow = APIError.unauthorized
 
-    func testGet_NetworkError() async {
-        // Test network error handling
-        // Should throw appropriate network error
-    }
-
-    // MARK: - POST Request Tests
-
-    func testPost_Success() async throws {
-        // Test successful POST request
-        // struct Request: Codable { let email: String }
-        // let response: LoginResponse = try await sut.post("/api/auth/login", body: Request(email: "test@test.com"))
-        // XCTAssertNotNil(response)
-    }
-
-    func testPost_WithComplexBody() async throws {
-        // Test POST with complex request body
-    }
-
-    func testPost_ServerError() async {
-        // Test 500 server error handling
-        // Should throw APIError.serverError(500)
-    }
-
-    // MARK: - PUT Request Tests
-
-    func testPut_Success() async throws {
-        // Test successful PUT request
-    }
-
-    // MARK: - DELETE Request Tests
-
-    func testDelete_Success() async throws {
-        // Test successful DELETE request
-    }
-
-    // MARK: - Upload Tests
-
-    func testUpload_Image() async throws {
-        // Test image upload with multipart/form-data
-        // let imageData = Data()
-        // let attachment: Attachment = try await sut.upload(
-        //     "/api/attachments/upload",
-        //     data: imageData,
-        //     filename: "test.jpg",
-        //     mimeType: "image/jpeg"
-        // )
-        // XCTAssertNotNil(attachment)
-    }
-
-    func testUpload_WithProgress() async throws {
-        // Test upload with progress tracking
-        // var progressValues: [Double] = []
-        // let attachment: Attachment = try await sut.upload(
-        //     "/api/attachments/upload",
-        //     data: Data(),
-        //     filename: "test.jpg",
-        //     mimeType: "image/jpeg"
-        // ) { progress in
-        //     progressValues.append(progress)
-        // }
-        // XCTAssertFalse(progressValues.isEmpty)
-    }
-
-    func testUpload_LargeFile() async throws {
-        // Test uploading large files (performance)
-    }
-
-    // MARK: - Token Management Tests
-
-    func testSetTokens() {
-        // Test setting access and refresh tokens
-        // sut.setTokens(accessToken: "access", refreshToken: "refresh")
-        // Verify tokens are stored in keychain
-    }
-
-    func testClearTokens() {
-        // Test clearing tokens
-        // sut.clearTokens()
-        // Verify tokens are removed from keychain
-    }
-
-    func testTokenRefresh_Success() async throws {
-        // Test automatic token refresh
-        // 1. Make request that returns 401
-        // 2. Verify refresh token endpoint is called
-        // 3. Verify original request is retried with new token
-    }
-
-    func testTokenRefresh_Failure() async {
-        // Test token refresh failure
-        // Should throw unauthorized error
-    }
-
-    func testConcurrentRequests_DuringTokenRefresh() async {
-        // Test that concurrent requests wait for token refresh
-        // Multiple requests that trigger 401 should only refresh once
-    }
-
-    // MARK: - Retry Logic Tests
-
-    func testRetry_NetworkTimeout() async throws {
-        // Test retry on network timeout
-        // Should retry up to max retries (3)
-    }
-
-    func testRetry_MaxRetriesExceeded() async {
-        // Test that retries stop after max attempts
-    }
-
-    func testRetry_ExponentialBackoff() async {
-        // Test retry delay increases exponentially
-    }
-
-    func testNoRetry_ClientError() async {
-        // Test that client errors (4xx) are not retried
-    }
-
-    // MARK: - Response Validation Tests
-
-    func testValidateResponse_2xxSuccess() {
-        // Test 2xx responses are accepted
-    }
-
-    func testValidateResponse_401Unauthorized() {
-        // Test 401 handling
-    }
-
-    func testValidateResponse_403Forbidden() {
-        // Test 403 handling
-    }
-
-    func testValidateResponse_5xxServerError() {
-        // Test 5xx error handling
-    }
-
-    // MARK: - Request Building Tests
-
-    func testBuildURL_WithBaseURL() {
-        // Test URL construction with base URL
-    }
-
-    func testBuildURL_WithQueryParameters() {
-        // Test URL construction with query params
-    }
-
-    func testBuildURL_EncodingSpecialCharacters() {
-        // Test proper URL encoding
-    }
-
-    // MARK: - Certificate Pinning Tests
-
-    func testCertificatePinning_ValidCertificate() async {
-        // Test connection with valid pinned certificate
-    }
-
-    func testCertificatePinning_InvalidCertificate() async {
-        // Test connection rejection with invalid certificate
-    }
-
-    // MARK: - Timeout Tests
-
-    func testRequestTimeout() async {
-        // Test request timeout handling
-    }
-
-    func testResourceTimeout() async {
-        // Test resource timeout handling
-    }
-
-    // MARK: - Encoding/Decoding Tests
-
-    func testJSONEncoding_ComplexObject() throws {
-        // Test encoding complex objects
-    }
-
-    func testJSONDecoding_MissingFields() {
-        // Test decoding with missing required fields
-    }
-
-    func testJSONDecoding_InvalidFormat() {
-        // Test decoding invalid JSON
-    }
-
-    func testDateDecoding_ISO8601() throws {
-        // Test ISO8601 date decoding
-    }
-
-    // MARK: - Error Mapping Tests
-
-    func testErrorMapping_NetworkError() {
-        // Test URLError to APIError mapping
-    }
-
-    func testErrorMapping_DecodingError() {
-        // Test decoding error mapping
-    }
-
-    // MARK: - Concurrency Tests
-
-    func testConcurrentRequests() async {
-        // Test multiple concurrent requests
-        // async let req1 = sut.get<User>("/api/users/1")
-        // async let req2 = sut.get<User>("/api/users/2")
-        // async let req3 = sut.get<User>("/api/users/3")
-        //
-        // let (user1, user2, user3) = try await (req1, req2, req3)
-        // XCTAssertNotNil(user1)
-        // XCTAssertNotNil(user2)
-        // XCTAssertNotNil(user3)
-    }
-
-    // MARK: - Performance Tests
-
-    func testPerformance_MultipleRequests() {
-        // Measure performance of multiple sequential requests
-        measure {
-            // Make requests
+        do {
+            let _: [String: String] = try await mock.request(
+                endpoint: "/fail",
+                method: "GET",
+                body: nil,
+                queryItems: nil
+            )
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertEqual(mock.requestCount, 1)
         }
+    }
+
+    func test_request_noStub_throws() async {
+        let mock = makeMockClient()
+
+        do {
+            let _: [String: String] = try await mock.request(
+                endpoint: "/unstubbed",
+                method: "GET",
+                body: nil,
+                queryItems: nil
+            )
+            XCTFail("Expected error for unstubbed endpoint")
+        } catch {
+            XCTAssertEqual(mock.requestCount, 1)
+        }
+    }
+
+    // MARK: - POST Tracking
+
+    func test_post_tracksCallCount() async throws {
+        let mock = makeMockClient()
+        let responseData = makeAPIResponse(success: true, data: ["result": true])
+        mock.stub("/auth/login", result: responseData)
+
+        struct TestBody: Encodable { let username: String }
+        let _: APIResponse<[String: Bool]> = try await mock.post(
+            endpoint: "/auth/login",
+            body: TestBody(username: "test")
+        )
+
+        XCTAssertEqual(mock.postCount, 1)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.requestMethods, ["POST"])
+    }
+
+    // MARK: - PUT Tracking
+
+    func test_put_tracksCallCount() async throws {
+        let mock = makeMockClient()
+        let responseData = makeAPIResponse(success: true, data: ["updated": true])
+        mock.stub("/users/me", result: responseData)
+
+        struct UpdateBody: Encodable { let displayName: String }
+        let _: APIResponse<[String: Bool]> = try await mock.put(
+            endpoint: "/users/me",
+            body: UpdateBody(displayName: "New Name")
+        )
+
+        XCTAssertEqual(mock.putCount, 1)
+        XCTAssertEqual(mock.requestMethods, ["PUT"])
+    }
+
+    // MARK: - DELETE Tracking
+
+    func test_delete_tracksCallCount() async throws {
+        let mock = makeMockClient()
+        let responseData = makeAPIResponse(success: true, data: ["success": true])
+        mock.stub("/messages/123", result: responseData)
+
+        let _: APIResponse<[String: Bool]> = try await mock.delete(endpoint: "/messages/123")
+
+        XCTAssertEqual(mock.deleteCount, 1)
+        XCTAssertEqual(mock.requestMethods, ["DELETE"])
+    }
+
+    // MARK: - PATCH Tracking
+
+    func test_patch_tracksCallCount() async throws {
+        let mock = makeMockClient()
+        let responseData = makeAPIResponse(success: true, data: ["patched": true])
+        mock.stub("/settings", result: responseData)
+
+        struct PatchBody: Encodable { let theme: String }
+        let _: APIResponse<[String: Bool]> = try await mock.patch(
+            endpoint: "/settings",
+            body: PatchBody(theme: "dark")
+        )
+
+        XCTAssertEqual(mock.patchCount, 1)
+        XCTAssertEqual(mock.requestMethods, ["PATCH"])
+    }
+
+    // MARK: - Token Injection
+
+    func test_authToken_canBeSetAndRead() {
+        let mock = makeMockClient()
+
+        mock.authToken = "bearer-token-123"
+
+        XCTAssertEqual(mock.authToken, "bearer-token-123")
+    }
+
+    func test_authToken_nil_byDefault() {
+        let mock = makeMockClient()
+
+        XCTAssertNil(mock.authToken)
+    }
+
+    func test_authToken_cleared_afterReset() {
+        let mock = makeMockClient()
+        mock.authToken = "some-token"
+
+        mock.reset()
+
+        XCTAssertNil(mock.authToken)
+    }
+
+    // MARK: - BaseURL
+
+    func test_baseURL_defaultValue() {
+        let mock = makeMockClient()
+
+        XCTAssertEqual(mock.baseURL, "https://mock.api")
+    }
+
+    // MARK: - Reset
+
+    func test_reset_clearsAllState() async throws {
+        let mock = makeMockClient()
+        mock.authToken = "token"
+        mock.stub("/test", result: ["k": "v"])
+        let _: [String: String] = try await mock.request(endpoint: "/test", method: "GET", body: nil, queryItems: nil)
+
+        mock.reset()
+
+        XCTAssertEqual(mock.requestCount, 0)
+        XCTAssertTrue(mock.requestEndpoints.isEmpty)
+        XCTAssertTrue(mock.requestMethods.isEmpty)
+        XCTAssertEqual(mock.postCount, 0)
+        XCTAssertEqual(mock.putCount, 0)
+        XCTAssertEqual(mock.patchCount, 0)
+        XCTAssertEqual(mock.deleteCount, 0)
+        XCTAssertNil(mock.authToken)
+        XCTAssertNil(mock.errorToThrow)
+    }
+
+    // MARK: - APIResponse Decoding
+
+    func test_apiResponse_decodesSuccessResponse() throws {
+        let json = """
+        {"success": true, "data": {"name": "Test"}, "error": null}
+        """
+        let data = json.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(APIResponse<[String: String]>.self, from: data)
+
+        XCTAssertTrue(response.success)
+        XCTAssertEqual(response.data["name"], "Test")
+        XCTAssertNil(response.error)
+    }
+
+    func test_apiResponse_decodesErrorResponse() throws {
+        let json = """
+        {"success": false, "data": {}, "error": "Not found"}
+        """
+        let data = json.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(APIResponse<[String: String]>.self, from: data)
+
+        XCTAssertFalse(response.success)
+        XCTAssertEqual(response.error, "Not found")
+    }
+
+    // MARK: - PaginatedAPIResponse Decoding
+
+    func test_paginatedResponse_decodesWithPagination() throws {
+        let json = """
+        {
+            "success": true,
+            "data": [{"id": "1"}, {"id": "2"}],
+            "pagination": {"nextCursor": "abc123", "hasMore": true, "limit": 20},
+            "error": null
+        }
+        """
+        let data = json.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(PaginatedAPIResponse<[[String: String]]>.self, from: data)
+
+        XCTAssertTrue(response.success)
+        XCTAssertEqual(response.data.count, 2)
+        XCTAssertEqual(response.pagination?.nextCursor, "abc123")
+        XCTAssertEqual(response.pagination?.hasMore, true)
+        XCTAssertEqual(response.pagination?.limit, 20)
+    }
+
+    func test_paginatedResponse_decodesWithoutPagination() throws {
+        let json = """
+        {"success": true, "data": [], "pagination": null, "error": null}
+        """
+        let data = json.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(PaginatedAPIResponse<[[String: String]]>.self, from: data)
+
+        XCTAssertTrue(response.success)
+        XCTAssertTrue(response.data.isEmpty)
+        XCTAssertNil(response.pagination)
+    }
+
+    // MARK: - OffsetPaginatedAPIResponse Decoding
+
+    func test_offsetPaginatedResponse_decodesCorrectly() throws {
+        let json = """
+        {
+            "success": true,
+            "data": [{"id": "1"}],
+            "pagination": {"total": 100, "hasMore": true, "limit": 15, "offset": 0},
+            "error": null
+        }
+        """
+        let data = json.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(OffsetPaginatedAPIResponse<[[String: String]]>.self, from: data)
+
+        XCTAssertEqual(response.pagination?.total, 100)
+        XCTAssertEqual(response.pagination?.hasMore, true)
+        XCTAssertEqual(response.pagination?.limit, 15)
+        XCTAssertEqual(response.pagination?.offset, 0)
+    }
+
+    // MARK: - APIError Tests
+
+    func test_apiError_invalidURL_description() {
+        let error = APIError.invalidURL
+        XCTAssertEqual(error.errorDescription, "Invalid URL")
+    }
+
+    func test_apiError_noData_description() {
+        let error = APIError.noData
+        XCTAssertEqual(error.errorDescription, "No data received")
+    }
+
+    func test_apiError_unauthorized_description() {
+        let error = APIError.unauthorized
+        XCTAssertEqual(error.errorDescription, "Authentication required")
+    }
+
+    func test_apiError_serverError_includesCodeAndMessage() {
+        let error = APIError.serverError(422, "Validation failed")
+        XCTAssertEqual(error.errorDescription, "Server error 422: Validation failed")
+    }
+
+    func test_apiError_serverError_nilMessage_showsUnknown() {
+        let error = APIError.serverError(500, nil)
+        XCTAssertEqual(error.errorDescription, "Server error 500: Unknown")
+    }
+
+    func test_apiError_networkError_wrapsUnderlying() {
+        let underlying = URLError(.notConnectedToInternet)
+        let error = APIError.networkError(underlying)
+        XCTAssertNotNil(error.errorDescription)
+        XCTAssertTrue(error.errorDescription?.contains("Network error") ?? false)
+    }
+
+    func test_apiError_decodingError_wrapsUnderlying() {
+        let decodingErr = DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "bad"))
+        let error = APIError.decodingError(decodingErr)
+        XCTAssertTrue(error.errorDescription?.contains("Decoding error") ?? false)
+    }
+
+    // MARK: - CursorPagination Decoding
+
+    func test_cursorPagination_decodesCorrectly() throws {
+        let json = """
+        {"nextCursor": "cursor123", "hasMore": false, "limit": 50}
+        """
+        let data = json.data(using: .utf8)!
+
+        let pagination = try JSONDecoder().decode(CursorPagination.self, from: data)
+
+        XCTAssertEqual(pagination.nextCursor, "cursor123")
+        XCTAssertFalse(pagination.hasMore)
+        XCTAssertEqual(pagination.limit, 50)
+    }
+
+    func test_cursorPagination_nullCursor() throws {
+        let json = """
+        {"nextCursor": null, "hasMore": false, "limit": 20}
+        """
+        let data = json.data(using: .utf8)!
+
+        let pagination = try JSONDecoder().decode(CursorPagination.self, from: data)
+
+        XCTAssertNil(pagination.nextCursor)
+    }
+
+    // MARK: - RefreshTokenData Decoding (App Model)
+
+    func test_refreshTokenData_decodesCorrectly() throws {
+        let json = """
+        {"token": "new-jwt-token", "expiresIn": 3600}
+        """
+        let data = json.data(using: .utf8)!
+
+        let tokenData = try JSONDecoder().decode(RefreshTokenData.self, from: data)
+
+        XCTAssertEqual(tokenData.token, "new-jwt-token")
+        XCTAssertEqual(tokenData.expiresIn, 3600)
     }
 }

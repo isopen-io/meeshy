@@ -5,20 +5,20 @@ import os
 
 // MARK: - Socket.IO Event Data Models
 
-public struct SocketPostCreatedData: Decodable {
+public struct SocketPostCreatedData: Decodable, Sendable {
     public let post: APIPost
 }
 
-public struct SocketPostUpdatedData: Decodable {
+public struct SocketPostUpdatedData: Decodable, Sendable {
     public let post: APIPost
 }
 
-public struct SocketPostDeletedData: Decodable {
+public struct SocketPostDeletedData: Decodable, Sendable {
     public let postId: String
     public let authorId: String
 }
 
-public struct SocketPostLikedData: Decodable {
+public struct SocketPostLikedData: Decodable, Sendable {
     public let postId: String
     public let userId: String
     public let emoji: String
@@ -26,99 +26,127 @@ public struct SocketPostLikedData: Decodable {
     public let reactionSummary: [String: Int]
 }
 
-public struct SocketPostUnlikedData: Decodable {
+public struct SocketPostUnlikedData: Decodable, Sendable {
     public let postId: String
     public let userId: String
     public let likeCount: Int
     public let reactionSummary: [String: Int]
 }
 
-public struct SocketPostRepostedData: Decodable {
+public struct SocketPostRepostedData: Decodable, Sendable {
     public let originalPostId: String
     public let repost: APIPost
 }
 
-public struct SocketStoryCreatedData: Decodable {
+public struct SocketStoryCreatedData: Decodable, Sendable {
     public let story: APIPost
 }
 
-public struct SocketStoryViewedData: Decodable {
+public struct SocketStoryViewedData: Decodable, Sendable {
     public let storyId: String
     public let viewerId: String
     public let viewerUsername: String
     public let viewCount: Int
 }
 
-public struct SocketStoryReactedData: Decodable {
+public struct SocketStoryReactedData: Decodable, Sendable {
     public let storyId: String
     public let userId: String
     public let emoji: String
 }
 
-public struct SocketStatusCreatedData: Decodable {
+public struct SocketStatusCreatedData: Decodable, Sendable {
     public let status: APIPost
 }
 
-public struct SocketStatusDeletedData: Decodable {
+public struct SocketStatusDeletedData: Decodable, Sendable {
     public let statusId: String
     public let authorId: String
 }
 
-public struct SocketStatusReactedData: Decodable {
+public struct SocketStatusReactedData: Decodable, Sendable {
     public let statusId: String
     public let userId: String
     public let emoji: String
 }
 
-public struct SocketCommentAddedData: Decodable {
+public struct SocketCommentAddedData: Decodable, Sendable {
     public let postId: String
     public let comment: APIPostComment
     public let commentCount: Int
 }
 
-public struct SocketCommentDeletedData: Decodable {
+public struct SocketCommentDeletedData: Decodable, Sendable {
     public let postId: String
     public let commentId: String
     public let commentCount: Int
 }
 
-public struct SocketCommentLikedData: Decodable {
+public struct SocketCommentLikedData: Decodable, Sendable {
     public let postId: String
     public let commentId: String
     public let userId: String
     public let likeCount: Int
 }
 
-public struct SocketStoryTranslationUpdatedData: Decodable {
+public struct SocketStoryTranslationUpdatedData: Decodable, Sendable {
     public let postId: String
     public let textObjectIndex: Int
     public let translations: [String: String]
 }
 
 // Socket payloads use camelCase (unlike REST which uses snake_case)
-public struct SocketTranslationPayload: Decodable {
+public struct SocketTranslationPayload: Decodable, Sendable {
     public let text: String
     public let translationModel: String?
     public let confidenceScore: Double?
     public let createdAt: String?
 }
 
-public struct SocketPostTranslationUpdatedData: Decodable {
+public struct SocketPostTranslationUpdatedData: Decodable, Sendable {
     public let postId: String
     public let language: String
     public let translation: SocketTranslationPayload
 }
 
-public struct SocketCommentTranslationUpdatedData: Decodable {
+public struct SocketCommentTranslationUpdatedData: Decodable, Sendable {
     public let commentId: String
     public let postId: String
     public let language: String
     public let translation: SocketTranslationPayload
 }
 
+// MARK: - Protocol
+
+public protocol SocialSocketProviding: Sendable {
+    var postCreated: PassthroughSubject<APIPost, Never> { get }
+    var postUpdated: PassthroughSubject<APIPost, Never> { get }
+    var postDeleted: PassthroughSubject<String, Never> { get }
+    var postLiked: PassthroughSubject<SocketPostLikedData, Never> { get }
+    var postUnliked: PassthroughSubject<SocketPostUnlikedData, Never> { get }
+    var postReposted: PassthroughSubject<SocketPostRepostedData, Never> { get }
+    var storyCreated: PassthroughSubject<APIPost, Never> { get }
+    var storyViewed: PassthroughSubject<SocketStoryViewedData, Never> { get }
+    var storyReacted: PassthroughSubject<SocketStoryReactedData, Never> { get }
+    var statusCreated: PassthroughSubject<APIPost, Never> { get }
+    var statusDeleted: PassthroughSubject<String, Never> { get }
+    var statusUpdated: PassthroughSubject<APIPost, Never> { get }
+    var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
+    var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
+    var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
+    var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
+    var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
+    var isConnected: Bool { get }
+    var connectionState: ConnectionState { get }
+    func connect()
+    func disconnect()
+    func subscribeFeed()
+    func unsubscribeFeed()
+}
+
 // MARK: - Social Socket Manager
 
-public final class SocialSocketManager: ObservableObject {
+public final class SocialSocketManager: ObservableObject, SocialSocketProviding, @unchecked Sendable {
     public static let shared = SocialSocketManager()
 
     // Combine publishers for ViewModels to subscribe to
@@ -232,12 +260,13 @@ public final class SocialSocketManager: ObservableObject {
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+            guard let self else { return }
             DispatchQueue.main.async {
-                self?.isConnected = false
-                if self?.hadPreviousConnection == true {
-                    self?.connectionState = .reconnecting(attempt: 0)
+                self.isConnected = false
+                if self.hadPreviousConnection {
+                    self.connectionState = .reconnecting(attempt: 0)
                 } else {
-                    self?.connectionState = .disconnected
+                    self.connectionState = .disconnected
                 }
             }
             Logger.socket.info("SocialSocket disconnected")
@@ -260,37 +289,43 @@ public final class SocialSocketManager: ObservableObject {
         // --- Post events ---
 
         socket.on("post:created") { [weak self] data, _ in
-            self?.decode(SocketPostCreatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostCreatedData.self, from: data) { [weak self] payload in
                 self?.postCreated.send(payload.post)
             }
         }
 
         socket.on("post:updated") { [weak self] data, _ in
-            self?.decode(SocketPostUpdatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostUpdatedData.self, from: data) { [weak self] payload in
                 self?.postUpdated.send(payload.post)
             }
         }
 
         socket.on("post:deleted") { [weak self] data, _ in
-            self?.decode(SocketPostDeletedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostDeletedData.self, from: data) { [weak self] payload in
                 self?.postDeleted.send(payload.postId)
             }
         }
 
         socket.on("post:liked") { [weak self] data, _ in
-            self?.decode(SocketPostLikedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostLikedData.self, from: data) { [weak self] payload in
                 self?.postLiked.send(payload)
             }
         }
 
         socket.on("post:unliked") { [weak self] data, _ in
-            self?.decode(SocketPostUnlikedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostUnlikedData.self, from: data) { [weak self] payload in
                 self?.postUnliked.send(payload)
             }
         }
 
         socket.on("post:reposted") { [weak self] data, _ in
-            self?.decode(SocketPostRepostedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketPostRepostedData.self, from: data) { [weak self] payload in
                 self?.postReposted.send(payload)
             }
         }
@@ -298,19 +333,22 @@ public final class SocialSocketManager: ObservableObject {
         // --- Story events ---
 
         socket.on("story:created") { [weak self] data, _ in
-            self?.decode(SocketStoryCreatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStoryCreatedData.self, from: data) { [weak self] payload in
                 self?.storyCreated.send(payload.story)
             }
         }
 
         socket.on("story:viewed") { [weak self] data, _ in
-            self?.decode(SocketStoryViewedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStoryViewedData.self, from: data) { [weak self] payload in
                 self?.storyViewed.send(payload)
             }
         }
 
         socket.on("story:reacted") { [weak self] data, _ in
-            self?.decode(SocketStoryReactedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStoryReactedData.self, from: data) { [weak self] payload in
                 self?.storyReacted.send(payload)
             }
         }
@@ -318,25 +356,29 @@ public final class SocialSocketManager: ObservableObject {
         // --- Status events ---
 
         socket.on("status:created") { [weak self] data, _ in
-            self?.decode(SocketStatusCreatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStatusCreatedData.self, from: data) { [weak self] payload in
                 self?.statusCreated.send(payload.status)
             }
         }
 
         socket.on("status:deleted") { [weak self] data, _ in
-            self?.decode(SocketStatusDeletedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStatusDeletedData.self, from: data) { [weak self] payload in
                 self?.statusDeleted.send(payload.statusId)
             }
         }
 
         socket.on("status:updated") { [weak self] data, _ in
-            self?.decode(SocketStatusCreatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStatusCreatedData.self, from: data) { [weak self] payload in
                 self?.statusUpdated.send(payload.status)
             }
         }
 
         socket.on("status:reacted") { [weak self] data, _ in
-            self?.decode(SocketStatusReactedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStatusReactedData.self, from: data) { [weak self] payload in
                 self?.statusReacted.send(payload)
             }
         }
@@ -344,19 +386,22 @@ public final class SocialSocketManager: ObservableObject {
         // --- Comment events ---
 
         socket.on("comment:added") { [weak self] data, _ in
-            self?.decode(SocketCommentAddedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketCommentAddedData.self, from: data) { [weak self] payload in
                 self?.commentAdded.send(payload)
             }
         }
 
         socket.on("comment:deleted") { [weak self] data, _ in
-            self?.decode(SocketCommentDeletedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketCommentDeletedData.self, from: data) { [weak self] payload in
                 self?.commentDeleted.send(payload)
             }
         }
 
         socket.on("comment:liked") { [weak self] data, _ in
-            self?.decode(SocketCommentLikedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
                 self?.commentLiked.send(payload)
             }
         }
@@ -364,7 +409,8 @@ public final class SocialSocketManager: ObservableObject {
         // --- Story translation events ---
 
         socket.on("post:story-translation-updated") { [weak self] data, _ in
-            self?.decode(SocketStoryTranslationUpdatedData.self, from: data) { payload in
+            guard let self else { return }
+            self.decode(SocketStoryTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.storyTranslationUpdated.send(payload)
             }
         }
@@ -386,7 +432,7 @@ public final class SocialSocketManager: ObservableObject {
 
     // MARK: - Decode Helper
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: [Any], handler: @escaping (T) -> Void) {
+    private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else { return }
 
         do {

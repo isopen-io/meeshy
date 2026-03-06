@@ -11,9 +11,10 @@ class StatusViewModel: ObservableObject {
     @Published var isLoadingMore = false
 
     let mode: StatusService.Mode
-    private let statusService = StatusService.shared
+    private let statusService: StatusServiceProviding
     private var cancellables = Set<AnyCancellable>()
-    private let socialSocket = SocialSocketManager.shared
+    private let socialSocket: SocialSocketProviding
+    private let authManager: AuthManaging
 
     // Cursor pagination
     private var nextCursor: String?
@@ -24,8 +25,16 @@ class StatusViewModel: ObservableObject {
         "💭", "🎵", "📚", "✈️", "❤️"
     ]
 
-    init(mode: StatusService.Mode = .friends) {
+    init(
+        mode: StatusService.Mode = .friends,
+        statusService: StatusServiceProviding = StatusService.shared,
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        authManager: AuthManaging = AuthManager.shared
+    ) {
         self.mode = mode
+        self.statusService = statusService
+        self.socialSocket = socialSocket
+        self.authManager = authManager
     }
 
     // MARK: - Load Statuses
@@ -37,7 +46,7 @@ class StatusViewModel: ObservableObject {
         hasMore = true
 
         do {
-            let response = try await statusService.list(mode: mode, limit: 20)
+            let response = try await statusService.list(mode: mode, cursor: nil, limit: 20)
 
             if response.success {
                 statuses = response.data.compactMap { $0.toStatusEntry() }
@@ -139,12 +148,12 @@ class StatusViewModel: ObservableObject {
     // MARK: - Current User Info (for preview)
 
     var currentUserDisplayName: String {
-        let user = AuthManager.shared.currentUser
+        let user = authManager.currentUser
         return user?.displayName ?? user?.username ?? "Moi"
     }
 
     var currentUserInitial: String {
-        let user = AuthManager.shared.currentUser
+        let user = authManager.currentUser
         return user?.firstName?.prefix(1).uppercased()
             ?? user?.username.prefix(1).uppercased()
             ?? "M"

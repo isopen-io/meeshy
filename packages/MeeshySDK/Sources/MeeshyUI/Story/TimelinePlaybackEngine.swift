@@ -81,7 +81,9 @@ final class TimelinePlaybackEngine {
 
     deinit {
         #if canImport(UIKit)
-        displayLink?.invalidate()
+        MainActor.assumeIsolated {
+            displayLink?.invalidate()
+        }
         #endif
     }
 }

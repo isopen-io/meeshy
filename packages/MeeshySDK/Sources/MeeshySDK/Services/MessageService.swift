@@ -1,9 +1,28 @@
 import Foundation
 
-public final class MessageService {
+// MARK: - Protocol
+
+public protocol MessageServiceProviding: Sendable {
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
+    func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
+    func edit(messageId: String, content: String) async throws -> APIMessage
+    func delete(conversationId: String, messageId: String) async throws
+    func pin(conversationId: String, messageId: String) async throws
+    func unpin(conversationId: String, messageId: String) async throws
+    func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse
+    func search(conversationId: String, query: String, limit: Int) async throws -> MessagesAPIResponse
+    func searchWithCursor(conversationId: String, query: String, cursor: String) async throws -> MessagesAPIResponse
+}
+
+public final class MessageService: MessageServiceProviding, @unchecked Sendable {
     public static let shared = MessageService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(

@@ -3,7 +3,7 @@ import Speech
 import AVFoundation
 import Combine
 
-public final class EdgeTranscriptionService: ObservableObject {
+public final class EdgeTranscriptionService: ObservableObject, @unchecked Sendable {
     public static let shared = EdgeTranscriptionService()
 
     @Published public var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
@@ -49,35 +49,33 @@ public final class EdgeTranscriptionService: ObservableObject {
         await MainActor.run { isTranscribing = true }
         defer { Task { @MainActor in isTranscribing = false } }
 
-        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>) in
+        let transcription = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OnDeviceTranscription, Error>) in
             recognizer.recognitionTask(with: request) { result, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
                 guard let result, result.isFinal else { return }
-                continuation.resume(returning: result)
+                let segments: [OnDeviceTranscriptionSegment] = result.bestTranscription.segments.map { segment in
+                    OnDeviceTranscriptionSegment(
+                        text: segment.substring,
+                        timestamp: segment.timestamp,
+                        duration: segment.duration,
+                        confidence: Double(segment.confidence)
+                    )
+                }
+                let overallConfidence = segments.isEmpty ? 0.0 : segments.reduce(0.0) { $0 + $1.confidence } / Double(segments.count)
+                continuation.resume(returning: OnDeviceTranscription(
+                    text: result.bestTranscription.formattedString,
+                    language: locale.identifier,
+                    confidence: overallConfidence,
+                    segments: segments,
+                    speakingRate: result.bestTranscription.speakingRate
+                ))
             }
         }
 
-        let segments: [OnDeviceTranscriptionSegment] = result.bestTranscription.segments.map { segment in
-            OnDeviceTranscriptionSegment(
-                text: segment.substring,
-                timestamp: segment.timestamp,
-                duration: segment.duration,
-                confidence: Double(segment.confidence)
-            )
-        }
-
-        let overallConfidence = segments.isEmpty ? 0.0 : segments.reduce(0.0) { $0 + $1.confidence } / Double(segments.count)
-
-        return OnDeviceTranscription(
-            text: result.bestTranscription.formattedString,
-            language: locale.identifier,
-            confidence: overallConfidence,
-            segments: segments,
-            speakingRate: result.bestTranscription.speakingRate
-        )
+        return transcription
     }
 
     // MARK: - Transcribe Data
@@ -102,7 +100,7 @@ public final class EdgeTranscriptionService: ObservableObject {
 
 // MARK: - On-Device Transcription Types
 
-public struct OnDeviceTranscription {
+public struct OnDeviceTranscription: Sendable {
     public let text: String
     public let language: String
     public let confidence: Double
@@ -116,7 +114,7 @@ public struct OnDeviceTranscription {
     }
 }
 
-public struct OnDeviceTranscriptionSegment: Identifiable {
+public struct OnDeviceTranscriptionSegment: Identifiable, Sendable {
     public let id = UUID()
     public let text: String
     public let timestamp: TimeInterval

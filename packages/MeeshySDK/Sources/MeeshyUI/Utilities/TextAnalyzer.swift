@@ -35,7 +35,7 @@ public enum SentimentLevel: String, CaseIterable {
 
 // MARK: - Detected Language
 
-public struct DetectedLanguage: Identifiable {
+public struct DetectedLanguage: Identifiable, Sendable {
     public let id: String
     public let code: String
     public let flag: String
@@ -64,7 +64,7 @@ public struct DetectedLanguage: Identifiable {
 
 // MARK: - Text Analyzer
 
-public class TextAnalyzer: ObservableObject {
+public class TextAnalyzer: ObservableObject, @unchecked Sendable {
     @Published public var sentiment: SentimentLevel = .neutral
     @Published public var language: DetectedLanguage? = nil
     @Published public var languageOverride: DetectedLanguage? = nil

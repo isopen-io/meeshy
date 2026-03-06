@@ -1,9 +1,21 @@
 import Foundation
 
-public final class StatusService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol StatusServiceProviding: Sendable {
+    func list(mode: StatusService.Mode, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func create(moodEmoji: String, content: String?, visibility: String, visibilityUserIds: [String]?) async throws -> APIPost
+    func delete(statusId: String) async throws
+    func react(statusId: String, emoji: String) async throws
+}
+
+public final class StatusService: StatusServiceProviding, @unchecked Sendable {
     public static let shared = StatusService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public enum Mode: String, Sendable {
         case friends

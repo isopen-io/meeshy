@@ -1,16 +1,32 @@
 import Foundation
 import UIKit
 
+// MARK: - Protocol
+
+public protocol MediaCaching: Sendable {
+    func data(for urlString: String) async throws -> Data
+    func image(for urlString: String) async throws -> UIImage
+    func localFileURL(for urlString: String) async throws -> URL
+    func prefetch(_ urlString: String) async
+    func conditionalPrefetch(_ urlString: String, fileSizeMB: Int) async
+    func cachedData(for urlString: String) async -> Data?
+    func isCached(_ urlString: String) async -> Bool
+    func store(_ data: Data, for urlString: String) async
+    func remove(for urlString: String) async
+    func clearAll() async
+    func evictExpired() async
+}
+
 /// Unified media cache with two tiers: NSCache (memory) + FileManager (disk).
 /// Supports images, audio, video, and any binary data keyed by URL string.
-public actor MediaCacheManager {
+public actor MediaCacheManager: MediaCaching {
     public static let shared = MediaCacheManager()
 
     // MARK: - Synchronous UIImage Cache (static, no actor hop needed)
 
     /// Static UIImage cache for instant synchronous access from SwiftUI view inits.
     /// Thread-safe via NSCache. Populated by `image(for:)` after successful decode.
-    private static let _imageCache: NSCache<NSString, UIImage> = {
+    nonisolated(unsafe) private static let _imageCache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 150
         cache.totalCostLimit = 80 * 1024 * 1024

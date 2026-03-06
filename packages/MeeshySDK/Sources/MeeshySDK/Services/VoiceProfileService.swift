@@ -1,6 +1,6 @@
 import Foundation
 
-public final class VoiceProfileService {
+public final class VoiceProfileService: @unchecked Sendable {
     public static let shared = VoiceProfileService()
     private init() {}
     private var api: APIClient { APIClient.shared }

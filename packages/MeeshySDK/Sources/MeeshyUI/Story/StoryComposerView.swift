@@ -41,7 +41,7 @@ struct StoryComposerDraft: Codable {
 
 // MARK: - Slide Publish Action
 
-public enum SlidePublishAction {
+public enum SlidePublishAction: Sendable {
     case retry, skip, cancel
 }
 

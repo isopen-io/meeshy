@@ -1,9 +1,23 @@
 import Foundation
 
-public final class StoryService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol StoryServiceProviding: Sendable {
+    func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func markViewed(storyId: String) async throws
+    func delete(storyId: String) async throws
+    func react(storyId: String, emoji: String) async throws
+    func comment(storyId: String, content: String) async throws -> APIPostComment
+    func repost(storyId: String) async throws
+}
+
+public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     public static let shared = StoryService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func list(cursor: String? = nil, limit: Int = 50) async throws -> PaginatedAPIResponse<[APIPost]> {
         try await api.paginatedRequest(endpoint: "/posts/feed/stories", cursor: cursor, limit: limit)

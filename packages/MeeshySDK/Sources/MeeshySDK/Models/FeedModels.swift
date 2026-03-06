@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Feed Media Type
-public enum FeedMediaType: String {
+public enum FeedMediaType: String, Sendable {
     case image, video, audio, document, location
 }
 

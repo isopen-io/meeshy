@@ -47,7 +47,7 @@ public struct NotificationPreferences: Codable {
 // MARK: - Notification Type
 // Raw values match backend lowercase strings exactly
 
-public enum MeeshyNotificationType: String, Codable, CaseIterable {
+public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     // Message events
     case newMessage = "new_message"
     case messageReply = "message_reply"

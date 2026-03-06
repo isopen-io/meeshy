@@ -3,7 +3,7 @@ import GRDB
 import os
 
 // MARK: - AppDatabase
-public final class AppDatabase {
+public final class AppDatabase: @unchecked Sendable {
     public static let shared = AppDatabase()
     
     public let databaseWriter: any DatabaseWriter

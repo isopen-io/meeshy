@@ -248,7 +248,14 @@ class ConversationViewModel: ObservableObject {
     private static let paginationRetryCount: Int = 3
     private static let paginationRetryDelay: UInt64 = 500_000_000
 
-    private var currentUserId: String { AuthManager.shared.currentUser?.id ?? "" }
+    private let authManager: AuthManaging
+    private let messageService: MessageServiceProviding
+    private let conversationService: ConversationServiceProviding
+    private let reactionService: ReactionServiceProviding
+    private let reportService: ReportServiceProviding
+    private let mediaCache: MediaCaching
+
+    private var currentUserId: String { authManager.currentUser?.id ?? "" }
 
     // MARK: - Mention Display Names (username → displayName)
 
@@ -292,14 +299,31 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Init
 
-    init(conversationId: String, unreadCount: Int = 0, isDirect: Bool = false, participantUserId: String? = nil) {
+    init(
+        conversationId: String,
+        unreadCount: Int = 0,
+        isDirect: Bool = false,
+        participantUserId: String? = nil,
+        authManager: AuthManaging = AuthManager.shared,
+        messageService: MessageServiceProviding = MessageService.shared,
+        conversationService: ConversationServiceProviding = ConversationService.shared,
+        reactionService: ReactionServiceProviding = ReactionService.shared,
+        reportService: ReportServiceProviding = ReportService.shared,
+        mediaCache: MediaCaching = MediaCacheManager.shared
+    ) {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
         self.participantUserId = participantUserId
+        self.authManager = authManager
+        self.messageService = messageService
+        self.conversationService = conversationService
+        self.reactionService = reactionService
+        self.reportService = reportService
+        self.mediaCache = mediaCache
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
-            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+            currentUserId: authManager.currentUser?.id ?? ""
         )
         handler.delegate = self
         self.socketHandler = handler
@@ -346,7 +370,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let response = try await MessageService.shared.list(
+            let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
             )
 
@@ -404,7 +428,7 @@ class ConversationViewModel: ObservableObject {
         var lastError: Error?
         for attempt in 1...Self.paginationRetryCount {
             do {
-                let response = try await MessageService.shared.listBefore(
+                let response = try await messageService.listBefore(
                     conversationId: conversationId, before: beforeValue, limit: limit, includeReplies: true
                 )
 
@@ -593,7 +617,7 @@ class ConversationViewModel: ObservableObject {
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode
             )
-            let responseData = try await MessageService.shared.send(
+            let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
 
@@ -683,7 +707,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.removeAll { $0.emoji == emoji && $0.userId == userId }
             // API call
             Task {
-                try? await ReactionService.shared.remove(messageId: messageId, emoji: emoji)
+                try? await reactionService.remove(messageId: messageId, emoji: emoji)
             }
         } else {
             // Optimistic add
@@ -691,7 +715,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].reactions.append(reaction)
             // API call
             Task {
-                try? await ReactionService.shared.add(messageId: messageId, emoji: emoji)
+                try? await reactionService.add(messageId: messageId, emoji: emoji)
             }
         }
     }
@@ -702,7 +726,7 @@ class ConversationViewModel: ObservableObject {
         isLoadingReactions = true
         defer { isLoadingReactions = false }
         do {
-            let result = try await ReactionService.shared.fetchDetails(messageId: messageId)
+            let result = try await reactionService.fetchDetails(messageId: messageId)
             reactionDetails = result.reactions
         } catch {
             reactionDetails = []
@@ -719,7 +743,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            try await MessageService.shared.delete(conversationId: conversationId, messageId: messageId)
+            try await messageService.delete(conversationId: conversationId, messageId: messageId)
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId) {
@@ -741,7 +765,7 @@ class ConversationViewModel: ObservableObject {
             messages[idx].pinnedBy = nil
 
             do {
-                try await MessageService.shared.unpin(conversationId: conversationId, messageId: messageId)
+                try await messageService.unpin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = Date()
@@ -751,10 +775,10 @@ class ConversationViewModel: ObservableObject {
             // Optimistic pin
             let now = Date()
             messages[idx].pinnedAt = now
-            messages[idx].pinnedBy = AuthManager.shared.currentUser?.id
+            messages[idx].pinnedBy = authManager.currentUser?.id
 
             do {
-                try await MessageService.shared.pin(conversationId: conversationId, messageId: messageId)
+                try await messageService.pin(conversationId: conversationId, messageId: messageId)
             } catch {
                 // Revert
                 messages[idx].pinnedAt = nil
@@ -768,7 +792,7 @@ class ConversationViewModel: ObservableObject {
 
     func consumeViewOnce(messageId: String) async -> Bool {
         do {
-            let result = try await MessageService.shared.consumeViewOnce(
+            let result = try await messageService.consumeViewOnce(
                 conversationId: conversationId, messageId: messageId
             )
             if let idx = messageIndex(for: messageId) {
@@ -787,7 +811,7 @@ class ConversationViewModel: ObservableObject {
             for urlStr in urls {
                 Task {
                     let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                    await MediaCacheManager.shared.remove(for: resolved)
+                    await mediaCache.remove(for: resolved)
                 }
             }
         }
@@ -814,7 +838,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            _ = try await MessageService.shared.edit(messageId: messageId, content: trimmed)
+            _ = try await messageService.edit(messageId: messageId, content: trimmed)
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId),
@@ -830,7 +854,7 @@ class ConversationViewModel: ObservableObject {
 
     func reportMessage(messageId: String, reportType: String, reason: String?) async -> Bool {
         do {
-            try await ReportService.shared.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
+            try await reportService.reportMessage(messageId: messageId, reportType: reportType, reason: reason)
             return true
         } catch {
             self.error = error.localizedDescription
@@ -844,7 +868,7 @@ class ConversationViewModel: ObservableObject {
         // Notify ConversationListViewModel immediately to clear the badge in the list
         NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
         Task {
-            try? await ConversationService.shared.markRead(conversationId: conversationId)
+            try? await conversationService.markRead(conversationId: conversationId)
         }
     }
 
@@ -856,7 +880,7 @@ class ConversationViewModel: ObservableObject {
         guard let lastMessage = messages.last else { return }
 
         do {
-            let response = try await MessageService.shared.list(
+            let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 50, includeReplies: true
             )
 
@@ -894,7 +918,7 @@ class ConversationViewModel: ObservableObject {
         searchNextCursor = nil
 
         do {
-            let response = try await MessageService.shared.search(
+            let response = try await messageService.search(
                 conversationId: conversationId, query: trimmed, limit: 20
             )
 
@@ -913,7 +937,7 @@ class ConversationViewModel: ObservableObject {
         isSearching = true
 
         do {
-            let response = try await MessageService.shared.searchWithCursor(
+            let response = try await messageService.searchWithCursor(
                 conversationId: conversationId, query: query, cursor: cursor
             )
 
@@ -972,7 +996,7 @@ class ConversationViewModel: ObservableObject {
         }
 
         do {
-            let response = try await MessageService.shared.listAround(
+            let response = try await messageService.listAround(
                 conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
             )
 
@@ -1005,7 +1029,7 @@ class ConversationViewModel: ObservableObject {
         var lastError: Error?
         for attempt in 1...Self.paginationRetryCount {
             do {
-                let response = try await MessageService.shared.listAround(
+                let response = try await messageService.listAround(
                     conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
                 )
 
@@ -1110,7 +1134,7 @@ class ConversationViewModel: ObservableObject {
 
         // Automatic resolution — mirrors gateway resolveUserLanguage() logic
         guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
-        let user = AuthManager.shared.currentUser
+        let user = authManager.currentUser
 
         // Build priority list respecting boolean preferences (same as packages/shared resolveUserLanguage)
         var preferred: [String] = []
