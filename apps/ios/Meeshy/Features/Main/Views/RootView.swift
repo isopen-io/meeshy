@@ -172,6 +172,12 @@ struct RootView: View {
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
+                    case .postDetail(let postId):
+                        PostDetailView(postId: postId)
+                            .navigationBarHidden(true)
+                    case .bookmarks:
+                        BookmarksView()
+                            .navigationBarHidden(true)
                     }
                 }
             }

@@ -3,7 +3,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
-import { CreatePostSchema, UpdatePostSchema, PostParams } from './types';
+import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -44,6 +45,21 @@ export function registerCoreRoutes(
           socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         } else {
           socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+        }
+      }
+
+      // Trigger async translation for posts with text content (fire-and-forget)
+      if (parsed.data.content && (parsed.data.type ?? 'POST') === 'POST') {
+        try {
+          const translationService = PostTranslationService.shared;
+          translationService.translatePost(
+            (post as any).id,
+            parsed.data.content,
+            parsed.data.originalLanguage ?? (post as any).originalLanguage,
+            authContext.registeredUser.id,
+          ).catch(() => {});
+        } catch {
+          // PostTranslationService not initialized — skip silently
         }
       }
 
@@ -138,6 +154,41 @@ export function registerCoreRoutes(
         return reply.status(403).send({ success: false, error: 'Not authorized to delete this post' });
       }
       fastify.log.error(`[DELETE /posts/:postId] Error: ${error}`);
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // POST /posts/:postId/translate — Request on-demand translation for a specific language
+  fastify.post('/posts/:postId/translate', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+
+      const { postId } = request.params;
+      const parsed = TranslatePostSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
+      }
+
+      const post = await postService.getPostById(postId);
+      if (!post) {
+        return reply.status(404).send({ success: false, error: 'Post not found' });
+      }
+
+      try {
+        const translationService = PostTranslationService.shared;
+        await translationService.translateOnDemand(postId, parsed.data.targetLanguage);
+      } catch {
+        return reply.status(503).send({ success: false, error: 'Translation service not available' });
+      }
+
+      return reply.send({ success: true, data: { requested: true, targetLanguage: parsed.data.targetLanguage } });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
       return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });

@@ -994,7 +994,8 @@ public struct StoryComposerView: View {
             closing: closingEffect,
             textObjects: viewModel.currentEffects.textObjects,
             mediaObjects: viewModel.currentEffects.mediaObjects,
-            audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects
+            audioPlayerObjects: viewModel.currentEffects.audioPlayerObjects,
+            slideDuration: Float(viewModel.currentSlideDuration)
         )
     }
 

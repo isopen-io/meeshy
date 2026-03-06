@@ -204,3 +204,26 @@ export interface CommentLikedEventData {
   readonly emoji: string;
   readonly likeCount: number;
 }
+
+export interface PostTranslationUpdatedEventData {
+  readonly postId: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}
+
+export interface CommentTranslationUpdatedEventData {
+  readonly postId: string;
+  readonly commentId: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}

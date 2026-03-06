@@ -59,6 +59,8 @@ export const CreatePostSchema = z.object({
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.string().url().optional(),
   audioDuration: z.number().int().positive().optional(),
+  // Original language override (ISO 639-1, e.g. "fr", "en")
+  originalLanguage: z.string().min(2).max(5).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
   // Mobile transcription for audio media
@@ -91,6 +93,10 @@ export const CreateCommentSchema = z.object({
 export const RepostSchema = z.object({
   content: z.string().max(5000).optional(),
   isQuote: z.boolean().default(false),
+});
+
+export const TranslatePostSchema = z.object({
+  targetLanguage: z.string().min(2).max(5),
 });
 
 export const FeedQuerySchema = z.object({

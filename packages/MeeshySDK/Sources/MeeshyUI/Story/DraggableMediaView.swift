@@ -131,14 +131,14 @@ public struct DraggableMediaView: View {
     @ViewBuilder
     private func mediaContentWithGestures(canvasWidth: CGFloat, canvasHeight: CGFloat) -> some View {
         let effectiveScale = isEditing ? currentScale * gestureScale : currentScale
-        let effectiveRotation = isEditing ? currentRotation + gestureRotation.radians : currentRotation
+        let effectiveRotation = isEditing ? currentRotation + gestureRotation.degrees : currentRotation
         let scaledSize = baseMediaSize * effectiveScale
 
         if isEditing {
             mediaContentBase
                 .frame(width: baseMediaSize, height: baseMediaSize)
                 .scaleEffect(effectiveScale)
-                .rotationEffect(.radians(effectiveRotation))
+                .rotationEffect(.degrees(effectiveRotation))
                 .frame(width: scaledSize, height: scaledSize)
                 .contentShape(Rectangle())
                 .position(
@@ -170,7 +170,7 @@ public struct DraggableMediaView: View {
             mediaContent
                 .frame(width: baseMediaSize, height: baseMediaSize)
                 .scaleEffect(currentScale)
-                .rotationEffect(.radians(currentRotation))
+                .rotationEffect(.degrees(currentRotation))
                 .frame(width: scaledSize, height: scaledSize)
                 .contentShape(Rectangle())
                 .position(
@@ -218,7 +218,7 @@ public struct DraggableMediaView: View {
                 state = value
             }
             .onEnded { value in
-                let newRotation = currentRotation + value.radians
+                let newRotation = currentRotation + value.degrees
                 baseRotation = newRotation
                 mediaObject.rotation = newRotation
                 onDragEnd()

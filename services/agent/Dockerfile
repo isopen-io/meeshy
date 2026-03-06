@@ -5,8 +5,8 @@
 # Dockerfile: services/agent/Dockerfile
 # =============================================================================
 
-# ===== BUILDER STAGE =====
-FROM node:22-alpine AS builder
+# ===== BASE STAGE =====
+FROM node:22-alpine AS base
 
 LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       description="Meeshy Agent - Autonomous conversation agent service" \
@@ -14,6 +14,13 @@ LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
       org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
       org.opencontainers.image.vendor="Meeshy" \
       org.opencontainers.image.title="Meeshy Agent"
+
+ARG PNPM_VERSION=9.15.0
+
+# ===== DEPS STAGE (with build tools) =====
+FROM base AS deps
+
+ARG PNPM_VERSION=9.15.0
 
 # Build tools for native modules (zeromq)
 RUN apk add --no-cache \
@@ -24,23 +31,69 @@ RUN apk add --no-cache \
     bash
 
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/shared/package.json packages/shared/
 COPY services/agent/package.json services/agent/
 
-RUN pnpm install --frozen-lockfile
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+    corepack enable pnpm && \
+    corepack prepare pnpm@${PNPM_VERSION} --activate && \
+    pnpm install --no-frozen-lockfile && \
+    pnpm store prune
 
-COPY packages/shared/ packages/shared/
-COPY services/agent/ services/agent/
+# ===== BUILDER STAGE =====
+FROM deps AS builder
 
-RUN pnpm --filter @meeshy/shared build
-RUN pnpm --filter @meeshy/agent build
+WORKDIR /app
 
-# ===== RUNTIME STAGE =====
+# Build shared package
+RUN echo "=== Building shared package ===" && \
+    cd packages/shared && \
+    pnpm exec tsc --project tsconfig.json
+
+# Copy agent source code
+COPY services/agent/src/ ./src/
+COPY services/agent/tsconfig.json ./
+
+# Build agent
+RUN echo "=== Generating Prisma client ===" && \
+    npx prisma generate --generator client --schema=./packages/shared/prisma/schema.prisma && \
+    echo "=== Building TypeScript ===" && \
+    pnpm exec tsc && \
+    echo "=== Copying Prisma client to dist ===" && \
+    mkdir -p dist/packages/shared/prisma && \
+    cp -ar packages/shared/prisma/client dist/packages/shared/prisma/ && \
+    cp packages/shared/prisma/schema.prisma dist/packages/shared/prisma/ && \
+    echo "=== Build completed ==="
+
+# ===== PROD-DEPS STAGE (production dependencies only) =====
+FROM base AS prod-deps
+
+ARG PNPM_VERSION=9.15.0
+
+# Build tools for native modules (zeromq)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cmake \
+    bash
+
+WORKDIR /app
+
+COPY services/agent/package.json ./
+COPY packages/shared/package.json ./packages/shared/
+
+RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
+    corepack enable pnpm && \
+    corepack prepare pnpm@${PNPM_VERSION} --activate && \
+    pnpm install --no-frozen-lockfile --prod && \
+    pnpm store prune
+
+# ===== RUNNER STAGE (minimal runtime - NO build tools) =====
 # Using Debian-slim for glibc compatibility with zeromq native module
-FROM node:22-slim AS runtime
+FROM node:22-slim AS runner
 
 ENV NODE_ENV=production
 
@@ -54,18 +107,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R agent:nodejs /app
 
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY --from=builder --chown=agent:nodejs /app/node_modules ./node_modules
+# Copy production node_modules from prod-deps
+COPY --from=prod-deps --chown=agent:nodejs /app/node_modules ./node_modules
+
+# Copy built artifacts from builder
+COPY --from=builder --chown=agent:nodejs /app/dist ./dist
 COPY --from=builder --chown=agent:nodejs /app/packages/shared ./packages/shared
-COPY --from=builder --chown=agent:nodejs /app/services/agent ./services/agent
 
 # Fix @meeshy/shared symlink: Docker COPY resolves symlinks to copies
 RUN rm -rf node_modules/@meeshy/shared && \
     mkdir -p node_modules/@meeshy && \
     ln -s ../../packages/shared node_modules/@meeshy/shared
 
-WORKDIR /app/services/agent
+# Copy package.json for runtime metadata
+COPY --chown=agent:nodejs services/agent/package.json ./
 
 USER agent
 

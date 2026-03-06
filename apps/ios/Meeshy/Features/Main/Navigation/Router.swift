@@ -22,6 +22,8 @@ enum Route: Hashable {
     case shareLinks
     case communityLinks
     case dataExport
+    case postDetail(String)
+    case bookmarks
 }
 
 @MainActor

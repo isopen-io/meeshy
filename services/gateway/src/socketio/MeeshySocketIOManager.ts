@@ -20,6 +20,7 @@ import { EmailService } from '../services/EmailService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { PostAudioService } from '../services/posts/PostAudioService';
+import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import { validateMessageLength } from '../config/message-limits';
 import jwt from 'jsonwebtoken';
@@ -210,6 +211,12 @@ export class MeeshySocketIOManager {
     try {
       // Initialiser le service de traduction
       await this.translationService.initialize();
+
+      // Initialiser le PostTranslationService singleton (dépend de ZMQ client + socialEventsHandler)
+      const zmqClient = this.translationService.getZmqClient();
+      if (zmqClient) {
+        PostTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+      }
 
       // Initialiser le service de notifications avec Socket.IO
       this.notificationService.setSocketIO(this.io, this.userSockets);

@@ -220,6 +220,7 @@ struct FeedSampleData {
 // MARK: - Feed View
 struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var router: Router
     @StateObject var viewModel = FeedViewModel()
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
@@ -229,6 +230,7 @@ struct FeedView: View {
     @State private var composerBounce: Bool = false
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
+    @State var postVisibility: String = "PUBLIC"
     @State private var showStoryViewer = false
     @State private var selectedStoryUserId: String?
     @State private var showStatusComposer = false
@@ -692,6 +694,12 @@ struct FeedView: View {
                             },
                             onLikeComment: { postId, commentId in
                                 Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
+                            },
+                            onSelectLanguage: { postId, language in
+                                viewModel.setTranslationOverride(postId: postId, language: language)
+                            },
+                            onTapPost: { postId in
+                                router.push(.postDetail(postId))
                             }
                         )
                         .onAppear {
@@ -868,9 +876,25 @@ struct FeedView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Public")
-                            .font(.system(size: 12))
+                        Menu {
+                            Button { postVisibility = "PUBLIC" } label: {
+                                Label("Public", systemImage: "globe")
+                            }
+                            Button { postVisibility = "FRIENDS" } label: {
+                                Label("Amis", systemImage: "person.2")
+                            }
+                            Button { postVisibility = "PRIVATE" } label: {
+                                Label("Priv\u{00E9}", systemImage: "lock")
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
+                                    .font(.system(size: 10))
+                                Text(postVisibility == "PUBLIC" ? "Public" : postVisibility == "FRIENDS" ? "Amis" : "Priv\u{00E9}")
+                                    .font(.system(size: 12))
+                            }
                             .foregroundColor(theme.textMuted)
+                        }
                     }
 
                     Spacer()

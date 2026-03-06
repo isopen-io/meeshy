@@ -832,9 +832,6 @@
     "Aucun lien de tracking" : {
 
     },
-    "Aucun membre" : {
-
-    },
     "Aucun message" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -875,9 +872,6 @@
 
     },
     "Aucune transcription" : {
-
-    },
-    "Aucune vue pour le moment" : {
 
     },
     "Audio" : {
@@ -2222,9 +2216,6 @@
 
     },
     "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire." : {
-
-    },
-    "Les personnes qui regardent votre story apparaîtront ici." : {
 
     },
     "Licences" : {

@@ -19,6 +19,8 @@ import type {
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  PostTranslationUpdatedEventData,
+  CommentTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 export interface SocialEventsHandlerDependencies {
@@ -227,6 +229,20 @@ export class SocialEventsHandler {
 
   broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
     this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
+  }
+
+  // ==============================================
+  // POST/COMMENT TRANSLATION BROADCASTS
+  // ==============================================
+
+  async broadcastPostTranslationUpdated(data: PostTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
+    const friendIds = await this.getFriendIds(postAuthorId);
+    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
+  }
+
+  async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
+    const friendIds = await this.getFriendIds(postAuthorId);
+    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   // ==============================================

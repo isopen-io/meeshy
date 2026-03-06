@@ -416,6 +416,9 @@ public struct StoryEffects: Codable, Sendable {
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
 
+    // Durée totale du slide (sérialisée au publish)
+    public var slideDuration: Float?
+
     // Deprecated — conservé pour compatibilité ascendante
     @available(*, deprecated, renamed: "backgroundAudioId")
     public var musicTrackId: String?
@@ -436,7 +439,8 @@ public struct StoryEffects: Codable, Sendable {
                 textObjects: [StoryTextObject]? = nil,
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
-                backgroundAudioVariants: [StoryAudioVariant]? = nil) {
+                backgroundAudioVariants: [StoryAudioVariant]? = nil,
+                slideDuration: Float? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
@@ -454,6 +458,7 @@ public struct StoryEffects: Codable, Sendable {
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.backgroundAudioVariants = backgroundAudioVariants
+        self.slideDuration = slideDuration
     }
 
     public var parsedTextStyle: StoryTextStyle? {
@@ -557,6 +562,7 @@ public struct StoryEffects: Codable, Sendable {
                 return d
             }
         }
+        if let sd = slideDuration { dict["slideDuration"] = sd }
         return dict
     }
 }

@@ -38,6 +38,8 @@ import type {
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  PostTranslationUpdatedEventData,
+  CommentTranslationUpdatedEventData,
 } from './post.js';
 
 // ===== ROOM HELPERS =====
@@ -142,6 +144,10 @@ export const SERVER_EVENTS = {
   COMMENT_ADDED: 'comment:added',
   COMMENT_DELETED: 'comment:deleted',
   COMMENT_LIKED: 'comment:liked',
+
+  // --- Post/Comment Translations ---
+  POST_TRANSLATION_UPDATED: 'post:translation-updated',
+  COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
 } as const;
 
 // Événements du client vers le serveur
@@ -586,6 +592,10 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMENT_ADDED]: (data: CommentAddedEventData) => void;
   [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
   [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
+
+  // Post/Comment Translations
+  [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
 }
 
 /**
