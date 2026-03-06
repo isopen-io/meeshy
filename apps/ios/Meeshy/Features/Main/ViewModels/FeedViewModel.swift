@@ -393,12 +393,10 @@ class FeedViewModel: ObservableObject {
         socialSocket.unsubscribeFeed()
     }
 
-    // MARK: - Fallback
+    // MARK: - Fallback (disabled — real API only)
 
     private func fallbackToSampleData() {
-        if posts.isEmpty {
-            posts = FeedSampleData.posts
-        }
+        // No-op: sample data disabled, show empty state instead
     }
 }
 

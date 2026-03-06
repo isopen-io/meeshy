@@ -222,8 +222,6 @@ struct FeedView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var router: Router
     @StateObject var viewModel = FeedViewModel()
-    @StateObject private var storyViewModel = StoryViewModel()
-    @StateObject private var statusViewModel = StatusViewModel()
     @State private var searchText = ""
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
@@ -231,9 +229,6 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    @State private var showStatusComposer = false
     @State private var showAudioComposer = false
 
     // Attachment states
@@ -256,10 +251,7 @@ struct FeedView: View {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
     }
 
-    // Computed property -- uses ViewModel data (falls back to sample)
-    private var posts: [FeedPost] {
-        viewModel.posts.isEmpty ? FeedSampleData.posts : viewModel.posts
-    }
+    private var posts: [FeedPost] { viewModel.posts }
 
     // Legacy inline sample data removed -- now served by FeedViewModel + FeedSampleData fallback
     private var _legacyPosts: [FeedPost] {
@@ -638,18 +630,12 @@ struct FeedView: View {
                     Spacer().frame(height: 100)
                         .id("feed-top")
 
-                    // Story Tray
-                    StoryTrayView(viewModel: storyViewModel) { userId in
-                        selectedStoryUserId = userId
-                        showStoryViewer = true
-                    }
-
                     // Composer placeholder
                     composerPlaceholder
                         .padding(.bottom, 8)
 
                     // Empty state when no posts
-                    if viewModel.hasLoaded && viewModel.posts.isEmpty && FeedSampleData.posts.isEmpty {
+                    if viewModel.hasLoaded && viewModel.posts.isEmpty {
                         EmptyStateView(
                             icon: "text.bubble",
                             title: "Aucune publication",
@@ -719,8 +705,6 @@ struct FeedView: View {
             }
             .refreshable {
                 await viewModel.refresh()
-                await storyViewModel.loadStories()
-                await statusViewModel.loadStatuses()
             }
             .overlay(alignment: .top) {
                 // "New posts" banner
@@ -765,26 +749,7 @@ struct FeedView: View {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
-            await storyViewModel.loadStories()
-            await statusViewModel.loadStatuses()
             viewModel.subscribeToSocketEvents()
-            storyViewModel.subscribeToSocketEvents()
-            statusViewModel.subscribeToSocketEvents()
-        }
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            if let userId = selectedStoryUserId,
-               let resolvedIndex = storyViewModel.groupIndex(forUserId: userId) {
-                StoryViewerView(
-                    viewModel: storyViewModel,
-                    groups: storyViewModel.storyGroups,
-                    currentGroupIndex: resolvedIndex,
-                    isPresented: $showStoryViewer
-                )
-            }
-        }
-        .sheet(isPresented: $showStatusComposer) {
-            StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in

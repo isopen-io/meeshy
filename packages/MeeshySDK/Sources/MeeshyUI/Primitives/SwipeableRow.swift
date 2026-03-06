@@ -106,7 +106,7 @@ public struct SwipeableRow<Content: View>: View {
             content
                 .environment(\.swipeProgress, swipeProgress)
                 .offset(x: effectiveOffset)
-                .gesture(swipeGesture)
+                .simultaneousGesture(swipeGesture)
                 .onTapGesture {
                     if openOffset != 0 { close() }
                 }
@@ -185,6 +185,9 @@ public struct SwipeableRow<Content: View>: View {
     private func handleDragEnd(_ value: DragGesture.Value) {
         let translation = value.translation.width
         let velocity = value.predictedEndTranslation.width - value.translation.width
+
+        // Ignore vertical-dominant drags (scroll) — ne pas ouvrir les swipe actions
+        guard abs(translation) > abs(value.translation.height) else { return }
 
         if openOffset == 0 {
             // Fermé : décider d'ouvrir

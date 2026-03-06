@@ -14,6 +14,7 @@ private struct StoryPreviewAssets: Identifiable {
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
     var onViewStory: (String) -> Void
+    var onAddStatus: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
@@ -21,7 +22,6 @@ struct StoryTrayView: View {
     private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var showStatusComposer = false
     @State private var showOwnStoryViewer = false
     @State private var storyPreviewAssets: StoryPreviewAssets?
 
@@ -33,7 +33,7 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 84)
+        .frame(height: 72)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -104,11 +104,6 @@ struct StoryTrayView: View {
                 )
             }
         }
-        .sheet(isPresented: $showStatusComposer) {
-            StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
         .withStatusBubble()
     }
 
@@ -140,8 +135,8 @@ struct StoryTrayView: View {
     private var myStoryButton: some View {
         MyStoryButton(
             viewModel: viewModel,
-            showStatusComposer: $showStatusComposer,
-            showOwnStoryViewer: $showOwnStoryViewer
+            showOwnStoryViewer: $showOwnStoryViewer,
+            onAddStatus: onAddStatus
         )
     }
 
@@ -172,15 +167,15 @@ struct StoryTrayView: View {
                 // Story count dots (multiple stories indicator)
                 if group.stories.count > 1 {
                     storyCountDots(count: group.stories.count, unviewed: group.hasUnviewed)
-                        .offset(y: 38)
+                        .offset(y: 28)
                 }
             }
 
             Text(group.username)
-                .font(.system(size: 11, weight: group.hasUnviewed ? .semibold : .medium))
+                .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
                 .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
                 .lineLimit(1)
-                .frame(width: 68)
+                .frame(width: 56)
         }
     }
 
@@ -207,18 +202,18 @@ struct StoryTrayView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(0..<6, id: \.self) { _ in
-                    VStack(spacing: 5) {
+                    VStack(spacing: 4) {
                         Circle()
                             .fill(Color.white.opacity(0.06))
-                            .frame(width: 62, height: 62)
+                            .frame(width: 44, height: 44)
                             .overlay(
                                 Circle()
                                     .stroke(Color.white.opacity(0.08), lineWidth: 2)
-                                    .frame(width: 68, height: 68)
+                                    .frame(width: 50, height: 50)
                             )
                         RoundedRectangle(cornerRadius: 3)
                             .fill(Color.white.opacity(0.06))
-                            .frame(width: 42, height: 8)
+                            .frame(width: 36, height: 7)
                     }
                     .shimmer()
                 }
@@ -233,11 +228,11 @@ struct StoryTrayView: View {
 
 private struct MyStoryButton: View {
     let viewModel: StoryViewModel
-    @Binding var showStatusComposer: Bool
     @Binding var showOwnStoryViewer: Bool
+    var onAddStatus: (() -> Void)?
 
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
         let currentUser = AuthManager.shared.currentUser
@@ -247,7 +242,7 @@ private struct MyStoryButton: View {
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
-        let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji ?? "💭"
+        let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji
 
         VStack(spacing: 5) {
             ZStack {
@@ -257,6 +252,7 @@ private struct MyStoryButton: View {
                     accentColor: accentColor,
                     avatarURL: currentUser?.avatar,
                     storyState: storyState,
+                    moodEmoji: myMoodEmoji,
                     presenceState: .offline,
                     onTap: {
                         if hasMyStory {
@@ -266,27 +262,38 @@ private struct MyStoryButton: View {
                         }
                         HapticFeedback.medium()
                     },
-                    contextMenuItems: hasMyStory ? [
-                        AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
-                            showOwnStoryViewer = true
-                            HapticFeedback.medium()
-                        },
-                        AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
-                            viewModel.showStoryComposer = true
+                    onMoodTap: { _ in
+                        onAddStatus?()
+                        HapticFeedback.medium()
+                    },
+                    contextMenuItems: [
+                        hasMyStory
+                            ? AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
+                                showOwnStoryViewer = true
+                                HapticFeedback.medium()
+                            }
+                            : AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
+                                viewModel.showStoryComposer = true
+                                HapticFeedback.medium()
+                            },
+                        AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
+                            onAddStatus?()
                             HapticFeedback.medium()
                         }
-                    ] : nil
+                    ]
                 )
                 .overlay(alignment: .bottomTrailing) {
-                    // 💭 status badge — remplace le dot de présence (inutile pour soi-même)
-                    Button {
-                        HapticFeedback.light()
-                        showStatusComposer = true
-                    } label: {
-                        Text(myMoodEmoji)
-                            .font(.system(size: 14))
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(theme.backgroundPrimary.opacity(0.9)))
+                    if myMoodEmoji == nil {
+                        Button {
+                            onAddStatus?()
+                            HapticFeedback.medium()
+                        } label: {
+                            Text("\u{1F4AD}")
+                                .font(.system(size: 14))
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(theme.backgroundPrimary))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -304,14 +311,14 @@ private struct MyStoryButton: View {
                                 .foregroundColor(.white.opacity(0.5))
                         }
                     }
-                    .offset(y: 38)
+                    .offset(y: 28)
                 }
             }
 
             Text("Moi")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white.opacity(0.8))
         }
-        .accessibilityLabel(hasMyStory ? "Ma story" : "Créer une story")
+        .accessibilityLabel(hasMyStory ? "Ma story" : "Changer mon mood")
     }
 }

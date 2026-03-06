@@ -5,7 +5,7 @@ import MeeshySDK
 
 public enum AvatarMode {
     case conversationList    // 52pt
-    case storyTray           // 58pt
+    case storyTray           // 44pt (compact)
     case conversationHeader  // 44pt
     case messageBubble       // 32pt
     case callNotification(CGFloat)
@@ -14,7 +14,7 @@ public enum AvatarMode {
     public var size: CGFloat {
         switch self {
         case .conversationList: return 52
-        case .storyTray: return 58
+        case .storyTray: return 44
         case .conversationHeader: return 44
         case .messageBubble: return 32
         case .callNotification(let v): return v

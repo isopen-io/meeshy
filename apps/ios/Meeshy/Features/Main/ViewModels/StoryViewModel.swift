@@ -361,9 +361,7 @@ class StoryViewModel: ObservableObject {
     // MARK: - Sample Data Fallback
 
     private func fallbackToSampleData() {
-        if storyGroups.isEmpty {
-            storyGroups = Self.sampleGroups
-        }
+        // No-op: sample data disabled, show empty state instead
     }
 
     static let sampleGroups: [StoryGroup] = {

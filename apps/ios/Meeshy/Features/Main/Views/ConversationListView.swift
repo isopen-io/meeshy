@@ -69,7 +69,8 @@ struct ConversationListView: View {
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
 
-    // Status bubble overlay state
+    // Status
+    @State private var showStatusComposer = false
     @State private var showStatusBubble = false
     @State private var selectedStatusEntry: StatusEntry?
     @State private var moodBadgeAnchor: CGPoint = .zero
@@ -458,6 +459,10 @@ struct ConversationListView: View {
                 .presentationDragIndicator(.visible)
             }
         .withStatusBubble()
+        .sheet(isPresented: $showStatusComposer) {
+            StatusComposerView(viewModel: statusViewModel)
+                .presentationDetents([.medium])
+        }
     }
 
     private var mainContent: some View {
@@ -563,9 +568,11 @@ struct ConversationListView: View {
                         )
 
                     // Story carousel
-                    StoryTrayView(viewModel: storyViewModel) { userId in
+                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         onStoryViewRequest?(userId, true)
-                    }
+                    }, onAddStatus: {
+                        showStatusComposer = true
+                    })
 
                     // Connection status banner
                     ConnectionBanner()

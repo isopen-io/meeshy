@@ -151,7 +151,6 @@ struct ThemedFeedOverlay: View {
     @StateObject private var viewModel = FeedViewModel()
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
-    @StateObject private var discoverStatusViewModel = StatusViewModel(mode: .discover)
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
     @State private var showStoryViewer = false
@@ -187,13 +186,10 @@ struct ThemedFeedOverlay: View {
                     Spacer().frame(height: 70)
 
                     // Story Tray
-                    StoryTrayView(viewModel: storyViewModel) { userId in
+                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         selectedStoryUserId = userId
                         showStoryViewer = true
-                    }
-
-                    // Discover statuses
-                    StatusBarView(viewModel: discoverStatusViewModel, onAddStatus: {
+                    }, onAddStatus: {
                         showStatusComposer = true
                     })
 
@@ -229,7 +225,6 @@ struct ThemedFeedOverlay: View {
                 await viewModel.refresh()
                 await storyViewModel.loadStories()
                 await statusViewModel.loadStatuses()
-                await discoverStatusViewModel.refresh()
             }
         }
         .task {
@@ -238,8 +233,6 @@ struct ThemedFeedOverlay: View {
             }
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
-            await discoverStatusViewModel.loadStatuses()
-            discoverStatusViewModel.subscribeToSocketEvents()
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             if let userId = selectedStoryUserId,
