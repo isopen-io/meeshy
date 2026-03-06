@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ReactionService {
+public final class ReactionService: @unchecked Sendable {
     public static let shared = ReactionService()
     private init() {}
     private var api: APIClient { APIClient.shared }

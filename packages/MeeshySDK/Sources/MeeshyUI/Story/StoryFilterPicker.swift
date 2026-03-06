@@ -53,7 +53,7 @@ public struct StoryFilterPicker: View {
         await MainActor.run { thumbnails = result }
     }
 
-    private func downsample(_ image: UIImage, to size: CGSize) -> UIImage {
+    private nonisolated func downsample(_ image: UIImage, to size: CGSize) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
     }

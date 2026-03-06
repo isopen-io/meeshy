@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Community Role
 
-public enum CommunityRole: String, Codable, CaseIterable {
+public enum CommunityRole: String, Codable, CaseIterable, Sendable {
     case admin
     case moderator
     case member

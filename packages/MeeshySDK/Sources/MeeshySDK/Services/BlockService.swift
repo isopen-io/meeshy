@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-public struct BlockedUser: Decodable, Identifiable {
+public struct BlockedUser: Decodable, Identifiable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -13,7 +13,7 @@ public struct BlockedUser: Decodable, Identifiable {
     }
 }
 
-public final class BlockService: ObservableObject {
+public final class BlockService: ObservableObject, @unchecked Sendable {
     public static let shared = BlockService()
     private var api: APIClient { APIClient.shared }
 

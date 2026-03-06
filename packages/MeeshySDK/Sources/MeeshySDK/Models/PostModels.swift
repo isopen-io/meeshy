@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Post Models
 
-public struct APIAuthor: Decodable {
+public struct APIAuthor: Decodable, Sendable {
     public let id: String
     public let username: String?
     public let displayName: String?
@@ -12,7 +12,7 @@ public struct APIAuthor: Decodable {
     public var name: String { displayName ?? username ?? "Anonymous" }
 }
 
-public struct APIPostMedia: Decodable {
+public struct APIPostMedia: Decodable, Sendable {
     public let id: String
     public let fileName: String?
     public let originalName: String?
@@ -38,7 +38,7 @@ public struct APIPostMedia: Decodable {
     }
 }
 
-public struct APIRepostOf: Decodable {
+public struct APIRepostOf: Decodable, Sendable {
     public let id: String
     public let content: String?
     public let author: APIAuthor
@@ -48,7 +48,7 @@ public struct APIRepostOf: Decodable {
     public let commentCount: Int?
 }
 
-public struct APIPostComment: Decodable {
+public struct APIPostComment: Decodable, Sendable {
     public let id: String
     public let content: String
     public let originalLanguage: String?
@@ -58,7 +58,7 @@ public struct APIPostComment: Decodable {
     public let author: APIAuthor
 }
 
-public struct APIPostTranslationEntry: Decodable {
+public struct APIPostTranslationEntry: Decodable, Sendable {
     public let text: String
     public let translationModel: String?
     public let confidenceScore: Double?
@@ -72,7 +72,7 @@ public struct APIPostTranslationEntry: Decodable {
     }
 }
 
-public struct APIPost: Decodable {
+public struct APIPost: Decodable, Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?

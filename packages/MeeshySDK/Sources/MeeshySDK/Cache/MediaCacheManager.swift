@@ -10,7 +10,7 @@ public actor MediaCacheManager {
 
     /// Static UIImage cache for instant synchronous access from SwiftUI view inits.
     /// Thread-safe via NSCache. Populated by `image(for:)` after successful decode.
-    private static let _imageCache: NSCache<NSString, UIImage> = {
+    nonisolated(unsafe) private static let _imageCache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 150
         cache.totalCostLimit = 80 * 1024 * 1024

@@ -4,7 +4,7 @@ import os
 
 // MARK: - Offline Queue Item
 
-public struct OfflineQueueItem: Codable, Identifiable {
+public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let id: String
     public let conversationId: String
     public let content: String
@@ -62,8 +62,8 @@ public actor OfflineQueue {
     public var onRetrySend: ((OfflineQueueItem) async -> Bool)?
 
     private init() {
-        items = loadFromDisk()
-        observeConnection()
+        items = Self.loadItemsFromDisk()
+        Task { await self.observeConnection() }
     }
 
     // MARK: - Queue Operations
@@ -168,17 +168,18 @@ public actor OfflineQueue {
         }
     }
 
-    private func loadFromDisk() -> [OfflineQueueItem] {
-        let url = queueFileURL
+    private static func loadItemsFromDisk() -> [OfflineQueueItem] {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        let url = cacheDir.appendingPathComponent(queueFileName)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
 
         do {
             let data = try Data(contentsOf: url)
-            let loaded = try decoder.decode([OfflineQueueItem].self, from: data)
-            logger.info("Loaded \(loaded.count) items from offline queue")
-            return loaded
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode([OfflineQueueItem].self, from: data)
         } catch {
-            logger.error("Failed to load offline queue: \(error.localizedDescription)")
             return []
         }
     }

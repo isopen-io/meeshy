@@ -1,6 +1,6 @@
 import Foundation
 
-public final class MeeshyConfig {
+public final class MeeshyConfig: @unchecked Sendable {
     public static let shared = MeeshyConfig()
 
     private static let remoteOrigin = "https://gate.meeshy.me"

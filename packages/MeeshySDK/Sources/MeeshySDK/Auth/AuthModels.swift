@@ -23,7 +23,7 @@ public struct LoginResponseData: Decodable {
 
 // MARK: - Register
 
-public struct RegisterRequest: Encodable {
+public struct RegisterRequest: Encodable, Sendable {
     public let username: String
     public let password: String
     public let firstName: String

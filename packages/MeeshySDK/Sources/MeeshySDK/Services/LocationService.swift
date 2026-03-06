@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-public final class LocationService {
+public final class LocationService: @unchecked Sendable {
     public static let shared = LocationService()
     private init() {}
     private let socketManager = MessageSocketManager.shared

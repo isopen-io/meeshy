@@ -40,7 +40,7 @@ public struct LocationSharePayload: Encodable {
     }
 }
 
-public struct LocationSharedEvent: Decodable {
+public struct LocationSharedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
     public let userId: String
@@ -88,7 +88,7 @@ public struct LiveLocationStartPayload: Encodable {
     }
 }
 
-public struct LiveLocationStartedEvent: Decodable {
+public struct LiveLocationStartedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
     public let username: String
@@ -118,7 +118,7 @@ public struct LiveLocationUpdatePayload: Encodable {
     }
 }
 
-public struct LiveLocationUpdatedEvent: Decodable {
+public struct LiveLocationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
     public let latitude: Double
@@ -130,7 +130,7 @@ public struct LiveLocationUpdatedEvent: Decodable {
     public let timestamp: Date?
 }
 
-public struct LiveLocationStoppedEvent: Decodable {
+public struct LiveLocationStoppedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
     public let stoppedAt: Date?

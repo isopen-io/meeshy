@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ReportService {
+public final class ReportService: @unchecked Sendable {
     public static let shared = ReportService()
     private init() {}
     private var api: APIClient { APIClient.shared }

@@ -21,13 +21,13 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let error: String?
 }
 
-public struct CursorPagination: Decodable {
+public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool
     public let limit: Int
 }
 
-public struct OffsetPagination: Decodable {
+public struct OffsetPagination: Decodable, Sendable {
     public let total: Int?
     public let hasMore: Bool
     public let limit: Int

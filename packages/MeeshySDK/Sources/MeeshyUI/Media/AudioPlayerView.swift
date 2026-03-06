@@ -220,8 +220,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     deinit {
-        timer?.invalidate()
-        loadTask?.cancel()
+        MainActor.assumeIsolated {
+            timer?.invalidate()
+            loadTask?.cancel()
+        }
     }
 
     @MainActor public func unregisterFromCoordinator() {

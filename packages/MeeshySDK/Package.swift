@@ -19,22 +19,22 @@ let package = Package(
                 .product(name: "SocketIO", package: "socket.io-client-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
             name: "MeeshyUI",
             dependencies: ["MeeshySDK"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "MeeshySDKTests",
             dependencies: ["MeeshySDK"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "MeeshyUITests",
             dependencies: ["MeeshyUI", "MeeshySDK"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]
 )

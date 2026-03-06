@@ -5,7 +5,7 @@ import os
 
 // MARK: - Message Socket Event Data
 
-public struct MessageDeletedEvent: Decodable {
+public struct MessageDeletedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
 
@@ -15,7 +15,7 @@ public struct MessageDeletedEvent: Decodable {
     }
 }
 
-public struct ReactionUpdateEvent: Decodable {
+public struct ReactionUpdateEvent: Decodable, Sendable {
     public let messageId: String
     public let emoji: String
     public let count: Int
@@ -28,7 +28,7 @@ public struct ReactionUpdateEvent: Decodable {
     }
 }
 
-public struct TypingEvent: Decodable {
+public struct TypingEvent: Decodable, Sendable {
     public let userId: String
     public let username: String
     public let conversationId: String
@@ -38,7 +38,7 @@ public struct TypingEvent: Decodable {
     }
 }
 
-public struct UnreadUpdateEvent: Decodable {
+public struct UnreadUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let unreadCount: Int
 
@@ -47,7 +47,7 @@ public struct UnreadUpdateEvent: Decodable {
     }
 }
 
-public struct UserStatusEvent: Decodable {
+public struct UserStatusEvent: Decodable, Sendable {
     public let userId: String
     public let username: String
     public let isOnline: Bool
@@ -61,7 +61,7 @@ public struct UserStatusEvent: Decodable {
 
 // MARK: - Translation Event Data
 
-public struct TranslationData: Decodable {
+public struct TranslationData: Decodable, Sendable {
     public let id: String
     public let messageId: String
     public let sourceLanguage: String
@@ -71,7 +71,7 @@ public struct TranslationData: Decodable {
     public let confidenceScore: Double?
 }
 
-public struct TranslationEvent: Decodable {
+public struct TranslationEvent: Decodable, Sendable {
     public let messageId: String
     public let translations: [TranslationData]
 }
@@ -107,7 +107,7 @@ public struct TranscriptionSegment: Decodable, Sendable {
     }
 }
 
-public struct TranscriptionData: Decodable {
+public struct TranscriptionData: Decodable, Sendable {
     public let id: String?
     public let text: String
     public let language: String
@@ -117,7 +117,7 @@ public struct TranscriptionData: Decodable {
     public let speakerCount: Int?
 }
 
-public struct TranscriptionReadyEvent: Decodable {
+public struct TranscriptionReadyEvent: Decodable, Sendable {
     public let messageId: String
     public let attachmentId: String
     public let conversationId: String
@@ -127,7 +127,7 @@ public struct TranscriptionReadyEvent: Decodable {
 
 // MARK: - Audio Translation Event Data
 
-public struct TranslatedAudioInfo: Decodable {
+public struct TranslatedAudioInfo: Decodable, Sendable {
     public let id: String
     public let targetLanguage: String
     public let url: String
@@ -140,7 +140,7 @@ public struct TranslatedAudioInfo: Decodable {
     public let segments: [TranscriptionSegment]?
 }
 
-public struct AudioTranslationEvent: Decodable {
+public struct AudioTranslationEvent: Decodable, Sendable {
     public let messageId: String
     public let attachmentId: String
     public let conversationId: String
@@ -149,14 +149,14 @@ public struct AudioTranslationEvent: Decodable {
     public let processingTimeMs: Int?
 }
 
-public struct ReadStatusUpdateEvent: Decodable {
+public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
     public let type: String // "read" or "received"
     public let updatedAt: Date
 }
 
-public struct MessageConsumedEvent: Decodable {
+public struct MessageConsumedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
     public let userId: String
@@ -167,7 +167,7 @@ public struct MessageConsumedEvent: Decodable {
 
 // MARK: - Notification Socket Event Data
 
-public struct SocketNotificationEvent: Decodable {
+public struct SocketNotificationEvent: Decodable, Sendable {
     public let id: String
     public let userId: String
     public let type: String
@@ -189,7 +189,7 @@ public struct SocketNotificationEvent: Decodable {
 
 // MARK: - Connection State
 
-public enum ConnectionState: Equatable {
+public enum ConnectionState: Equatable, Sendable {
     case connected
     case connecting
     case reconnecting(attempt: Int)
@@ -198,7 +198,7 @@ public enum ConnectionState: Equatable {
 
 // MARK: - Message Socket Manager
 
-public final class MessageSocketManager: ObservableObject {
+public final class MessageSocketManager: ObservableObject, @unchecked Sendable {
     public static let shared = MessageSocketManager()
 
     // Combine publishers — messages
@@ -404,12 +404,13 @@ public final class MessageSocketManager: ObservableObject {
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+            guard let self else { return }
             DispatchQueue.main.async {
-                self?.isConnected = false
-                if self?.hadPreviousConnection == true {
-                    self?.connectionState = .reconnecting(attempt: 0)
+                self.isConnected = false
+                if self.hadPreviousConnection {
+                    self.connectionState = .reconnecting(attempt: 0)
                 } else {
-                    self?.connectionState = .disconnected
+                    self.connectionState = .disconnected
                 }
             }
             Logger.socket.info("MessageSocket disconnected")
@@ -432,19 +433,22 @@ public final class MessageSocketManager: ObservableObject {
         // --- Message events ---
 
         socket.on("message:new") { [weak self] data, _ in
-            self?.decode(APIMessage.self, from: data) { msg in
+            guard let self else { return }
+            self.decode(APIMessage.self, from: data) { [weak self] msg in
                 self?.messageReceived.send(msg)
             }
         }
 
         socket.on("message:edited") { [weak self] data, _ in
-            self?.decode(APIMessage.self, from: data) { msg in
+            guard let self else { return }
+            self.decode(APIMessage.self, from: data) { [weak self] msg in
                 self?.messageEdited.send(msg)
             }
         }
 
         socket.on("message:deleted") { [weak self] data, _ in
-            self?.decode(MessageDeletedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(MessageDeletedEvent.self, from: data) { [weak self] event in
                 self?.messageDeleted.send(event)
             }
         }
@@ -452,13 +456,15 @@ public final class MessageSocketManager: ObservableObject {
         // --- Reaction events ---
 
         socket.on("reaction:added") { [weak self] data, _ in
-            self?.decode(ReactionUpdateEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionAdded.send(event)
             }
         }
 
         socket.on("reaction:removed") { [weak self] data, _ in
-            self?.decode(ReactionUpdateEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionRemoved.send(event)
             }
         }
@@ -466,13 +472,15 @@ public final class MessageSocketManager: ObservableObject {
         // --- Typing events ---
 
         socket.on("typing:start") { [weak self] data, _ in
-            self?.decode(TypingEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(TypingEvent.self, from: data) { [weak self] event in
                 self?.typingStarted.send(event)
             }
         }
 
         socket.on("typing:stop") { [weak self] data, _ in
-            self?.decode(TypingEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(TypingEvent.self, from: data) { [weak self] event in
                 self?.typingStopped.send(event)
             }
         }
@@ -480,7 +488,8 @@ public final class MessageSocketManager: ObservableObject {
         // --- Unread events ---
 
         socket.on("conversation:unread-updated") { [weak self] data, _ in
-            self?.decode(UnreadUpdateEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(UnreadUpdateEvent.self, from: data) { [weak self] event in
                 self?.unreadUpdated.send(event)
             }
         }
@@ -488,7 +497,8 @@ public final class MessageSocketManager: ObservableObject {
         // --- User status events ---
 
         socket.on("user:status") { [weak self] data, _ in
-            self?.decode(UserStatusEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(UserStatusEvent.self, from: data) { [weak self] event in
                 self?.userStatusChanged.send(event)
             }
         }
@@ -496,13 +506,15 @@ public final class MessageSocketManager: ObservableObject {
         // --- Translation events ---
 
         socket.on("message:translation") { [weak self] data, _ in
-            self?.decode(TranslationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(TranslationEvent.self, from: data) { [weak self] event in
                 self?.translationReceived.send(event)
             }
         }
 
         socket.on("message:translated") { [weak self] data, _ in
-            self?.decode(TranslationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(TranslationEvent.self, from: data) { [weak self] event in
                 self?.translationReceived.send(event)
             }
         }
@@ -510,7 +522,8 @@ public final class MessageSocketManager: ObservableObject {
         // --- Transcription events ---
 
         socket.on("audio:transcription-ready") { [weak self] data, _ in
-            self?.decode(TranscriptionReadyEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(TranscriptionReadyEvent.self, from: data) { [weak self] event in
                 self?.transcriptionReady.send(event)
             }
         }
@@ -518,19 +531,22 @@ public final class MessageSocketManager: ObservableObject {
         // --- Audio translation events ---
 
         socket.on("audio:translation-ready") { [weak self] data, _ in
-            self?.decode(AudioTranslationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(AudioTranslationEvent.self, from: data) { [weak self] event in
                 self?.audioTranslationReady.send(event)
             }
         }
 
         socket.on("audio:translations-progressive") { [weak self] data, _ in
-            self?.decode(AudioTranslationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(AudioTranslationEvent.self, from: data) { [weak self] event in
                 self?.audioTranslationProgressive.send(event)
             }
         }
 
         socket.on("audio:translations-completed") { [weak self] data, _ in
-            self?.decode(AudioTranslationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(AudioTranslationEvent.self, from: data) { [weak self] event in
                 self?.audioTranslationCompleted.send(event)
             }
         }
@@ -538,13 +554,15 @@ public final class MessageSocketManager: ObservableObject {
         // --- Read status events ---
 
         socket.on("read-status:updated") { [weak self] data, _ in
-            self?.decode(ReadStatusUpdateEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(ReadStatusUpdateEvent.self, from: data) { [weak self] event in
                 self?.readStatusUpdated.send(event)
             }
         }
 
         socket.on("message:consumed") { [weak self] data, _ in
-            self?.decode(MessageConsumedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(MessageConsumedEvent.self, from: data) { [weak self] event in
                 self?.messageConsumed.send(event)
             }
         }
@@ -552,25 +570,29 @@ public final class MessageSocketManager: ObservableObject {
         // --- Location events ---
 
         socket.on("location:shared") { [weak self] data, _ in
-            self?.decode(LocationSharedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(LocationSharedEvent.self, from: data) { [weak self] event in
                 self?.locationShared.send(event)
             }
         }
 
         socket.on("location:live-started") { [weak self] data, _ in
-            self?.decode(LiveLocationStartedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(LiveLocationStartedEvent.self, from: data) { [weak self] event in
                 self?.liveLocationStarted.send(event)
             }
         }
 
         socket.on("location:live-updated") { [weak self] data, _ in
-            self?.decode(LiveLocationUpdatedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(LiveLocationUpdatedEvent.self, from: data) { [weak self] event in
                 self?.liveLocationUpdated.send(event)
             }
         }
 
         socket.on("location:live-stopped") { [weak self] data, _ in
-            self?.decode(LiveLocationStoppedEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(LiveLocationStoppedEvent.self, from: data) { [weak self] event in
                 self?.liveLocationStopped.send(event)
             }
         }
@@ -578,7 +600,8 @@ public final class MessageSocketManager: ObservableObject {
         // --- Notification events ---
 
         socket.on("notification") { [weak self] data, _ in
-            self?.decode(SocketNotificationEvent.self, from: data) { event in
+            guard let self else { return }
+            self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
                 self?.notificationReceived.send(event)
             }
         }
@@ -586,7 +609,7 @@ public final class MessageSocketManager: ObservableObject {
 
     // MARK: - Decode Helper
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: [Any], handler: @escaping (T) -> Void) {
+    private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else { return }
 
         do {

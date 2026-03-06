@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - TrackingLink Service
 
-public final class TrackingLinkService {
+public final class TrackingLinkService: @unchecked Sendable {
     public static let shared = TrackingLinkService()
     private let api = APIClient.shared
 

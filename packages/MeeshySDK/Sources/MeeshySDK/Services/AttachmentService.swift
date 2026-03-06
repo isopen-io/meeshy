@@ -1,6 +1,6 @@
 import Foundation
 
-public final class AttachmentService {
+public final class AttachmentService: @unchecked Sendable {
     public static let shared = AttachmentService()
     private init() {}
     private var api: APIClient { APIClient.shared }

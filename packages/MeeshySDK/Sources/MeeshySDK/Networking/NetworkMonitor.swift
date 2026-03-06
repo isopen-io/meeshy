@@ -5,13 +5,13 @@ import os
 
 // MARK: - Network Monitor
 
-public final class NetworkMonitor: ObservableObject {
+public final class NetworkMonitor: ObservableObject, @unchecked Sendable {
     public static let shared = NetworkMonitor()
 
     @Published public private(set) var isOffline: Bool = false
     @Published public private(set) var connectionType: ConnectionType = .unknown
 
-    public enum ConnectionType: String {
+    public enum ConnectionType: String, Sendable {
         case wifi
         case cellular
         case wired

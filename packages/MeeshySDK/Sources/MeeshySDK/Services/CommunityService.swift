@@ -1,6 +1,6 @@
 import Foundation
 
-public final class CommunityService {
+public final class CommunityService: @unchecked Sendable {
     public static let shared = CommunityService()
     private init() {}
     private var api: APIClient { APIClient.shared }
