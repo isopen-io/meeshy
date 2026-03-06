@@ -555,6 +555,11 @@ extension StoryViewerView {
         var maxDuration: Double = 5.0
         let effects = story.storyEffects
 
+        if let authoritative = effects?.slideDuration, authoritative > 0 {
+            computedStoryDuration = Double(authoritative)
+            return
+        }
+
         // Durées des médias foreground (vidéo + audio) depuis FeedMedia.duration
         if let mediaObjects = effects?.mediaObjects {
             for obj in mediaObjects where obj.placement == "foreground" {
