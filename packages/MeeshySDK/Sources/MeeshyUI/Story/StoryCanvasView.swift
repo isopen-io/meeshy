@@ -18,14 +18,27 @@ struct StoryCanvasView: View {
     var onEditText: ((String) -> Void)?
     var onEditMedia: ((String) -> Void)?
 
-    // Background image manipulation (local UX state)
-    @State private var imageScale: CGFloat = 1.0
-    @State private var imageOffset: CGSize = .zero
+    // Background image manipulation — base values from ViewModel (persisted per-slide)
     @GestureState private var dragDelta: CGSize = .zero
     @GestureState private var pinchDelta: CGFloat = 1.0
     @GestureState private var rotationDelta: Angle = .zero
-    @State private var imageRotation: Angle = .zero
     @State private var filteredImage: UIImage?
+
+    private var imageScale: CGFloat {
+        get { viewModel.backgroundTransform.scale }
+        nonmutating set { viewModel.backgroundTransform.scale = newValue }
+    }
+    private var imageOffset: CGSize {
+        get { CGSize(width: viewModel.backgroundTransform.offsetX, height: viewModel.backgroundTransform.offsetY) }
+        nonmutating set {
+            viewModel.backgroundTransform.offsetX = newValue.width
+            viewModel.backgroundTransform.offsetY = newValue.height
+        }
+    }
+    private var imageRotation: Angle {
+        get { Angle(degrees: viewModel.backgroundTransform.rotation) }
+        nonmutating set { viewModel.backgroundTransform.rotation = newValue.degrees }
+    }
 
     init(
         viewModel: StoryComposerViewModel,
@@ -140,9 +153,7 @@ struct StoryCanvasView: View {
         }
         .onChange(of: selectedImage) { _, _ in
             withAnimation(.spring(response: 0.3)) {
-                imageScale = 1.0
-                imageOffset = .zero
-                imageRotation = .zero
+                viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
             }
             updateFilteredImage()
         }
@@ -319,6 +330,7 @@ struct StoryCanvasView: View {
                 }
             )
             .allowsHitTesting(interactive)
+            .zIndex(Double(viewModel.zIndex(for: sticker.id)))
         }
     }
 

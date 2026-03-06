@@ -105,6 +105,24 @@ final class StoryComposerViewModel {
 
     var backgroundColor: String = "#000000"
 
+    // Per-slide background image transforms (persisted across slide changes)
+    struct BackgroundTransform {
+        var scale: CGFloat = 1.0
+        var offsetX: CGFloat = 0
+        var offsetY: CGFloat = 0
+        var rotation: Double = 0
+    }
+    var backgroundTransform: BackgroundTransform = BackgroundTransform()
+    private var backgroundTransformCache: [Int: BackgroundTransform] = [:]
+
+    func saveBackgroundTransform() {
+        backgroundTransformCache[currentSlideIndex] = backgroundTransform
+    }
+
+    func restoreBackgroundTransform() {
+        backgroundTransform = backgroundTransformCache[currentSlideIndex] ?? BackgroundTransform()
+    }
+
     // MARK: - Media Storage (pre-publication)
 
     var loadedImages: [String: UIImage] = [:]
@@ -229,11 +247,13 @@ final class StoryComposerViewModel {
 
     func selectSlide(at index: Int) {
         guard slides.indices.contains(index) else { return }
+        saveBackgroundTransform()
         selectedElementId = nil
         activeTool = nil
         currentSlideIndex = index
         zIndexMap = [:]
         nextZIndex = 1
+        restoreBackgroundTransform()
     }
 
     func moveSlide(from source: Int, to destination: Int) {
