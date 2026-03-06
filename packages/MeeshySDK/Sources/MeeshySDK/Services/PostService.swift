@@ -52,6 +52,52 @@ public final class PostService: @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
     }
 
+    public func getBookmarks(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await api.paginatedRequest(endpoint: "/posts/bookmarks", cursor: cursor, limit: limit)
+    }
+
+    public func removeBookmark(postId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/bookmark")
+    }
+
+    public func getPost(postId: String) async throws -> APIPost {
+        let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(postId)")
+        return response.data
+    }
+
+    public func getComments(postId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
+        try await api.paginatedRequest(endpoint: "/posts/\(postId)/comments", cursor: cursor, limit: limit)
+    }
+
+    public func requestTranslation(postId: String, targetLanguage: String) async throws {
+        let body = ["targetLanguage": targetLanguage]
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        let _: APIResponse<[String: String]> = try await api.request(
+            endpoint: "/posts/\(postId)/translate",
+            method: "POST",
+            body: bodyData
+        )
+    }
+
+    public func unlikeComment(postId: String, commentId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)/like")
+    }
+
+    public func deleteComment(postId: String, commentId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
+    }
+
+    public func addReply(postId: String, parentId: String, content: String) async throws -> APIPostComment {
+        let body: [String: String] = ["content": content, "parentId": parentId]
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        let response: APIResponse<APIPostComment> = try await api.request(
+            endpoint: "/posts/\(postId)/comments",
+            method: "POST",
+            body: bodyData
+        )
+        return response.data
+    }
+
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", mediaIds: [String]? = nil) async throws -> APIPost {
         let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, mediaIds: mediaIds)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
