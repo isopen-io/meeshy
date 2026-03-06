@@ -21,6 +21,9 @@ struct ProfileView: View {
     @State private var errorMessage: String?
     @State private var showStats = false
     @State private var stats: UserStats?
+    @State private var showSystemLanguagePicker = false
+    @State private var showRegionalLanguagePicker = false
+    @State private var showCustomLanguagePicker = false
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -37,13 +40,6 @@ struct ProfileView: View {
     private var user: MeeshyUser? { authManager.currentUser }
 
     private var isUploading: Bool { isUploadingAvatar || isUploadingBanner }
-
-    private let languages = [
-        ("", "Aucune"), ("fr", "Français"), ("en", "English"), ("es", "Español"),
-        ("ar", "العربية"), ("de", "Deutsch"), ("it", "Italiano"), ("pt", "Português"),
-        ("zh", "中文"), ("ja", "日本語"), ("ko", "한국어"), ("ru", "Русский"),
-        ("tr", "Türkçe"), ("nl", "Nederlands"), ("hi", "हिन्दी"), ("sw", "Kiswahili")
-    ]
 
     var body: some View {
         ZStack {
@@ -381,11 +377,56 @@ struct ProfileView: View {
             sectionHeader(icon: "globe", title: "LANGUES", color: "FF6B6B")
 
             VStack(spacing: 0) {
-                languageRow(title: "Langue principale", selection: $systemLanguage)
-                languageRow(title: "Langue regionale", selection: $regionalLanguage)
-                languageRow(title: "Langue personnalisee", selection: $customDestinationLanguage)
+                languagePickerRow(
+                    title: "Langue principale",
+                    subtitle: "Le contenu sera traduit dans cette langue",
+                    code: systemLanguage,
+                    required: true,
+                    showPicker: $showSystemLanguagePicker
+                )
+                languagePickerRow(
+                    title: "Langue regionale",
+                    subtitle: nil,
+                    code: regionalLanguage,
+                    required: false,
+                    showPicker: $showRegionalLanguagePicker
+                )
+                languagePickerRow(
+                    title: "Langue personnalisee",
+                    subtitle: nil,
+                    code: customDestinationLanguage,
+                    required: false,
+                    showPicker: $showCustomLanguagePicker
+                )
             }
             .background(sectionBackground)
+        }
+        .sheet(isPresented: $showSystemLanguagePicker) {
+            ProfileLanguagePickerSheet(
+                title: "Langue principale",
+                languages: LanguageData.allLanguages,
+                selectedCode: systemLanguage,
+                allowClear: false,
+                onSelect: { systemLanguage = $0 }
+            )
+        }
+        .sheet(isPresented: $showRegionalLanguagePicker) {
+            ProfileLanguagePickerSheet(
+                title: "Langue regionale",
+                languages: LanguageData.allLanguages,
+                selectedCode: regionalLanguage,
+                allowClear: true,
+                onSelect: { regionalLanguage = $0 }
+            )
+        }
+        .sheet(isPresented: $showCustomLanguagePicker) {
+            ProfileLanguagePickerSheet(
+                title: "Langue personnalisee",
+                languages: LanguageData.allLanguages,
+                selectedCode: customDestinationLanguage,
+                allowClear: true,
+                onSelect: { customDestinationLanguage = $0 }
+            )
         }
     }
 
@@ -520,32 +561,59 @@ struct ProfileView: View {
         .padding(.vertical, 10)
     }
 
-    private func languageRow(title: String, selection: Binding<String>) -> some View {
-        HStack(spacing: 12) {
-            fieldIcon("globe")
+    private func languagePickerRow(
+        title: String,
+        subtitle: String?,
+        code: String,
+        required: Bool,
+        showPicker: Binding<Bool>
+    ) -> some View {
+        Button {
+            guard isEditing else { return }
+            HapticFeedback.light()
+            showPicker.wrappedValue = true
+        } label: {
+            HStack(spacing: 12) {
+                fieldIcon("globe")
 
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
 
-            Spacer()
-
-            if isEditing {
-                Picker("", selection: selection) {
-                    ForEach(languages, id: \.0) { code, name in
-                        Text(name).tag(code)
+                    if let subtitle, !code.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.textMuted)
                     }
                 }
-                .pickerStyle(.menu)
-                .tint(Color(hex: accentColor))
-            } else {
-                Text(languageName(for: selection.wrappedValue))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+
+                Spacer()
+
+                if let info = LanguageData.info(for: code) {
+                    HStack(spacing: 6) {
+                        Text(info.flag)
+                            .font(.system(size: 18))
+                        Text(info.nativeName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                } else {
+                    Text(required ? "Choisir" : "Aucune")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                if isEditing {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .disabled(!isEditing)
     }
 
     private func verificationBadge(verified: Bool) -> some View {
@@ -581,16 +649,13 @@ struct ProfileView: View {
 
     // MARK: - Helpers
 
-    private func languageName(for code: String) -> String {
-        languages.first(where: { $0.0 == code })?.1 ?? (code.isEmpty ? "Aucune" : code)
-    }
-
     private func loadUserData() {
         firstName = user?.firstName ?? ""
         lastName = user?.lastName ?? ""
         displayName = user?.displayName ?? user?.username ?? ""
         bio = user?.bio ?? ""
-        systemLanguage = user?.systemLanguage ?? ""
+        let deviceLang = Locale.current.language.languageCode?.identifier ?? "fr"
+        systemLanguage = user?.systemLanguage ?? deviceLang
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
     }
@@ -619,7 +684,10 @@ struct ProfileView: View {
                     bio: bio.isEmpty ? nil : bio,
                     systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
                     regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
-                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage
+                    customDestinationLanguage: customDestinationLanguage.isEmpty ? nil : customDestinationLanguage,
+                    translateToSystemLanguage: !systemLanguage.isEmpty,
+                    translateToRegionalLanguage: !regionalLanguage.isEmpty,
+                    useCustomDestination: !customDestinationLanguage.isEmpty
                 )
                 let updatedUser = try await UserService.shared.updateProfile(request)
                 authManager.currentUser = updatedUser

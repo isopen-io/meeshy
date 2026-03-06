@@ -8,13 +8,22 @@ public struct UpdateProfileRequest: Encodable {
     public var systemLanguage: String?
     public var regionalLanguage: String?
     public var customDestinationLanguage: String?
+    public var translateToSystemLanguage: Bool?
+    public var translateToRegionalLanguage: Bool?
+    public var useCustomDestination: Bool?
 
     public init(firstName: String? = nil, lastName: String? = nil, displayName: String? = nil,
                 bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
-                customDestinationLanguage: String? = nil) {
+                customDestinationLanguage: String? = nil,
+                translateToSystemLanguage: Bool? = nil,
+                translateToRegionalLanguage: Bool? = nil,
+                useCustomDestination: Bool? = nil) {
         self.firstName = firstName; self.lastName = lastName; self.displayName = displayName
         self.bio = bio; self.systemLanguage = systemLanguage; self.regionalLanguage = regionalLanguage
         self.customDestinationLanguage = customDestinationLanguage
+        self.translateToSystemLanguage = translateToSystemLanguage
+        self.translateToRegionalLanguage = translateToRegionalLanguage
+        self.useCustomDestination = useCustomDestination
     }
 }
 

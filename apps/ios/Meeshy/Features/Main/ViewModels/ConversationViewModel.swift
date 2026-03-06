@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 import MeeshySDK
 import os
 
@@ -497,6 +498,13 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
+    private func detectKeyboardLanguage() -> String {
+        if let primaryLanguage = UITextInputMode.activeInputModes.first?.primaryLanguage {
+            return String(primaryLanguage.prefix(2))
+        }
+        return authManager.currentUser?.systemLanguage ?? "fr"
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -604,7 +612,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: nil,
+                originalLanguage: detectKeyboardLanguage(),
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,

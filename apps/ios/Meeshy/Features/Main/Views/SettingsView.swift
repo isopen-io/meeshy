@@ -29,8 +29,6 @@ struct SettingsView: View {
     @State private var showVoiceProfileManage = false
     @State private var autoTranscriptionEnabled = false
 
-    @AppStorage("preferredLanguage") private var preferredLanguage = "fr"
-
     private let accentColor = "08D9D6"
 
     var body: some View {
@@ -117,7 +115,6 @@ struct SettingsView: View {
                 voiceProfileSection
                 transcriptionSection
                 notificationsSection
-                languageSection
                 dataSection
                 meeshyToolsSection
                 supportSection
@@ -237,6 +234,23 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            settingsRow(icon: "globe", title: "Langue de l'interface", color: "4ECDC4") {
+                Picker("", selection: Binding(
+                    get: { prefs.application.interfaceLanguage },
+                    set: { val in prefs.updateApplication { $0.interfaceLanguage = val } }
+                )) {
+                    ForEach(LanguageData.interfaceLanguages, id: \.code) { lang in
+                        HStack {
+                            Text(lang.flag)
+                            Text(lang.nativeName)
+                        }
+                        .tag(lang.code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color(hex: "4ECDC4"))
+            }
         }
     }
 
@@ -289,31 +303,6 @@ struct SettingsView: View {
             }
             .accessibilityLabel("Plus d'options de notifications")
             .accessibilityHint("Ouvre les reglages avances de notifications")
-        }
-    }
-
-    // MARK: - Language Section
-
-    private var languageSection: some View {
-        settingsSection(title: "Langue", icon: "globe", color: "4ECDC4") {
-            let languages = [("fr", "Français"), ("en", "English"), ("es", "Español"), ("ar", "العربية")]
-            ForEach(languages, id: \.0) { code, name in
-                Button {
-                    HapticFeedback.light()
-                    prefs.updateApplication { $0.interfaceLanguage = code }
-                } label: {
-                    settingsRow(icon: "flag.fill", title: name, color: prefs.application.interfaceLanguage == code ? accentColor : "6B7280") {
-                        if prefs.application.interfaceLanguage == code {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(Color(hex: accentColor))
-                        }
-                    }
-                }
-                .accessibilityLabel("Langue \(name)")
-                .accessibilityValue(prefs.application.interfaceLanguage == code ? "selectionnee" : "")
-                .accessibilityAddTraits(prefs.application.interfaceLanguage == code ? .isSelected : [])
-            }
         }
     }
 

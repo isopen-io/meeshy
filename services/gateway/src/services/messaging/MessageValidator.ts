@@ -293,6 +293,7 @@ export class MessageValidator {
   async detectLanguage(content: string): Promise<string> {
     try {
       // TODO: Implémenter détection via service de traduction
+      console.warn('[MessageValidator] detectLanguage: using hardcoded fallback "fr" — client should send originalLanguage');
       return 'fr';
     } catch (error) {
       console.error('[MessageValidator] Language detection failed:', error);
