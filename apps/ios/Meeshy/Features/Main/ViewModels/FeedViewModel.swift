@@ -23,6 +23,12 @@ class FeedViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket = SocialSocketManager.shared
 
+    private var userLanguage: String {
+        AuthManager.shared.currentUser?.systemLanguage
+            ?? Locale.current.language.languageCode?.identifier
+            ?? "en"
+    }
+
     // MARK: - Initial Load
 
     func loadFeed() async {
@@ -37,7 +43,7 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                posts = response.data.map { $0.toFeedPost() }
+                posts = response.data.map { $0.toFeedPost(userLanguage: self.userLanguage) }
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
             } else {
@@ -78,7 +84,7 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                let newPosts = response.data.map { $0.toFeedPost() }
+                let newPosts = response.data.map { $0.toFeedPost(userLanguage: self.userLanguage) }
                 // Deduplicate
                 let existingIds = Set(posts.map(\.id))
                 let uniqueNew = newPosts.filter { !existingIds.contains($0.id) }
@@ -159,7 +165,7 @@ class FeedViewModel: ObservableObject {
                 audioDuration: audioDuration,
                 mobileTranscription: mobileTranscription
             )
-            let feedPost = apiPost.toFeedPost()
+            let feedPost = apiPost.toFeedPost(userLanguage: userLanguage)
             posts.insert(feedPost, at: 0)
         } catch {
             publishError = error.localizedDescription
@@ -232,6 +238,31 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Translation
+
+    func setTranslationOverride(postId: String, language: String) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }),
+              let translation = posts[index].translations?[language] else { return }
+        posts[index].translatedContent = translation.text
+    }
+
+    func clearTranslationOverride(postId: String) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        if let translation = posts[index].translations?[userLanguage] {
+            posts[index].translatedContent = translation.text
+        } else {
+            posts[index].translatedContent = nil
+        }
+    }
+
+    func requestTranslation(postId: String, targetLanguage: String) async {
+        do {
+            try await PostService.shared.requestTranslation(postId: postId, targetLanguage: targetLanguage)
+        } catch {
+            // Translation will arrive via socket event
+        }
+    }
+
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
@@ -242,7 +273,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
                 guard let self else { return }
-                let feedPost = apiPost.toFeedPost()
+                let feedPost = apiPost.toFeedPost(userLanguage: userLanguage)
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1
@@ -255,7 +286,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
                 guard let self else { return }
-                let updatedFeedPost = apiPost.toFeedPost()
+                let updatedFeedPost = apiPost.toFeedPost(userLanguage: userLanguage)
                 if let index = self.posts.firstIndex(where: { $0.id == updatedFeedPost.id }) {
                     // Preserve local-only state (isLiked) across the update
                     var merged = updatedFeedPost
@@ -296,7 +327,7 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self else { return }
-                let repostFeedPost = data.repost.toFeedPost()
+                let repostFeedPost = data.repost.toFeedPost(userLanguage: self.userLanguage)
                 if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
                     self.posts.insert(repostFeedPost, at: 0)
                     self.newPostsCount += 1
@@ -319,6 +350,40 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].commentCount = data.commentCount
+            }
+            .store(in: &cancellables)
+
+        // --- post:translation-updated ---
+        socialSocket.postTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                let translation = PostTranslation(
+                    text: data.translation.text,
+                    translationModel: data.translation.translationModel,
+                    confidenceScore: data.translation.confidenceScore
+                )
+                var translations = self.posts[index].translations ?? [:]
+                translations[data.language] = translation
+                self.posts[index].translations = translations
+                if data.language == self.userLanguage {
+                    self.posts[index].translatedContent = data.translation.text
+                }
+            }
+            .store(in: &cancellables)
+
+        // --- comment:translation-updated ---
+        socialSocket.commentTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self,
+                      let postIndex = self.posts.firstIndex(where: { $0.id == data.postId }),
+                      let commentIndex = self.posts[postIndex].comments.firstIndex(where: { $0.id == data.commentId })
+                else { return }
+                let lang = self.userLanguage
+                if data.language == lang {
+                    self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
+                }
             }
             .store(in: &cancellables)
     }
