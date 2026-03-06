@@ -7,8 +7,9 @@ struct TimelinePanel: View {
     @State private var tracks: [TimelineTrack] = []
     @State private var engine = TimelinePlaybackEngine()
     @State private var detailTrackId: String?
-    @State private var zoomScale: CGFloat = 1.0
+    private var zoomScale: CGFloat { viewModel.timelineZoomScale }
     @State private var mediaDurationCache: [String: Float] = [:]
+    @State private var scrollProxy: ScrollViewProxy?
     @Environment(\.theme) private var theme
 
     private let labelWidth: CGFloat = 72
@@ -66,6 +67,7 @@ struct TimelinePanel: View {
         engine.configure(duration: slideDuration)
         engine.onTimeUpdate = { time in
             viewModel.timelinePlaybackTime = time
+            scrollProxy?.scrollTo("playhead", anchor: .center)
         }
         engine.onPlaybackEnd = {
             viewModel.isTimelinePlaying = false
@@ -153,18 +155,26 @@ struct TimelinePanel: View {
                 labelColumn(grouped: grouped)
                     .frame(width: labelWidth)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ZStack(alignment: .topLeading) {
-                        VStack(spacing: 0) {
-                            rulerRow
-                            trackRows(grouped: grouped)
-                        }
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        ZStack(alignment: .topLeading) {
+                            VStack(spacing: 0) {
+                                rulerRow
+                                trackRows(grouped: grouped)
+                            }
 
-                        gridLines(grouped: grouped)
-                        playheadOverlay(grouped: grouped)
-                        durationHandleOverlay
+                            gridLines(grouped: grouped)
+                            playheadOverlay(grouped: grouped)
+                            durationHandleOverlay
+
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                                .id("playhead")
+                                .offset(x: CGFloat(viewModel.timelinePlaybackTime) * pixelsPerSecond)
+                        }
+                        .frame(width: totalTimelineWidth)
                     }
-                    .frame(width: totalTimelineWidth)
+                    .onAppear { scrollProxy = proxy }
                 }
             }
 
@@ -174,7 +184,7 @@ struct TimelinePanel: View {
         .gesture(
             MagnificationGesture()
                 .onChanged { value in
-                    zoomScale = max(0.5, min(4.0, value))
+                    viewModel.timelineZoomScale = max(0.5, min(4.0, value))
                 }
         )
     }
@@ -662,15 +672,20 @@ struct TimelinePanel: View {
         return String(format: "%d:%02d", Int(sec) / 60, Int(sec) % 60)
     }
 
-    /// Synchronous intrinsic duration from a local media URL. Caches result.
+    /// Returns cached intrinsic duration; starts async load if not yet cached.
     private func intrinsicDuration(url: URL?) -> Float? {
         guard let url else { return nil }
         let key = url.lastPathComponent
         if let cached = mediaDurationCache[key] { return cached }
+        Task { await loadIntrinsicDuration(url: url, key: key) }
+        return nil
+    }
+
+    private func loadIntrinsicDuration(url: URL, key: String) async {
         let asset = AVURLAsset(url: url)
-        let dur = Float(CMTimeGetSeconds(asset.duration))
-        guard dur > 0, dur.isFinite else { return nil }
-        DispatchQueue.main.async { mediaDurationCache[key] = dur }
-        return dur
+        guard let cmDuration = try? await asset.load(.duration) else { return }
+        let dur = Float(CMTimeGetSeconds(cmDuration))
+        guard dur > 0, dur.isFinite else { return }
+        mediaDurationCache[key] = dur
     }
 }
