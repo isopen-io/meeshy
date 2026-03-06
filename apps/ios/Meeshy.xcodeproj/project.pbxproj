@@ -44,6 +44,7 @@
 		AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */; };
 		AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440080 /* PostDetailView.swift */; };
 		AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440081 /* BookmarksView.swift */; };
+		AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */; };
 		AA00BB11CC22DD33EE440028 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440018 /* AuthModels.swift */; };
 		AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001A /* PostModels.swift */; };
 		AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001B /* StoryModels.swift */; };
@@ -253,6 +254,7 @@
 		AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCommentsSheet.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440080 /* PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailView.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440081 /* BookmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostTranslationSheet.swift; sourceTree = "<group>"; };
 		AA1000000000001FA1 /* UploadProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProgressBar.swift; sourceTree = "<group>"; };
 		AA2000000000001FA2 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		AA3000000000001FA3 /* MediaCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCompressor.swift; sourceTree = "<group>"; };
@@ -525,6 +527,7 @@
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
 				AA00BB11CC22DD33EE440080 /* PostDetailView.swift */,
 				AA00BB11CC22DD33EE440081 /* BookmarksView.swift */,
+				AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */,
 				AA00BB11CC22DD33EE440031 /* FeedPostCard.swift */,
 				AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */,
 				6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */,
@@ -903,6 +906,7 @@
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */,
+				AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */,
 				AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */,
 				AA00BB11CC22DD33EE440022 /* FeedPostCard+Media.swift in Sources */,

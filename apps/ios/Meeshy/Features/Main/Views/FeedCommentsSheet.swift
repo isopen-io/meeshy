@@ -122,8 +122,8 @@ struct CommentsSheetView: View {
                 }
             }
 
-            // Content
-            Text(post.content)
+            // Content (Prisme Linguistique)
+            Text(post.displayContent)
                 .font(.system(size: 15))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(3)
@@ -173,7 +173,7 @@ struct CommentsSheetView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: replyingTo.authorColor))
 
-                        Text(replyingTo.content)
+                        Text(replyingTo.displayContent)
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
@@ -355,8 +355,8 @@ struct CommentRowView: View {
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Content
-                Text(comment.content)
+                // Content (Prisme Linguistique)
+                Text(comment.displayContent)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)

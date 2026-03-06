@@ -15,11 +15,14 @@ struct FeedPostCard: View {
     var onBookmark: ((String) -> Void)? = nil
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onLikeComment: ((String, String) -> Void)? = nil // (postId, commentId)
+    var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
+    var onTapPost: ((String) -> Void)? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isLiked = false
     @State private var showCommentsSheet = false
+    @State private var showTranslationSheet = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
@@ -31,11 +34,32 @@ struct FeedPostCard: View {
                 // Author header
                 authorHeader
 
-                // Post content
-                Text(post.content)
+                // Post content (Prisme Linguistique: displays translated content when available)
+                Text(post.displayContent)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(nil)
+                    .onLongPressGesture {
+                        if let translations = post.translations, !translations.isEmpty {
+                            HapticFeedback.light()
+                            showTranslationSheet = true
+                        }
+                    }
+
+                // Translation indicator
+                if post.isTranslated {
+                    HStack(spacing: 4) {
+                        Image(systemName: "translate")
+                            .font(.system(size: 11))
+                        Text("Traduit depuis \(Locale.current.localizedString(forLanguageCode: post.originalLanguage ?? "?") ?? post.originalLanguage ?? "?")")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(theme.textMuted)
+                    .onTapGesture {
+                        HapticFeedback.light()
+                        showTranslationSheet = true
+                    }
+                }
 
                 // Media preview
                 if post.hasMedia {
@@ -66,8 +90,19 @@ struct FeedPostCard: View {
                 )
         )
         .padding(.horizontal, 16)
+        .onTapGesture {
+            onTapPost?(post.id)
+        }
         .sheet(isPresented: $showCommentsSheet) {
             CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment, onLikeComment: onLikeComment)
+        }
+        .sheet(isPresented: $showTranslationSheet) {
+            PostTranslationSheet(
+                post: post,
+                onSelectLanguage: { language in
+                    onSelectLanguage?(post.id, language)
+                }
+            )
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -380,8 +415,8 @@ struct FeedPostCard: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
 
-                    // Content
-                    Text(comment.content)
+                    // Content (Prisme Linguistique)
+                    Text(comment.displayContent)
                         .font(.system(size: 14))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
