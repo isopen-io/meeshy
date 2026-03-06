@@ -303,6 +303,9 @@ export class MaintenanceService {
         // Nettoyer les attachments orphelins
         await this.cleanupOrphanedAttachments();
 
+        // Nettoyer les messages vides sans contenu ni attachement
+        await this.cleanupEmptyMessages();
+
         // Nettoyer les sessions et données expirées
         await this.cleanupExpiredData();
 
@@ -378,6 +381,67 @@ export class MaintenanceService {
 
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des attachments orphelins:', error);
+    }
+  }
+
+  /**
+   * Nettoyer les messages vides (pas de contenu et pas d'attachement)
+   * Ces messages fantômes peuvent apparaître suite à des envois interrompus
+   * ou des suppressions partielles d'attachements
+   */
+  private async cleanupEmptyMessages(): Promise<void> {
+    try {
+      logger.info('🧹 [CLEANUP] Démarrage du nettoyage des messages vides...');
+
+      const staleThreshold = new Date();
+      staleThreshold.setHours(staleThreshold.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
+
+      // Trouver les messages vides via MongoDB raw query :
+      // content whitespace-only ($regex), pas de soft-delete, >24h,
+      // et pas d'attachements liés (lookup + match vide)
+      const emptyMessageIds = await this.prisma.message.findRaw({
+        filter: {
+          content: { $regex: '^\\s*$' },
+          deletedAt: null,
+          createdAt: { $lt: { $date: staleThreshold.toISOString() } },
+        },
+        options: {
+          projection: { _id: 1 },
+        },
+      }) as unknown as Array<{ _id: { $oid: string } }>;
+
+      if (!emptyMessageIds.length) {
+        logger.info('✅ [CLEANUP] Aucun message vide trouvé');
+        return;
+      }
+
+      const candidateIds = emptyMessageIds.map(m => m._id.$oid);
+
+      // Filtrer ceux qui ont des attachements (relation MessageAttachment.messageId)
+      const withAttachments = await this.prisma.messageAttachment.findMany({
+        where: { messageId: { in: candidateIds } },
+        select: { messageId: true },
+        distinct: ['messageId'],
+      });
+
+      const attachedSet = new Set(withAttachments.map(a => a.messageId).filter(Boolean));
+      const toDelete = candidateIds.filter(id => !attachedSet.has(id));
+
+      if (toDelete.length === 0) {
+        logger.info('✅ [CLEANUP] Aucun message vide sans attachement trouvé');
+        return;
+      }
+
+      logger.info(`🗑️  [CLEANUP] ${toDelete.length} messages vides trouvés, soft-delete en cours...`);
+
+      const result = await this.prisma.message.updateMany({
+        where: { id: { in: toDelete } },
+        data: { deletedAt: new Date() },
+      });
+
+      logger.info(`✅ [CLEANUP] ${result.count} messages vides soft-deleted`);
+    } catch (error) {
+      logger.error('❌ [CLEANUP] Erreur lors du nettoyage des messages vides:', error);
     }
   }
 
