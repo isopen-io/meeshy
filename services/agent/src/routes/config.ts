@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const prisma = new PrismaClient();
 

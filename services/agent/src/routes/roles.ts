@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { listArchetypes, getArchetype } from '../archetypes/catalog';
 
 const prisma = new PrismaClient();

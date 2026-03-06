@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import Redis from 'ioredis';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
 import { buildAgentGraph } from './graph/graph';

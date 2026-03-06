@@ -91,6 +91,7 @@ import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache'
 import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
 import { TusCleanupService } from './services/TusCleanupService';
+import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -298,6 +299,7 @@ class MeeshyServer {
   private backgroundJobs: BackgroundJobsManager;
   private jobMappingCache: MultiLevelJobMappingCache;
   private tusCleanup: TusCleanupService;
+  private agentClient: ZmqAgentClient | null = null;
 
   constructor() {
     // Check if HTTPS mode is enabled
@@ -1110,6 +1112,21 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         throw new Error('Translation service initialization failed');
       }
     }
+
+    // Initialize agent ZMQ client (optional — only when AGENT_HOST is set)
+    const agentHost = process.env.AGENT_HOST;
+    if (agentHost) {
+      try {
+        this.agentClient = new ZmqAgentClient(agentHost, 5560, 5561);
+        await this.agentClient.initialize();
+        logger.info(`✓ Agent ZMQ client initialized (${agentHost}:5560/5561)`);
+      } catch (error) {
+        logger.warn('⚠️ Agent ZMQ client init failed, continuing without agent:', error);
+        this.agentClient = null;
+      }
+    } else {
+      logger.info('ℹ️ AGENT_HOST not set — agent service disabled');
+    }
   }
 
   private displayStartupBanner(): void {
@@ -1188,6 +1205,21 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.setupSocketIO();
       await this.setupRoutes();
 
+      // Wire agent client to Socket.IO manager (fire-and-forget listener)
+      if (this.agentClient) {
+        const manager = this.socketIOHandler.getManager();
+        if (manager) {
+          manager.setAgentClient(this.agentClient);
+          this.agentClient.onResponse(async (response) => {
+            await manager.handleAgentResponse(response);
+          });
+          this.agentClient.startListening().catch((err) => {
+            logger.error('[GWY] Agent ZMQ listener error:', err);
+          });
+          logger.info('✓ Agent ZMQ listener started');
+        }
+      }
+
       // Start the server
       await this.server.listen({
         port: config.port,
@@ -1243,6 +1275,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         logger.info('✓ Encryption service shutdown (sensitive data cleared)');
       } catch (encError) {
         logger.warn('⚠️ Encryption service shutdown error:', encError);
+      }
+
+      if (this.agentClient) {
+        await this.agentClient.close();
+        logger.info('✓ Agent ZMQ client closed');
       }
 
       if (this.translationService) {

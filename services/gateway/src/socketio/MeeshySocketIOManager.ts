@@ -41,6 +41,7 @@ import { conversationStatsService } from '../services/ConversationStatsService';
 import type { MessageRequest, MessageResponse } from '@meeshy/shared/types/messaging';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -72,6 +73,7 @@ export class MeeshySocketIOManager {
   private notificationService: NotificationService;
   private socialEventsHandler: SocialEventsHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private agentClient: ZmqAgentClient | null = null;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -487,6 +489,18 @@ export class MeeshySocketIOManager {
               } as any; // Cast temporaire pour éviter les conflits de types
               // FIX: Utiliser message.conversationId (déjà normalisé en base) au lieu de data.conversationId (peut être un identifier)
               await this._broadcastNewMessage(messageWithTimestamp, message.conversationId, socket);
+
+              // Notifier le service agent (fire-and-forget)
+              this._notifyAgent({
+                id: message.id,
+                conversationId: message.conversationId,
+                senderId: message.senderId,
+                senderDisplayName: (message.sender as any)?.displayName ?? (message.sender as any)?.username,
+                content: message.content,
+                originalLanguage: message.originalLanguage,
+                replyToId: message.replyToId,
+                createdAt: message.createdAt,
+              });
 
               // Créer des notifications pour les autres participants de la conversation
               await this._createMessageNotifications(message, userId);
@@ -3152,5 +3166,82 @@ export class MeeshySocketIOManager {
     } catch (error) {
       logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // AGENT INTEGRATION
+  // --------------------------------------------------------------------------
+
+  setAgentClient(client: ZmqAgentClient): void {
+    this.agentClient = client;
+    logger.info('[Agent] ZmqAgentClient wired to SocketIOManager');
+  }
+
+  async handleAgentResponse(response: {
+    type: 'agent:response';
+    conversationId: string;
+    asUserId: string;
+    content: string;
+    replyToId?: string;
+    messageSource: 'agent';
+    metadata: { agentType: 'impersonator' | 'animator'; roleConfidence: number; archetypeId?: string };
+  }): Promise<void> {
+    try {
+      const message = await this.prisma.message.create({
+        data: {
+          conversationId: response.conversationId,
+          senderId: response.asUserId,
+          content: response.content,
+          originalLanguage: 'fr',
+          messageType: 'text',
+          replyToId: response.replyToId ?? null,
+          deletedAt: null,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+      });
+
+      const messageWithTimestamp = { ...message, timestamp: message.createdAt } as any;
+      await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
+      logger.info(`[Agent] Response broadcast — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType}`);
+    } catch (error) {
+      logger.error('[Agent] handleAgentResponse error:', error);
+    }
+  }
+
+  private _notifyAgent(message: {
+    id: string;
+    conversationId: string;
+    senderId: string | null;
+    senderDisplayName?: string;
+    content: string | null;
+    originalLanguage: string | null;
+    replyToId?: string | null;
+    createdAt: Date;
+  }): void {
+    if (!this.agentClient || !message.senderId || !message.content) return;
+    this.agentClient.sendEvent({
+      type: 'agent:new-message',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      senderId: message.senderId,
+      senderDisplayName: message.senderDisplayName,
+      content: message.content,
+      originalLanguage: message.originalLanguage ?? 'fr',
+      replyToId: message.replyToId ?? undefined,
+      timestamp: message.createdAt.getTime(),
+    }).catch((err: unknown) => {
+      logger.warn('[Agent] sendEvent error (non-blocking):', err);
+    });
   }
 }
