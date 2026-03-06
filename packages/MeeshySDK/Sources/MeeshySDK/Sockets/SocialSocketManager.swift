@@ -95,17 +95,25 @@ public struct SocketStoryTranslationUpdatedData: Decodable {
     public let translations: [String: String]
 }
 
+// Socket payloads use camelCase (unlike REST which uses snake_case)
+public struct SocketTranslationPayload: Decodable {
+    public let text: String
+    public let translationModel: String?
+    public let confidenceScore: Double?
+    public let createdAt: String?
+}
+
 public struct SocketPostTranslationUpdatedData: Decodable {
     public let postId: String
     public let language: String
-    public let translation: APIPostTranslationEntry
+    public let translation: SocketTranslationPayload
 }
 
 public struct SocketCommentTranslationUpdatedData: Decodable {
     public let commentId: String
     public let postId: String
     public let language: String
-    public let translation: APIPostTranslationEntry
+    public let translation: SocketTranslationPayload
 }
 
 // MARK: - Social Socket Manager

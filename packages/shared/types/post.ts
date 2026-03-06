@@ -212,6 +212,7 @@ export interface PostTranslationUpdatedEventData {
     readonly text: string;
     readonly translationModel: string;
     readonly confidenceScore?: number;
+    readonly createdAt: string;
   };
 }
 
@@ -223,5 +224,6 @@ export interface CommentTranslationUpdatedEventData {
     readonly text: string;
     readonly translationModel: string;
     readonly confidenceScore?: number;
+    readonly createdAt: string;
   };
 }

@@ -95,7 +95,7 @@ export class PostTranslationService {
   async translateOnDemand(postId: string, targetLanguage: string): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { content: true, originalLanguage: true },
+      select: { content: true, originalLanguage: true, translations: true },
     });
 
     if (!post?.content) {
@@ -111,7 +111,7 @@ export class PostTranslationService {
     }
 
     // Check if translation already exists
-    const translations = (post as any).translations as Record<string, unknown> | null;
+    const translations = (post.translations ?? null) as Record<string, unknown> | null;
     if (translations?.[targetLanguage]) {
       log.info('PostTranslation: translation already cached', { postId, targetLanguage });
       return;
@@ -226,6 +226,7 @@ export class PostTranslationService {
             text: translatedText,
             translationModel: translatorModel ?? 'nllb',
             confidenceScore: confidenceScore ?? 1,
+            createdAt: new Date().toISOString(),
           },
         }, post.authorId).catch(() => {});
       }
@@ -278,6 +279,7 @@ export class PostTranslationService {
               text: translatedText,
               translationModel: translatorModel ?? 'nllb',
               confidenceScore: confidenceScore ?? 1,
+              createdAt: new Date().toISOString(),
             },
           }, post.authorId).catch(() => {});
         }
