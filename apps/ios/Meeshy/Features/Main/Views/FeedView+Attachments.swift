@@ -214,7 +214,7 @@ extension FeedView {
             feedCleanupAttachments()
             HapticFeedback.success()
             if !text.isEmpty {
-                Task { await viewModel.createPost(content: text) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility) }
             }
             return
         }
@@ -523,6 +523,7 @@ struct FeedComposerSheet: View {
     @State private var isUploading = false
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
+    @State private var postVisibility: String = "PUBLIC"
 
     private var hasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
@@ -957,7 +958,7 @@ struct FeedComposerSheet: View {
             onDismiss()
             HapticFeedback.success()
             if !text.isEmpty {
-                Task { await viewModel.createPost(content: text) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility) }
             }
             return
         }
@@ -993,7 +994,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds)
+                await viewModel.createPost(content: text, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds)
 
                 await MainActor.run {
                     isUploading = false

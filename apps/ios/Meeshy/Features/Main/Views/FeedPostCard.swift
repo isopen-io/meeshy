@@ -11,6 +11,7 @@ struct FeedPostCard: View {
     var onToggleComments: (() -> Void)? = nil
     var onLike: ((String) -> Void)? = nil
     var onRepost: ((String) -> Void)? = nil
+    var onQuote: ((String) -> Void)? = nil
     var onShare: ((String) -> Void)? = nil
     var onBookmark: ((String) -> Void)? = nil
     var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
@@ -23,6 +24,7 @@ struct FeedPostCard: View {
     @State private var isLiked = false
     @State private var showCommentsSheet = false
     @State private var showTranslationSheet = false
+    @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
 
     private var accentColor: String { post.authorColor }
@@ -293,12 +295,17 @@ struct FeedPostCard: View {
 
             // Repost
             Button {
-                onRepost?(post.id)
+                showRepostOptions = true
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "arrow.2.squarepath")
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
+            }
+            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+                Button("Repartager") { onRepost?(post.id) }
+                Button("Citer") { onQuote?(post.id) }
+                Button("Annuler", role: .cancel) {}
             }
 
             Spacer()
