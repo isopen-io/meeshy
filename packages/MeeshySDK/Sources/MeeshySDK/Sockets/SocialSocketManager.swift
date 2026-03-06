@@ -136,6 +136,8 @@ public protocol SocialSocketProviding: Sendable {
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
+    var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
+    var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
     func connect()
@@ -418,13 +420,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // --- Post translation events ---
 
         socket.on("post:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketPostTranslationUpdatedData.self, from: data) { payload in
+            self?.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.postTranslationUpdated.send(payload)
             }
         }
 
         socket.on("comment:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketCommentTranslationUpdatedData.self, from: data) { payload in
+            self?.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.commentTranslationUpdated.send(payload)
             }
         }

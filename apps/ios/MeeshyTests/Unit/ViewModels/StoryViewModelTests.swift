@@ -143,16 +143,16 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups[0].stories.count, 2)
     }
 
-    func test_loadStories_failure_fallsBackToSampleData() async {
+    func test_loadStories_failure_showsEmptyState() async {
         mockStoryService.listResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
 
         await sut.loadStories()
 
-        XCTAssertFalse(sut.storyGroups.isEmpty, "Should fall back to sample data on failure")
+        XCTAssertTrue(sut.storyGroups.isEmpty, "Should show empty state on failure")
         XCTAssertFalse(sut.isLoading)
     }
 
-    func test_loadStories_responseNotSuccess_fallsBackToSampleData() async {
+    func test_loadStories_responseNotSuccess_showsEmptyState() async {
         let failResponse: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
         {"success":false,"data":[],"pagination":null,"error":"Stories unavailable"}
         """)
@@ -160,7 +160,7 @@ final class StoryViewModelTests: XCTestCase {
 
         await sut.loadStories()
 
-        XCTAssertFalse(sut.storyGroups.isEmpty, "Should fall back to sample data on non-success response")
+        XCTAssertTrue(sut.storyGroups.isEmpty, "Should show empty state on non-success response")
     }
 
     func test_loadStories_guardsAgainstDoubleLoad() async {

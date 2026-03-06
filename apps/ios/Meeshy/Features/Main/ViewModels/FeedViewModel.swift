@@ -369,7 +369,7 @@ class FeedViewModel: ObservableObject {
         // --- post:translation-updated ---
         socialSocket.postTranslationUpdated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] data in
+            .sink { [weak self] (data: SocketPostTranslationUpdatedData) in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 let translation = PostTranslation(
                     text: data.translation.text,
@@ -388,7 +388,7 @@ class FeedViewModel: ObservableObject {
         // --- comment:translation-updated ---
         socialSocket.commentTranslationUpdated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] data in
+            .sink { [weak self] (data: SocketCommentTranslationUpdatedData) in
                 guard let self,
                       let postIndex = self.posts.firstIndex(where: { $0.id == data.postId }),
                       let commentIndex = self.posts[postIndex].comments.firstIndex(where: { $0.id == data.commentId })

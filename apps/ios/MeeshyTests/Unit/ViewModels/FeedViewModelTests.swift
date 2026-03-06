@@ -106,12 +106,12 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(sut.error)
     }
 
-    func test_loadFeed_failure_fallsBackToSampleDataWhenPostsEmpty() async {
+    func test_loadFeed_failure_showsEmptyState() async {
         mockAPI.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
 
         await sut.loadFeed()
 
-        XCTAssertFalse(sut.posts.isEmpty, "Should fall back to sample data")
+        XCTAssertTrue(sut.posts.isEmpty, "Should show empty state on failure")
         XCTAssertTrue(sut.hasLoaded)
         XCTAssertNotNil(sut.error)
     }
@@ -134,7 +134,7 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(mockAPI.requestCount, 1)
     }
 
-    func test_loadFeed_responseNotSuccess_fallsBackToSampleData() async {
+    func test_loadFeed_responseNotSuccess_showsEmptyState() async {
         let failResponse: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
         {"success":false,"data":[],"pagination":null,"error":"Feed unavailable"}
         """)
@@ -142,7 +142,7 @@ final class FeedViewModelTests: XCTestCase {
 
         await sut.loadFeed()
 
-        XCTAssertFalse(sut.posts.isEmpty, "Should fall back to sample data on non-success response")
+        XCTAssertTrue(sut.posts.isEmpty, "Should show empty state on non-success response")
         XCTAssertTrue(sut.hasLoaded)
     }
 

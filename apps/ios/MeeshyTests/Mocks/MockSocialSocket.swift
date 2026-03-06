@@ -29,6 +29,8 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
     let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
+    let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
+    let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
 
     // MARK: - Call Tracking
 
