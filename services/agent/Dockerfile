@@ -32,9 +32,9 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
-COPY packages/shared/package.json packages/shared/
-COPY services/agent/package.json services/agent/
+# Copy package files and setup mini workspace (no monorepo lockfile)
+COPY services/agent/package.json ./
+COPY packages/shared/ ./packages/shared/
 
 RUN printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml && \
     corepack enable pnpm && \
