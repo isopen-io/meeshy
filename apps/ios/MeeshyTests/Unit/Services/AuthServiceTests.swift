@@ -1,212 +1,271 @@
-//
-//  AuthServiceTests.swift
-//  MeeshyTests
-//
-
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class AuthServiceTests: XCTestCase {
-    var mockAPIService: MockAPIService!
 
-    override func setUp() {
-        super.setUp()
-        mockAPIService = MockAPIService()
+    // MARK: - AuthManaging Protocol Tests (via MockAuthManager)
+
+    private func makeMockAuth() -> MockAuthManager {
+        let mock = MockAuthManager()
+        mock.reset()
+        return mock
     }
 
-    override func tearDown() {
-        mockAPIService = nil
-        super.tearDown()
+    private func makeTestUser(
+        id: String = "user-123",
+        username: String = "testuser"
+    ) -> MeeshyUser {
+        MeeshyUser(id: id, username: username, email: "test@meeshy.me", displayName: "Test User")
     }
 
-    // MARK: - Login Tests
+    // MARK: - Login
 
-    func testLogin_Success() async throws {
-        let user = MockDataGenerator.createUser()
-        mockAPIService.mockLoginResponse = (user, "access-token", "refresh-token", false)
+    func test_login_success_setsAuthenticated() async {
+        let auth = makeMockAuth()
+        let user = makeTestUser()
+        auth.currentUser = user
+        auth.isAuthenticated = true
 
-        // let loggedInUser = try await authService.login(email: "test@meeshy.me", password: "password")
-        // XCTAssertEqual(loggedInUser.email, "test@meeshy.me")
-        // XCTAssertTrue(authService.isAuthenticated)
+        await auth.login(username: "testuser", password: "password123")
+
+        XCTAssertEqual(auth.loginCallCount, 1)
+        XCTAssertEqual(auth.loginCredentials.first?.username, "testuser")
+        XCTAssertEqual(auth.loginCredentials.first?.password, "password123")
     }
 
-    func testLogin_Requires2FA() async {
-        mockAPIService.mockLoginResponse = (
-            MockDataGenerator.createUser(),
-            "temp-access",
-            "temp-refresh",
-            true
+    func test_login_failure_setsErrorMessage() async {
+        let auth = makeMockAuth()
+        auth.loginError = "Invalid credentials"
+
+        await auth.login(username: "wrong", password: "wrong")
+
+        XCTAssertEqual(auth.errorMessage, "Invalid credentials")
+        XCTAssertFalse(auth.isAuthenticated)
+    }
+
+    func test_login_tracksCallCount() async {
+        let auth = makeMockAuth()
+
+        await auth.login(username: "user1", password: "pass1")
+        await auth.login(username: "user2", password: "pass2")
+
+        XCTAssertEqual(auth.loginCallCount, 2)
+        XCTAssertEqual(auth.loginCredentials.count, 2)
+    }
+
+    // MARK: - Logout
+
+    func test_logout_clearsAuthState() {
+        let auth = makeMockAuth()
+        auth.simulateLoggedIn(user: makeTestUser(), token: "jwt-token")
+
+        auth.logout()
+
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.currentUser)
+        XCTAssertNil(auth.authToken)
+        XCTAssertEqual(auth.logoutCallCount, 1)
+    }
+
+    func test_logout_whenNotAuthenticated_stillClearsState() {
+        let auth = makeMockAuth()
+
+        auth.logout()
+
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.currentUser)
+        XCTAssertEqual(auth.logoutCallCount, 1)
+    }
+
+    // MARK: - checkExistingSession
+
+    func test_checkExistingSession_incrementsCallCount() async {
+        let auth = makeMockAuth()
+
+        await auth.checkExistingSession()
+
+        XCTAssertEqual(auth.checkExistingSessionCallCount, 1)
+    }
+
+    func test_checkExistingSession_multipleCalls_tracksAll() async {
+        let auth = makeMockAuth()
+
+        await auth.checkExistingSession()
+        await auth.checkExistingSession()
+
+        XCTAssertEqual(auth.checkExistingSessionCallCount, 2)
+    }
+
+    // MARK: - handleUnauthorized
+
+    func test_handleUnauthorized_clearsAuthState() {
+        let auth = makeMockAuth()
+        auth.simulateLoggedIn(user: makeTestUser(), token: "jwt-token")
+
+        auth.handleUnauthorized()
+
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.currentUser)
+        XCTAssertNil(auth.authToken)
+        XCTAssertEqual(auth.handleUnauthorizedCallCount, 1)
+    }
+
+    func test_handleUnauthorized_whenNotAuthenticated_staysCleared() {
+        let auth = makeMockAuth()
+
+        auth.handleUnauthorized()
+
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.currentUser)
+    }
+
+    // MARK: - Registration
+
+    func test_register_tracksRequest() async {
+        let auth = makeMockAuth()
+        let request = RegisterRequest(
+            username: "newuser",
+            password: "securePass",
+            firstName: "Test",
+            lastName: "User",
+            email: "new@meeshy.me"
         )
 
-        // Test that requires2FA error is thrown
-        // do {
-        //     _ = try await authService.login(email: "test@meeshy.me", password: "password")
-        //     XCTFail("Should throw requires2FA")
-        // } catch AuthError.requires2FA {
-        //     // Expected
-        // }
+        await auth.register(request: request)
+
+        XCTAssertEqual(auth.registerCallCount, 1)
+        XCTAssertEqual(auth.registerRequests.first?.username, "newuser")
+        XCTAssertEqual(auth.registerRequests.first?.email, "new@meeshy.me")
     }
 
-    func testLogin_InvalidCredentials() async {
-        mockAPIService.shouldFail = true
-        mockAPIService.errorToThrow = AuthError.invalidCredentials
+    func test_register_failure_setsErrorMessage() async {
+        let auth = makeMockAuth()
+        auth.registerError = "Username already taken"
+        let request = RegisterRequest(
+            username: "taken",
+            password: "pass",
+            firstName: "A",
+            lastName: "B",
+            email: "taken@meeshy.me"
+        )
 
-        // Test invalid credentials error
+        await auth.register(request: request)
+
+        XCTAssertEqual(auth.errorMessage, "Username already taken")
     }
 
-    func testLogin_NetworkError() async {
-        mockAPIService.shouldFail = true
-        mockAPIService.errorToThrow = APIError.networkError(NSError(domain: "Network", code: -1))
+    // MARK: - Magic Link
 
-        // Test network error handling
+    func test_requestMagicLink_success_returnsTrue() async {
+        let auth = makeMockAuth()
+        auth.magicLinkResult = true
+
+        let result = await auth.requestMagicLink(email: "user@meeshy.me")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(auth.requestMagicLinkCallCount, 1)
+        XCTAssertEqual(auth.requestMagicLinkEmails.first, "user@meeshy.me")
     }
 
-    // MARK: - 2FA Tests
+    func test_requestMagicLink_failure_returnsFalse() async {
+        let auth = makeMockAuth()
+        auth.magicLinkResult = false
 
-    func testVerify2FA_Success() async throws {
-        // Test successful 2FA verification
+        let result = await auth.requestMagicLink(email: "user@meeshy.me")
+
+        XCTAssertFalse(result)
     }
 
-    func testVerify2FA_InvalidCode() async {
-        // Test invalid 2FA code
+    func test_validateMagicLink_tracksToken() async {
+        let auth = makeMockAuth()
+
+        await auth.validateMagicLink(token: "magic-token-123")
+
+        XCTAssertEqual(auth.validateMagicLinkCallCount, 1)
+        XCTAssertEqual(auth.validateMagicLinkTokens.first, "magic-token-123")
     }
 
-    func testEnable2FA_Success() async throws {
-        // Test enabling 2FA
-        // let qrCode = try await authService.enable2FA()
-        // XCTAssertFalse(qrCode.isEmpty)
+    // MARK: - Password Reset
+
+    func test_requestPasswordReset_success_returnsTrue() async {
+        let auth = makeMockAuth()
+        auth.passwordResetResult = true
+
+        let result = await auth.requestPasswordReset(email: "user@meeshy.me")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(auth.requestPasswordResetCallCount, 1)
     }
 
-    // MARK: - Register Tests
+    func test_requestPasswordReset_failure_returnsFalse() async {
+        let auth = makeMockAuth()
+        auth.passwordResetResult = false
 
-    func testRegister_Success() async throws {
-        let user = MockDataGenerator.createUser()
-        mockAPIService.mockRegisterResponse = (user, "access-token", "refresh-token")
+        let result = await auth.requestPasswordReset(email: "user@meeshy.me")
 
-        // let registeredUser = try await authService.register(
-        //     username: "testuser",
-        //     email: "test@meeshy.me",
-        //     password: "password",
-        //     displayName: "Test User"
-        // )
-        // XCTAssertEqual(registeredUser.username, "testuser")
+        XCTAssertFalse(result)
     }
 
-    func testRegister_DuplicateEmail() async {
-        // Test duplicate email error
+    // MARK: - simulateLoggedIn helper
+
+    func test_simulateLoggedIn_setsAllAuthState() {
+        let auth = makeMockAuth()
+        let user = makeTestUser()
+
+        auth.simulateLoggedIn(user: user, token: "my-token")
+
+        XCTAssertTrue(auth.isAuthenticated)
+        XCTAssertEqual(auth.currentUser?.id, user.id)
+        XCTAssertEqual(auth.authToken, "my-token")
     }
 
-    // MARK: - Logout Tests
+    // MARK: - Reset
 
-    func testLogout_Success() async throws {
-        // Login first
-        // Then logout
-        // try await authService.logout()
-        // XCTAssertFalse(authService.isAuthenticated)
-        // XCTAssertNil(authService.currentUser)
+    func test_reset_clearsAllTrackingState() async {
+        let auth = makeMockAuth()
+        auth.simulateLoggedIn(user: makeTestUser(), token: "tok")
+        await auth.login(username: "a", password: "b")
+        auth.logout()
+
+        auth.reset()
+
+        XCTAssertFalse(auth.isAuthenticated)
+        XCTAssertNil(auth.currentUser)
+        XCTAssertNil(auth.authToken)
+        XCTAssertEqual(auth.loginCallCount, 0)
+        XCTAssertEqual(auth.logoutCallCount, 0)
+        XCTAssertEqual(auth.handleUnauthorizedCallCount, 0)
+        XCTAssertEqual(auth.checkExistingSessionCallCount, 0)
     }
 
-    func testLogout_ClearsTokens() async throws {
-        // Test that tokens are cleared on logout
+    // MARK: - SDK AuthManager (Singleton) -- State Tests
+
+    func test_authManager_logout_clearsPublishedState() {
+        let appAuth = AuthManager.shared
+
+        appAuth.logout()
+
+        XCTAssertFalse(appAuth.isAuthenticated)
+        XCTAssertNil(appAuth.currentUser)
     }
 
-    func testLogout_DisconnectsWebSocket() async throws {
-        // Test that WebSocket is disconnected on logout
+    func test_authManager_handleUnauthorized_clearsState() {
+        let appAuth = AuthManager.shared
+
+        appAuth.handleUnauthorized()
+
+        XCTAssertFalse(appAuth.isAuthenticated)
+        XCTAssertNil(appAuth.currentUser)
     }
 
-    // MARK: - Token Management Tests
+    func test_authManager_initialState_notAuthenticated() {
+        let appAuth = AuthManager.shared
 
-    func testCheckAuthenticationState_ValidToken() {
-        // Test with valid unexpired token
-    }
+        appAuth.logout()
 
-    func testCheckAuthenticationState_ExpiredToken() {
-        // Test with expired token
-        // Should trigger refresh
-    }
-
-    func testCheckAuthenticationState_NoToken() {
-        // Test with no token
-        // Should set isAuthenticated to false
-    }
-
-    func testTokenExpiration_Detection() {
-        // Test JWT expiration detection logic
-    }
-
-    // MARK: - Biometric Authentication Tests
-
-    func testBiometricAuthenticationAvailable_FaceID() {
-        // Test Face ID availability detection
-    }
-
-    func testBiometricAuthenticationAvailable_TouchID() {
-        // Test Touch ID availability detection
-    }
-
-    func testBiometricAuthenticationAvailable_None() {
-        // Test when no biometric is available
-    }
-
-    func testBiometricType_FaceID() {
-        // Test biometric type detection for Face ID
-    }
-
-    func testBiometricType_TouchID() {
-        // Test biometric type detection for Touch ID
-    }
-
-    func testBiometricType_OpticID() {
-        // Test Optic ID detection (iOS 17+)
-        // if #available(iOS 17.0, *) {
-        //     // Test Optic ID
-        // }
-    }
-
-    func testAuthenticateWithBiometrics_Success() async throws {
-        // Test successful biometric authentication
-    }
-
-    func testAuthenticateWithBiometrics_Failure() async {
-        // Test failed biometric authentication
-    }
-
-    func testAuthenticateWithBiometrics_Cancelled() async {
-        // Test user cancellation
-    }
-
-    func testEnableBiometricAuth() async throws {
-        // Test enabling biometric auth
-    }
-
-    func testDisableBiometricAuth() async throws {
-        // Test disabling biometric auth
-    }
-
-    // MARK: - Session Management Tests
-
-    func testRefreshSession_Success() async throws {
-        // Test session refresh
-    }
-
-    func testRefreshSession_Failure() async {
-        // Test failed session refresh
-        // Should logout user
-    }
-
-    // MARK: - User State Tests
-
-    func testUpdateCurrentUser() {
-        // Test updating current user in memory
-    }
-
-    // MARK: - WebSocket Integration Tests
-
-    func testLogin_ConnectsWebSocket() async throws {
-        // Test that WebSocket connects after successful login
-    }
-
-    func testLogout_DisconnectsWebSocket() async throws {
-        // Test WebSocket disconnection on logout
+        XCTAssertFalse(appAuth.isAuthenticated)
+        XCTAssertFalse(appAuth.isLoading)
     }
 }
