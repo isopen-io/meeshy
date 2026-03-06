@@ -71,23 +71,25 @@ async function start() {
       replyToId: msg.replyToId,
     };
     messages.push(newEntry);
-    // Use dynamic window size from config or global default
-    // If useFullHistory is enabled, we still cap at 250 for Redis/State performance but allow much larger than default 50
     const windowSize = config.useFullHistory ? 250 : (config.contextWindowSize ?? env.AGENT_SLIDING_WINDOW_SIZE);
     const window = messages.slice(-windowSize);
     await stateManager.setMessages(msg.conversationId, window);
 
-    await triggerEngine.onMessage(msg.conversationId, {
-      messageId: msg.messageId,
-      senderId: msg.senderId,
-      replyToId: msg.replyToId,
+    // Run graph immediately — TriggerEngine registration happens separately via config
+    await runGraph(msg.conversationId, {
+      type: 'user_message',
+      triggeredByMessageId: msg.messageId,
+      triggeredByUserId: msg.senderId,
     });
   });
 
   const runGraph = async (conversationId: string, triggerContext: { type: string; triggeredByMessageId?: string; triggeredByUserId?: string }) => {
-    const messages = await stateManager.getMessages(conversationId);
-    const summary = await stateManager.getSummary(conversationId);
-    const toneProfiles = await stateManager.getToneProfiles(conversationId);
+    const [messages, summary, toneProfiles, controlledUsers] = await Promise.all([
+      stateManager.getMessages(conversationId),
+      stateManager.getSummary(conversationId),
+      stateManager.getToneProfiles(conversationId),
+      persistence.getControlledUsers(conversationId),
+    ]);
     let config = await persistence.getAgentConfig(conversationId);
 
     if (!config) {
@@ -95,12 +97,14 @@ async function start() {
       config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
     }
 
+    server.log.info(`[Agent] runGraph conv=${conversationId} trigger=${triggerContext.type} controlledUsers=${controlledUsers.length} messages=${messages.length}`);
+
     const result = await graph.invoke({
       conversationId,
       messages,
       summary,
       toneProfiles,
-      controlledUsers: [],
+      controlledUsers,
       triggerContext: triggerContext as any,
       pendingResponse: null,
       decision: 'skip',

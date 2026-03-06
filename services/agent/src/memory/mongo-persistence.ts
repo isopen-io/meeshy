@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { ToneProfile } from '../graph/state';
+import type { ToneProfile, ControlledUser } from '../graph/state';
 
 export class MongoPersistence {
   constructor(private prisma: PrismaClient) {}
@@ -60,6 +60,44 @@ export class MongoPersistence {
 
   async getLlmConfig() {
     return this.prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+  }
+
+  async getControlledUsers(conversationId: string): Promise<ControlledUser[]> {
+    const roles = await this.prisma.agentUserRole.findMany({ where: { conversationId } });
+    if (roles.length === 0) return [];
+
+    const userIds = roles.map((r) => r.userId);
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, displayName: true, username: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u.displayName ?? u.username ?? u.id]));
+
+    return roles.map((r) => ({
+      userId: r.userId,
+      displayName: userMap.get(r.userId) ?? r.userId,
+      source: 'manual' as const,
+      role: {
+        userId: r.userId,
+        displayName: userMap.get(r.userId) ?? r.userId,
+        origin: r.origin as ToneProfile['origin'],
+        archetypeId: r.archetypeId ?? undefined,
+        personaSummary: r.personaSummary,
+        tone: r.tone,
+        vocabularyLevel: r.vocabularyLevel,
+        typicalLength: r.typicalLength,
+        emojiUsage: r.emojiUsage,
+        topicsOfExpertise: r.topicsOfExpertise,
+        topicsAvoided: r.topicsAvoided,
+        relationshipMap: r.relationshipMap as Record<string, string>,
+        catchphrases: r.catchphrases,
+        responseTriggers: r.responseTriggers,
+        silenceTriggers: r.silenceTriggers,
+        messagesAnalyzed: r.messagesAnalyzed,
+        confidence: r.confidence,
+        locked: r.locked,
+      },
+    }));
   }
 
   async getInactiveUsers(conversationId: string, thresholdHours: number, excludedRoles: string[], excludedUserIds: string[]) {
