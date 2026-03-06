@@ -68,7 +68,7 @@ export class MongoPersistence {
       where: {
         conversations: { some: { conversationId } },
         lastActiveAt: { lt: threshold },
-        role: { notIn: excludedRoles },
+        role: { notIn: excludedRoles as any[] },
         id: { notIn: excludedUserIds },
       },
       select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true },
