@@ -36,6 +36,23 @@ public struct TusUploadResult: Decodable, Sendable {
     public let width: Int?
     public let height: Int?
     public let duration: Int?
+
+    public func toMessageAttachment(uploadedBy: String) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(
+            id: id,
+            fileName: fileName,
+            originalName: originalName ?? fileName,
+            mimeType: mimeType,
+            fileSize: fileSize,
+            fileUrl: fileUrl,
+            width: width,
+            height: height,
+            thumbnailUrl: thumbnailUrl,
+            duration: duration,
+            uploadedBy: uploadedBy,
+            createdAt: Date()
+        )
+    }
 }
 
 public actor TusUploadManager {

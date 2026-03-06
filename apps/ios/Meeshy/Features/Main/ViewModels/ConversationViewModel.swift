@@ -474,7 +474,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Send Message
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
@@ -523,11 +523,23 @@ class ConversationViewModel: ObservableObject {
 
         // Optimistic insert
         let tempId = "temp_\(UUID().uuidString)"
+        let resolvedAttachments = localAttachments ?? []
+        let optimisticMessageType: Message.MessageType = {
+            guard let first = resolvedAttachments.first else { return .text }
+            switch first.type {
+            case .image: return .image
+            case .video: return .video
+            case .audio: return .audio
+            case .file: return .file
+            case .location: return .location
+            }
+        }()
         let optimisticMessage = Message(
             id: tempId,
             conversationId: conversationId,
             senderId: currentUserId,
             content: text,
+            messageType: optimisticMessageType,
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
@@ -538,6 +550,7 @@ class ConversationViewModel: ObservableObject {
             isBlurred: resolvedBlur == true,
             createdAt: Date(),
             updatedAt: Date(),
+            attachments: resolvedAttachments,
             replyTo: replyRef,
             deliveryStatus: .sending,
             isMe: true
@@ -584,13 +597,14 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId, request: body
             )
 
-            // Replace temp message with server version
+            // Replace temp message with server version, preserving local attachments
             if let idx = messageIndex(for: tempId) {
                 messages[idx] = Message(
                     id: responseData.id,
                     conversationId: conversationId,
                     senderId: currentUserId,
                     content: text,
+                    messageType: optimisticMessageType,
                     replyToId: replyToId,
                     expiresAt: resolvedExpiresAt,
                     isViewOnce: resolvedIsViewOnce,
@@ -599,6 +613,7 @@ class ConversationViewModel: ObservableObject {
                     isBlurred: resolvedBlur == true,
                     createdAt: responseData.createdAt,
                     updatedAt: responseData.createdAt,
+                    attachments: resolvedAttachments,
                     replyTo: replyRef,
                     deliveryStatus: .sent,
                     isMe: true
