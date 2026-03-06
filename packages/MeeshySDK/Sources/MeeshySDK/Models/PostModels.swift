@@ -52,6 +52,7 @@ public struct APIPostComment: Decodable {
     public let id: String
     public let content: String
     public let originalLanguage: String?
+    public let translations: [String: APIPostTranslationEntry]?
     public let likeCount: Int?
     public let replyCount: Int?
     public let createdAt: Date
@@ -119,7 +120,7 @@ private func formatFileSize(_ bytes: Int) -> String {
 }
 
 extension APIPost {
-    public func toFeedPost() -> FeedPost {
+    public func toFeedPost(userLanguage: String? = nil) -> FeedPost {
         let feedMedia: [FeedMedia] = (media ?? []).map { m in
             let transcription: MessageTranscription? = m.transcription.map { t in
                 let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
@@ -152,10 +153,12 @@ extension APIPost {
         }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
-            FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+            let commentTranslatedContent: String? = userLanguage.flatMap { lang in c.translations?[lang]?.text }
+            return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
                         authorAvatarURL: c.author.avatar ?? c.author.avatarUrl,
                         content: c.content,
-                        timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0)
+                        timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
         }
 
         var repost: RepostContent?
@@ -166,12 +169,18 @@ extension APIPost {
                                    timestamp: r.createdAt, likes: r.likeCount ?? 0)
         }
 
+        let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
+            PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
+        }
+        let postTranslatedContent: String? = userLanguage.flatMap { lang in translations?[lang]?.text }
+
         return FeedPost(id: id, author: author.name, authorId: author.id,
                         authorAvatarURL: author.avatar ?? author.avatarUrl,
                         content: content ?? "",
                         timestamp: createdAt, likes: likeCount ?? 0,
                         comments: feedComments, commentCount: commentCount ?? feedComments.count,
                         repost: repost, repostAuthor: repostOf != nil ? author.name : nil,
-                        media: feedMedia)
+                        media: feedMedia,
+                        originalLanguage: originalLanguage, translations: postTranslations, translatedContent: postTranslatedContent)
     }
 }

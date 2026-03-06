@@ -5,6 +5,19 @@ public enum FeedMediaType: String {
     case image, video, audio, document, location
 }
 
+// MARK: - Post Translation
+public struct PostTranslation: Sendable {
+    public let text: String
+    public let translationModel: String?
+    public let confidenceScore: Double?
+
+    public init(text: String, translationModel: String? = nil, confidenceScore: Double? = nil) {
+        self.text = text
+        self.translationModel = translationModel
+        self.confidenceScore = confidenceScore
+    }
+}
+
 // MARK: - Feed Media Model
 public struct FeedMedia: Identifiable, Sendable {
     public let id: String
@@ -95,13 +108,19 @@ public struct FeedComment: Identifiable, Sendable {
     public let timestamp: Date
     public var likes: Int
     public var replies: Int
+    public var originalLanguage: String?
+    public var translatedContent: String?
+
+    public var displayContent: String { translatedContent ?? content }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
-                content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0) {
+                content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
+                originalLanguage: String? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(author)
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
+        self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
     }
 }
 
@@ -121,14 +140,21 @@ public struct FeedPost: Identifiable, Sendable {
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var media: [FeedMedia] = []
+    public var originalLanguage: String?
+    public var translations: [String: PostTranslation]?
+    public var translatedContent: String?
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
+    public var isTranslated: Bool { translatedContent != nil }
+    public var displayContent: String { translatedContent ?? content }
+    public var availableLanguages: [String] { Array(translations?.keys ?? [String: PostTranslation]().keys) }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0,
                 comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
-                media: [FeedMedia] = [], mediaUrl: String? = nil) {
+                media: [FeedMedia] = [], mediaUrl: String? = nil,
+                originalLanguage: String? = nil, translations: [String: PostTranslation]? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorColor = DynamicColorGenerator.colorForName(author)
         self.authorAvatarURL = authorAvatarURL
@@ -137,5 +163,6 @@ public struct FeedPost: Identifiable, Sendable {
         self.repost = repost; self.repostAuthor = repostAuthor
         if !media.isEmpty { self.media = media }
         else if mediaUrl != nil { self.media = [.image()] }
+        self.originalLanguage = originalLanguage; self.translations = translations; self.translatedContent = translatedContent
     }
 }
