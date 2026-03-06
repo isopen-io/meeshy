@@ -97,6 +97,7 @@ services/translator/models/*
 */**/coverage
 */**/logs
 */**/cache
+!packages/MeeshySDK/Sources/MeeshySDK/Cache/
 # Logs
 *.log
 logs/
