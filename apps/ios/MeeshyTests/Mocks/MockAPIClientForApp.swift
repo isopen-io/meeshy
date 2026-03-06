@@ -43,7 +43,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append(method)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
-            fatalError("MockAPIClientForApp: No stub for endpoint '\(endpoint)' returning \(T.self)")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for endpoint '\(endpoint)' returning \(T.self)"])
         }
         return result
     }
@@ -58,7 +58,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("GET")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? PaginatedAPIResponse<[T]> else {
-            fatalError("MockAPIClientForApp: No stub for paginated endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for paginated endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -73,7 +73,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("GET")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? OffsetPaginatedAPIResponse<[T]> else {
-            fatalError("MockAPIClientForApp: No stub for offset paginated endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for offset paginated endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -88,7 +88,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("POST")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClientForApp: No stub for POST endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for POST endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -103,7 +103,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("PUT")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClientForApp: No stub for PUT endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for PUT endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -118,7 +118,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("PATCH")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClientForApp: No stub for PATCH endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for PATCH endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -130,7 +130,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("DELETE")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<[String: Bool]> else {
-            fatalError("MockAPIClientForApp: No stub for DELETE endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for DELETE endpoint '\(endpoint)'"])
         }
         return result
     }
@@ -145,7 +145,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestMethods.append("DELETE")
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClientForApp: No stub for DELETE endpoint '\(endpoint)'")
+            throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for DELETE endpoint '\(endpoint)'"])
         }
         return result
     }

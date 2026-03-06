@@ -72,11 +72,11 @@ final class ConversationViewModelTests: XCTestCase {
         let pagination: String
         if let cursor = nextCursor {
             pagination = """
-            {"hasMore":\(hasMore),"nextCursor":"\(cursor)"}
+            {"hasMore":\(hasMore),"nextCursor":"\(cursor)","limit":50}
             """
         } else {
             pagination = """
-            {"hasMore":\(hasMore),"nextCursor":null}
+            {"hasMore":\(hasMore),"nextCursor":null,"limit":50}
             """
         }
 
@@ -143,7 +143,7 @@ final class ConversationViewModelTests: XCTestCase {
         {"success":true,"data":[
             {"id":"msg-1","conversationId":"\(testConversationId)","content":"First","createdAt":"2026-01-01T00:00:00.000Z"},
             {"id":"msg-2","conversationId":"\(testConversationId)","content":"Second","createdAt":"2026-01-01T00:01:00.000Z"}
-        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null},"hasNewer":null}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":50},"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
@@ -160,7 +160,7 @@ final class ConversationViewModelTests: XCTestCase {
         {"success":true,"data":[
             {"id":"msg-newer","conversationId":"\(testConversationId)","content":"Newer","createdAt":"2026-01-01T00:01:00.000Z"},
             {"id":"msg-older","conversationId":"\(testConversationId)","content":"Older","createdAt":"2026-01-01T00:00:00.000Z"}
-        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null},"hasNewer":null}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":50},"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
@@ -173,7 +173,7 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_loadMessages_setsHasOlderMessages() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
-        {"success":true,"data":[],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-123"},"hasNewer":null}
+        {"success":true,"data":[],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-123","limit":50},"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
@@ -575,13 +575,14 @@ final class ConversationViewModelTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 
-    func test_markAsRead_callsConversationServiceMarkRead() async {
+    func test_markAsRead_callsConversationServiceMarkRead() {
         let sut = makeSUT()
+        let expectation = XCTestExpectation(description: "markRead called on service")
+        mockConversationService.onMarkReadCalled = { expectation.fulfill() }
 
         sut.markAsRead()
 
-        // markRead fires a detached Task, wait briefly
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        wait(for: [expectation], timeout: 2.0)
         XCTAssertEqual(mockConversationService.markReadCallCount, 1)
         XCTAssertEqual(mockConversationService.lastMarkReadConversationId, testConversationId)
     }

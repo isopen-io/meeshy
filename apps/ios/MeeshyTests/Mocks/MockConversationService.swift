@@ -53,6 +53,7 @@ final class MockConversationService: ConversationServiceProviding {
 
     var markReadCallCount = 0
     var lastMarkReadConversationId: String?
+    var onMarkReadCalled: (() -> Void)?
 
     var markUnreadCallCount = 0
     var lastMarkUnreadConversationId: String?
@@ -109,6 +110,7 @@ final class MockConversationService: ConversationServiceProviding {
         await MainActor.run {
             markReadCallCount += 1
             lastMarkReadConversationId = conversationId
+            onMarkReadCalled?()
         }
         try await MainActor.run { try markReadResult.get() }
     }

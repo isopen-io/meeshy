@@ -134,7 +134,9 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, content: "Hey!")
         socket.simulateMessage(apiMsg)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // Combine pipeline needs RunLoop processing — yield and wait
+        await Task.yield()
+        try await Task.sleep(nanoseconds: 300_000_000)
 
         XCTAssertEqual(delegate.messages.count, 1)
         XCTAssertEqual(delegate.messages[0].id, "newmsg")
