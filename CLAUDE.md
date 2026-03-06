@@ -105,6 +105,16 @@ Each increment leaves the codebase in a working state.
 - **Validation**: Zod (TypeScript), Pydantic (Python)
 - **State**: Zustand (web), SwiftUI @Published (iOS)
 
+### iOS TDD Requirements
+- Every NEW service MUST define a protocol BEFORE implementation (name: `{ServiceName}Providing`)
+- Protocols live in same file as concrete type, above the class declaration
+- All ViewModels accept dependencies via init injection with `.shared` defaults
+- Every PR MUST include tests for changed behavior
+- Use XCTest for all iOS tests (Swift Testing for SDK pure model tests)
+- `./apps/ios/meeshy.sh test` MUST pass before any commit
+- Mock pattern: `Mock{ServiceName}` conforming to protocol, with `Result<T, Error>` stubs + call counts
+- Test naming: `test_{method}_{condition}_{expectedResult}`
+
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
