@@ -196,9 +196,50 @@ public enum ConnectionState: Equatable, Sendable {
     case disconnected
 }
 
+// MARK: - Protocol
+
+public protocol MessageSocketProviding: Sendable {
+    var messageReceived: PassthroughSubject<APIMessage, Never> { get }
+    var messageEdited: PassthroughSubject<APIMessage, Never> { get }
+    var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
+    var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
+    var reactionRemoved: PassthroughSubject<ReactionUpdateEvent, Never> { get }
+    var typingStarted: PassthroughSubject<TypingEvent, Never> { get }
+    var typingStopped: PassthroughSubject<TypingEvent, Never> { get }
+    var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
+    var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
+    var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
+    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
+    var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
+    var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
+    var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
+    var translationReceived: PassthroughSubject<TranslationEvent, Never> { get }
+    var transcriptionReady: PassthroughSubject<TranscriptionReadyEvent, Never> { get }
+    var audioTranslationReady: PassthroughSubject<AudioTranslationEvent, Never> { get }
+    var audioTranslationProgressive: PassthroughSubject<AudioTranslationEvent, Never> { get }
+    var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
+    var didReconnect: PassthroughSubject<Void, Never> { get }
+    var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    var isConnected: Bool { get }
+    var connectionState: ConnectionState { get }
+    var activeConversationId: String? { get set }
+    func connect()
+    func disconnect()
+    func joinConversation(_ conversationId: String)
+    func leaveConversation(_ conversationId: String)
+    func emitTypingStart(conversationId: String)
+    func emitTypingStop(conversationId: String)
+    func requestTranslation(messageId: String, targetLanguage: String)
+    func emitLocationShare(payload: LocationSharePayload)
+    func emitLiveLocationStart(payload: LiveLocationStartPayload)
+    func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
+    func emitLiveLocationStop(conversationId: String)
+}
+
 // MARK: - Message Socket Manager
 
-public final class MessageSocketManager: ObservableObject, @unchecked Sendable {
+public final class MessageSocketManager: ObservableObject, MessageSocketProviding, @unchecked Sendable {
     public static let shared = MessageSocketManager()
 
     // Combine publishers — messages

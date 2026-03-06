@@ -1,9 +1,34 @@
 import Foundation
 
-public final class UserService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol UserServiceProviding: Sendable {
+    func search(query: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[UserSearchResult]>
+    func searchUsers(query: String, limit: Int, offset: Int) async throws -> [UserSearchResult]
+    func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser
+    func updateAvatar(url: String) async throws -> MeeshyUser
+    func updateBanner(url: String) async throws -> MeeshyUser
+    func uploadImage(_ imageData: Data, filename: String) async throws -> String
+    func getProfile(idOrUsername: String) async throws -> MeeshyUser
+    func getPublicProfile(username: String) async throws -> MeeshyUser
+    func getProfileByEmail(_ email: String) async throws -> MeeshyUser
+    func getProfileById(_ id: String) async throws -> MeeshyUser
+    func getProfileByPhone(_ phone: String) async throws -> MeeshyUser
+    func changeEmail(_ request: ChangeEmailRequest) async throws -> ChangeEmailResponse
+    func verifyEmailChange(_ request: VerifyEmailChangeRequest) async throws -> VerifyEmailChangeResponse
+    func resendEmailChangeVerification() async throws -> ChangeEmailResponse
+    func changePhone(_ request: ChangePhoneRequest) async throws -> ChangePhoneResponse
+    func verifyPhoneChange(_ request: VerifyPhoneChangeRequest) async throws -> VerifyPhoneChangeResponse
+    func getUserStats(userId: String) async throws -> UserStats
+}
+
+public final class UserService: UserServiceProviding, @unchecked Sendable {
     public static let shared = UserService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> OffsetPaginatedAPIResponse<[UserSearchResult]> {
         try await api.offsetPaginatedRequest(endpoint: "/users/search", offset: offset, limit: limit)

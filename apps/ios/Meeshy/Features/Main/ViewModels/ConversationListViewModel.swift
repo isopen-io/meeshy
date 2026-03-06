@@ -26,9 +26,12 @@ class ConversationListViewModel: ObservableObject {
         conversations.reduce(0) { $0 + $1.unreadCount }
     }
 
-    private let api = APIClient.shared
-    private let conversationService = ConversationService.shared
-    private let preferenceService = PreferenceService.shared
+    private let api: APIClientProviding
+    private let conversationService: ConversationServiceProviding
+    private let preferenceService: PreferenceServiceProviding
+    private let messageSocket: MessageSocketProviding
+    private let messageService: MessageServiceProviding
+    private let authManager: AuthManaging
     private let pageLimit = 100
     /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
     private let autoLoadCap = 1000
@@ -58,7 +61,20 @@ class ConversationListViewModel: ObservableObject {
         lastFetchedAt = nil
     }
 
-    init() {
+    init(
+        api: APIClientProviding = APIClient.shared,
+        conversationService: ConversationServiceProviding = ConversationService.shared,
+        preferenceService: PreferenceServiceProviding = PreferenceService.shared,
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
+        messageService: MessageServiceProviding = MessageService.shared,
+        authManager: AuthManaging = AuthManager.shared
+    ) {
+        self.api = api
+        self.conversationService = conversationService
+        self.preferenceService = preferenceService
+        self.messageSocket = messageSocket
+        self.messageService = messageService
+        self.authManager = authManager
         observeSocketReconnect()
         subscribeToSocketEvents()
         syncBadgeOnUnreadChange()
@@ -154,10 +170,8 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Real-time Socket Subscriptions
 
     private func subscribeToSocketEvents() {
-        let socketManager = MessageSocketManager.shared
-
         // Unread count updates from server
-        socketManager.unreadUpdated
+        messageSocket.unreadUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
@@ -177,7 +191,7 @@ class ConversationListViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // New message → update last message preview + bump to top
-        socketManager.messageReceived
+        messageSocket.messageReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
@@ -224,7 +238,7 @@ class ConversationListViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Typing indicator — affiche "<Auteur> écrit..." dans le row
-        socketManager.typingStarted
+        messageSocket.typingStarted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
@@ -233,7 +247,7 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        socketManager.typingStopped
+        messageSocket.typingStopped
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.clearTyping(for: event.conversationId)
@@ -602,6 +616,7 @@ class ConversationListViewModel: ObservableObject {
 
     private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
         let toFetch = Array(apiConversations.prefix(20))
+        let messageService = self.messageService
 
         Task.detached(priority: .utility) {
             await withTaskGroup(of: Void.self) { group in
@@ -612,9 +627,11 @@ class ConversationListViewModel: ObservableObject {
 
                     group.addTask {
                         do {
-                            let response = try await MessageService.shared.list(
+                            let response = try await messageService.list(
                                 conversationId: conversationId,
-                                limit: 20
+                                offset: 0,
+                                limit: 20,
+                                includeReplies: true
                             )
                             if response.success {
                                 let messages = response.data.reversed().map {
@@ -655,7 +672,7 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Helpers
 
     private var currentUserId: String {
-        AuthManager.shared.currentUser?.id ?? ""
+        authManager.currentUser?.id ?? ""
     }
 }
 

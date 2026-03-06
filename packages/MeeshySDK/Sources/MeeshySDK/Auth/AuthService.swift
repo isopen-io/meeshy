@@ -3,9 +3,11 @@ import Foundation
 /// Stateless auth API calls. All state management is in AuthManager.
 public final class AuthService: @unchecked Sendable {
     public static let shared = AuthService()
-    private init() {}
+    private let api: APIClientProviding
 
-    private var api: APIClient { APIClient.shared }
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - Login
 

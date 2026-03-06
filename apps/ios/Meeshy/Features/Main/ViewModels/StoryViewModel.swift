@@ -11,10 +11,23 @@ class StoryViewModel: ObservableObject {
     @Published var publishError: String?
     @Published var showStoryComposer = false
 
-    private let storyService = StoryService.shared
-    private let postService = PostService.shared
+    private let storyService: StoryServiceProviding
+    private let postService: PostServiceProviding
     private var cancellables = Set<AnyCancellable>()
-    private let socialSocket = SocialSocketManager.shared
+    private let socialSocket: SocialSocketProviding
+    private let api: APIClientProviding
+
+    init(
+        storyService: StoryServiceProviding = StoryService.shared,
+        postService: PostServiceProviding = PostService.shared,
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        api: APIClientProviding = APIClient.shared
+    ) {
+        self.storyService = storyService
+        self.postService = postService
+        self.socialSocket = socialSocket
+        self.api = api
+    }
 
     // MARK: - Load Stories
 
@@ -23,7 +36,7 @@ class StoryViewModel: ObservableObject {
         isLoading = true
 
         do {
-            let response = try await storyService.list(limit: 50)
+            let response = try await storyService.list(cursor: nil, limit: 50)
 
             if response.success {
                 storyGroups = response.data.toStoryGroups()
@@ -104,7 +117,7 @@ class StoryViewModel: ObservableObject {
             if let image {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
-                      let token = APIClient.shared.authToken else {
+                      let token = api.authToken else {
                     publishError = "Authentication required"
                     isPublishing = false
                     return
@@ -184,7 +197,7 @@ class StoryViewModel: ObservableObject {
     ) async throws {
         let serverOrigin = MeeshyConfig.shared.serverOrigin
         guard let baseURL = URL(string: serverOrigin),
-              let token = APIClient.shared.authToken else {
+              let token = api.authToken else {
             throw URLError(.userAuthenticationRequired)
         }
         let uploader = TusUploadManager(baseURL: baseURL)

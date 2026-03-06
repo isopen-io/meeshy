@@ -18,10 +18,21 @@ class FeedViewModel: ObservableObject {
     @Published var publishError: String?
 
     private var nextCursor: String?
-    private let api = APIClient.shared
+    private let api: APIClientProviding
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
-    private let socialSocket = SocialSocketManager.shared
+    private let socialSocket: SocialSocketProviding
+    private let postService: PostServiceProviding
+
+    init(
+        api: APIClientProviding = APIClient.shared,
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        postService: PostServiceProviding = PostService.shared
+    ) {
+        self.api = api
+        self.socialSocket = socialSocket
+        self.postService = postService
+    }
 
     // MARK: - Initial Load
 
@@ -33,6 +44,7 @@ class FeedViewModel: ObservableObject {
         do {
             let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
                 endpoint: "/posts/feed",
+                cursor: nil,
                 limit: limit
             )
 
@@ -150,10 +162,11 @@ class FeedViewModel: ObservableObject {
     func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         publishError = nil
         do {
-            let apiPost = try await PostService.shared.create(
+            let apiPost = try await postService.create(
                 content: content,
                 type: type,
                 visibility: visibility,
+                moodEmoji: nil,
                 mediaIds: mediaIds,
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,

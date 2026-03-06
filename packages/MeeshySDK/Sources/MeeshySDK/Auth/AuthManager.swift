@@ -1,8 +1,30 @@
 import Foundation
 import Combine
 
+// MARK: - Protocol
+
 @MainActor
-public final class AuthManager: ObservableObject {
+public protocol AuthManaging: AnyObject {
+    var isAuthenticated: Bool { get }
+    var currentUser: MeeshyUser? { get }
+    var isLoading: Bool { get }
+    var errorMessage: String? { get }
+    var savedAccounts: [SavedAccount] { get }
+    var authToken: String? { get }
+    func login(username: String, password: String) async
+    func register(request: RegisterRequest) async
+    func requestMagicLink(email: String) async -> Bool
+    func validateMagicLink(token: String) async
+    func requestPasswordReset(email: String) async -> Bool
+    func logout()
+    func checkExistingSession() async
+    func handleUnauthorized()
+}
+
+// MARK: - Implementation
+
+@MainActor
+public final class AuthManager: ObservableObject, AuthManaging {
     public static let shared = AuthManager()
 
     // MARK: - Published State

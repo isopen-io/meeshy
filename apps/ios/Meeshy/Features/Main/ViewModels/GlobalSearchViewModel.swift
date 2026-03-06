@@ -82,6 +82,12 @@ class GlobalSearchViewModel: ObservableObject {
     @Published var recentSearches: [String] = []
     @Published var hasSearched = false
 
+    // MARK: - Dependencies
+
+    private let api: APIClientProviding
+    private let userService: UserServiceProviding
+    private let authManager: AuthManaging
+
     // MARK: - Private
 
     private var cancellables = Set<AnyCancellable>()
@@ -90,7 +96,14 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Init
 
-    init() {
+    init(
+        api: APIClientProviding = APIClient.shared,
+        userService: UserServiceProviding = UserService.shared,
+        authManager: AuthManaging = AuthManager.shared
+    ) {
+        self.api = api
+        self.userService = userService
+        self.authManager = authManager
         loadRecentSearches()
         setupDebounce()
     }
@@ -137,11 +150,11 @@ class GlobalSearchViewModel: ObservableObject {
 
     private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
         do {
-            let response: APIResponse<[APIConversation]> = try await APIClient.shared.request(
+            let response: APIResponse<[APIConversation]> = try await api.request(
                 endpoint: "/conversations/search",
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
-            let userId = AuthManager.shared.currentUser?.id ?? ""
+            let userId = authManager.currentUser?.id ?? ""
             return response.data.map { apiConv in
                 let conv = apiConv.toConversation(currentUserId: userId)
                 return GlobalSearchConversationResult(
@@ -165,7 +178,7 @@ class GlobalSearchViewModel: ObservableObject {
 
     private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
         do {
-            let results = try await UserService.shared.searchUsers(query: query, limit: 20)
+            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
             return results.map { user in
                 GlobalSearchUserResult(
                     id: user.id,
@@ -188,11 +201,11 @@ class GlobalSearchViewModel: ObservableObject {
         // then searching within those conversations for message matches
         do {
             // First get conversations that might have matching messages
-            let response: APIResponse<[APIConversation]> = try await APIClient.shared.request(
+            let response: APIResponse<[APIConversation]> = try await api.request(
                 endpoint: "/conversations/search",
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
-            let userId = AuthManager.shared.currentUser?.id ?? ""
+            let userId = authManager.currentUser?.id ?? ""
             let conversations = response.data.map { $0.toConversation(currentUserId: userId) }
 
             // Search for messages in the first few conversations (limit to avoid too many requests)
@@ -229,7 +242,7 @@ class GlobalSearchViewModel: ObservableObject {
         query: String
     ) async -> [GlobalSearchMessageResult] {
         do {
-            let response: MessagesAPIResponse = try await APIClient.shared.request(
+            let response: MessagesAPIResponse = try await api.request(
                 endpoint: "/conversations/\(conversationId)/messages/search",
                 queryItems: [
                     URLQueryItem(name: "q", value: query),

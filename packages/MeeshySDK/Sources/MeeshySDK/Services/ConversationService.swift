@@ -1,9 +1,26 @@
 import Foundation
 
-public final class ConversationService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol ConversationServiceProviding: Sendable {
+    func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>
+    func getById(_ conversationId: String) async throws -> APIConversation
+    func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
+    func delete(conversationId: String) async throws
+    func markRead(conversationId: String) async throws
+    func markUnread(conversationId: String) async throws
+    func getParticipants(conversationId: String, limit: Int) async throws -> [APIConversationMember]
+    func deleteForMe(conversationId: String) async throws
+    func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
+}
+
+public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
     public static let shared = ConversationService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func list(offset: Int = 0, limit: Int = 30) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         try await api.offsetPaginatedRequest(endpoint: "/conversations", offset: offset, limit: limit)

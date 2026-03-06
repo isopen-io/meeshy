@@ -13,13 +13,26 @@ public struct BlockedUser: Decodable, Identifiable, Sendable {
     }
 }
 
-public final class BlockService: ObservableObject, @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol BlockServiceProviding: Sendable {
+    var blockedUserIds: Set<String> { get }
+    func blockUser(userId: String) async throws
+    func unblockUser(userId: String) async throws
+    func listBlockedUsers() async throws -> [BlockedUser]
+    func isBlocked(userId: String) -> Bool
+    func refreshCache() async
+}
+
+public final class BlockService: ObservableObject, BlockServiceProviding, @unchecked Sendable {
     public static let shared = BlockService()
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
 
     @Published public private(set) var blockedUserIds: Set<String> = []
 
-    private init() {}
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - Block
 

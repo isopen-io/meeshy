@@ -1,9 +1,29 @@
 import Foundation
 
-public final class PostService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol PostServiceProviding: Sendable {
+    func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, mobileTranscription: MobileTranscriptionPayload?) async throws -> APIPost
+    func delete(postId: String) async throws
+    func like(postId: String) async throws
+    func unlike(postId: String) async throws
+    func bookmark(postId: String) async throws
+    func addComment(postId: String, content: String) async throws -> APIPostComment
+    func likeComment(postId: String, commentId: String) async throws
+    func repost(postId: String, quote: String?) async throws
+    func share(postId: String) async throws
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, mediaIds: [String]?) async throws -> APIPost
+    func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
+}
+
+public final class PostService: PostServiceProviding, @unchecked Sendable {
     public static let shared = PostService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)

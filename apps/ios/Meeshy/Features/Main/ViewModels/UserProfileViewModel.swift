@@ -14,14 +14,28 @@ final class UserProfileViewModel: ObservableObject {
     @Published var isLoadingStats = false
     @Published var statsError: String?
 
+    // MARK: - Dependencies
+
+    private let authManager: AuthManaging
+    private let profileCache: UserProfileCaching
+    private let blockService: BlockServiceProviding
+
     var isCurrentUser: Bool {
-        guard let currentId = AuthManager.shared.currentUser?.id else { return false }
+        guard let currentId = authManager.currentUser?.id else { return false }
         return profileUser.userId == currentId
     }
 
-    init(user: ProfileSheetUser) {
+    init(
+        user: ProfileSheetUser,
+        authManager: AuthManaging = AuthManager.shared,
+        profileCache: UserProfileCaching = UserProfileCacheManager.shared,
+        blockService: BlockServiceProviding = BlockService.shared
+    ) {
+        self.authManager = authManager
+        self.profileCache = profileCache
+        self.blockService = blockService
         self.profileUser = user
-        self.isBlocked = Self.checkIsBlocked(userId: user.userId)
+        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
     }
 
     func loadFullProfile() async {
@@ -30,7 +44,7 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let user = try await UserProfileCacheManager.shared.profile(for: userId)
+            let user = try await profileCache.profile(for: userId)
             fullUser = user
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
@@ -44,7 +58,7 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoadingStats = false }
 
         do {
-            let stats = try await UserProfileCacheManager.shared.stats(for: userId)
+            let stats = try await profileCache.stats(for: userId)
             userStats = stats
         } catch {
             statsError = "Impossible de charger les statistiques"
@@ -61,7 +75,7 @@ final class UserProfileViewModel: ObservableObject {
     func blockUser() async {
         guard let userId = profileUser.userId else { return }
         do {
-            try await BlockService.shared.blockUser(userId: userId)
+            try await blockService.blockUser(userId: userId)
             isBlocked = true
         } catch {}
     }
@@ -69,14 +83,14 @@ final class UserProfileViewModel: ObservableObject {
     func unblockUser() async {
         guard let userId = profileUser.userId else { return }
         do {
-            try await BlockService.shared.unblockUser(userId: userId)
+            try await blockService.unblockUser(userId: userId)
             isBlocked = false
         } catch {}
     }
 
-    private static func checkIsBlocked(userId: String?) -> Bool {
+    private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {
         guard let userId = userId,
-              let blockedIds = AuthManager.shared.currentUser?.blockedUserIds else { return false }
+              let blockedIds = authManager.currentUser?.blockedUserIds else { return false }
         return blockedIds.contains(userId)
     }
 }

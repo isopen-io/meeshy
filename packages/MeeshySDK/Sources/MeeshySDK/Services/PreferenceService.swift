@@ -1,9 +1,24 @@
 import Foundation
 
-public final class PreferenceService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol PreferenceServiceProviding: Sendable {
+    func getCategories() async throws -> [ConversationCategory]
+    func getConversationPreferences(conversationId: String) async throws -> APIConversationPreferences
+    func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws
+    func patchCategory(id: String, isExpanded: Bool) async throws
+    func getAllPreferences() async throws -> UserPreferences
+    func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws
+    func resetPreferences(category: PreferenceCategory) async throws
+}
+
+public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
     public static let shared = PreferenceService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func getCategories() async throws -> [ConversationCategory] {
         let response: APIResponse<[ConversationCategory]> = try await api.request(endpoint: "/me/preferences/categories")

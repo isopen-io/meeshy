@@ -41,11 +41,21 @@ private struct CachedConversations: Sendable {
     }
 }
 
+// MARK: - Protocol
+
+public protocol UserProfileCaching: Sendable {
+    func profile(for userId: String) async throws -> MeeshyUser
+    func stats(for userId: String) async throws -> UserStats
+    func sharedConversations(with userId: String) async throws -> [APIConversation]
+    func invalidate(userId: String) async
+    func clearAll() async
+}
+
 // MARK: - User Profile Cache Manager
 
 /// Thread-safe actor for caching user profiles and stats.
 /// Implements two-tier TTL: fresh (5min) and stale (1h) with background refresh.
-public actor UserProfileCacheManager {
+public actor UserProfileCacheManager: UserProfileCaching {
     public static let shared = UserProfileCacheManager()
 
     // MARK: - Cache Storage

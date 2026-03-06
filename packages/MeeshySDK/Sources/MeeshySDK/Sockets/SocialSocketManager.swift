@@ -95,9 +95,37 @@ public struct SocketStoryTranslationUpdatedData: Decodable, Sendable {
     public let translations: [String: String]
 }
 
+// MARK: - Protocol
+
+public protocol SocialSocketProviding: Sendable {
+    var postCreated: PassthroughSubject<APIPost, Never> { get }
+    var postUpdated: PassthroughSubject<APIPost, Never> { get }
+    var postDeleted: PassthroughSubject<String, Never> { get }
+    var postLiked: PassthroughSubject<SocketPostLikedData, Never> { get }
+    var postUnliked: PassthroughSubject<SocketPostUnlikedData, Never> { get }
+    var postReposted: PassthroughSubject<SocketPostRepostedData, Never> { get }
+    var storyCreated: PassthroughSubject<APIPost, Never> { get }
+    var storyViewed: PassthroughSubject<SocketStoryViewedData, Never> { get }
+    var storyReacted: PassthroughSubject<SocketStoryReactedData, Never> { get }
+    var statusCreated: PassthroughSubject<APIPost, Never> { get }
+    var statusDeleted: PassthroughSubject<String, Never> { get }
+    var statusUpdated: PassthroughSubject<APIPost, Never> { get }
+    var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
+    var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
+    var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
+    var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
+    var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
+    var isConnected: Bool { get }
+    var connectionState: ConnectionState { get }
+    func connect()
+    func disconnect()
+    func subscribeFeed()
+    func unsubscribeFeed()
+}
+
 // MARK: - Social Socket Manager
 
-public final class SocialSocketManager: ObservableObject, @unchecked Sendable {
+public final class SocialSocketManager: ObservableObject, SocialSocketProviding, @unchecked Sendable {
     public static let shared = SocialSocketManager()
 
     // Combine publishers for ViewModels to subscribe to

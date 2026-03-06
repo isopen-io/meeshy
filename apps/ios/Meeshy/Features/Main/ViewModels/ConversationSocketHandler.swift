@@ -34,6 +34,7 @@ final class ConversationSocketHandler {
     private var cancellables = Set<AnyCancellable>()
     private let conversationId: String
     private let currentUserId: String
+    private let messageSocket: MessageSocketProviding
     weak var delegate: ConversationSocketDelegate?
 
     // Typing emission state
@@ -45,9 +46,14 @@ final class ConversationSocketHandler {
 
     // MARK: - Init / Deinit
 
-    init(conversationId: String, currentUserId: String) {
+    init(
+        conversationId: String,
+        currentUserId: String,
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared
+    ) {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
+        self.messageSocket = messageSocket
         joinRoom()
         subscribeToSocket()
         subscribeToReconnect()
@@ -69,7 +75,7 @@ final class ConversationSocketHandler {
     // MARK: - Room Management
 
     private func joinRoom() {
-        MessageSocketManager.shared.joinConversation(conversationId)
+        messageSocket.joinConversation(conversationId)
     }
 
     private nonisolated func leaveRoom() {
@@ -92,7 +98,7 @@ final class ConversationSocketHandler {
 
         if !isEmittingTyping {
             isEmittingTyping = true
-            MessageSocketManager.shared.emitTypingStart(conversationId: conversationId)
+            messageSocket.emitTypingStart(conversationId: conversationId)
         }
 
         typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingDebounceInterval, repeats: false) { [weak self] _ in
@@ -108,7 +114,7 @@ final class ConversationSocketHandler {
 
         guard isEmittingTyping else { return }
         isEmittingTyping = false
-        MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
+        messageSocket.emitTypingStop(conversationId: conversationId)
     }
 
     // MARK: - Typing Safety Timers
@@ -131,7 +137,7 @@ final class ConversationSocketHandler {
     // MARK: - Socket Subscriptions
 
     private func subscribeToSocket() {
-        let socketManager = MessageSocketManager.shared
+        let socketManager = messageSocket
         let convId = conversationId
         let userId = currentUserId
 
@@ -463,7 +469,7 @@ final class ConversationSocketHandler {
     // MARK: - Reconnection Sync
 
     private func subscribeToReconnect() {
-        MessageSocketManager.shared.didReconnect
+        messageSocket.didReconnect
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }

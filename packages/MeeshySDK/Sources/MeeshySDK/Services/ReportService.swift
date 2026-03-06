@@ -1,9 +1,21 @@
 import Foundation
 
-public final class ReportService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol ReportServiceProviding: Sendable {
+    func reportMessage(messageId: String, reportType: String, reason: String?) async throws
+    func reportUser(userId: String, reportType: String, reason: String?) async throws
+    func reportStory(storyId: String, reportType: String, reason: String?) async throws
+    func reportConversation(conversationId: String, reportType: String, reason: String?) async throws
+}
+
+public final class ReportService: ReportServiceProviding, @unchecked Sendable {
     public static let shared = ReportService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     public func reportMessage(messageId: String, reportType: String, reason: String? = nil) async throws {
         let body = CreateReportBody(
