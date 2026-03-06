@@ -95,6 +95,19 @@ public struct SocketStoryTranslationUpdatedData: Decodable {
     public let translations: [String: String]
 }
 
+public struct SocketPostTranslationUpdatedData: Decodable {
+    public let postId: String
+    public let language: String
+    public let translation: APIPostTranslationEntry
+}
+
+public struct SocketCommentTranslationUpdatedData: Decodable {
+    public let commentId: String
+    public let postId: String
+    public let language: String
+    public let translation: APIPostTranslationEntry
+}
+
 // MARK: - Social Socket Manager
 
 public final class SocialSocketManager: ObservableObject {
@@ -118,6 +131,8 @@ public final class SocialSocketManager: ObservableObject {
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
+    public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
+    public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -343,6 +358,20 @@ public final class SocialSocketManager: ObservableObject {
         socket.on("post:story-translation-updated") { [weak self] data, _ in
             self?.decode(SocketStoryTranslationUpdatedData.self, from: data) { payload in
                 self?.storyTranslationUpdated.send(payload)
+            }
+        }
+
+        // --- Post translation events ---
+
+        socket.on("post:translation-updated") { [weak self] data, _ in
+            self?.decode(SocketPostTranslationUpdatedData.self, from: data) { payload in
+                self?.postTranslationUpdated.send(payload)
+            }
+        }
+
+        socket.on("comment:translation-updated") { [weak self] data, _ in
+            self?.decode(SocketCommentTranslationUpdatedData.self, from: data) { payload in
+                self?.commentTranslationUpdated.send(payload)
             }
         }
     }
