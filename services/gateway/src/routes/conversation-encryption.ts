@@ -275,6 +275,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
             content: encryptionMessages[mode],
             originalLanguage: 'en',
             messageType: 'system',
+            deletedAt: null
           }
         });
 

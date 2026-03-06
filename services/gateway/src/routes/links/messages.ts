@@ -206,7 +206,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
-          anonymousSenderId: anonymousParticipant.id
+          anonymousSenderId: anonymousParticipant.id,
+          deletedAt: null
         },
         include: {
           anonymousSender: {
@@ -462,7 +463,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
-          anonymousSenderId: null
+          anonymousSenderId: null,
+          deletedAt: null
         },
         include: {
           sender: {

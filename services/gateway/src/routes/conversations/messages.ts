@@ -1183,7 +1183,8 @@ export function registerMessagesRoutes(
         replyToId,
         storyReplyToId,
         forwardedFromId,
-        forwardedFromConversationId
+        forwardedFromConversationId,
+        deletedAt: null
       };
 
       // Add blur flag if specified

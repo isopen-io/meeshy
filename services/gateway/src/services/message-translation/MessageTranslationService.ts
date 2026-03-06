@@ -240,7 +240,8 @@ export class MessageTranslationService extends EventEmitter {
           content: messageData.content,
           originalLanguage: messageData.originalLanguage,
           messageType: messageData.messageType || 'text',
-          replyToId: messageData.replyToId || null
+          replyToId: messageData.replyToId || null,
+          deletedAt: null
         }
       });
 

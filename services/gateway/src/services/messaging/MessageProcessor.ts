@@ -336,7 +336,8 @@ export class MessageProcessor {
         isEncrypted: encryptionContext.isEncrypted,
         encryptionMode: encryptionContext.mode,
         encryptedContent: encryptionContext.encryptedContent,
-        encryptionMetadata: encryptionContext.encryptionMetadata
+        encryptionMetadata: encryptionContext.encryptionMetadata,
+        deletedAt: null
       },
       include: {
         sender: {
