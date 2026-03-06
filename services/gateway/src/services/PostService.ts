@@ -105,6 +105,7 @@ export class PostService {
     visibility: string;
     visibilityUserIds?: string[];
     content?: string;
+    originalLanguage?: string;
     communityId?: string;
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
@@ -122,7 +123,7 @@ export class PostService {
       expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
     }
 
-    const originalLanguage = data.content ? detectLanguage(data.content) : undefined;
+    const originalLanguage = data.originalLanguage ?? (data.content ? detectLanguage(data.content) : undefined);
 
     const post = await this.prisma.post.create({
       data: {

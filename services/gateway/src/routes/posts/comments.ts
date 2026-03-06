@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
+import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 
 export function registerCommentRoutes(
@@ -131,6 +132,21 @@ export function registerCommentRoutes(
             commentId: comment.id,
             commentPreview: parsed.data.content,
           }).catch(() => {});
+        }
+      }
+
+      // Trigger async translation for comment content (fire-and-forget)
+      if (parsed.data.content) {
+        try {
+          const translationService = PostTranslationService.shared;
+          translationService.translateComment(
+            comment.id,
+            postId,
+            parsed.data.content,
+            (comment as any).originalLanguage,
+          ).catch(() => {});
+        } catch {
+          // PostTranslationService not initialized — skip silently
         }
       }
 
