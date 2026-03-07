@@ -353,9 +353,20 @@ class MeeshyServer {
       logger.info('🌐 Gateway starting in HTTP mode');
     }
 
+    const stripDataUri = (v: string | null | undefined) => (v?.startsWith('data:') ? null : v ?? null);
     this.prisma = new PrismaClient({
-      log: ['warn', 'error'] // Désactivation des logs query et info pour réduire le bruit
-    });
+      log: ['warn', 'error'],
+    }).$extends({
+      result: {
+        user: {
+          avatar: { needs: { avatar: true }, compute: (u) => stripDataUri(u.avatar) },
+          banner: { needs: { banner: true }, compute: (u) => stripDataUri(u.banner) },
+        },
+        conversation: {
+          avatar: { needs: { avatar: true }, compute: (c) => stripDataUri(c.avatar) },
+        },
+      },
+    }) as unknown as PrismaClient;
 
     // Initialiser Redis si l'URL est configurée (optionnel)
     if (process.env.REDIS_URL) {

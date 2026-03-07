@@ -3187,33 +3187,31 @@ export class MeeshySocketIOManager {
     metadata: { agentType: 'impersonator' | 'animator'; roleConfidence: number; archetypeId?: string };
   }): Promise<void> {
     try {
-      const message = await this.prisma.message.create({
-        data: {
-          conversationId: response.conversationId,
-          senderId: response.asUserId,
-          content: response.content,
-          originalLanguage: 'fr',
-          messageType: 'text',
-          replyToId: response.replyToId ?? null,
-          deletedAt: null,
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-      });
+      // Use MessagingService full pipeline: DB save + translation + broadcast
+      const messageRequest = {
+        conversationId: response.conversationId,
+        content: response.content,
+        messageType: 'text' as const,
+        replyToId: response.replyToId,
+        isAnonymous: false,
+        metadata: { source: 'api' as const },
+      };
 
-      const messageWithTimestamp = { ...message, timestamp: message.createdAt } as any;
+      const result = await this.messagingService.handleMessage(
+        messageRequest,
+        response.asUserId,
+        true,
+      );
+
+      if (!result.success || !result.data) {
+        logger.error(`[Agent] handleMessage failed — conv=${response.conversationId}`, result.error);
+        return;
+      }
+
+      // Broadcast to all members (translation arrives asynchronously via translationReady event)
+      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
-      logger.info(`[Agent] Response broadcast — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType}`);
+      logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {
       logger.error('[Agent] handleAgentResponse error:', error);
     }
