@@ -66,6 +66,11 @@ export class ConversationScanner {
       excludedUserIds: config.excludedUserIds,
       agentInstructions: config.agentInstructions ?? null,
       webSearchEnabled: config.webSearchEnabled,
+      minWordsPerMessage: config.minWordsPerMessage,
+      maxWordsPerMessage: config.maxWordsPerMessage,
+      generationTemperature: config.generationTemperature,
+      qualityGateEnabled: config.qualityGateEnabled,
+      qualityGateMinScore: config.qualityGateMinScore,
     };
     await this.processConversation(conv);
   }
@@ -167,6 +172,11 @@ export class ConversationScanner {
       conversationDescription: conv.description ?? '',
       agentInstructions: conv.agentInstructions ?? '',
       webSearchEnabled: conv.webSearchEnabled,
+      minWordsPerMessage: conv.minWordsPerMessage,
+      maxWordsPerMessage: conv.maxWordsPerMessage,
+      generationTemperature: conv.generationTemperature,
+      qualityGateEnabled: conv.qualityGateEnabled,
+      qualityGateMinScore: conv.qualityGateMinScore,
       minResponsesPerCycle: conv.minResponsesPerCycle,
       maxResponsesPerCycle: conv.maxResponsesPerCycle,
       reactionsEnabled: conv.reactionsEnabled,

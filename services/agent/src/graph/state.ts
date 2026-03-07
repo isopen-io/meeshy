@@ -167,6 +167,26 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => false,
   }),
+  minWordsPerMessage: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 3,
+  }),
+  maxWordsPerMessage: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 400,
+  }),
+  generationTemperature: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 0.8,
+  }),
+  qualityGateEnabled: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  qualityGateMinScore: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 0.5,
+  }),
   minResponsesPerCycle: Annotation<number>({
     reducer: (_current, update) => update,
     default: () => 2,

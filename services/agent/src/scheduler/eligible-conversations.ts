@@ -20,6 +20,11 @@ export type EligibleConversation = {
   excludedUserIds: string[];
   agentInstructions: string | null;
   webSearchEnabled: boolean;
+  minWordsPerMessage: number;
+  maxWordsPerMessage: number;
+  generationTemperature: number;
+  qualityGateEnabled: boolean;
+  qualityGateMinScore: number;
 };
 
 export async function findEligibleConversations(persistence: MongoPersistence): Promise<EligibleConversation[]> {
@@ -45,5 +50,10 @@ export async function findEligibleConversations(persistence: MongoPersistence): 
     excludedUserIds: config.excludedUserIds,
     agentInstructions: config.agentInstructions ?? null,
     webSearchEnabled: config.webSearchEnabled,
+    minWordsPerMessage: config.minWordsPerMessage,
+    maxWordsPerMessage: config.maxWordsPerMessage,
+    generationTemperature: config.generationTemperature,
+    qualityGateEnabled: config.qualityGateEnabled,
+    qualityGateMinScore: config.qualityGateMinScore,
   }));
 }
