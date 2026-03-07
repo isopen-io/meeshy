@@ -60,14 +60,28 @@ public struct NotificationRowView: View {
 
     private var iconView: some View {
         ZStack(alignment: .topTrailing) {
-            Circle()
-                .fill(accentColor.opacity(0.12))
+            if let avatarUrl = notification.senderAvatar, !avatarUrl.isEmpty {
+                CachedAsyncImage(url: avatarUrl) {
+                    Circle()
+                        .fill(accentColor.opacity(0.12))
+                        .overlay(
+                            Image(systemName: notifType.systemIcon)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(accentColor)
+                        )
+                }
                 .frame(width: 44, height: 44)
-                .overlay(
-                    Image(systemName: notifType.systemIcon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(accentColor)
-                )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(accentColor.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: notifType.systemIcon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(accentColor)
+                    )
+            }
 
             if !notification.isRead {
                 Circle()
@@ -137,7 +151,7 @@ public struct NotificationRowView: View {
         case .communityInvite, .legacyGroupInvite:
             return "Invitation de groupe"
         case .communityJoined, .memberJoined, .legacyGroupJoined:
-            return "A rejoint le groupe"
+            return "\(notification.senderName ?? "Quelqu'un") a rejoint le groupe"
         case .communityLeft, .memberLeft, .legacyGroupLeft:
             return "A quitte le groupe"
         case .missedCall, .callDeclined, .legacyCallMissed:

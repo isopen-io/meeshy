@@ -8,6 +8,7 @@
 import { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { logger } from '../utils/logger.js';
+import { isLocalIp } from '../utils/rate-limiter';
 
 /**
  * Rate limit configuration per endpoint
@@ -60,8 +61,8 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
     global: true,
     max: RATE_LIMITS.DEFAULT.max,
     timeWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    cache: 10000, // Cache size for in-memory store
-    allowList: [], // IPs to exclude from rate limiting
+    cache: 10000,
+    allowList: (req) => isLocalIp(req.ip),
     redis: (fastify as any).redis, // Use Redis for distributed rate limiting (if available)
     skipOnError: true, // Don't block requests if Redis is down
     keyGenerator: (request) => {

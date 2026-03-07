@@ -357,7 +357,7 @@ public struct APINotification: Decodable, Identifiable {
         case .communityInvite, .legacyGroupInvite:
             return "Invitation a \(conversationTitle)"
         case .communityJoined, .memberJoined, .legacyGroupJoined:
-            return "Nouveau membre dans \(conversationTitle)"
+            return "\(actorName) a rejoint \(conversationTitle)"
         case .communityLeft, .memberLeft, .legacyGroupLeft:
             return "\(actorName) a quitte \(conversationTitle)"
         case .memberRemoved:

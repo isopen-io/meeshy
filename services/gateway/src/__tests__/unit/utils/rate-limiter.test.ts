@@ -124,7 +124,7 @@ class MockRedis {
 // Mock Fastify request and reply
 function createMockRequest(overrides: Partial<FastifyRequest> = {}): FastifyRequest {
   return {
-    ip: '127.0.0.1',
+    ip: '203.0.113.1',
     ...overrides
   } as FastifyRequest;
 }
@@ -169,6 +169,7 @@ function createMockReply(): FastifyReply & {
 // Import the module under test
 import {
   RateLimiter,
+  isLocalIp,
   createNotificationRateLimiter,
   createGlobalRateLimiter,
   createStrictRateLimiter,
@@ -176,6 +177,49 @@ import {
   createCustomRateLimiter
 } from '../../../utils/rate-limiter';
 import type { RateLimiterConfig } from '../../../utils/rate-limiter';
+
+describe('isLocalIp', () => {
+  it('returns true for 127.0.0.1', () => {
+    expect(isLocalIp('127.0.0.1')).toBe(true);
+  });
+
+  it('returns true for ::1', () => {
+    expect(isLocalIp('::1')).toBe(true);
+  });
+
+  it('returns true for ::ffff:127.0.0.1', () => {
+    expect(isLocalIp('::ffff:127.0.0.1')).toBe(true);
+  });
+
+  it('returns true for localhost', () => {
+    expect(isLocalIp('localhost')).toBe(true);
+  });
+
+  it('returns true for 192.168.x.x', () => {
+    expect(isLocalIp('192.168.1.42')).toBe(true);
+    expect(isLocalIp('192.168.0.1')).toBe(true);
+  });
+
+  it('returns true for 10.x.x.x', () => {
+    expect(isLocalIp('10.0.0.1')).toBe(true);
+    expect(isLocalIp('10.255.255.255')).toBe(true);
+  });
+
+  it('returns true for 172.16-31.x.x', () => {
+    expect(isLocalIp('172.16.0.1')).toBe(true);
+    expect(isLocalIp('172.31.255.255')).toBe(true);
+  });
+
+  it('returns false for public IPs', () => {
+    expect(isLocalIp('8.8.8.8')).toBe(false);
+    expect(isLocalIp('203.0.113.1')).toBe(false);
+    expect(isLocalIp('172.32.0.1')).toBe(false);
+  });
+
+  it('returns false for empty or undefined', () => {
+    expect(isLocalIp('')).toBe(false);
+  });
+});
 
 describe('RateLimiter', () => {
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
@@ -272,7 +316,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '192.168.1.1' });
+      const request = createMockRequest({ ip: '203.0.113.11' });
       const reply = createMockReply();
 
       await middleware(request, reply);
@@ -288,7 +332,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '192.168.1.2' });
+      const request = createMockRequest({ ip: '203.0.113.12' });
 
       // First request
       const reply1 = createMockReply();
@@ -314,7 +358,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '192.168.1.3' });
+      const request = createMockRequest({ ip: '203.0.113.13' });
 
       // First request
       const reply1 = createMockReply();
@@ -341,7 +385,7 @@ describe('RateLimiter', () => {
 
       // Create multiple requests from different IPs
       for (let i = 0; i < 5; i++) {
-        const request = createMockRequest({ ip: '192.168.2.' + i });
+        const request = createMockRequest({ ip: '203.0.113.' + i });
         const reply = createMockReply();
         await middleware(request, reply);
       }
@@ -350,7 +394,7 @@ describe('RateLimiter', () => {
       jest.advanceTimersByTime(200);
 
       // New request should work fine (entries should be cleaned)
-      const request = createMockRequest({ ip: '192.168.2.10' });
+      const request = createMockRequest({ ip: '203.0.113.210' });
       const reply = createMockReply();
       await middleware(request, reply);
       expect(reply.headers.get('X-RateLimit-Remaining')).toBe('99');
@@ -375,7 +419,7 @@ describe('RateLimiter', () => {
       );
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '10.0.0.1' });
+      const request = createMockRequest({ ip: '198.51.100.1' });
       const reply = createMockReply();
 
       await middleware(request, reply);
@@ -394,7 +438,7 @@ describe('RateLimiter', () => {
       );
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '10.0.0.2' });
+      const request = createMockRequest({ ip: '198.51.100.2' });
       const reply = createMockReply();
 
       await middleware(request, reply);
@@ -415,7 +459,7 @@ describe('RateLimiter', () => {
       );
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '10.0.0.3' });
+      const request = createMockRequest({ ip: '198.51.100.3' });
       const reply = createMockReply();
 
       // Should not throw - error is caught and logged
@@ -426,7 +470,7 @@ describe('RateLimiter', () => {
 
     it('should calculate reset time from TTL', async () => {
       // Set existing counter with known TTL
-      mockRedis.setCounter('ratelimit:redis-ttl:ip:10.0.0.4', 5, Date.now() + 30000);
+      mockRedis.setCounter('ratelimit:redis-ttl:ip:198.51.100.4', 5, Date.now() + 30000);
 
       const limiter = new RateLimiter(
         {
@@ -438,7 +482,7 @@ describe('RateLimiter', () => {
       );
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '10.0.0.4' });
+      const request = createMockRequest({ ip: '198.51.100.4' });
       const reply = createMockReply();
 
       await middleware(request, reply);
@@ -508,7 +552,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.0.1' });
+      const request = createMockRequest({ ip: '198.51.100.50' });
 
       // First request
       const reply1 = createMockReply();
@@ -536,7 +580,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.1.1' });
+      const request = createMockRequest({ ip: '198.51.100.51' });
 
       // First request - within limit
       const reply1 = createMockReply();
@@ -557,7 +601,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.1.2' });
+      const request = createMockRequest({ ip: '198.51.100.52' });
 
       // Exhaust limit
       const reply1 = createMockReply();
@@ -580,7 +624,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.1.3' });
+      const request = createMockRequest({ ip: '198.51.100.53' });
 
       // Exhaust limit
       const reply1 = createMockReply();
@@ -608,7 +652,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.1.4' });
+      const request = createMockRequest({ ip: '198.51.100.54' });
 
       // Exhaust limit
       const reply1 = createMockReply();
@@ -629,7 +673,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.1.5' });
+      const request = createMockRequest({ ip: '198.51.100.55' });
 
       // Exhaust limit
       const reply1 = createMockReply();
@@ -658,7 +702,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.2.1' });
+      const request = createMockRequest({ ip: '198.51.100.56' });
 
       // Should skip all requests
       for (let i = 0; i < 5; i++) {
@@ -678,7 +722,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.2.2' });
+      const request = createMockRequest({ ip: '198.51.100.22' });
 
       // First request - within limit
       const reply1 = createMockReply();
@@ -702,7 +746,7 @@ describe('RateLimiter', () => {
       });
 
       const middleware = limiter.middleware();
-      const request = createMockRequest({ ip: '172.16.2.3' });
+      const request = createMockRequest({ ip: '198.51.100.23' });
 
       const reply = createMockReply();
       await middleware(request, reply);
@@ -1163,7 +1207,7 @@ describe('RateLimiter - Integration Scenarios', () => {
     });
 
     const middleware = limiter.middleware();
-    const request = createMockRequest({ ip: '10.10.10.10' });
+    const request = createMockRequest({ ip: '198.51.100.10' });
 
     // Use up limit
     for (let i = 0; i < 2; i++) {

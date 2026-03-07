@@ -18,6 +18,23 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
 
+/**
+ * Check if an IP address is local (loopback or private network).
+ * Local IPs are exempt from rate limiting in dev environments.
+ */
+export function isLocalIp(ip: string): boolean {
+  if (!ip) return false;
+  const normalized = ip.replace(/^::ffff:/, '');
+  return (
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === 'localhost' ||
+    normalized.startsWith('192.168.') ||
+    normalized.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(normalized)
+  );
+}
+
 export interface RateLimiterConfig {
   /**
    * Maximum requests allowed in the window
@@ -200,7 +217,8 @@ export class RateLimiter {
   middleware() {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        // Check if we should skip rate limiting
+        if (isLocalIp(request.ip)) return;
+
         const shouldSkip = await this.config.skip(request);
         if (shouldSkip) {
           return;

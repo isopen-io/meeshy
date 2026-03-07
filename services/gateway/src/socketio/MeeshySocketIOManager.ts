@@ -2593,8 +2593,9 @@ export class MeeshySocketIOManager {
    * PHASE 3.1.1: Extraction du JWT Token depuis le socket
    */
   private extractJWTToken(socket: any): string | undefined {
-    return socket.handshake?.headers?.authorization?.replace('Bearer ', '') || 
-           socket.handshake?.auth?.authToken || 
+    return socket.handshake?.headers?.authorization?.replace('Bearer ', '') ||
+           socket.handshake?.auth?.authToken ||
+           socket.handshake?.auth?.token ||
            socket.auth?.token;
   }
 

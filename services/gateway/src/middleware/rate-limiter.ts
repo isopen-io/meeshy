@@ -9,6 +9,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import { isLocalIp } from '../utils/rate-limiter';
 
 /**
  * Rate limiter pour les messages
@@ -58,9 +59,10 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     },
     skipOnError: false,
     skip: (request: FastifyRequest) => {
-      // Exclure les routes de healthcheck/monitoring
-      const path = request.url.split('?')[0]; // Enlever query params
-      return path === '/health' || path === '/healthz' || path === '/ready';
+      const path = request.url.split('?')[0];
+      if (path === '/health' || path === '/healthz' || path === '/ready') return true;
+      if (isLocalIp(request.ip)) return true;
+      return false;
     },
     errorResponseBuilder: (request, context) => {
       return {
