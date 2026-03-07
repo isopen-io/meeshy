@@ -58,39 +58,34 @@ enum DeepLinkParser {
     // MARK: - Private
 
     private static func parseCustomScheme(_ url: URL) -> DeepLinkDestination {
-        // meeshy://me, meeshy://u/username, meeshy://c/id, meeshy://auth/magic-link?token=xxx
-        let path = url.host ?? url.path
-        let components = path.split(separator: "/").map(String.init)
+        // meeshy://me -> host="me", path=""
+        // meeshy://u/atabeth -> host="u", path="/atabeth"
+        // meeshy://auth/magic-link?token=xxx -> host="auth", path="/magic-link"
+        let host = url.host ?? ""
+        let pathSegments = url.pathComponents.filter { $0 != "/" }
+        let components = host.isEmpty ? pathSegments : [host] + pathSegments
 
-        if path == "me" || components.first == "me" {
+        guard let first = components.first else { return .external(url) }
+
+        switch first {
+        case "me":
             return .ownProfile
-        }
-
-        if path == "links" || components.first == "links" {
+        case "links":
             return .userLinks
-        }
-
-        // meeshy://share?text=...&url=...
-        if path == "share" || components.first == "share" {
+        case "share":
             return parseShareQuery(url)
-        }
-
-        // meeshy://auth/magic-link?token=xxx
-        if path == "auth" || components.first == "auth" {
-            let subPath = components.dropFirst()
-            if subPath.first == "magic-link",
+        case "auth":
+            if components.count >= 2, components[1] == "magic-link",
                let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
                let token = queryItems.first(where: { $0.name == "token" })?.value {
                 return .magicLink(token: token)
             }
-        }
-
-        if components.count >= 2 {
-            switch components[0] {
-            case "u": return .userProfile(username: components[1])
-            case "c": return .conversation(id: components[1])
-            default: break
-            }
+        case "u":
+            if components.count >= 2 { return .userProfile(username: components[1]) }
+        case "c":
+            if components.count >= 2 { return .conversation(id: components[1]) }
+        default:
+            break
         }
 
         return .external(url)

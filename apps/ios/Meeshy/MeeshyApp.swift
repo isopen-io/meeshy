@@ -65,7 +65,21 @@ struct MeeshyApp: App {
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
-                    handleAppLevelDeepLink(url)
+                    let destination = DeepLinkParser.parse(url)
+                    if case .magicLink = destination {
+                        handleAppLevelDeepLink(url)
+                        return
+                    }
+                    let _ = deepLinkRouter.handle(url: url)
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
+                    guard let url = userActivity.webpageURL else { return }
+                    let destination = DeepLinkParser.parse(url)
+                    if case .magicLink = destination {
+                        handleAppLevelDeepLink(url)
+                        return
+                    }
+                    let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
                     await authManager.checkExistingSession()
@@ -91,9 +105,6 @@ struct MeeshyApp: App {
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
                     guard let payload else { return }
                     handlePushNavigation(payload: payload)
-                }
-                .onOpenURL { url in
-                    let _ = deepLinkRouter.handle(url: url)
                 }
             }
         }
