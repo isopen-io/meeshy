@@ -48,7 +48,7 @@ export class MessagingService {
 
     try {
       // 1. Création du contexte d'authentification robuste
-      const authContext = this.createAuthenticationContext(senderId, jwtToken, sessionToken);
+      const authContext = this.createAuthenticationContext(senderId, jwtToken, sessionToken, isAuthenticated);
 
       const enrichedRequest: MessageRequest = {
         ...request,
@@ -152,7 +152,8 @@ export class MessagingService {
   private createAuthenticationContext(
     senderId: string,
     jwtToken?: string,
-    sessionToken?: string
+    sessionToken?: string,
+    isAuthenticated?: boolean
   ): AuthenticationContext {
     if (jwtToken) {
       return {
@@ -166,6 +167,13 @@ export class MessagingService {
         type: 'session',
         sessionToken: sessionToken,
         isAnonymous: true
+      };
+    } else if (isAuthenticated) {
+      // Internal/system call (e.g. agent service) — senderId trusted, no token needed
+      return {
+        type: 'jwt',
+        userId: senderId,
+        isAnonymous: false
       };
     } else {
       throw new Error('Authentication required: no JWT token or session token provided');
