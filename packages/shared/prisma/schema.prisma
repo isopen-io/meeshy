@@ -2950,6 +2950,26 @@ model AgentConfig {
   /// Minimum quality score to accept a message (0.0-1.0)
   qualityGateMinScore      Float    @default(0.5)
 
+  /// Daily scheduling — weekday
+  weekdayMaxMessages       Int      @default(10)
+  weekendMaxMessages       Int      @default(25)
+  weekdayMaxUsers          Int      @default(4)
+  weekendMaxUsers          Int      @default(6)
+
+  /// Burst scheduling
+  burstEnabled             Boolean  @default(true)
+  burstSize                Int      @default(4)
+  burstIntervalMinutes     Int      @default(5)
+  quietIntervalMinutes     Int      @default(90)
+
+  /// Inactivity threshold in days
+  inactivityDaysThreshold  Int      @default(3)
+
+  /// Reactivity rules
+  prioritizeTaggedUsers    Boolean  @default(true)
+  prioritizeRepliedUsers   Boolean  @default(true)
+  reactionBoostFactor      Float    @default(1.5)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -3045,4 +3065,26 @@ model AgentAnalytic {
   conversation    Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
+}
+
+model AgentGlobalConfig {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Global system prompt for all agent interactions
+  systemPrompt          String   @default("Tu es un systeme d'animation de conversations. Ton role est de maintenir des echanges naturels et engageants en imitant le style des utilisateurs inactifs.")
+  /// Global kill switch
+  enabled               Boolean  @default(true)
+  /// Default LLM provider
+  defaultProvider       String   @default("openai")
+  /// Default LLM model
+  defaultModel          String   @default("gpt-4o-mini")
+  /// Fallback provider
+  fallbackProvider      String?
+  /// Fallback model
+  fallbackModel         String?
+  /// Daily budget in USD across all conversations
+  globalDailyBudgetUsd  Float    @default(10.0)
+  /// Max concurrent LLM calls
+  maxConcurrentCalls    Int      @default(5)
+
+  updatedAt             DateTime @updatedAt
 }
