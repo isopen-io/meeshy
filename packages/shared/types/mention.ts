@@ -333,11 +333,13 @@ export function truncateMessageForNotification(
  */
 export const MENTION_CONSTANTS = {
   MAX_USERNAME_LENGTH: 30,
+  MAX_DISPLAY_NAME_LENGTH: 50,
   MAX_SUGGESTIONS: 10,
   AUTOCOMPLETE_DEBOUNCE_MS: 300,
   NOTIFICATION_WORD_LIMIT: 20,
   MENTION_TRIGGER: '@',
-  MENTION_REGEX: /@(\w+)/g
+  MENTION_REGEX: /@(\w+)/g,
+  MENTION_DISPLAY_REGEX: /@([\w][\w\s'-]{0,49})(?=[!?,;:.@\n]|\s{2,}|$)/g
 } as const;
 
 /**
