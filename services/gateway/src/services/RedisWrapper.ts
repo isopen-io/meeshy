@@ -225,27 +225,9 @@ export class RedisWrapper {
     });
   }
 
-  /**
-   * Définit une valeur avec expiration (Redis ou mémoire)
-   */
+  /** @deprecated Use set(key, value, ttlSeconds) instead */
   async setex(key: string, seconds: number, value: string): Promise<void> {
-    // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
-    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
-      try {
-        await this.redis.setex(key, seconds, value);
-        return;
-      } catch (error) {
-        // Erreur silencieuse - basculer vers cache mémoire
-        this.permanentlyDisabled = true;
-        this.closeRedisConnection();
-      }
-    }
-
-    // Fallback sur cache mémoire
-    this.memoryCache.set(key, {
-      value,
-      expiresAt: Date.now() + (seconds * 1000),
-    });
+    return this.set(key, value, seconds);
   }
 
   /**
