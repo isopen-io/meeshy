@@ -31,6 +31,13 @@ const agentConfigSchema = z.object({
   agentType: z.string().optional(),
   contextWindowSize: z.number().int().min(10).max(250).optional(),
   useFullHistory: z.boolean().optional(),
+  scanIntervalMinutes: z.number().int().min(1).max(1440).optional(),
+  minResponsesPerCycle: z.number().int().min(0).max(50).optional(),
+  maxResponsesPerCycle: z.number().int().min(1).max(50).optional(),
+  reactionsEnabled: z.boolean().optional(),
+  maxReactionsPerCycle: z.number().int().min(0).max(50).optional(),
+  agentInstructions: z.string().max(5000).nullable().optional(),
+  webSearchEnabled: z.boolean().optional(),
 });
 
 const llmConfigSchema = z.object({

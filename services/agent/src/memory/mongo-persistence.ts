@@ -146,11 +146,19 @@ export class MongoPersistence {
             id: true,
             type: true,
             title: true,
+            description: true,
             lastMessageAt: true,
             memberCount: true,
           },
         },
       },
+    });
+  }
+
+  async getConversationContext(conversationId: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { title: true, description: true },
     });
   }
 

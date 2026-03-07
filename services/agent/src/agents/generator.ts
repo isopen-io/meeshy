@@ -1,5 +1,5 @@
 import type { ConversationState, PendingAction, PendingMessage, PendingReaction, MessageDirective, ReactionDirective } from '../graph/state';
-import type { LlmProvider } from '../llm/types';
+import type { LlmProvider, LlmTool } from '../llm/types';
 
 function detectConversationLanguage(state: ConversationState): string {
   const recentMessages = state.messages.slice(-20);
@@ -35,12 +35,23 @@ function buildGeneratorPrompt(
   mentionUsernames: string[],
   userLanguage: string,
   recentTopics: string,
+  conversationTitle: string,
+  conversationDescription: string,
+  agentInstructions: string,
 ): string {
   const mentionsText = mentionUsernames.length > 0
     ? `\nMENTIONS: Inclus naturellement ces @mentions dans ta reponse: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
     : '';
 
+  const instructionsText = agentInstructions
+    ? `\nINSTRUCTIONS: ${agentInstructions}`
+    : '';
+
   return `Tu incarnes ${displayName} dans une conversation de groupe.
+
+CONTEXTE DE LA CONVERSATION:
+- Titre: ${conversationTitle || 'Sans titre'}
+- Description: ${conversationDescription || 'Aucune'}${instructionsText}
 
 IDENTITE:
 - Persona: ${profile.personaSummary}
@@ -102,7 +113,15 @@ async function generateMessage(
     directive.mentionUsernames,
     userLanguage,
     recentTopicsText,
+    state.conversationTitle,
+    state.conversationDescription,
+    state.agentInstructions,
   );
+
+  const useWebSearch = Boolean(directive.needsWebSearch && state.webSearchEnabled);
+  const tools: LlmTool[] | undefined = useWebSearch
+    ? [{ type: 'web_search_preview', search_context_size: 'medium' }]
+    : undefined;
 
   try {
     const response = await llm.chat({
@@ -114,7 +133,8 @@ async function generateMessage(
         },
       ],
       temperature: 0.8,
-      maxTokens: 256,
+      maxTokens: useWebSearch ? 512 : 256,
+      tools,
     });
 
     const content = response.content.trim();

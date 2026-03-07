@@ -4,6 +4,7 @@ export type EligibleConversation = {
   conversationId: string;
   conversationType: string;
   title: string | null;
+  description: string | null;
   lastMessageAt: Date;
   memberCount: number;
   scanIntervalMinutes: number;
@@ -17,6 +18,8 @@ export type EligibleConversation = {
   inactivityThresholdHours: number;
   excludedRoles: string[];
   excludedUserIds: string[];
+  agentInstructions: string | null;
+  webSearchEnabled: boolean;
 };
 
 export async function findEligibleConversations(persistence: MongoPersistence): Promise<EligibleConversation[]> {
@@ -26,6 +29,7 @@ export async function findEligibleConversations(persistence: MongoPersistence): 
     conversationId: config.conversationId,
     conversationType: config.conversation.type,
     title: config.conversation.title,
+    description: config.conversation.description,
     lastMessageAt: config.conversation.lastMessageAt,
     memberCount: config.conversation.memberCount,
     scanIntervalMinutes: config.scanIntervalMinutes,
@@ -39,5 +43,7 @@ export async function findEligibleConversations(persistence: MongoPersistence): 
     inactivityThresholdHours: config.inactivityThresholdHours,
     excludedRoles: config.excludedRoles,
     excludedUserIds: config.excludedUserIds,
+    agentInstructions: config.agentInstructions ?? null,
+    webSearchEnabled: config.webSearchEnabled,
   }));
 }

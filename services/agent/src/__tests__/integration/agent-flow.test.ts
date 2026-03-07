@@ -129,6 +129,14 @@ describe('Agent Flow E2E', () => {
       contextWindowSize: 50,
       agentType: 'personal',
       useFullHistory: false,
+      conversationTitle: '',
+      conversationDescription: '',
+      agentInstructions: '',
+      webSearchEnabled: false,
+      minResponsesPerCycle: 2,
+      maxResponsesPerCycle: 12,
+      reactionsEnabled: true,
+      maxReactionsPerCycle: 8,
     });
 
     expect(result.summary).toBeTruthy();
@@ -155,6 +163,14 @@ describe('Agent Flow E2E', () => {
       contextWindowSize: 50,
       agentType: 'personal',
       useFullHistory: false,
+      conversationTitle: '',
+      conversationDescription: '',
+      agentInstructions: '',
+      webSearchEnabled: false,
+      minResponsesPerCycle: 2,
+      maxResponsesPerCycle: 12,
+      reactionsEnabled: true,
+      maxReactionsPerCycle: 8,
     });
 
     expect(result.summary).toBeTruthy();
@@ -208,6 +224,14 @@ describe('Agent Flow E2E', () => {
       contextWindowSize: 50,
       agentType: 'personal',
       useFullHistory: false,
+      conversationTitle: '',
+      conversationDescription: '',
+      agentInstructions: '',
+      webSearchEnabled: false,
+      minResponsesPerCycle: 2,
+      maxResponsesPerCycle: 12,
+      reactionsEnabled: true,
+      maxReactionsPerCycle: 8,
     });
 
     expect(result.interventionPlan?.shouldIntervene).toBe(false);

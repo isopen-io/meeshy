@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
@@ -47,6 +48,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     excludedUserIds: [],
     manualUserIds: [],
     triggerFromUserIds: [],
+    scanIntervalMinutes: 3,
+    minResponsesPerCycle: 2,
+    maxResponsesPerCycle: 12,
+    reactionsEnabled: true,
+    maxReactionsPerCycle: 8,
+    agentInstructions: null,
+    webSearchEnabled: false,
   });
 
   useEffect(() => {
@@ -69,6 +77,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         excludedUserIds: config.excludedUserIds,
         manualUserIds: config.manualUserIds,
         triggerFromUserIds: config.triggerFromUserIds,
+        scanIntervalMinutes: config.scanIntervalMinutes,
+        minResponsesPerCycle: config.minResponsesPerCycle,
+        maxResponsesPerCycle: config.maxResponsesPerCycle,
+        reactionsEnabled: config.reactionsEnabled,
+        maxReactionsPerCycle: config.maxReactionsPerCycle,
+        agentInstructions: config.agentInstructions,
+        webSearchEnabled: config.webSearchEnabled,
       });
     } else {
       setConversationId('');
@@ -89,6 +104,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         excludedUserIds: [],
         manualUserIds: [],
         triggerFromUserIds: [],
+        scanIntervalMinutes: 3,
+        minResponsesPerCycle: 2,
+        maxResponsesPerCycle: 12,
+        reactionsEnabled: true,
+        maxReactionsPerCycle: 8,
+        agentInstructions: null,
+        webSearchEnabled: false,
       });
     }
   }, [config, open]);
@@ -249,6 +271,116 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   max={50}
                 />
               </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Planificateur */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Planificateur</h3>
+            <div className="space-y-2">
+              <Label>Fréquence de scan</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Heures</Label>
+                  <Input
+                    type="number"
+                    value={Math.floor((form.scanIntervalMinutes ?? 3) / 60)}
+                    onChange={e => {
+                      const hours = Math.max(0, Math.min(24, parseInt(e.target.value) || 0));
+                      const minutes = (form.scanIntervalMinutes ?? 3) % 60;
+                      updateField('scanIntervalMinutes', Math.max(1, hours * 60 + minutes));
+                    }}
+                    min={0}
+                    max={24}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Minutes</Label>
+                  <Input
+                    type="number"
+                    value={(form.scanIntervalMinutes ?? 3) % 60}
+                    onChange={e => {
+                      const hours = Math.floor((form.scanIntervalMinutes ?? 3) / 60);
+                      const minutes = Math.max(0, Math.min(59, parseInt(e.target.value) || 0));
+                      updateField('scanIntervalMinutes', Math.max(1, hours * 60 + minutes));
+                    }}
+                    min={0}
+                    max={59}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Min réponses/cycle</Label>
+                <Input
+                  type="number"
+                  value={form.minResponsesPerCycle ?? 2}
+                  onChange={e => updateField('minResponsesPerCycle', Math.max(0, Math.min(50, parseInt(e.target.value) || 0)))}
+                  min={0}
+                  max={50}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max réponses/cycle</Label>
+                <Input
+                  type="number"
+                  value={form.maxResponsesPerCycle ?? 12}
+                  onChange={e => updateField('maxResponsesPerCycle', Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                  min={1}
+                  max={50}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Réactions activées</Label>
+              <Switch checked={form.reactionsEnabled ?? true} onCheckedChange={v => updateField('reactionsEnabled', v)} />
+            </div>
+            {form.reactionsEnabled !== false && (
+              <div className="space-y-2 pl-4">
+                <Label>Max réactions/cycle</Label>
+                <Input
+                  type="number"
+                  value={form.maxReactionsPerCycle ?? 8}
+                  onChange={e => updateField('maxReactionsPerCycle', Math.max(0, Math.min(50, parseInt(e.target.value) || 0)))}
+                  min={0}
+                  max={50}
+                />
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Instructions Agent */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Instructions Agent</h3>
+            <div className="space-y-2">
+              <Label>Instructions spécifiques</Label>
+              <Textarea
+                rows={4}
+                maxLength={5000}
+                value={form.agentInstructions ?? ''}
+                onChange={e => updateField('agentInstructions', e.target.value || null)}
+                placeholder="Instructions personnalisées pour l'agent dans cette conversation..."
+              />
+              <p className="text-xs text-gray-500">{(form.agentInstructions ?? '').length}/5000</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Recherche Web */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Recherche Web</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Recherche web activée</Label>
+                <p className="text-xs text-gray-500 mt-1">Permet à l&apos;agent de rechercher des informations actuelles</p>
+              </div>
+              <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
             </div>
           </div>
 

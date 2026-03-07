@@ -48,6 +48,14 @@ const baseState = {
   agentType: 'personal',
   useFullHistory: false,
   agentHistory: [],
+  conversationTitle: '',
+  conversationDescription: '',
+  agentInstructions: '',
+  webSearchEnabled: false,
+  minResponsesPerCycle: 2,
+  maxResponsesPerCycle: 12,
+  reactionsEnabled: true,
+  maxReactionsPerCycle: 8,
 };
 
 describe('Observer Agent', () => {

@@ -5,11 +5,17 @@ export type LlmMessage = {
   content: string;
 };
 
+export type LlmTool = {
+  type: 'web_search_preview';
+  search_context_size?: 'low' | 'medium' | 'high';
+};
+
 export type LlmChatParams = {
   messages: LlmMessage[];
   temperature?: number;
   maxTokens?: number;
   systemPrompt?: string;
+  tools?: LlmTool[];
 };
 
 export type LlmChatResponse = {

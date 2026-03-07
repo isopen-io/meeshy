@@ -2936,6 +2936,9 @@ model AgentConfig {
   reactionsEnabled         Boolean  @default(true)
   maxReactionsPerCycle     Int      @default(8)
 
+  agentInstructions        String?
+  webSearchEnabled         Boolean  @default(false)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

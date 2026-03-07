@@ -28,7 +28,22 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
-    getAgentConfig: jest.fn().mockResolvedValue(null),
+    getAgentConfig: jest.fn().mockResolvedValue({
+      scanIntervalMinutes: 3,
+      minResponsesPerCycle: 2,
+      maxResponsesPerCycle: 12,
+      reactionsEnabled: true,
+      maxReactionsPerCycle: 8,
+      contextWindowSize: 50,
+      useFullHistory: false,
+      agentType: 'personal',
+      inactivityThresholdHours: 72,
+      excludedRoles: [],
+      excludedUserIds: [],
+      agentInstructions: null,
+      webSearchEnabled: false,
+    }),
+    getConversationContext: jest.fn().mockResolvedValue({ title: 'Test', description: null }),
     getRecentMessages: jest.fn().mockResolvedValue([]),
     updateAnalytics: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -47,7 +62,7 @@ function makeStateManager(messages = [makeMessage()]) {
 }
 
 function makeRedis() {
-  return { set: jest.fn().mockResolvedValue('1'), del: jest.fn().mockResolvedValue(1) } as any;
+  return { set: jest.fn().mockResolvedValue('1'), del: jest.fn().mockResolvedValue(1), get: jest.fn().mockResolvedValue(null) } as any;
 }
 
 function makeDeliveryQueue() {
