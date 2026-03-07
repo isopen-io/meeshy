@@ -43,6 +43,18 @@ const agentConfigSchema = z.object({
   generationTemperature: z.number().min(0).max(2).optional(),
   qualityGateEnabled: z.boolean().optional(),
   qualityGateMinScore: z.number().min(0).max(1).optional(),
+  weekdayMaxMessages: z.number().int().min(1).max(100).optional(),
+  weekendMaxMessages: z.number().int().min(1).max(200).optional(),
+  weekdayMaxUsers: z.number().int().min(1).max(20).optional(),
+  weekendMaxUsers: z.number().int().min(1).max(30).optional(),
+  burstEnabled: z.boolean().optional(),
+  burstSize: z.number().int().min(1).max(10).optional(),
+  burstIntervalMinutes: z.number().int().min(1).max(30).optional(),
+  quietIntervalMinutes: z.number().int().min(10).max(480).optional(),
+  inactivityDaysThreshold: z.number().int().min(1).max(30).optional(),
+  prioritizeTaggedUsers: z.boolean().optional(),
+  prioritizeRepliedUsers: z.boolean().optional(),
+  reactionBoostFactor: z.number().min(0.5).max(5).optional(),
 });
 
 const llmConfigSchema = z.object({
@@ -149,6 +161,9 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         create: { conversationId, configuredBy: authContext.registeredUser.id, ...parsed.data },
         update: parsed.data,
       });
+
+      const redis = getRedisWrapper();
+      await redis.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
 
       return reply.send({ success: true, data: config });
     } catch (error) {
@@ -562,6 +577,64 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching live analytics:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  const globalConfigSchema = z.object({
+    systemPrompt: z.string().max(10000).optional(),
+    enabled: z.boolean().optional(),
+    defaultProvider: z.enum(['openai', 'anthropic']).optional(),
+    defaultModel: z.string().min(1).optional(),
+    fallbackProvider: z.string().nullable().optional(),
+    fallbackModel: z.string().nullable().optional(),
+    globalDailyBudgetUsd: z.number().min(0).max(1000).optional(),
+    maxConcurrentCalls: z.number().int().min(1).max(50).optional(),
+  });
+
+  // GET /global-config
+  fastify.get('/global-config', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      let config = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+      if (!config) {
+        config = await fastify.prisma.agentGlobalConfig.create({ data: {} });
+      }
+      return reply.send({ success: true, data: config });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching global agent config:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  // PUT /global-config
+  fastify.put('/global-config', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const parsed = globalConfigSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+      }
+
+      let existing = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+      let config;
+      if (existing) {
+        config = await fastify.prisma.agentGlobalConfig.update({
+          where: { id: existing.id },
+          data: parsed.data,
+        });
+      } else {
+        config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
+      }
+
+      const redis = getRedisWrapper();
+      await redis.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+
+      return reply.send({ success: true, data: config });
+    } catch (error) {
+      logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
     }
   });

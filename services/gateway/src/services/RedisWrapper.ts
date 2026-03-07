@@ -314,6 +314,17 @@ export class RedisWrapper {
     this.memoryCache.delete(key);
   }
 
+  async publish(channel: string, message: string): Promise<number> {
+    if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
+      try {
+        return await this.redis.publish(channel, message);
+      } catch {
+        return 0;
+      }
+    }
+    return 0;
+  }
+
   /**
    * Récupère toutes les clés correspondant à un pattern (Redis ou mémoire)
    */
