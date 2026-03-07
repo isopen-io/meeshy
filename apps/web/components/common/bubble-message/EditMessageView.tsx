@@ -2,12 +2,12 @@
 
 import { memo, useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, AlertTriangle, Globe, Check } from 'lucide-react';
+import { X, Save, AlertTriangle, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { getLanguageInfo } from '@meeshy/shared/types';
+import { getLanguageInfo, SUPPORTED_LANGUAGES } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
@@ -21,7 +21,7 @@ interface EditMessageViewProps {
     originalContent: string;
   };
   isOwnMessage: boolean;
-  onSave: (messageId: string, newContent: string) => Promise<void> | void;
+  onSave: (messageId: string, newContent: string, originalLanguage: string) => Promise<void> | void;
   onCancel: () => void;
   isSaving?: boolean;
   saveError?: string;
@@ -39,6 +39,7 @@ export const EditMessageView = memo(function EditMessageView({
 }: EditMessageViewProps) {
   const { t } = useI18n('editMessage');
   const [content, setContent] = useState(message.originalContent || message.content);
+  const [selectedLanguage, setSelectedLanguage] = useState(message.originalLanguage || 'fr');
   const [hasChanges, setHasChanges] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -84,8 +85,10 @@ export const EditMessageView = memo(function EditMessageView({
   // Détection des changements
   useEffect(() => {
     const originalContent = message.originalContent || message.content;
-    setHasChanges(content.trim() !== originalContent.trim());
-  }, [content, message.originalContent, message.content]);
+    const hasContentChanges = content.trim() !== originalContent.trim();
+    const hasLanguageChanges = selectedLanguage !== (message.originalLanguage || 'fr');
+    setHasChanges(hasContentChanges || hasLanguageChanges);
+  }, [content, message.originalContent, message.content, selectedLanguage, message.originalLanguage]);
 
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -155,14 +158,14 @@ export const EditMessageView = memo(function EditMessageView({
 
   const handleSave = useCallback(async () => {
     if (!hasChanges || !content.trim()) return;
-    
+
     try {
-      await onSave(message.id, content.trim());
+      await onSave(message.id, content.trim(), selectedLanguage);
     } catch (error) {
       // Error handled by parent component
       console.error('Failed to save message:', error);
     }
-  }, [hasChanges, content, onSave, message.id]);
+  }, [hasChanges, content, onSave, message.id, selectedLanguage]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -204,7 +207,7 @@ export const EditMessageView = memo(function EditMessageView({
     }, 0);
   }, [content, mentionCursorStart]);
 
-  const originalLanguageInfo = getLanguageInfo(message.originalLanguage || 'fr');
+  const selectedLanguageInfo = getLanguageInfo(selectedLanguage);
   const hasTranslations = message.translations && message.translations.length > 0;
 
   // Version mobile épurée
@@ -248,36 +251,67 @@ export const EditMessageView = memo(function EditMessageView({
 
         {/* Boutons simples en bas */}
         <div className={cn(
-          "flex items-center justify-end gap-3 p-4 border-t",
+          "flex items-center justify-between gap-3 p-4 border-t",
           isOwnMessage
             ? "border-blue-200 dark:border-blue-800 bg-blue-100/50 dark:bg-blue-900/30"
             : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
         )}>
-          {/* Bouton Annuler (X) */}
-          <Button
-            onClick={onCancel}
-            disabled={isSaving}
-            size="lg"
-            variant="ghost"
-            className="h-12 w-12 p-0 rounded-full"
-          >
-            <X className="h-6 w-6" />
-          </Button>
+          {/* Language selector mobile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
+                isOwnMessage
+                  ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
+                  : "border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400"
+              )}>
+                <span>{selectedLanguageInfo.flag}</span>
+                {selectedLanguageInfo.code.toUpperCase()}
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto w-48">
+              {SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation).map(lang => (
+                <DropdownMenuItem
+                  key={lang.code}
+                  onClick={() => setSelectedLanguage(lang.code)}
+                  className={cn(selectedLanguage === lang.code && "bg-accent")}
+                >
+                  <span className="mr-2">{lang.flag}</span>
+                  <span className="flex-1 truncate">{lang.nativeName || lang.name}</span>
+                  <span className="text-xs text-muted-foreground ml-1">{lang.code.toUpperCase()}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* Bouton Valider (Check) */}
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || !content.trim() || isSaving}
-            size="lg"
-            className={cn(
-              "h-12 w-12 p-0 rounded-full",
-              isOwnMessage
-                ? "bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                : "bg-green-600 hover:bg-green-700"
-            )}
-          >
-            <Check className="h-6 w-6" />
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Bouton Annuler (X) */}
+            <Button
+              onClick={onCancel}
+              disabled={isSaving}
+              size="lg"
+              variant="ghost"
+              className="h-12 w-12 p-0 rounded-full"
+            >
+              <X className="h-6 w-6" />
+            </Button>
+
+            {/* Bouton Valider (Check) */}
+            <Button
+              onClick={handleSave}
+              disabled={!hasChanges || !content.trim() || isSaving}
+              size="lg"
+              className={cn(
+                "h-12 w-12 p-0 rounded-full",
+                isOwnMessage
+                  ? "bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                  : "bg-green-600 hover:bg-green-700"
+              )}
+            >
+              <Check className="h-6 w-6" />
+            </Button>
+          </div>
         </div>
 
         {/* Autocomplete des mentions */}
@@ -326,15 +360,33 @@ export const EditMessageView = memo(function EditMessageView({
           )}>
             {t('editMessage')}
           </h3>
-          <Badge variant="outline" className={cn(
-            "text-xs h-5",
-            isOwnMessage
-              ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
-              : "border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400"
-          )}>
-            <span className="mr-1">{originalLanguageInfo.flag}</span>
-            {originalLanguageInfo.code.toUpperCase()}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
+                isOwnMessage
+                  ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
+                  : "border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400"
+              )}>
+                <span>{selectedLanguageInfo.flag}</span>
+                {selectedLanguageInfo.code.toUpperCase()}
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto w-48">
+              {SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation).map(lang => (
+                <DropdownMenuItem
+                  key={lang.code}
+                  onClick={() => setSelectedLanguage(lang.code)}
+                  className={cn(selectedLanguage === lang.code && "bg-accent")}
+                >
+                  <span className="mr-2">{lang.flag}</span>
+                  <span className="flex-1 truncate">{lang.nativeName || lang.name}</span>
+                  <span className="text-xs text-muted-foreground ml-1">{lang.code.toUpperCase()}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <Button
