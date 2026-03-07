@@ -201,11 +201,15 @@ export class RedisWrapper {
   /**
    * Définit une valeur (Redis ou mémoire)
    */
-  async set(key: string, value: string): Promise<void> {
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
     // Utiliser Redis seulement s'il est disponible ET pas définitivement désactivé
     if (!this.permanentlyDisabled && this.isRedisAvailable && this.redis) {
       try {
-        await this.redis.set(key, value);
+        if (ttlSeconds) {
+          await this.redis.set(key, value, 'EX', ttlSeconds);
+        } else {
+          await this.redis.set(key, value);
+        }
         return;
       } catch (error) {
         // Erreur silencieuse - basculer vers cache mémoire
@@ -214,10 +218,10 @@ export class RedisWrapper {
       }
     }
 
-    // Fallback sur cache mémoire (pas d'expiration par défaut)
+    // Fallback sur cache mémoire
     this.memoryCache.set(key, {
       value,
-      expiresAt: Date.now() + 3600000, // 1 heure par défaut
+      expiresAt: Date.now() + (ttlSeconds ? ttlSeconds * 1000 : 3600000),
     });
   }
 

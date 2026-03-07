@@ -399,7 +399,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           const profiles = JSON.parse(raw) as Record<string, unknown>;
           if (userId in profiles) {
             delete profiles[userId];
-            await redis.set(key, JSON.stringify(profiles), 3600);
+            await redis.set(key, JSON.stringify(profiles));
             profilesCleaned++;
           }
         } catch { /* skip malformed */ }
