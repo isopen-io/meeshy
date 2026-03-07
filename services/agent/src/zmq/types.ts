@@ -6,6 +6,7 @@ export const agentNewMessageSchema = z.object({
   messageId: z.string(),
   senderId: z.string(),
   senderDisplayName: z.string().optional(),
+  senderUsername: z.string().optional(),
   content: z.string(),
   originalLanguage: z.string(),
   replyToId: z.string().optional(),

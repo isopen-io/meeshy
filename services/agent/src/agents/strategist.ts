@@ -10,6 +10,11 @@ CONTEXTE:
 - Score d'activite conversation: {activityScore} (0 = morte, 1 = tres active)
 - Participants actuels: {participants}
 
+CONTEXTE DE LA CONVERSATION:
+- Titre: {conversationTitle}
+- Description: {conversationDescription}
+{agentInstructions}
+
 DECIDE:
 1. La conversation a-t-elle besoin d'activite ? (oui/non + raison)
 2. Si oui, combien d'interventions ? (entre {minResponses} et {maxResponses})
@@ -22,6 +27,9 @@ DECIDE:
 5. Ne fais PAS intervenir le meme utilisateur plus de 2 fois
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
 7. Choisis les utilisateurs dont le profil colle au sujet de conversation
+8. Pour chaque intervention "message", indique "needsWebSearch": true/false
+   - true si le sujet requiert des informations actuelles ou factuelles
+   - false pour conversation sociale, opinions, sujets generaux
 
 HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
 {agentHistory}
@@ -49,7 +57,8 @@ REPONSE JSON STRICTE (aucun texte autour):
       "topic": "string",
       "replyToMessageId": "string | null",
       "mentionUsernames": ["string"],
-      "delaySeconds": number
+      "delaySeconds": number,
+      "needsWebSearch": boolean
     },
     {
       "type": "reaction",
@@ -79,7 +88,7 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
   const participantIds = new Set(recentMessages.map((m) => m.senderId));
   const participantsText = recentMessages
     .filter((m, i, arr) => arr.findIndex((a) => a.senderId === m.senderId) === i)
-    .map((m) => `@${m.senderName} (${m.senderId})`)
+    .map((m) => `@${m.senderUsername ?? m.senderName} (${m.senderId})`)
     .join(', ');
 
   const effectiveMaxResponses = reactionsEnabled
@@ -92,11 +101,18 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .map((h) => `- ${h.userId}: "${h.topic}" (il y a ${Math.round((Date.now() - h.timestamp) / 60000)}min)`)
     .join('\n') || 'Aucune intervention recente.';
 
+  const instructionsText = state.agentInstructions
+    ? `INSTRUCTIONS SPECIFIQUES: ${state.agentInstructions}`
+    : '';
+
   return STRATEGIST_SYSTEM_PROMPT
     .replace('{messages}', messagesText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{activityScore}', String(state.activityScore))
     .replace('{participants}', participantsText)
+    .replace('{conversationTitle}', state.conversationTitle || 'Sans titre')
+    .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
+    .replace('{agentInstructions}', instructionsText)
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(effectiveMaxResponses + effectiveMaxReactions))
     .replace('{agentHistory}', historyText);
@@ -125,6 +141,7 @@ function validateInterventions(interventions: unknown[], controlledUserIds: Set<
         replyToMessageId: item.replyToMessageId ? String(item.replyToMessageId) : undefined,
         mentionUsernames: Array.isArray(item.mentionUsernames) ? item.mentionUsernames.map(String) : [],
         delaySeconds: Math.max(30, Math.min(180, Number(item.delaySeconds) || 60)),
+        needsWebSearch: Boolean(item.needsWebSearch),
       });
       messageCount++;
       userActionCounts.set(userId, currentCount + 1);
@@ -161,10 +178,10 @@ export function createStrategistNode(llm: LlmProvider) {
       };
     }
 
-    const minResponses = 2;
-    const maxResponses = 12;
-    const maxReactions = 8;
-    const reactionsEnabled = true;
+    const minResponses = state.minResponsesPerCycle;
+    const maxResponses = state.maxResponsesPerCycle;
+    const maxReactions = state.maxReactionsPerCycle;
+    const reactionsEnabled = state.reactionsEnabled;
 
     const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled);
 

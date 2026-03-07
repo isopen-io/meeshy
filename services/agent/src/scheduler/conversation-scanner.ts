@@ -2,8 +2,8 @@ import type Redis from 'ioredis';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
 import type { DeliveryQueue } from '../delivery/delivery-queue';
-import type { MessageEntry, PendingMessage } from '../graph/state';
-import { findEligibleConversations } from './eligible-conversations';
+import type { PendingMessage } from '../graph/state';
+import { findEligibleConversations, type EligibleConversation } from './eligible-conversations';
 import { detectActivity } from './activity-detector';
 
 type CompiledGraph = {
@@ -13,7 +13,7 @@ type CompiledGraph = {
 export class ConversationScanner {
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private scanning = false;
-  private defaultIntervalMs = 3 * 60 * 1000;
+  private defaultIntervalMs = 60 * 1000;
 
   constructor(
     private graph: CompiledGraph,
@@ -43,7 +43,31 @@ export class ConversationScanner {
   }
 
   async scanConversation(conversationId: string): Promise<void> {
-    await this.processConversation(conversationId);
+    const config = await this.persistence.getAgentConfig(conversationId);
+    if (!config) return;
+    const context = await this.persistence.getConversationContext(conversationId);
+    const conv: EligibleConversation = {
+      conversationId,
+      conversationType: 'group',
+      title: context?.title ?? null,
+      description: context?.description ?? null,
+      lastMessageAt: new Date(),
+      memberCount: 0,
+      scanIntervalMinutes: config.scanIntervalMinutes,
+      minResponsesPerCycle: config.minResponsesPerCycle,
+      maxResponsesPerCycle: config.maxResponsesPerCycle,
+      reactionsEnabled: config.reactionsEnabled,
+      maxReactionsPerCycle: config.maxReactionsPerCycle,
+      contextWindowSize: config.contextWindowSize,
+      useFullHistory: config.useFullHistory,
+      agentType: config.agentType,
+      inactivityThresholdHours: config.inactivityThresholdHours,
+      excludedRoles: config.excludedRoles,
+      excludedUserIds: config.excludedUserIds,
+      agentInstructions: config.agentInstructions ?? null,
+      webSearchEnabled: config.webSearchEnabled,
+    };
+    await this.processConversation(conv);
   }
 
   private async scanAll(): Promise<void> {
@@ -61,7 +85,12 @@ export class ConversationScanner {
 
       for (const conv of eligible) {
         try {
-          await this.processConversation(conv.conversationId);
+          const lastScanKey = `agent:last-scan:${conv.conversationId}`;
+          const lastScan = parseInt(await this.redis.get(lastScanKey) || '0', 10);
+          if (Date.now() - lastScan < conv.scanIntervalMinutes * 60_000) continue;
+
+          await this.processConversation(conv);
+          await this.redis.set(lastScanKey, String(Date.now()), 'EX', 86400);
         } catch (error) {
           console.error(`[Scanner] Error processing conv=${conv.conversationId}:`, error);
         }
@@ -72,7 +101,8 @@ export class ConversationScanner {
     }
   }
 
-  private async processConversation(conversationId: string): Promise<void> {
+  private async processConversation(conv: EligibleConversation): Promise<void> {
+    const { conversationId } = conv;
     const activity = await detectActivity(this.persistence, conversationId);
 
     if (activity.shouldSkip) {
@@ -101,6 +131,7 @@ export class ConversationScanner {
           id: m.id,
           senderId: m.senderId!,
           senderName: m.sender?.displayName ?? m.sender?.username ?? m.senderId!,
+          senderUsername: m.sender?.username ?? m.senderId!,
           content: m.content ?? '',
           timestamp: m.createdAt.getTime(),
           replyToId: m.replyToId ?? undefined,
@@ -117,8 +148,6 @@ export class ConversationScanner {
       return;
     }
 
-    const config = await this.persistence.getAgentConfig(conversationId);
-
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length}`);
 
     const result = await this.graph.invoke({
@@ -131,9 +160,17 @@ export class ConversationScanner {
       pendingActions: [],
       interventionPlan: null,
       activityScore: activity.activityScore,
-      contextWindowSize: config?.contextWindowSize ?? 50,
-      agentType: config?.agentType ?? 'personal',
-      useFullHistory: config?.useFullHistory ?? false,
+      contextWindowSize: conv.contextWindowSize,
+      agentType: conv.agentType,
+      useFullHistory: conv.useFullHistory,
+      conversationTitle: conv.title ?? '',
+      conversationDescription: conv.description ?? '',
+      agentInstructions: conv.agentInstructions ?? '',
+      webSearchEnabled: conv.webSearchEnabled,
+      minResponsesPerCycle: conv.minResponsesPerCycle,
+      maxResponsesPerCycle: conv.maxResponsesPerCycle,
+      reactionsEnabled: conv.reactionsEnabled,
+      maxReactionsPerCycle: conv.maxReactionsPerCycle,
     });
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);

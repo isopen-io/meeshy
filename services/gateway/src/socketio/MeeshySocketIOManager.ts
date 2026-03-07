@@ -499,6 +499,7 @@ export class MeeshySocketIOManager {
                 conversationId: message.conversationId,
                 senderId: message.senderId,
                 senderDisplayName: (message.sender as any)?.displayName ?? (message.sender as any)?.username,
+                senderUsername: (message.sender as any)?.username,
                 content: message.content,
                 originalLanguage: message.originalLanguage,
                 replyToId: message.replyToId,
@@ -3245,6 +3246,12 @@ export class MeeshySocketIOManager {
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
       const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
+
+      // Notifications push (fire-and-forget)
+      this._createMessageNotifications(result.data, response.asUserId).catch((err) => {
+        logger.error('[Agent] Notification error:', err);
+      });
+
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {
       logger.error('[Agent] handleAgentResponse error:', error);
@@ -3327,6 +3334,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     senderId: string | null;
     senderDisplayName?: string;
+    senderUsername?: string;
     content: string | null;
     originalLanguage: string | null;
     replyToId?: string | null;
@@ -3339,6 +3347,7 @@ export class MeeshySocketIOManager {
       messageId: message.id,
       senderId: message.senderId,
       senderDisplayName: message.senderDisplayName,
+      senderUsername: message.senderUsername,
       content: message.content,
       originalLanguage: message.originalLanguage ?? 'fr',
       replyToId: message.replyToId ?? undefined,

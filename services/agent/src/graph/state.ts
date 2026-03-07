@@ -4,6 +4,7 @@ export type MessageEntry = {
   id: string;
   senderId: string;
   senderName: string;
+  senderUsername?: string;
   content: string;
   timestamp: number;
   replyToId?: string;
@@ -75,6 +76,7 @@ export type MessageDirective = {
   replyToMessageId?: string;
   mentionUsernames: string[];
   delaySeconds: number;
+  needsWebSearch?: boolean;
 };
 
 export type ReactionDirective = {
@@ -148,6 +150,38 @@ export const ConversationStateAnnotation = Annotation.Root({
   useFullHistory: Annotation<boolean>({
     reducer: (_current, update) => update,
     default: () => false,
+  }),
+  conversationTitle: Annotation<string>({
+    reducer: (_current, update) => update,
+    default: () => '',
+  }),
+  conversationDescription: Annotation<string>({
+    reducer: (_current, update) => update,
+    default: () => '',
+  }),
+  agentInstructions: Annotation<string>({
+    reducer: (_current, update) => update,
+    default: () => '',
+  }),
+  webSearchEnabled: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => false,
+  }),
+  minResponsesPerCycle: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 2,
+  }),
+  maxResponsesPerCycle: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 12,
+  }),
+  reactionsEnabled: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  maxReactionsPerCycle: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 8,
   }),
   agentHistory: Annotation<AgentHistoryEntry[]>({
     reducer: (current, update) => {

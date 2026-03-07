@@ -76,7 +76,8 @@ async function start() {
     const newEntry: MessageEntry = {
       id: msg.messageId,
       senderId: msg.senderId,
-      senderName: msg.senderDisplayName ?? msg.senderId,
+      senderName: msg.senderDisplayName ?? msg.senderUsername ?? msg.senderId,
+      senderUsername: msg.senderUsername ?? msg.senderId,
       content: msg.content,
       timestamp: msg.timestamp,
       replyToId: msg.replyToId,
