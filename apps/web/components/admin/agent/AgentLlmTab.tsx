@@ -58,16 +58,17 @@ export function AgentLlmTab() {
       try {
         const response = await agentAdminService.getLlmConfig();
         if (response.success && response.data) {
-          setConfig(response.data);
+          const cfg = (response.data as any).data ?? response.data;
+          setConfig(cfg);
           setForm({
-            provider: response.data.provider,
-            model: response.data.model,
-            maxTokens: response.data.maxTokens,
-            temperature: response.data.temperature,
-            dailyBudgetUsd: response.data.dailyBudgetUsd,
-            maxCostPerCall: response.data.maxCostPerCall,
-            fallbackProvider: response.data.fallbackProvider,
-            fallbackModel: response.data.fallbackModel,
+            provider: cfg.provider,
+            model: cfg.model,
+            maxTokens: cfg.maxTokens,
+            temperature: cfg.temperature,
+            dailyBudgetUsd: cfg.dailyBudgetUsd,
+            maxCostPerCall: cfg.maxCostPerCall,
+            fallbackProvider: cfg.fallbackProvider,
+            fallbackModel: cfg.fallbackModel,
           });
         }
       } catch {
@@ -88,7 +89,7 @@ export function AgentLlmTab() {
       }
       const response = await agentAdminService.updateLlmConfig(payload);
       if (response.success && response.data) {
-        setConfig(response.data);
+        setConfig((response.data as any).data ?? response.data);
         setForm(prev => ({ ...prev, apiKeyEncrypted: '' }));
         toast.success('Configuration LLM mise à jour');
       }

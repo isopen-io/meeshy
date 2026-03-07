@@ -25,7 +25,7 @@ export function AgentOverviewTab() {
       setLoading(true);
       const response = await agentAdminService.getStats();
       if (response.success && response.data) {
-        setStats(response.data);
+        setStats((response.data as any).data ?? response.data);
         setError(null);
       } else {
         setError('Impossible de charger les statistiques');

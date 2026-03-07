@@ -37,8 +37,14 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
           agentAdminService.getRoles(conversationId),
           agentAdminService.getArchetypes(),
         ]);
-        if (rolesRes.success && rolesRes.data) setRoles(rolesRes.data);
-        if (archetypesRes.success && archetypesRes.data) setArchetypes(archetypesRes.data);
+        if (rolesRes.success && rolesRes.data) {
+          const rolesData = (rolesRes.data as any).data ?? rolesRes.data;
+          setRoles(Array.isArray(rolesData) ? rolesData : []);
+        }
+        if (archetypesRes.success && archetypesRes.data) {
+          const archetypesData = (archetypesRes.data as any).data ?? archetypesRes.data;
+          setArchetypes(Array.isArray(archetypesData) ? archetypesData : []);
+        }
       } catch {
         toast.error('Erreur lors du chargement des rôles');
       } finally {
