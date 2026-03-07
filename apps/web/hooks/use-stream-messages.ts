@@ -31,7 +31,7 @@ interface UseStreamMessagesOptions {
 
 interface UseStreamMessagesReturn {
   // Handlers pour les messages
-  handleEditMessage: (messageId: string, newContent: string) => Promise<void>;
+  handleEditMessage: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   handleDeleteMessage: (messageId: string) => Promise<void>;
   handleReplyMessage: (message: any) => void;
   handleNavigateToMessage: (messageId: string) => Promise<void>;
@@ -48,7 +48,6 @@ export function useStreamMessages({
   user,
   messages,
   hasMore,
-  selectedInputLanguage,
   refreshMessages,
   loadMore,
   messageComposerRef,
@@ -57,11 +56,11 @@ export function useStreamMessages({
 }: UseStreamMessagesOptions): UseStreamMessagesReturn {
 
   // Éditer un message
-  const handleEditMessage = useCallback(async (messageId: string, newContent: string) => {
+  const handleEditMessage = useCallback(async (messageId: string, newContent: string, originalLanguage: string) => {
     try {
       await messageService.editMessage(conversationId, messageId, {
         content: newContent,
-        originalLanguage: selectedInputLanguage
+        originalLanguage,
       });
 
       await refreshMessages();
@@ -71,7 +70,7 @@ export function useStreamMessages({
       toast.error(tCommon('messages.modifyError'));
       throw error;
     }
-  }, [conversationId, selectedInputLanguage, refreshMessages, tCommon]);
+  }, [conversationId, refreshMessages, tCommon]);
 
   // Supprimer un message
   const handleDeleteMessage = useCallback(async (messageId: string) => {

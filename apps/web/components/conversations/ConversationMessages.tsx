@@ -31,7 +31,7 @@ interface ConversationMessagesProps {
   currentAnonymousUserId?: string; // Add anonymous user ID for reactions
   addTranslatingState: (messageId: string, targetLanguage: string) => void;
   isTranslating: (messageId: string, targetLanguage: string) => boolean;
-  onEditMessage: (messageId: string, newContent: string) => Promise<void>;
+  onEditMessage: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;

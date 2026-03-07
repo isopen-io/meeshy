@@ -36,7 +36,7 @@ interface UseMessageActionsOptions {
 
 interface UseMessageActionsReturn {
   /** Éditer un message */
-  handleEditMessage: (messageId: string, newContent: string) => Promise<void>;
+  handleEditMessage: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   /** Supprimer un message */
   handleDeleteMessage: (messageId: string) => Promise<void>;
   /** Naviguer vers un message (avec lazy loading si nécessaire) */
@@ -51,7 +51,6 @@ interface UseMessageActionsReturn {
 export function useMessageActions({
   conversationId,
   messages,
-  selectedLanguage,
   updateMessage,
   removeMessage,
   refreshMessages,
@@ -61,7 +60,7 @@ export function useMessageActions({
 }: UseMessageActionsOptions): UseMessageActionsReturn {
 
   // Éditer un message
-  const handleEditMessage = useCallback(async (messageId: string, newContent: string) => {
+  const handleEditMessage = useCallback(async (messageId: string, newContent: string, originalLanguage: string) => {
     if (!conversationId) return;
 
     // Sanitize input
@@ -83,7 +82,7 @@ export function useMessageActions({
       // API call
       await messageService.editMessage(conversationId, messageId, {
         content: sanitizedContent,
-        originalLanguage: selectedLanguage,
+        originalLanguage,
       });
 
       toast.success(t('messages.messageEdited') || 'Message edited');
@@ -95,7 +94,7 @@ export function useMessageActions({
       await refreshMessages();
       throw error;
     }
-  }, [conversationId, selectedLanguage, updateMessage, refreshMessages, t]);
+  }, [conversationId, updateMessage, refreshMessages, t]);
 
   // Supprimer un message
   const handleDeleteMessage = useCallback(async (messageId: string) => {

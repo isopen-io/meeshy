@@ -21,7 +21,7 @@ interface MessagesDisplayProps {
   reverseOrder?: boolean;
   className?: string;
   onTranslation?: (messageId: string, translations: any[]) => void;
-  onEditMessage?: (messageId: string, newContent: string) => Promise<void>;
+  onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;

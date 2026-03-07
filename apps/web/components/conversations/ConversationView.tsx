@@ -69,7 +69,7 @@ interface ConversationViewProps {
   isTranslating: (messageId: string, targetLanguage: string) => boolean;
 
   // Handlers - Messages
-  onEditMessage: (messageId: string, content: string) => Promise<void>;
+  onEditMessage: (messageId: string, content: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
   onReplyMessage: (message: Message) => void;
   onNavigateToMessage: (messageId: string) => Promise<void>;

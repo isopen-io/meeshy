@@ -31,7 +31,7 @@ interface BubbleMessageProps {
   
   // Actions remontées au parent (AUCUN CHANGEMENT)
   onForceTranslation?: (messageId: string, targetLanguage: string, model?: TranslationModel) => void;
-  onEditMessage?: (messageId: string, newContent: string) => Promise<void> | void;
+  onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;
@@ -174,9 +174,9 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     exitMode();
   }, [onForceTranslation, message.id, exitMode]);
 
-  const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
+  const handleSaveEdit = useCallback(async (messageId: string, newContent: string, originalLanguage: string) => {
     try {
-      await onEditMessage?.(messageId, newContent);
+      await onEditMessage?.(messageId, newContent, originalLanguage);
       exitMode();
       // Note: Le toast de succès est géré par le composant parent (bubble-stream-page)
     } catch (error) {

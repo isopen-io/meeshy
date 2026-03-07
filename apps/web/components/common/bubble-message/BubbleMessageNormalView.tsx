@@ -53,7 +53,7 @@ interface BubbleMessageNormalViewProps {
 
   // Actions originales
   onForceTranslation?: (messageId: string, targetLanguage: string, model?: TranslationModel) => void;
-  onEditMessage?: (messageId: string, newContent: string) => Promise<void> | void;
+  onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;

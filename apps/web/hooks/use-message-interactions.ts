@@ -19,7 +19,7 @@ interface UseMessageInteractionsProps {
   onEnterEditMode?: () => void;
   onEnterDeleteMode?: () => void;
   onEnterReportMode?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => Promise<void> | void;
+  onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void> | void;
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   t: (key: string) => string;
 }
