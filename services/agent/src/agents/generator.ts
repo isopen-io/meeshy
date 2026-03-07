@@ -34,6 +34,7 @@ function buildGeneratorPrompt(
   summary: string,
   mentionUsernames: string[],
   userLanguage: string,
+  recentTopics: string,
 ): string {
   const mentionsText = mentionUsernames.length > 0
     ? `\nMENTIONS: Inclus naturellement ces @mentions dans ta reponse: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
@@ -51,6 +52,11 @@ IDENTITE:
 - Expressions habituelles: ${profile.catchphrases.join(', ')}
 
 SUJET A ABORDER: ${topic}${mentionsText}
+
+ANTI-REPETITION:
+- NE repete PAS les memes idees ou formulations que tu as deja utilisees
+- Si tu n'as RIEN de nouveau a dire, reponds exactement "SKIP"
+- Sujets deja abordes recemment: ${recentTopics}
 
 REGLES ABSOLUES:
 - Tu es ${displayName}. Pas un assistant IA.
@@ -80,6 +86,13 @@ async function generateMessage(
     .join('\n');
 
   const profile = user.role;
+  const userHistory = (state.agentHistory ?? [])
+    .filter((h) => h.userId === directive.asUserId)
+    .slice(-5)
+    .map((h) => h.topic)
+    .filter(Boolean);
+  const recentTopicsText = userHistory.length > 0 ? userHistory.join(', ') : 'aucun';
+
   const systemPrompt = buildGeneratorPrompt(
     user.displayName,
     profile,
@@ -88,6 +101,7 @@ async function generateMessage(
     state.summary,
     directive.mentionUsernames,
     userLanguage,
+    recentTopicsText,
   );
 
   try {

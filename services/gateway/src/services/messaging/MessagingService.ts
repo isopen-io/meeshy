@@ -81,9 +81,14 @@ export class MessagingService {
         );
       }
 
-      // 5. Détection de langue automatique si nécessaire
-      const originalLanguage = enrichedRequest.originalLanguage ||
-        await this.validator.detectLanguage(enrichedRequest.content);
+      // 5. Détection de langue — valide/override ce que le client envoie
+      const detectedLanguage = enrichedRequest.content
+        ? await this.validator.detectLanguage(enrichedRequest.content)
+        : 'fr';
+      const originalLanguage = enrichedRequest.originalLanguage
+        && enrichedRequest.originalLanguage === detectedLanguage
+        ? enrichedRequest.originalLanguage
+        : detectedLanguage;
 
       // 6. Déterminer les IDs pour la sauvegarde selon le type d'authentification
       const { actualSenderId, actualAnonymousSenderId } = await this.resolveSenderIds(

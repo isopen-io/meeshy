@@ -23,6 +23,16 @@ DECIDE:
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
 7. Choisis les utilisateurs dont le profil colle au sujet de conversation
 
+HISTORIQUE DES INTERVENTIONS RECENTES (NE PAS REPETER):
+{agentHistory}
+
+REGLES ANTI-REPETITION:
+- Ne propose JAMAIS un sujet deja aborde dans l'historique
+- Varie les utilisateurs qui interviennent
+- Si aucun sujet frais n'est disponible, retourne shouldIntervene: false
+- Favorise les reactions aux messages recents plutot que de nouveaux messages generiques
+- Maximum 1 intervention par utilisateur si la conversation est peu active
+
 IMPORTANT:
 - Analyse semantique pure. Fonctionne en TOUTES langues.
 - Ne reponds PAS si l'activite est deja suffisante (score > 0.7)
@@ -77,13 +87,19 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     : maxResponses;
   const effectiveMaxReactions = reactionsEnabled ? maxReactions : 0;
 
+  const historyText = (state.agentHistory ?? [])
+    .slice(-20)
+    .map((h) => `- ${h.userId}: "${h.topic}" (il y a ${Math.round((Date.now() - h.timestamp) / 60000)}min)`)
+    .join('\n') || 'Aucune intervention recente.';
+
   return STRATEGIST_SYSTEM_PROMPT
     .replace('{messages}', messagesText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{activityScore}', String(state.activityScore))
     .replace('{participants}', participantsText)
     .replace('{minResponses}', String(minResponses))
-    .replace('{maxResponses}', String(effectiveMaxResponses + effectiveMaxReactions));
+    .replace('{maxResponses}', String(effectiveMaxResponses + effectiveMaxReactions))
+    .replace('{agentHistory}', historyText);
 }
 
 function validateInterventions(interventions: unknown[], controlledUserIds: Set<string>, messageIds: Set<string>, maxMessages: number, maxReactions: number): InterventionDirective[] {

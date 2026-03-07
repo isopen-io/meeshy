@@ -1,4 +1,4 @@
-import type { ConversationState, PendingAction, PendingMessage } from '../graph/state';
+import type { ConversationState, PendingAction, PendingMessage, AgentHistoryEntry } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 
@@ -17,6 +17,10 @@ export function createQualityGateNode(llm: LlmProvider) {
     const validatedMessages: PendingAction[] = [];
     const seenContents = new Set<string>();
 
+    const pastContents = new Set(
+      (state.agentHistory ?? []).map((h) => h.contentHash),
+    );
+
     for (const msg of messages) {
       const userId = msg.asUserId;
       const profile = state.controlledUsers.find((u) => u.userId === userId)?.role;
@@ -32,16 +36,24 @@ export function createQualityGateNode(llm: LlmProvider) {
         continue;
       }
 
+      if (pastContents.has(contentKey)) {
+        console.warn(`[QualityGate] Content too similar to past agent message, skipping`);
+        continue;
+      }
+
+      const expectedLanguage = msg.originalLanguage || state.controlledUsers.find((u) => u.userId === userId)?.systemLanguage || 'fr';
+
       const checkPrompt = `Verifie cette reponse pour coherence avec le profil.
 
 Profil attendu:
 - Ton: ${profile.tone}
 - Registre: ${profile.vocabularyLevel}
 - Longueur: ${profile.typicalLength}
+- Langue attendue: ${expectedLanguage}
 
 Reponse a verifier: "${msg.content}"
 
-Retourne un JSON: { "coherent": boolean, "score": 0-1, "reason": "..." }`;
+Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolean, "reason": "..." }`;
 
       try {
         const response = await llm.chat({
@@ -50,7 +62,12 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "reason": "..." }`;
           maxTokens: 128,
         });
 
-        const result = parseJsonLlm<{ coherent: boolean; score: number; reason: string }>(response.content);
+        const result = parseJsonLlm<{ coherent: boolean; score: number; correctLanguage?: boolean; reason: string }>(response.content);
+
+        if (result.correctLanguage === false) {
+          console.warn(`[QualityGate] Wrong language for user ${userId} (expected ${expectedLanguage}): ${result.reason}`);
+          continue;
+        }
 
         if (result.score < 0.5) {
           console.warn(`[QualityGate] Low score (${result.score}) for user ${userId}: ${result.reason}`);
@@ -67,6 +84,15 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "reason": "..." }`;
 
     console.log(`[QualityGate] Validated ${validatedMessages.length}/${messages.length} messages, ${reactions.length} reactions pass-through`);
 
-    return { pendingActions: [...validatedMessages, ...reactions] };
+    const newHistory: AgentHistoryEntry[] = validatedMessages
+      .filter((a): a is PendingMessage => a.type === 'message')
+      .map((a) => ({
+        userId: a.asUserId,
+        topic: a.content.slice(0, 50),
+        contentHash: a.content.toLowerCase().trim().slice(0, 100),
+        timestamp: Date.now(),
+      }));
+
+    return { pendingActions: [...validatedMessages, ...reactions], agentHistory: newHistory };
   };
 }

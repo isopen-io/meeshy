@@ -87,6 +87,13 @@ export type ReactionDirective = {
 
 export type InterventionDirective = MessageDirective | ReactionDirective;
 
+export type AgentHistoryEntry = {
+  userId: string;
+  topic: string;
+  contentHash: string;
+  timestamp: number;
+};
+
 export type InterventionPlan = {
   shouldIntervene: boolean;
   reason: string;
@@ -141,6 +148,13 @@ export const ConversationStateAnnotation = Annotation.Root({
   useFullHistory: Annotation<boolean>({
     reducer: (_current, update) => update,
     default: () => false,
+  }),
+  agentHistory: Annotation<AgentHistoryEntry[]>({
+    reducer: (current, update) => {
+      const combined = [...current, ...update];
+      return combined.slice(-100);
+    },
+    default: () => [],
   }),
 });
 

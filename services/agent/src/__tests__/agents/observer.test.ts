@@ -47,6 +47,7 @@ const baseState = {
   contextWindowSize: 50,
   agentType: 'personal',
   useFullHistory: false,
+  agentHistory: [],
 };
 
 describe('Observer Agent', () => {

@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 # ===== MODÈLES PYDANTIC =====
 
+class DetectLanguageRequest(BaseModel):
+    """Requête de détection de langue"""
+    text: str = Field(..., min_length=1, max_length=10000)
+
 class TranslationRequest(BaseModel):
     """Requête de traduction"""
     text: str = Field(..., min_length=1, max_length=100000)  # Limite très élevée, découpage par paragraphes
@@ -121,12 +125,29 @@ class TranslationAPI:
             self.app.include_router(audio_router)
             logger.info("[TRANSLATOR] 🎤 Audio API routes registered")
 
+        # Route de détection de langue (standalone, avant register_routes)
+        self._register_detect_language_route()
+
         # Enregistrer les autres routes
         self._register_routes()
 
         # Variables de monitoring
         self.start_time = None
     
+    def _register_detect_language_route(self):
+        """Route de détection de langue via langdetect"""
+        from langdetect import detect, LangDetectException, DetectorFactory
+        DetectorFactory.seed = 0
+
+        @self.app.post("/detect-language")
+        async def detect_language(request: DetectLanguageRequest):
+            try:
+                detected = detect(request.text)
+                return {"language": detected, "confidence": 0.9}
+            except LangDetectException as e:
+                logger.warning(f"[TRANSLATOR] Language detection failed: {e}")
+                return {"language": "unknown", "confidence": 0.0}
+
     def _register_routes(self):
         """Enregistre toutes les routes de l'API"""
         

@@ -288,15 +288,22 @@ export class MessageValidator {
   }
 
   /**
-   * Détection automatique de la langue
+   * Détection automatique de la langue via le service translator
    */
   async detectLanguage(content: string): Promise<string> {
     try {
-      // TODO: Implémenter détection via service de traduction
-      console.warn('[MessageValidator] detectLanguage: using hardcoded fallback "fr" — client should send originalLanguage');
-      return 'fr';
+      const translatorUrl = process.env.ML_API_URL || 'http://translator:8000';
+      const response = await fetch(`${translatorUrl}/detect-language`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content.slice(0, 5000) }),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok) return 'fr';
+      const { language } = await response.json() as { language: string };
+      return language || 'fr';
     } catch (error) {
-      console.error('[MessageValidator] Language detection failed:', error);
+      console.error('[MessageValidator] Language detection failed, fallback to fr:', error);
       return 'fr';
     }
   }
