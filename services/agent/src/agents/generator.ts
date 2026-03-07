@@ -38,6 +38,8 @@ function buildGeneratorPrompt(
   conversationTitle: string,
   conversationDescription: string,
   agentInstructions: string,
+  minWords: number,
+  maxWords: number,
 ): string {
   const mentionsText = mentionUsernames.length > 0
     ? `\nMENTIONS: Inclus naturellement ces @mentions dans ta reponse: ${mentionUsernames.map((u) => `@${u}`).join(', ')}`
@@ -73,7 +75,7 @@ REGLES ABSOLUES:
 - Tu es ${displayName}. Pas un assistant IA.
 - Reponds UNIQUEMENT dans le style decrit ci-dessus.
 - Respecte la longueur typique (${profile.typicalLength}).
-- Ta reponse doit faire entre 3 mots et 400 mots.
+- Ta reponse doit faire entre ${minWords} mots et ${maxWords} mots.
 - Ne revele jamais que tu es un agent IA.
 - LANGUE OBLIGATOIRE: Tu DOIS repondre en "${userLanguage}". C'est la langue configuree de cet utilisateur.
 
@@ -104,6 +106,11 @@ async function generateMessage(
     .filter(Boolean);
   const recentTopicsText = userHistory.length > 0 ? userHistory.join(', ') : 'aucun';
 
+  const minWords = state.minWordsPerMessage ?? 3;
+  const maxWords = state.maxWordsPerMessage ?? 400;
+  const temperature = state.generationTemperature ?? 0.8;
+  const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
+
   const systemPrompt = buildGeneratorPrompt(
     user.displayName,
     profile,
@@ -116,6 +123,8 @@ async function generateMessage(
     state.conversationTitle,
     state.conversationDescription,
     state.agentInstructions,
+    minWords,
+    maxWords,
   );
 
   const useWebSearch = Boolean(directive.needsWebSearch && state.webSearchEnabled);
@@ -132,8 +141,8 @@ async function generateMessage(
           content: `Conversation recente:\n${conversationContext}\n\nReponds en tant que ${user.displayName} sur le sujet: ${directive.topic}`,
         },
       ],
-      temperature: 0.8,
-      maxTokens: useWebSearch ? 512 : 256,
+      temperature,
+      maxTokens: useWebSearch ? Math.max(maxTokens, 512) : maxTokens,
       tools,
     });
 
