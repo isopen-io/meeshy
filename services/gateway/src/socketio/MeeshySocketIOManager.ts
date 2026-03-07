@@ -42,6 +42,7 @@ import type { MessageRequest, MessageResponse } from '@meeshy/shared/types/messa
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
+import { MentionService } from '../services/MentionService';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -74,6 +75,7 @@ export class MeeshySocketIOManager {
   private socialEventsHandler: SocialEventsHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
   private agentClient: ZmqAgentClient | null = null;
+  private mentionService: MentionService;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -111,6 +113,7 @@ export class MeeshySocketIOManager {
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
+    this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
     this.callEventsHandler = new CallEventsHandler(prisma);
     this.callService = new CallService(prisma);
@@ -3200,6 +3203,19 @@ export class MeeshySocketIOManager {
         if (users.length > 0) {
           mentionedUserIds = users.map((u) => u.id);
         }
+      } else if (response.content?.includes('@')) {
+        // Résolution @DisplayName depuis les participants de la conversation
+        const participants = await this.getConversationParticipantsForMention(response.conversationId);
+        if (participants.length > 0) {
+          const usernames = this.mentionService.extractMentionsWithParticipants(response.content, participants);
+          if (usernames.length > 0) {
+            const userMap = await this.mentionService.resolveUsernames(usernames);
+            const resolved = [...userMap.values()].map((u) => u.id);
+            if (resolved.length > 0) {
+              mentionedUserIds = resolved;
+            }
+          }
+        }
       }
 
       // Use MessagingService full pipeline: DB save + mention extraction + translation + broadcast
@@ -3232,6 +3248,31 @@ export class MeeshySocketIOManager {
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {
       logger.error('[Agent] handleAgentResponse error:', error);
+    }
+  }
+
+  private async getConversationParticipantsForMention(
+    conversationId: string
+  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
+    try {
+      const members = await this.prisma.conversationMember.findMany({
+        where: { conversationId, isActive: true },
+        select: {
+          user: {
+            select: { id: true, username: true, displayName: true }
+          }
+        }
+      });
+
+      return members
+        .filter((m): m is typeof m & { user: NonNullable<typeof m.user> } => m.user !== null)
+        .map((m) => ({
+          userId: m.user.id,
+          username: m.user.username,
+          displayName: m.user.displayName ?? m.user.username,
+        }));
+    } catch {
+      return [];
     }
   }
 
