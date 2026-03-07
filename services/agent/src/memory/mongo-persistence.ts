@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ToneProfile, ControlledUser } from '../graph/state';
+import { toneProfileToGlobalFields } from './profile-merger';
 
 export class MongoPersistence {
   constructor(private prisma: PrismaClient) {}
@@ -69,17 +70,18 @@ export class MongoPersistence {
     const userIds = roles.map((r) => r.userId);
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, displayName: true, username: true },
+      select: { id: true, displayName: true, username: true, systemLanguage: true },
     });
-    const userMap = new Map(users.map((u) => [u.id, u.displayName ?? u.username ?? u.id]));
+    const userMap = new Map(users.map((u) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, systemLanguage: u.systemLanguage }]));
 
     return roles.map((r) => ({
       userId: r.userId,
-      displayName: userMap.get(r.userId) ?? r.userId,
+      displayName: userMap.get(r.userId)?.displayName ?? r.userId,
+      systemLanguage: userMap.get(r.userId)?.systemLanguage ?? 'fr',
       source: 'manual' as const,
       role: {
         userId: r.userId,
-        displayName: userMap.get(r.userId) ?? r.userId,
+        displayName: userMap.get(r.userId)?.displayName ?? r.userId,
         origin: r.origin as ToneProfile['origin'],
         archetypeId: r.archetypeId ?? undefined,
         personaSummary: r.personaSummary,
@@ -93,6 +95,8 @@ export class MongoPersistence {
         catchphrases: r.catchphrases,
         responseTriggers: r.responseTriggers,
         silenceTriggers: r.silenceTriggers,
+        commonEmojis: [],
+        reactionPatterns: [],
         messagesAnalyzed: r.messagesAnalyzed,
         confidence: r.confidence,
         locked: r.locked,
@@ -110,6 +114,124 @@ export class MongoPersistence {
         id: { notIn: excludedUserIds },
       },
       select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true },
+    });
+  }
+
+  async getGlobalProfile(userId: string) {
+    return this.prisma.agentGlobalProfile.findUnique({ where: { userId } });
+  }
+
+  async upsertGlobalProfile(userId: string, data: ReturnType<typeof toneProfileToGlobalFields>) {
+    return this.prisma.agentGlobalProfile.upsert({
+      where: { userId },
+      create: { userId, ...data },
+      update: data,
+    });
+  }
+
+  async getEligibleConversations() {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    return this.prisma.agentConfig.findMany({
+      where: {
+        enabled: true,
+        conversation: {
+          isActive: true,
+          lastMessageAt: { gte: oneDayAgo },
+        },
+      },
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            type: true,
+            title: true,
+            lastMessageAt: true,
+            memberCount: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getRecentMessageCount(conversationId: string, withinMinutes: number): Promise<number> {
+    const since = new Date(Date.now() - withinMinutes * 60 * 1000);
+    return this.prisma.message.count({
+      where: {
+        conversationId,
+        createdAt: { gte: since },
+        deletedAt: null,
+      },
+    });
+  }
+
+  async getRecentUniqueAuthors(conversationId: string, withinMinutes: number): Promise<number> {
+    const since = new Date(Date.now() - withinMinutes * 60 * 1000);
+    const messages = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        createdAt: { gte: since },
+        deletedAt: null,
+      },
+      select: { senderId: true },
+      distinct: ['senderId'],
+    });
+    return messages.length;
+  }
+
+  async getAnalytics(conversationId: string) {
+    return this.prisma.agentAnalytic.findUnique({ where: { conversationId } });
+  }
+
+  async updateAnalytics(conversationId: string, data: { messagesSent: number; wordsSent: number; avgConfidence: number }) {
+    const existing = await this.prisma.agentAnalytic.findUnique({ where: { conversationId } });
+
+    if (existing) {
+      const totalMessages = existing.messagesSent + data.messagesSent;
+      const totalWords = existing.totalWordsSent + data.wordsSent;
+      const weightedConfidence = totalMessages > 0
+        ? (existing.avgConfidence * existing.messagesSent + data.avgConfidence * data.messagesSent) / totalMessages
+        : data.avgConfidence;
+
+      return this.prisma.agentAnalytic.update({
+        where: { conversationId },
+        data: {
+          messagesSent: totalMessages,
+          totalWordsSent: totalWords,
+          avgConfidence: weightedConfidence,
+          lastResponseAt: new Date(),
+        },
+      });
+    }
+
+    return this.prisma.agentAnalytic.create({
+      data: {
+        conversationId,
+        messagesSent: data.messagesSent,
+        totalWordsSent: data.wordsSent,
+        avgConfidence: data.avgConfidence,
+        lastResponseAt: new Date(),
+      },
+    });
+  }
+
+  async getSummaryRecord(conversationId: string) {
+    return this.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
+  }
+
+  async getRecentMessages(conversationId: string, limit: number) {
+    return this.prisma.message.findMany({
+      where: {
+        conversationId,
+        deletedAt: null,
+      },
+      include: {
+        sender: {
+          select: { id: true, displayName: true, username: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
     });
   }
 }

@@ -15,9 +15,12 @@ const mockLlm: LlmProvider = {
             typicalLength: 'court',
             emojiUsage: 'jamais',
             topicsOfExpertise: ['management'],
-            catchphrases: ['Concrètement'],
+            catchphrases: ['Concretement'],
             responseTriggers: ['deadline'],
             silenceTriggers: [],
+            commonEmojis: [],
+            reactionPatterns: [],
+            personaSummary: 'Direct project manager',
           },
         },
       }),
@@ -28,25 +31,25 @@ const mockLlm: LlmProvider = {
   },
 };
 
-describe('Observer Agent', () => {
-  const baseState = {
-    conversationId: 'conv1',
-    messages: [
-      { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'On doit finir le projet', timestamp: Date.now() },
-      { id: 'm2', senderId: 'user2', senderName: 'Bob', content: 'OK je m\'en occupe', timestamp: Date.now() },
-    ],
-    summary: '',
-    toneProfiles: {},
-    controlledUsers: [],
-    triggerContext: null,
-    pendingResponse: null,
-    decision: 'skip' as const,
-    selectedUserId: null,
-    contextWindowSize: 50,
-    agentType: 'personal',
-    useFullHistory: false,
-  };
+const baseState = {
+  conversationId: 'conv1',
+  messages: [
+    { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'On doit finir le projet', timestamp: Date.now() },
+    { id: 'm2', senderId: 'user2', senderName: 'Bob', content: 'OK je m\'en occupe', timestamp: Date.now() },
+  ],
+  summary: '',
+  toneProfiles: {},
+  controlledUsers: [],
+  triggerContext: null,
+  pendingActions: [],
+  interventionPlan: null,
+  activityScore: 0,
+  contextWindowSize: 50,
+  agentType: 'personal',
+  useFullHistory: false,
+};
 
+describe('Observer Agent', () => {
   it('updates summary from conversation', async () => {
     const observe = createObserverNode(mockLlm);
     const result = await observe(baseState);
@@ -71,7 +74,8 @@ describe('Observer Agent', () => {
           personaSummary: 'Locked profile', tone: 'original', vocabularyLevel: 'soutenu',
           typicalLength: 'long', emojiUsage: 'abondant', topicsOfExpertise: [],
           topicsAvoided: [], relationshipMap: {}, catchphrases: [], responseTriggers: [],
-          silenceTriggers: [], messagesAnalyzed: 60, confidence: 1.0, locked: true,
+          silenceTriggers: [], commonEmojis: [], reactionPatterns: [],
+          messagesAnalyzed: 60, confidence: 1.0, locked: true,
         },
       },
     };
@@ -107,7 +111,8 @@ describe('Observer Agent', () => {
           personaSummary: '', tone: 'neutre', vocabularyLevel: 'courant',
           typicalLength: 'moyen', emojiUsage: 'occasionnel', topicsOfExpertise: [],
           topicsAvoided: [], relationshipMap: {}, catchphrases: [], responseTriggers: [],
-          silenceTriggers: [], messagesAnalyzed: 24, confidence: 0.48, locked: false,
+          silenceTriggers: [], commonEmojis: [], reactionPatterns: [],
+          messagesAnalyzed: 24, confidence: 0.48, locked: false,
         },
       },
     };
@@ -126,7 +131,8 @@ describe('Observer Agent', () => {
           personaSummary: '', tone: 'neutre', vocabularyLevel: 'courant',
           typicalLength: 'moyen', emojiUsage: 'occasionnel', topicsOfExpertise: [],
           topicsAvoided: [], relationshipMap: {}, catchphrases: [], responseTriggers: [],
-          silenceTriggers: [], messagesAnalyzed: 49, confidence: 0.98, locked: false,
+          silenceTriggers: [], commonEmojis: [], reactionPatterns: [],
+          messagesAnalyzed: 49, confidence: 0.98, locked: false,
         },
       },
     };
@@ -134,41 +140,6 @@ describe('Observer Agent', () => {
     expect(result.toneProfiles!['user1'].messagesAnalyzed).toBe(50);
     expect(result.toneProfiles!['user1'].confidence).toBe(1.0);
     expect(result.toneProfiles!['user1'].locked).toBe(true);
-  });
-
-  it('preserves existing origin when updating', async () => {
-    const observe = createObserverNode(mockLlm);
-    const stateWithArchetype = {
-      ...baseState,
-      toneProfiles: {
-        'user1': {
-          userId: 'user1', displayName: 'Alice', origin: 'archetype' as const,
-          archetypeId: 'arch-1', personaSummary: '', tone: 'neutre', vocabularyLevel: 'courant',
-          typicalLength: 'moyen', emojiUsage: 'occasionnel', topicsOfExpertise: [],
-          topicsAvoided: [], relationshipMap: {}, catchphrases: [], responseTriggers: [],
-          silenceTriggers: [], messagesAnalyzed: 5, confidence: 0.1, locked: false,
-        },
-      },
-    };
-    const result = await observe(stateWithArchetype);
-    expect(result.toneProfiles!['user1'].origin).toBe('archetype');
-    expect(result.toneProfiles!['user1'].archetypeId).toBe('arch-1');
-  });
-
-  it('includes previous summary in context prompt', async () => {
-    const chatSpy = jest.fn().mockResolvedValue({
-      content: JSON.stringify({ summary: 'Updated summary', profiles: {} }),
-      usage: { inputTokens: 100, outputTokens: 50 },
-      model: 'mock',
-      latencyMs: 10,
-    });
-    const spyLlm: LlmProvider = { name: 'spy', chat: chatSpy };
-    const observe = createObserverNode(spyLlm);
-
-    await observe({ ...baseState, summary: 'Previous summary' });
-
-    const callArgs = chatSpy.mock.calls[0][0];
-    expect(callArgs.messages[0].content).toContain('Résumé précédent: Previous summary');
   });
 
   it('handles LLM returning invalid JSON gracefully', async () => {

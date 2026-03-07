@@ -6,19 +6,32 @@ type AgentResponse = {
   conversationId: string;
   asUserId: string;
   content: string;
+  originalLanguage: string;
   replyToId?: string;
+  mentionedUsernames?: string[];
   messageSource: 'agent';
   metadata: {
-    agentType: 'impersonator' | 'animator';
+    agentType: 'impersonator' | 'animator' | 'orchestrator';
     roleConfidence: number;
     archetypeId?: string;
   };
 };
 
+type AgentReaction = {
+  type: 'agent:reaction';
+  conversationId: string;
+  asUserId: string;
+  targetMessageId: string;
+  emoji: string;
+};
+
+type AgentMessage = AgentResponse | AgentReaction;
+
 export class ZmqAgentClient {
   private pushSocket: Push | null = null;
   private subSocket: Subscriber | null = null;
   private responseHandler: ((response: AgentResponse) => Promise<void>) | null = null;
+  private reactionHandler: ((reaction: AgentReaction) => Promise<void>) | null = null;
   private running = false;
 
   constructor(
@@ -29,6 +42,10 @@ export class ZmqAgentClient {
 
   onResponse(handler: (response: AgentResponse) => Promise<void>): void {
     this.responseHandler = handler;
+  }
+
+  onReaction(handler: (reaction: AgentReaction) => Promise<void>): void {
+    this.reactionHandler = handler;
   }
 
   async initialize(): Promise<void> {
@@ -53,18 +70,21 @@ export class ZmqAgentClient {
   }
 
   async startListening(): Promise<void> {
-    if (!this.subSocket || !this.responseHandler) return;
+    if (!this.subSocket) return;
     this.running = true;
 
     for await (const [msg] of this.subSocket) {
       if (!this.running) break;
       try {
-        const response = JSON.parse(msg.toString()) as AgentResponse;
-        if (response.type === 'agent:response') {
-          await this.responseHandler(response);
+        const parsed = JSON.parse(msg.toString()) as AgentMessage;
+
+        if (parsed.type === 'agent:response' && this.responseHandler) {
+          await this.responseHandler(parsed as AgentResponse);
+        } else if (parsed.type === 'agent:reaction' && this.reactionHandler) {
+          await this.reactionHandler(parsed as AgentReaction);
         }
       } catch (error) {
-        console.error('[ZMQ-AgentClient] Error processing response:', error);
+        console.error('[ZMQ-AgentClient] Error processing message:', error);
       }
     }
   }

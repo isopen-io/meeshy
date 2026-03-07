@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { logError } from '../../utils/logger';
+import { getRedisWrapper } from '../../services/RedisWrapper';
 
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as any).authContext;
@@ -332,6 +333,79 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: summary });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent summary:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  // GET /configs/:conversationId/live
+  fastify.get('/configs/:conversationId/live', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+      const redis = getRedisWrapper();
+
+      const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles] = await Promise.all([
+        redis.get(`agent:profiles:${conversationId}`),
+        redis.get(`agent:summary:${conversationId}`),
+        redis.get(`agent:messages:${conversationId}`),
+        fastify.prisma.agentAnalytic.findUnique({ where: { conversationId } }),
+        fastify.prisma.agentConversationSummary.findUnique({ where: { conversationId } }),
+        fastify.prisma.agentUserRole.findMany({
+          where: { conversationId },
+          select: { userId: true, confidence: true, locked: true },
+        }),
+      ]);
+
+      const toneProfiles = profilesRaw ? JSON.parse(profilesRaw) : {};
+      const messages = messagesRaw ? JSON.parse(messagesRaw) : [];
+
+      const userIds = roles.map((r) => r.userId);
+      const users = userIds.length > 0
+        ? await fastify.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, displayName: true, username: true, systemLanguage: true },
+          })
+        : [];
+      const userMap = new Map(users.map((u) => [u.id, u]));
+
+      return reply.send({
+        success: true,
+        data: {
+          conversationId,
+          summary: summaryRaw ?? '',
+          toneProfiles,
+          cachedMessageCount: messages.length,
+          analytics: analytics
+            ? {
+                messagesSent: analytics.messagesSent,
+                totalWordsSent: analytics.totalWordsSent,
+                avgConfidence: analytics.avgConfidence,
+                lastResponseAt: analytics.lastResponseAt?.toISOString() ?? null,
+              }
+            : null,
+          summaryRecord: summaryRecord
+            ? {
+                summary: summaryRecord.summary,
+                currentTopics: summaryRecord.currentTopics,
+                overallTone: summaryRecord.overallTone,
+                messageCount: summaryRecord.messageCount,
+              }
+            : null,
+          controlledUsers: roles.map((r) => {
+            const user = userMap.get(r.userId);
+            return {
+              userId: r.userId,
+              displayName: user?.displayName ?? user?.username ?? r.userId,
+              systemLanguage: user?.systemLanguage ?? 'fr',
+              confidence: r.confidence,
+              locked: r.locked,
+            };
+          }),
+        },
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching live analytics:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
     }
   });

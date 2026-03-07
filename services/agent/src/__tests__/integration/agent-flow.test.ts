@@ -7,14 +7,25 @@ const mockLlm: LlmProvider = {
   async chat({ systemPrompt, messages }) {
     const userMsg = messages[0]?.content ?? '';
 
-    // Observer response
     if (systemPrompt?.includes('analyste conversationnel')) {
       return {
         content: JSON.stringify({
           summary: 'Test conversation about tech',
           overallTone: 'casual',
           profiles: {
-            'user1': { tone: 'direct', vocabularyLevel: 'courant', typicalLength: 'court', emojiUsage: 'jamais', topicsOfExpertise: ['tech'], catchphrases: ['OK'] },
+            'user1': {
+              tone: 'direct',
+              vocabularyLevel: 'courant',
+              typicalLength: 'court',
+              emojiUsage: 'jamais',
+              topicsOfExpertise: ['tech'],
+              catchphrases: ['OK'],
+              responseTriggers: ['question'],
+              silenceTriggers: [],
+              commonEmojis: [],
+              reactionPatterns: [],
+              personaSummary: 'Direct tech user',
+            },
           },
         }),
         usage: { inputTokens: 100, outputTokens: 80 },
@@ -23,8 +34,36 @@ const mockLlm: LlmProvider = {
       };
     }
 
-    // Quality gate response
-    if (userMsg.includes('Vérifie cette réponse')) {
+    if (systemPrompt?.includes('orchestrateur')) {
+      return {
+        content: JSON.stringify({
+          shouldIntervene: true,
+          reason: 'Conversation needs activity',
+          interventions: [
+            {
+              type: 'message',
+              asUserId: 'bot1',
+              topic: 'tech streaming libraries',
+              replyToMessageId: 'm1',
+              mentionUsernames: ['Alice'],
+              delaySeconds: 30,
+            },
+            {
+              type: 'reaction',
+              asUserId: 'bot1',
+              targetMessageId: 'm1',
+              emoji: '👍',
+              delaySeconds: 5,
+            },
+          ],
+        }),
+        usage: { inputTokens: 200, outputTokens: 150 },
+        model: 'mock',
+        latencyMs: 20,
+      };
+    }
+
+    if (userMsg.includes('Verifie cette reponse')) {
       return {
         content: JSON.stringify({ coherent: true, score: 0.9, reason: 'OK' }),
         usage: { inputTokens: 20, outputTokens: 10 },
@@ -33,9 +72,8 @@ const mockLlm: LlmProvider = {
       };
     }
 
-    // Animator / Impersonator response
     return {
-      content: 'Intéressant, tu peux développer ?',
+      content: 'Super question ! Je recommande FFmpeg pour le streaming.',
       usage: { inputTokens: 50, outputTokens: 20 },
       model: 'mock',
       latencyMs: 15,
@@ -44,12 +82,13 @@ const mockLlm: LlmProvider = {
 };
 
 describe('Agent Flow E2E', () => {
-  it('runs full graph: observe → decide → animate → quality gate', async () => {
+  it('runs full graph: observe -> strategist -> generator -> qualityGate', async () => {
     const graph = buildAgentGraph(mockLlm);
 
     const controlledUser: ControlledUser = {
       userId: 'bot1',
       displayName: 'CuriousBot',
+      systemLanguage: 'fr',
       source: 'manual',
       role: {
         userId: 'bot1',
@@ -64,9 +103,11 @@ describe('Agent Flow E2E', () => {
         topicsOfExpertise: ['tech', 'science'],
         topicsAvoided: [],
         relationshipMap: {},
-        catchphrases: ['Intéressant !'],
+        catchphrases: ['Interessant !'],
         responseTriggers: ['question', 'tech', 'nouveau sujet'],
         silenceTriggers: [],
+        commonEmojis: ['🔥', '👀'],
+        reactionPatterns: ['👍', '❤️'],
         messagesAnalyzed: 0,
         confidence: 0.6,
         locked: false,
@@ -76,23 +117,24 @@ describe('Agent Flow E2E', () => {
     const result = await graph.invoke({
       conversationId: 'conv-test',
       messages: [
-        { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'Quelqu\'un connaît une bonne lib tech pour le streaming ?', timestamp: Date.now() },
+        { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'Quelqu\'un connait une bonne lib tech pour le streaming ?', timestamp: Date.now() },
       ],
       summary: '',
       toneProfiles: {},
       controlledUsers: [controlledUser],
-      triggerContext: { type: 'user_message', triggeredByUserId: 'user1', triggeredByMessageId: 'm1' },
-      pendingResponse: null,
-      decision: 'skip',
-      selectedUserId: null,
+      triggerContext: { type: 'scan' },
+      pendingActions: [],
+      interventionPlan: null,
+      activityScore: 0.2,
+      contextWindowSize: 50,
+      agentType: 'personal',
+      useFullHistory: false,
     });
 
-    // Observer should have updated summary
     expect(result.summary).toBeTruthy();
     expect(result.summary).not.toBe('');
-
-    // Tone profiles should be populated
     expect(result.toneProfiles).toBeDefined();
+    expect(result.interventionPlan).toBeDefined();
   });
 
   it('skips when no controlled users are provided', async () => {
@@ -106,15 +148,69 @@ describe('Agent Flow E2E', () => {
       summary: '',
       toneProfiles: {},
       controlledUsers: [],
-      triggerContext: { type: 'timeout' },
-      pendingResponse: null,
-      decision: 'skip',
-      selectedUserId: null,
+      triggerContext: { type: 'scan' },
+      pendingActions: [],
+      interventionPlan: null,
+      activityScore: 0.2,
+      contextWindowSize: 50,
+      agentType: 'personal',
+      useFullHistory: false,
     });
 
-    // Should still have summary from observer
     expect(result.summary).toBeTruthy();
-    // But no pending response since no controlled users
-    expect(result.decision).toBe('skip');
+    expect(result.interventionPlan?.shouldIntervene).toBe(false);
+    expect(result.pendingActions).toEqual([]);
+  });
+
+  it('skips when activity score is too high', async () => {
+    const graph = buildAgentGraph(mockLlm);
+
+    const controlledUser: ControlledUser = {
+      userId: 'bot1',
+      displayName: 'Bot',
+      systemLanguage: 'fr',
+      source: 'manual',
+      role: {
+        userId: 'bot1',
+        displayName: 'Bot',
+        origin: 'observed',
+        personaSummary: 'Test bot',
+        tone: 'neutre',
+        vocabularyLevel: 'courant',
+        typicalLength: 'court',
+        emojiUsage: 'jamais',
+        topicsOfExpertise: [],
+        topicsAvoided: [],
+        relationshipMap: {},
+        catchphrases: [],
+        responseTriggers: [],
+        silenceTriggers: [],
+        commonEmojis: [],
+        reactionPatterns: [],
+        messagesAnalyzed: 0,
+        confidence: 0.5,
+        locked: false,
+      },
+    };
+
+    const result = await graph.invoke({
+      conversationId: 'conv-active',
+      messages: [
+        { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'Hello', timestamp: Date.now() },
+      ],
+      summary: '',
+      toneProfiles: {},
+      controlledUsers: [controlledUser],
+      triggerContext: { type: 'scan' },
+      pendingActions: [],
+      interventionPlan: null,
+      activityScore: 0.9,
+      contextWindowSize: 50,
+      agentType: 'personal',
+      useFullHistory: false,
+    });
+
+    expect(result.interventionPlan?.shouldIntervene).toBe(false);
+    expect(result.pendingActions).toEqual([]);
   });
 });

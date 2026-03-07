@@ -1,5 +1,6 @@
 import { createQualityGateNode } from '../../agents/quality-gate';
 import type { LlmProvider } from '../../llm/types';
+import type { PendingMessage, PendingReaction, ControlledUser } from '../../graph/state';
 
 const mockLlm: LlmProvider = {
   name: 'mock',
@@ -15,82 +16,127 @@ const mockLlm: LlmProvider = {
   },
 };
 
+const controlledUser: ControlledUser = {
+  userId: 'user1',
+  displayName: 'Bot1',
+  systemLanguage: 'fr',
+  source: 'manual',
+  role: {
+    userId: 'user1',
+    displayName: 'Bot1',
+    origin: 'observed',
+    personaSummary: 'Friendly bot',
+    tone: 'amical',
+    vocabularyLevel: 'courant',
+    typicalLength: 'moyen',
+    emojiUsage: 'occasionnel',
+    topicsOfExpertise: [],
+    topicsAvoided: [],
+    relationshipMap: {},
+    catchphrases: [],
+    responseTriggers: [],
+    silenceTriggers: [],
+    commonEmojis: [],
+    reactionPatterns: [],
+    messagesAnalyzed: 10,
+    confidence: 0.5,
+    locked: false,
+  },
+};
+
+const goodMessage: PendingMessage = {
+  type: 'message',
+  asUserId: 'user1',
+  content: 'Bonjour, comment ca va ?',
+  originalLanguage: 'fr',
+  mentionedUsernames: [],
+  delaySeconds: 30,
+  messageSource: 'agent',
+};
+
+const badMessage: PendingMessage = {
+  type: 'message',
+  asUserId: 'user1',
+  content: 'Generic response without greeting',
+  originalLanguage: 'fr',
+  mentionedUsernames: [],
+  delaySeconds: 30,
+  messageSource: 'agent',
+};
+
+const reaction: PendingReaction = {
+  type: 'reaction',
+  asUserId: 'user1',
+  targetMessageId: 'm1',
+  emoji: '👍',
+  delaySeconds: 5,
+};
+
 describe('Quality Gate', () => {
-  it('passes good responses through', async () => {
+  it('passes good messages through', async () => {
     const gate = createQualityGateNode(mockLlm);
     const result = await gate({
-      pendingResponse: {
-        type: 'agent:response',
-        content: 'Bonjour, comment ça va ?',
-        metadata: { roleConfidence: 0.8, agentType: 'animator' },
-      },
-      toneProfiles: {
-        'user1': { tone: 'amical', vocabularyLevel: 'courant', typicalLength: 'moyen' },
-      },
-      selectedUserId: 'user1',
+      pendingActions: [goodMessage],
+      controlledUsers: [controlledUser],
     } as any);
-    expect(result.pendingResponse).toBeTruthy();
-    expect((result as any).pendingResponse.metadata.roleConfidence).toBe(0.9);
+    expect(result.pendingActions).toHaveLength(1);
+    expect(result.pendingActions[0].type).toBe('message');
   });
 
-  it('rejects low quality responses', async () => {
+  it('rejects low quality messages', async () => {
+    const gate = createQualityGateNode(mockLlm);
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const result = await gate({
+      pendingActions: [badMessage],
+      controlledUsers: [controlledUser],
+    } as any);
+    expect(result.pendingActions).toHaveLength(0);
+    consoleSpy.mockRestore();
+  });
+
+  it('passes reactions through without LLM check', async () => {
     const gate = createQualityGateNode(mockLlm);
     const result = await gate({
-      pendingResponse: {
-        type: 'agent:response',
-        content: 'Generic response without greeting',
-        metadata: { roleConfidence: 0.8, agentType: 'animator' },
-      },
-      toneProfiles: {
-        'user1': { tone: 'amical', vocabularyLevel: 'courant', typicalLength: 'moyen' },
-      },
-      selectedUserId: 'user1',
+      pendingActions: [reaction],
+      controlledUsers: [controlledUser],
     } as any);
-    expect(result.pendingResponse).toBeNull();
+    expect(result.pendingActions).toHaveLength(1);
+    expect(result.pendingActions[0].type).toBe('reaction');
   });
 
-  it('handles null pending response', async () => {
+  it('handles empty actions', async () => {
     const gate = createQualityGateNode(mockLlm);
     const result = await gate({
-      pendingResponse: null,
-      toneProfiles: {},
-      selectedUserId: 'user1',
+      pendingActions: [],
+      controlledUsers: [],
     } as any);
-    expect(result.pendingResponse).toBeNull();
+    expect(result.pendingActions).toEqual([]);
   });
 
-  it('handles missing profile gracefully', async () => {
+  it('handles mixed messages and reactions', async () => {
     const gate = createQualityGateNode(mockLlm);
     const result = await gate({
-      pendingResponse: {
-        type: 'agent:response',
-        content: 'Bonjour',
-        metadata: { roleConfidence: 0.8, agentType: 'animator' },
-      },
-      toneProfiles: {},
-      selectedUserId: 'user1',
+      pendingActions: [goodMessage, reaction, badMessage],
+      controlledUsers: [controlledUser],
     } as any);
-    // No profile means gate returns state as-is
-    expect(result.pendingResponse).toBeTruthy();
+    const messages = result.pendingActions.filter((a: any) => a.type === 'message');
+    const reactions = result.pendingActions.filter((a: any) => a.type === 'reaction');
+    expect(messages).toHaveLength(1);
+    expect(reactions).toHaveLength(1);
   });
 
-  it('handles LLM error gracefully', async () => {
+  it('handles LLM error gracefully by skipping message', async () => {
     const errorLlm: LlmProvider = {
       name: 'error-mock',
       async chat() { throw new Error('LLM unavailable'); },
     };
     const gate = createQualityGateNode(errorLlm);
-    const state = {
-      pendingResponse: {
-        type: 'agent:response',
-        content: 'Bonjour',
-        metadata: { roleConfidence: 0.8, agentType: 'animator' },
-      },
-      toneProfiles: { 'user1': { tone: 'amical', vocabularyLevel: 'courant', typicalLength: 'moyen' } },
-      selectedUserId: 'user1',
-    } as any;
-    const result = await gate(state);
-    // On error, returns state unchanged
-    expect(result).toEqual(state);
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const result = await gate({
+      pendingActions: [goodMessage],
+      controlledUsers: [controlledUser],
+    } as any);
+    expect(result.pendingActions).toHaveLength(0);
+    consoleSpy.mockRestore();
   });
 });

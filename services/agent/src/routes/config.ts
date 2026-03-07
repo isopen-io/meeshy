@@ -49,7 +49,10 @@ export async function configRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/agent/analytics/:conversationId', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
-    const analytics = await prisma.agentAnalytic.findUnique({ where: { conversationId } });
-    return { success: true, data: analytics };
+    const [analytics, summary] = await Promise.all([
+      prisma.agentAnalytic.findUnique({ where: { conversationId } }),
+      prisma.agentConversationSummary.findUnique({ where: { conversationId } }),
+    ]);
+    return { success: true, data: { analytics, summary } };
   });
 }

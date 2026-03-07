@@ -1,5 +1,5 @@
 import * as zmq from 'zeromq';
-import type { AgentResponse } from './types';
+import type { AgentResponse, AgentReaction } from './types';
 
 export class ZmqAgentPublisher {
   private pubSocket: zmq.Publisher | null = null;
@@ -23,6 +23,16 @@ export class ZmqAgentPublisher {
     const data = JSON.stringify(response);
     await this.pubSocket.send(data);
     console.log(`[ZMQ-Agent] Published response for conversation ${response.conversationId} as user ${response.asUserId}`);
+  }
+
+  async publishReaction(reaction: AgentReaction): Promise<void> {
+    if (!this.pubSocket) {
+      throw new Error('ZMQ publisher not initialized');
+    }
+
+    const data = JSON.stringify(reaction);
+    await this.pubSocket.send(data);
+    console.log(`[ZMQ-Agent] Published reaction for conversation ${reaction.conversationId} as user ${reaction.asUserId} emoji=${reaction.emoji}`);
   }
 
   async close(): Promise<void> {

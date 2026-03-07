@@ -3182,17 +3182,34 @@ export class MeeshySocketIOManager {
     conversationId: string;
     asUserId: string;
     content: string;
+    originalLanguage: string;
     replyToId?: string;
+    mentionedUsernames?: string[];
     messageSource: 'agent';
-    metadata: { agentType: 'impersonator' | 'animator'; roleConfidence: number; archetypeId?: string };
+    metadata: { agentType: 'impersonator' | 'animator' | 'orchestrator'; roleConfidence: number; archetypeId?: string };
   }): Promise<void> {
     try {
-      // Use MessagingService full pipeline: DB save + translation + broadcast
+      // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
+      let mentionedUserIds: string[] | undefined;
+      if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
+        const users = await this.prisma.user.findMany({
+          where: { username: { in: response.mentionedUsernames.map((u) => u.toLowerCase()) } },
+          select: { id: true },
+        });
+        if (users.length > 0) {
+          mentionedUserIds = users.map((u) => u.id);
+        }
+      }
+
+      // Use MessagingService full pipeline: DB save + mention extraction + translation + broadcast
       const messageRequest = {
         conversationId: response.conversationId,
         content: response.content,
+        originalLanguage: response.originalLanguage,
         messageType: 'text' as const,
+        messageSource: 'agent' as const,
         replyToId: response.replyToId,
+        mentionedUserIds,
         isAnonymous: false,
         metadata: { source: 'api' as const },
       };
@@ -3214,6 +3231,52 @@ export class MeeshySocketIOManager {
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
     } catch (error) {
       logger.error('[Agent] handleAgentResponse error:', error);
+    }
+  }
+
+  async handleAgentReaction(reaction: {
+    type: 'agent:reaction';
+    conversationId: string;
+    asUserId: string;
+    targetMessageId: string;
+    emoji: string;
+  }): Promise<void> {
+    try {
+      const { ReactionService } = await import('../services/ReactionService.js');
+      const reactionService = new ReactionService(this.prisma);
+
+      const result = await reactionService.addReaction({
+        messageId: reaction.targetMessageId,
+        emoji: reaction.emoji,
+        userId: reaction.asUserId,
+      });
+
+      if (!result) {
+        logger.warn(`[Agent] Reaction failed — conv=${reaction.conversationId} msg=${reaction.targetMessageId}`);
+        return;
+      }
+
+      const updateEvent = await reactionService.createUpdateEvent(
+        reaction.targetMessageId,
+        reaction.emoji,
+        'add',
+        reaction.asUserId,
+        undefined,
+      );
+
+      const message = await this.prisma.message.findUnique({
+        where: { id: reaction.targetMessageId },
+        select: { conversationId: true },
+      });
+
+      if (message) {
+        const normalizedConversationId = message.conversationId;
+        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
+      }
+
+      logger.info(`[Agent] Reaction sent — conv=${reaction.conversationId} user=${reaction.asUserId} emoji=${reaction.emoji} msg=${reaction.targetMessageId}`);
+    } catch (error) {
+      logger.error('[Agent] handleAgentReaction error:', error);
     }
   }
 

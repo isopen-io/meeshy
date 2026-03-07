@@ -233,6 +233,9 @@ model User {
 
   // Story audio library
   storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
+
+  // Agent global profile (1:1)
+  agentGlobalProfile AgentGlobalProfile?
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -2871,6 +2874,33 @@ model AccountDeletionRequest {
 // AGENT SERVICE MODELS
 // =============================================================================
 
+model AgentGlobalProfile {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @unique @db.ObjectId
+  user               User     @relation(fields: [userId], references: [id])
+
+  personaSummary     String?
+  tone               String?
+  vocabularyLevel    String?
+  typicalLength      String?
+  emojiUsage         String?
+  catchphrases       String[]
+  topicsOfExpertise  String[]
+  topicsAvoided      String[]
+  responsePatterns   String[]
+  /// Emojis frequently used in messages
+  commonEmojis       String[]
+  /// Emojis frequently used as reactions
+  reactionPatterns   String[]
+
+  messagesAnalyzed   Int      @default(0)
+  confidence         Float    @default(0)
+  locked             Boolean  @default(false)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 model AgentConfig {
   id                       String   @id @default(auto()) @map("_id") @db.ObjectId
   conversationId           String   @db.ObjectId
@@ -2899,6 +2929,13 @@ model AgentConfig {
   triggerFromUserIds       String[] @db.ObjectId
   triggerOnReplyTo         Boolean  @default(true)
 
+  /// Scheduler configuration for autonomous scanning
+  scanIntervalMinutes      Int      @default(3)
+  minResponsesPerCycle     Int      @default(2)
+  maxResponsesPerCycle     Int      @default(12)
+  reactionsEnabled         Boolean  @default(true)
+  maxReactionsPerCycle     Int      @default(8)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -2926,6 +2963,12 @@ model AgentUserRole {
   catchphrases      String[]
   responseTriggers  String[]
   silenceTriggers   String[]
+
+  /// Conversation-level overrides (take priority over AgentGlobalProfile)
+  overrideTone             String?
+  overrideVocabularyLevel  String?
+  overrideTypicalLength    String?
+  overrideEmojiUsage       String?
 
   messagesAnalyzed  Int      @default(0)
   confidence        Float    @default(0.0)

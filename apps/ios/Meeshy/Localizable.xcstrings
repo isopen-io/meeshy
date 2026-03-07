@@ -187,6 +187,12 @@
     "+%@" : {
 
     },
+    "+%@ media" : {
+
+    },
+    "💭" : {
+
+    },
     "2h" : {
 
     },
@@ -823,6 +829,9 @@
         }
       }
     },
+    "Aucun favori" : {
+
+    },
     "Aucun lien de parrainage" : {
 
     },
@@ -850,6 +859,9 @@
 
     },
     "Aucun utilisateur trouvé" : {
+
+    },
+    "Aucune" : {
 
     },
     "Aucune communauté administrée" : {
@@ -1050,6 +1062,9 @@
           }
         }
       }
+    },
+    "Charger plus de commentaires" : {
+
     },
     "Chiffrement de bout en bout" : {
 
@@ -2218,6 +2233,9 @@
     "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire." : {
 
     },
+    "Les posts que vous sauvegardez apparaitront ici" : {
+
+    },
     "Licences" : {
 
     },
@@ -2489,6 +2507,9 @@
           }
         }
       }
+    },
+    "Original (%@)" : {
+
     },
     "Original • %@" : {
 
@@ -3289,7 +3310,13 @@
     "Traductions audio" : {
 
     },
+    "Traductions disponibles" : {
+
+    },
     "Traduire" : {
+
+    },
+    "Traduit depuis %@" : {
 
     },
     "Transcription" : {

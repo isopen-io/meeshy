@@ -39,11 +39,21 @@ export type AgentResponse = {
   conversationId: string;
   asUserId: string;
   content: string;
+  originalLanguage: string;
   replyToId?: string;
+  mentionedUsernames?: string[];
   messageSource: 'agent';
   metadata: {
-    agentType: 'impersonator' | 'animator';
+    agentType: 'impersonator' | 'animator' | 'orchestrator';
     roleConfidence: number;
     archetypeId?: string;
   };
+};
+
+export type AgentReaction = {
+  type: 'agent:reaction';
+  conversationId: string;
+  asUserId: string;
+  targetMessageId: string;
+  emoji: string;
 };

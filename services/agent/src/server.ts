@@ -7,13 +7,15 @@ import { createLlmProvider } from './llm/llm-factory';
 import { buildAgentGraph } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
 import { ZmqAgentPublisher } from './zmq/zmq-publisher';
-import { TriggerEngine } from './triggers/trigger-engine';
 import { RedisStateManager } from './memory/redis-state';
 import { MongoPersistence } from './memory/mongo-persistence';
+import { ConversationScanner } from './scheduler/conversation-scanner';
+import { DeliveryQueue } from './delivery/delivery-queue';
 import type { AgentNewMessage } from './zmq/types';
 import type { MessageEntry } from './graph/state';
 import { configRoutes } from './routes/config';
 import { rolesRoutes } from './routes/roles';
+import { analyticsRoutes } from './routes/analytics';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -26,7 +28,6 @@ server.get('/health', async () => ({
   provider: env.LLM_PROVIDER,
 }));
 
-// Debug: ZMQ status
 server.get('/debug/zmq-status', async () => ({
   zmqListenerAlive: true,
   uptime: process.uptime(),
@@ -46,7 +47,6 @@ async function start() {
   const graph = buildAgentGraph(llm);
   const stateManager = new RedisStateManager(redis);
   const persistence = new MongoPersistence(prisma);
-  const triggerEngine = new TriggerEngine();
 
   const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT);
   const zmqPublisher = new ZmqAgentPublisher(env.ZMQ_HOST, env.ZMQ_PUB_PORT);
@@ -54,13 +54,17 @@ async function start() {
   await zmqListener.initialize();
   await zmqPublisher.initialize();
 
+  server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
+
+  const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence);
+  const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis);
+
   zmqListener.onEvent(async (event) => {
     if (event.type !== 'agent:new-message') return;
 
     const msg = event as AgentNewMessage;
     let config = await persistence.getAgentConfig(msg.conversationId);
 
-    // Default config if none exists (Animator active by default)
     if (!config) {
       // @ts-ignore - Minimal default config
       config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
@@ -76,91 +80,51 @@ async function start() {
       content: msg.content,
       timestamp: msg.timestamp,
       replyToId: msg.replyToId,
+      originalLanguage: msg.originalLanguage,
     };
     messages.push(newEntry);
     const windowSize = config.useFullHistory ? 250 : (config.contextWindowSize ?? env.AGENT_SLIDING_WINDOW_SIZE);
     const window = messages.slice(-windowSize);
     await stateManager.setMessages(msg.conversationId, window);
 
-    // Run graph immediately — TriggerEngine registration happens separately via config
-    await runGraph(msg.conversationId, {
-      type: 'user_message',
-      triggeredByMessageId: msg.messageId,
-      triggeredByUserId: msg.senderId,
+    scanner.scanConversation(msg.conversationId).catch((err) => {
+      server.log.error(`[Agent] Immediate scan error for conv=${msg.conversationId}:`, err);
     });
   });
 
-  const runGraph = async (conversationId: string, triggerContext: { type: string; triggeredByMessageId?: string; triggeredByUserId?: string }) => {
-    const [messages, summary, toneProfiles, controlledUsers] = await Promise.all([
-      stateManager.getMessages(conversationId),
-      stateManager.getSummary(conversationId),
-      stateManager.getToneProfiles(conversationId),
-      persistence.getControlledUsers(conversationId),
-    ]);
-    let config = await persistence.getAgentConfig(conversationId);
-
-    if (!config) {
-      // @ts-ignore
-      config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
-    }
-
-    server.log.info(`[Agent] runGraph conv=${conversationId} trigger=${triggerContext.type} controlledUsers=${controlledUsers.length} messages=${messages.length}`);
-
-    const result = await graph.invoke({
-      conversationId,
-      messages,
-      summary,
-      toneProfiles,
-      controlledUsers,
-      triggerContext: triggerContext as any,
-      pendingResponse: null,
-      decision: 'skip',
-      selectedUserId: null,
-      contextWindowSize: config?.contextWindowSize ?? 50,
-      agentType: config?.agentType ?? 'personal',
-      useFullHistory: config?.useFullHistory ?? false,
-    });
-
-    if (result.summary) await stateManager.setSummary(conversationId, result.summary);
-    if (result.toneProfiles) await stateManager.setToneProfiles(conversationId, result.toneProfiles);
-
-    if (result.pendingResponse) {
-      await zmqPublisher.publish(result.pendingResponse);
-    }
-  };
-
-  // Debug: test event via HTTP (bypasses ZMQ)
   server.post('/debug/test-event', async (request) => {
     const body = request.body as any;
     const conversationId = body?.conversationId ?? 'test-conv';
-    const content = body?.content ?? 'Test message from debug endpoint';
-    const senderId = body?.senderId ?? 'debug-user';
 
-    server.log.info(`[Debug] test-event received: conv=${conversationId} content="${content}"`);
+    server.log.info(`[Debug] test-event received: conv=${conversationId}`);
 
     try {
-      await runGraph(conversationId, {
-        type: 'user_message',
-        triggeredByMessageId: `debug-${Date.now()}`,
-        triggeredByUserId: senderId,
-      });
-      return { success: true, message: 'Graph executed' };
+      await scanner.scanConversation(conversationId);
+      return { success: true, message: 'Scan executed' };
     } catch (error) {
       server.log.error(`[Debug] test-event error: ${error}`);
       return { success: false, error: String(error) };
     }
   });
 
+  server.get('/debug/scanner-status', async () => ({
+    pendingDeliveries: deliveryQueue.pendingCount,
+    uptime: process.uptime(),
+  }));
+
   zmqListener.startListening().catch((error) => {
     server.log.error('ZMQ listener error:', error);
   });
+
+  scanner.start();
 
   await server.listen({ port: env.PORT, host: '0.0.0.0' });
   server.log.info(`Agent service running on port ${env.PORT} with ${llm.name} provider`);
 
   const shutdown = async () => {
     server.log.info('Shutting down agent service...');
-    triggerEngine.clearAll();
+    scanner.stop();
+    deliveryQueue.clearAll();
     await zmqListener.close();
     await zmqPublisher.close();
     await redis.quit();

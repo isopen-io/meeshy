@@ -1,5 +1,4 @@
 import { Annotation } from '@langchain/langgraph';
-import type { AgentResponse } from '../zmq/types';
 
 export type MessageEntry = {
   id: string;
@@ -8,6 +7,7 @@ export type MessageEntry = {
   content: string;
   timestamp: number;
   replyToId?: string;
+  originalLanguage?: string;
 };
 
 export type ToneProfile = {
@@ -26,6 +26,8 @@ export type ToneProfile = {
   catchphrases: string[];
   responseTriggers: string[];
   silenceTriggers: string[];
+  commonEmojis: string[];
+  reactionPatterns: string[];
   messagesAnalyzed: number;
   confidence: number;
   locked: boolean;
@@ -34,14 +36,61 @@ export type ToneProfile = {
 export type ControlledUser = {
   userId: string;
   displayName: string;
+  systemLanguage: string;
   source: 'manual' | 'auto_rule';
   role: ToneProfile;
 };
 
 export type TriggerContext = {
-  type: 'timeout' | 'user_message' | 'reply_to' | 'periodic';
+  type: 'timeout' | 'user_message' | 'reply_to' | 'periodic' | 'scan';
   triggeredByMessageId?: string;
   triggeredByUserId?: string;
+};
+
+export type PendingMessage = {
+  type: 'message';
+  asUserId: string;
+  content: string;
+  originalLanguage: string;
+  replyToId?: string;
+  mentionedUsernames: string[];
+  delaySeconds: number;
+  messageSource: 'agent';
+};
+
+export type PendingReaction = {
+  type: 'reaction';
+  asUserId: string;
+  targetMessageId: string;
+  emoji: string;
+  delaySeconds: number;
+};
+
+export type PendingAction = PendingMessage | PendingReaction;
+
+export type MessageDirective = {
+  type: 'message';
+  asUserId: string;
+  topic: string;
+  replyToMessageId?: string;
+  mentionUsernames: string[];
+  delaySeconds: number;
+};
+
+export type ReactionDirective = {
+  type: 'reaction';
+  asUserId: string;
+  targetMessageId: string;
+  emoji: string;
+  delaySeconds: number;
+};
+
+export type InterventionDirective = MessageDirective | ReactionDirective;
+
+export type InterventionPlan = {
+  shouldIntervene: boolean;
+  reason: string;
+  interventions: InterventionDirective[];
 };
 
 export const ConversationStateAnnotation = Annotation.Root({
@@ -49,7 +98,6 @@ export const ConversationStateAnnotation = Annotation.Root({
   messages: Annotation<MessageEntry[]>({
     reducer: (current, update) => {
       const combined = [...current, ...update];
-      // Keep up to 250 messages for sliding window flexibility
       return combined.slice(-250);
     },
     default: () => [],
@@ -70,17 +118,17 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => null,
   }),
-  pendingResponse: Annotation<AgentResponse | null>({
+  pendingActions: Annotation<PendingAction[]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
+  interventionPlan: Annotation<InterventionPlan | null>({
     reducer: (_current, update) => update,
     default: () => null,
   }),
-  decision: Annotation<'impersonate' | 'animate' | 'skip'>({
+  activityScore: Annotation<number>({
     reducer: (_current, update) => update,
-    default: () => 'skip',
-  }),
-  selectedUserId: Annotation<string | null>({
-    reducer: (_current, update) => update,
-    default: () => null,
+    default: () => 0,
   }),
   contextWindowSize: Annotation<number>({
     reducer: (_current, update) => update,

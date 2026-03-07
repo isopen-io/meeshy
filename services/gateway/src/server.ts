@@ -1224,6 +1224,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           this.agentClient.onResponse(async (response) => {
             await manager.handleAgentResponse(response);
           });
+          this.agentClient.onReaction(async (reaction) => {
+            await manager.handleAgentReaction(reaction);
+          });
           this.agentClient.startListening().catch((err) => {
             logger.error('[GWY] Agent ZMQ listener error:', err);
           });

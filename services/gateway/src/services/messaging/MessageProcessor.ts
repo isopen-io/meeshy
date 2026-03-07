@@ -287,6 +287,7 @@ export class MessageProcessor {
     content: string;
     originalLanguage: string;
     messageType?: string;
+    messageSource?: string;
     replyToId?: string;
     forwardedFromId?: string;
     forwardedFromConversationId?: string;
@@ -330,6 +331,7 @@ export class MessageProcessor {
         content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
         originalLanguage: data.originalLanguage,
         messageType: data.messageType || 'text',
+        messageSource: data.messageSource || 'user',
         replyToId: data.replyToId,
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
