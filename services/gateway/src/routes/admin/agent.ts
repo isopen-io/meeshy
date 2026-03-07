@@ -38,6 +38,11 @@ const agentConfigSchema = z.object({
   maxReactionsPerCycle: z.number().int().min(0).max(50).optional(),
   agentInstructions: z.string().max(5000).nullable().optional(),
   webSearchEnabled: z.boolean().optional(),
+  minWordsPerMessage: z.number().int().min(1).max(200).optional(),
+  maxWordsPerMessage: z.number().int().min(10).max(2000).optional(),
+  generationTemperature: z.number().min(0).max(2).optional(),
+  qualityGateEnabled: z.boolean().optional(),
+  qualityGateMinScore: z.number().min(0).max(1).optional(),
 });
 
 const llmConfigSchema = z.object({
