@@ -327,6 +327,47 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // DELETE /reset — Nuclear reset: all configs, roles, summaries, analytics + Redis
+  fastify.delete('/reset', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const [configs, roles, summaries, analytics, globalProfiles] = await fastify.prisma.$transaction([
+        fastify.prisma.agentConfig.deleteMany(),
+        fastify.prisma.agentUserRole.deleteMany(),
+        fastify.prisma.agentConversationSummary.deleteMany(),
+        fastify.prisma.agentAnalytic.deleteMany(),
+        fastify.prisma.agentGlobalProfile.deleteMany(),
+      ]);
+
+      const redis = getRedisWrapper();
+      const agentKeys = await redis.keys('agent:*');
+      let redisKeysDeleted = 0;
+      for (const key of agentKeys) {
+        await redis.del(key);
+        redisKeysDeleted++;
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          deleted: {
+            configs: configs.count,
+            roles: roles.count,
+            summaries: summaries.count,
+            analytics: analytics.count,
+            globalProfiles: globalProfiles.count,
+            redisKeys: redisKeysDeleted,
+          },
+        },
+        message: 'Reset complet effectué',
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error during agent reset:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur lors du reset agent' });
+    }
+  });
+
   // GET /configs/:conversationId/summary
   fastify.get('/configs/:conversationId/summary', {
     onRequest: [fastify.authenticate, requireAgentAdmin],

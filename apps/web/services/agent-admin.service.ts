@@ -207,4 +207,14 @@ export const agentAdminService = {
       throw error;
     }
   },
+
+  async resetAll() {
+    try {
+      const response = await apiService.delete('/admin/agent/reset');
+      return response;
+    } catch (error) {
+      console.error('Error resetting agent:', error);
+      throw error;
+    }
+  },
 };

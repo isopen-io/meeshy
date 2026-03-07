@@ -1,34 +1,62 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Zap, Users, Shapes } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MessageSquare, Zap, Users, Shapes, RotateCcw } from 'lucide-react';
 import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.service';
+import { toast } from 'sonner';
 
 export function AgentOverviewTab() {
   const [stats, setStats] = useState<AgentStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await agentAdminService.getStats();
+      if (response.success && response.data) {
+        setStats(response.data);
+        setError(null);
+      } else {
+        setError('Impossible de charger les statistiques');
+      }
+    } catch {
+      setError('Erreur de connexion au service agent');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await agentAdminService.getStats();
-        if (response.success && response.data) {
-          setStats(response.data);
-        } else {
-          setError('Impossible de charger les statistiques');
-        }
-      } catch {
-        setError('Erreur de connexion au service agent');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
-  }, []);
+  }, [fetchStats]);
+
+  const handleReset = useCallback(async () => {
+    if (!confirm('ATTENTION : Cette action va supprimer TOUTES les configurations IA, profils, analytics et cache Redis. Cette action est irréversible. Continuer ?')) {
+      return;
+    }
+    try {
+      setResetting(true);
+      const response = await agentAdminService.resetAll();
+      if (response.success) {
+        const deleted = (response as Record<string, unknown>).data as Record<string, Record<string, number>> | undefined;
+        const counts = deleted?.deleted;
+        toast.success(`Reset complet : ${counts?.configs ?? 0} configs, ${counts?.roles ?? 0} rôles, ${counts?.analytics ?? 0} analytics, ${counts?.redisKeys ?? 0} clés Redis supprimés`);
+        fetchStats();
+      } else {
+        toast.error('Erreur lors du reset');
+      }
+    } catch {
+      toast.error('Erreur lors du reset des configurations IA');
+    } finally {
+      setResetting(false);
+    }
+  }, [fetchStats]);
 
   if (loading) {
     return (
@@ -91,34 +119,60 @@ export function AgentOverviewTab() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map(card => {
-        const Icon = card.icon;
-        return (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {card.title}
-              </CardTitle>
-              <div className={`p-2 rounded-lg ${card.bg}`}>
-                <Icon className={`h-4 w-4 ${card.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {card.value}
-                </span>
-                {card.badge && (
-                  <Badge variant={card.badgeVariant as 'default' | 'secondary'}>
-                    {card.badge}
-                  </Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map(card => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.title}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {card.title}
+                </CardTitle>
+                <div className={`p-2 rounded-lg ${card.bg}`}>
+                  <Icon className={`h-4 w-4 ${card.color}`} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {card.value}
+                  </span>
+                  {card.badge && (
+                    <Badge variant={card.badgeVariant as 'default' | 'secondary'}>
+                      {card.badge}
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card className="border-red-200 dark:border-red-900">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-red-600 dark:text-red-400">
+            Zone dangereuse
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Supprimer toutes les configurations, profils de ton, analytics et cache Redis de l&apos;agent IA.
+            </p>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleReset}
+              disabled={resetting}
+            >
+              <RotateCcw className={`h-4 w-4 mr-2 ${resetting ? 'animate-spin' : ''}`} />
+              {resetting ? 'Reset en cours...' : 'Reset complet'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
