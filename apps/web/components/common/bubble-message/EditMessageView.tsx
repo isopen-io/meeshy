@@ -14,6 +14,9 @@ import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 import { detectMentionAtCursor } from '@meeshy/shared/types/mention';
 import { getCursorPosition, adjustPositionForViewport } from '@/lib/cursor-position';
 
+const DEFAULT_LANGUAGE = 'fr';
+const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation);
+
 interface EditMessageViewProps {
   message: Message & {
     originalLanguage: string;
@@ -39,7 +42,7 @@ export const EditMessageView = memo(function EditMessageView({
 }: EditMessageViewProps) {
   const { t } = useI18n('editMessage');
   const [content, setContent] = useState(message.originalContent || message.content);
-  const [selectedLanguage, setSelectedLanguage] = useState(message.originalLanguage || 'fr');
+  const [selectedLanguage, setSelectedLanguage] = useState(message.originalLanguage || DEFAULT_LANGUAGE);
   const [hasChanges, setHasChanges] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -86,7 +89,7 @@ export const EditMessageView = memo(function EditMessageView({
   useEffect(() => {
     const originalContent = message.originalContent || message.content;
     const hasContentChanges = content.trim() !== originalContent.trim();
-    const hasLanguageChanges = selectedLanguage !== (message.originalLanguage || 'fr');
+    const hasLanguageChanges = selectedLanguage !== (message.originalLanguage || DEFAULT_LANGUAGE);
     setHasChanges(hasContentChanges || hasLanguageChanges);
   }, [content, message.originalContent, message.content, selectedLanguage, message.originalLanguage]);
 
@@ -259,7 +262,7 @@ export const EditMessageView = memo(function EditMessageView({
           {/* Language selector mobile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={cn(
+              <button type="button" className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
                 isOwnMessage
                   ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
@@ -271,7 +274,7 @@ export const EditMessageView = memo(function EditMessageView({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto w-48">
-              {SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation).map(lang => (
+              {TRANSLATION_LANGUAGES.map(lang => (
                 <DropdownMenuItem
                   key={lang.code}
                   onClick={() => setSelectedLanguage(lang.code)}
@@ -362,7 +365,7 @@ export const EditMessageView = memo(function EditMessageView({
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={cn(
+              <button type="button" className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/10",
                 isOwnMessage
                   ? "border-blue-700 dark:border-blue-300 text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-white/10"
@@ -374,7 +377,7 @@ export const EditMessageView = memo(function EditMessageView({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto w-48">
-              {SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation).map(lang => (
+              {TRANSLATION_LANGUAGES.map(lang => (
                 <DropdownMenuItem
                   key={lang.code}
                   onClick={() => setSelectedLanguage(lang.code)}
@@ -485,14 +488,11 @@ export const EditMessageView = memo(function EditMessageView({
 
       {/* Footer Actions */}
       <div className={cn(
-        "flex items-center justify-between px-4 py-3 border-t",
+        "flex items-center justify-end px-4 py-3 border-t",
         isOwnMessage
           ? "border-white/20 dark:border-white/10 bg-white/5 dark:bg-white/5"
           : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50"
       )}>
-        <div className="flex items-center gap-2">
-        </div>
-
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
