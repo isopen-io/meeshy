@@ -31,6 +31,7 @@ import { Upload, Camera, Lock, Eye, EyeOff, Languages, Monitor, Wand2, CheckCirc
 import { useI18n } from '@/hooks/use-i18n';
 import { buildApiUrl } from '@/lib/config';
 import { validateAvatarFile } from '@/utils/avatar-upload';
+import { compressAvatarImage } from '@/utils/media-compression';
 import { AvatarCropDialog } from './avatar-crop-dialog';
 import { authManager } from '@/services/auth-manager.service';
 import { Separator } from '@/components/ui/separator';
@@ -298,9 +299,10 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsUploadingAvatar(true);
     try {
-      // Étape 1: Upload du fichier recadré vers l'API Next.js
+      const compressed = await compressAvatarImage(croppedFile);
+
       const formData = new FormData();
-      formData.append('avatar', croppedFile);
+      formData.append('avatar', compressed);
 
       const uploadResponse = await fetch('/api/upload/avatar', {
         method: 'POST',

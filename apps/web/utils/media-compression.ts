@@ -120,6 +120,28 @@ export async function compressImage(
   }
 }
 
+export async function compressAvatarImage(file: File): Promise<File> {
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 0.5,
+    maxWidthOrHeight: 1024,
+    useWebWorker: true,
+    fileType: 'image/jpeg' as any,
+    initialQuality: 0.8,
+  });
+  return new File([compressed], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+}
+
+export async function compressBannerImage(file: File): Promise<File> {
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 1,
+    maxWidthOrHeight: 2400,
+    useWebWorker: true,
+    fileType: 'image/jpeg' as any,
+    initialQuality: 0.8,
+  });
+  return new File([compressed], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+}
+
 /**
  * Compresse une vidéo
  */
