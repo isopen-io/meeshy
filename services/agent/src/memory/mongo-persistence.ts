@@ -223,6 +223,10 @@ export class MongoPersistence {
     });
   }
 
+  async getGlobalConfig() {
+    return this.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+  }
+
   async getSummaryRecord(conversationId: string) {
     return this.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
   }
