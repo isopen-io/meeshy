@@ -61,6 +61,14 @@ const baseState = {
   maxResponsesPerCycle: 12,
   reactionsEnabled: true,
   maxReactionsPerCycle: 8,
+  budgetRemaining: 10,
+  todayUsersActive: 0,
+  maxUsersToday: 4,
+  burstMode: true,
+  burstSize: 4,
+  prioritizeTaggedUsers: true,
+  prioritizeRepliedUsers: true,
+  reactionBoostFactor: 1.5,
 };
 
 describe('Observer Agent', () => {
