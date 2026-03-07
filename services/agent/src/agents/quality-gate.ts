@@ -1,5 +1,6 @@
 import type { ConversationState, PendingAction, PendingMessage } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
+import { parseJsonLlm } from '../utils/parse-json-llm';
 
 export function createQualityGateNode(llm: LlmProvider) {
   return async function qualityGate(state: ConversationState) {
@@ -49,7 +50,7 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "reason": "..." }`;
           maxTokens: 128,
         });
 
-        const result = JSON.parse(response.content);
+        const result = parseJsonLlm<{ coherent: boolean; score: number; reason: string }>(response.content);
 
         if (result.score < 0.5) {
           console.warn(`[QualityGate] Low score (${result.score}) for user ${userId}: ${result.reason}`);

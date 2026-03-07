@@ -1,5 +1,6 @@
 import type { ConversationState, ToneProfile } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
+import { parseJsonLlm } from '../utils/parse-json-llm';
 
 const OBSERVER_SYSTEM_PROMPT = `Tu es un analyste conversationnel. Analyse la conversation et retourne un JSON avec:
 1. "summary": un resume concis de la conversation (max 200 mots)
@@ -39,7 +40,7 @@ export function createObserverNode(llm: LlmProvider) {
         maxTokens: 1024,
       });
 
-      const parsed = JSON.parse(response.content);
+      const parsed = parseJsonLlm<{ summary?: string; overallTone?: string; profiles?: Record<string, unknown> }>(response.content);
 
       const updatedProfiles: Record<string, ToneProfile> = { ...state.toneProfiles };
 

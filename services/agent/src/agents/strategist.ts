@@ -1,5 +1,6 @@
 import type { ConversationState, InterventionPlan, InterventionDirective } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
+import { parseJsonLlm } from '../utils/parse-json-llm';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -164,7 +165,7 @@ export function createStrategistNode(llm: LlmProvider) {
         maxTokens: 1024,
       });
 
-      const parsed = JSON.parse(response.content);
+      const parsed = parseJsonLlm<{ shouldIntervene: boolean; reason?: string; interventions?: unknown[] }>(response.content);
 
       if (!parsed.shouldIntervene) {
         return {
