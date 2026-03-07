@@ -253,6 +253,7 @@ final class AuthServiceTests: XCTestCase {
 
     func test_authManager_handleUnauthorized_clearsState() {
         let appAuth = AuthManager.shared
+        appAuth.logout()
 
         appAuth.handleUnauthorized()
 

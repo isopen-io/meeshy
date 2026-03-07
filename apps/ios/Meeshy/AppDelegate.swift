@@ -44,6 +44,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             PushNotificationManager.shared.handleRegistrationError(error)
         }
     }
+
+    // MARK: - Universal Links (cold launch)
+
+    func application(
+        _ application: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+    ) -> Bool {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+              let url = userActivity.webpageURL else { return false }
+        Task { @MainActor in
+            let _ = DeepLinkRouter.shared.handle(url: url)
+        }
+        return true
+    }
 }
 
 // MARK: - UNUserNotificationCenterDelegate

@@ -36,7 +36,7 @@ final class StoryServiceTests: XCTestCase {
     private func makeComment(id: String = "comment1") -> APIPostComment {
         APIPostComment(
             id: id, content: "Nice!", originalLanguage: "en",
-            likeCount: 0, replyCount: 0, createdAt: Date(),
+            translations: nil, likeCount: 0, replyCount: 0, createdAt: Date(),
             author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil, avatarUrl: nil)
         )
     }
