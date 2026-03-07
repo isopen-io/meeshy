@@ -267,6 +267,19 @@ docker exec meeshy-local-redis redis-cli DEL "ratelimit:auth:login:ip:{ip}:{pref
 
 ## Key Patterns
 
+### Conversation Accent Color
+Each conversation has a unique, deterministic accent color computed from its metadata:
+```
+primary = blend(languageColor×0.30, typeColor×0.30, themeColor×0.40)
+secondary = hueShift(primary, +30°)
+accent = hueShift(primary, −30°)
+```
+- Source: `packages/MeeshySDK/Sources/MeeshySDK/Theme/ColorGeneration.swift`
+- Access: `conversation.accentColor` (hex string), `conversation.colorPalette` (primary/secondary/accent)
+- Fallback: `DynamicColorGenerator.colorForName(name)` (hash → 20-color palette)
+- Rule: ALL conversation-context components MUST use `accentColor`, never hardcode colors
+- Semantic colors (error, success) remain static via `MeeshyColors`
+
 ### API Response Format (all services)
 ```typescript
 { success: boolean, data?: T, error?: { code, message }, pagination?: PaginationMeta }

@@ -61,6 +61,33 @@ public struct ConversationContext: Sendable {
 }
 
 // MARK: - Dynamic Color Generator
+//
+// ## Accent Color Algorithm
+//
+// Each conversation gets a unique, deterministic accent color derived from its metadata.
+// The algorithm blends three contextual factors with weighted averaging:
+//
+//   primaryHex = blend(
+//     languageColor × 0.30,   ← color mapped from conversation language (french→#3498DB, english→#E74C3C, ...)
+//     typeColor    × 0.30,   ← color mapped from conversation type (direct→#FF6B6B, group→#4ECDC4, ...)
+//     themeColor   × 0.40    ← color mapped from conversation theme (work→#3498DB, social→#E91E63, ...)
+//   )
+//
+// From the primary, two companion colors are derived via hue rotation:
+//   secondaryHex = hueShift(primary, +30°)
+//   accentHex    = hueShift(primary, −30°)
+//
+// Saturation is boosted up to 20% based on member count:
+//   saturationBoost = min(1.0, memberCount / 100) × 0.2
+//
+// Fallback for name-only contexts (no conversation metadata):
+//   colorForName(name) → deterministic pick from a 20-color vibrant palette via name.hashValue
+//
+// Access pattern:
+//   conversation.accentColor     → colorPalette.primary (main accent hex)
+//   conversation.colorPalette    → ConversationColorPalette { primary, secondary, accent, saturationBoost }
+//   conversation.colorContext    → ConversationContext { name, type, language, theme, memberCount }
+//
 
 public struct DynamicColorGenerator {
 

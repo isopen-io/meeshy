@@ -100,6 +100,35 @@ PushNotificationManager.shared
 - Double couche: NSCache (mmoire) + FileManager (disque, 7j TTL)
 - Dduplification in-flight (vite tlchargements parallles du mme fichier)
 
+### Accent Color — Couleur dynamique par conversation
+
+Chaque conversation a une couleur d'accent unique et deterministe, calculee a partir de ses metadonnees.
+
+**Algorithme** (`Theme/ColorGeneration.swift` → `DynamicColorGenerator`) :
+```
+primaryHex = blend(
+  languageColor × 0.30,   // french=#3498DB, english=#E74C3C, spanish=#F39C12...
+  typeColor    × 0.30,   // direct=#FF6B6B, group=#4ECDC4, community=#9B59B6...
+  themeColor   × 0.40    // work=#3498DB, social=#E91E63, gaming=#2ECC71...
+)
+secondaryHex = hueShift(primary, +30°)
+accentHex    = hueShift(primary, −30°)
+saturationBoost = min(1.0, memberCount / 100) × 0.2
+```
+
+**Acces** (`Models/CoreModels.swift` → `MeeshyConversation`) :
+- `conversation.accentColor` → `String` (hex primary, propriete calculee)
+- `conversation.colorPalette` → `ConversationColorPalette { primary, secondary, accent, saturationBoost }`
+- `conversation.colorContext` → `ConversationContext { name, type, language, theme, memberCount }`
+
+**Fallback** : `DynamicColorGenerator.colorForName(name)` → hash du nom dans une palette de 20 couleurs vibrantes
+
+**Regles** :
+1. TOUJOURS utiliser `conversation.accentColor` dans les vues conversation (jamais hardcoder une couleur)
+2. Pour les sender names : `DynamicColorGenerator.colorForName(senderName)`
+3. Les couleurs semantiques (error, success, warning) restent statiques (`MeeshyColors`)
+4. Les composants enfants (sheets, overlays) DOIVENT recevoir `accentColor` en parametre
+
 ### Prisme Linguistique — Models & Socket
 
 Le SDK fournit les types API et la communication temps reel pour le prisme linguistique :
