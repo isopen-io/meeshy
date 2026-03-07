@@ -40,6 +40,18 @@ export interface AgentConfigData {
   generationTemperature: number;
   qualityGateEnabled: boolean;
   qualityGateMinScore: number;
+  weekdayMaxMessages: number;
+  weekendMaxMessages: number;
+  weekdayMaxUsers: number;
+  weekendMaxUsers: number;
+  burstEnabled: boolean;
+  burstSize: number;
+  burstIntervalMinutes: number;
+  quietIntervalMinutes: number;
+  inactivityDaysThreshold: number;
+  prioritizeTaggedUsers: boolean;
+  prioritizeRepliedUsers: boolean;
+  reactionBoostFactor: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +85,42 @@ export interface AgentConfigUpsert {
   generationTemperature?: number;
   qualityGateEnabled?: boolean;
   qualityGateMinScore?: number;
+  weekdayMaxMessages?: number;
+  weekendMaxMessages?: number;
+  weekdayMaxUsers?: number;
+  weekendMaxUsers?: number;
+  burstEnabled?: boolean;
+  burstSize?: number;
+  burstIntervalMinutes?: number;
+  quietIntervalMinutes?: number;
+  inactivityDaysThreshold?: number;
+  prioritizeTaggedUsers?: boolean;
+  prioritizeRepliedUsers?: boolean;
+  reactionBoostFactor?: number;
+}
+
+export interface AgentGlobalConfigData {
+  id: string;
+  systemPrompt: string;
+  enabled: boolean;
+  defaultProvider: string;
+  defaultModel: string;
+  fallbackProvider: string | null;
+  fallbackModel: string | null;
+  globalDailyBudgetUsd: number;
+  maxConcurrentCalls: number;
+  updatedAt: string;
+}
+
+export interface AgentGlobalConfigUpsert {
+  systemPrompt?: string;
+  enabled?: boolean;
+  defaultProvider?: string;
+  defaultModel?: string;
+  fallbackProvider?: string | null;
+  fallbackModel?: string | null;
+  globalDailyBudgetUsd?: number;
+  maxConcurrentCalls?: number;
 }
 
 export interface AgentRoleData {
@@ -206,6 +254,14 @@ export const agentAdminService = {
 
   async getConversationSummary(conversationId: string): Promise<ApiResponse<AgentSummaryData>> {
     return apiService.get<AgentSummaryData>(`/admin/agent/configs/${conversationId}/summary`);
+  },
+
+  async getGlobalConfig(): Promise<ApiResponse<AgentGlobalConfigData>> {
+    return apiService.get<AgentGlobalConfigData>('/admin/agent/global-config');
+  },
+
+  async updateGlobalConfig(data: AgentGlobalConfigUpsert): Promise<ApiResponse<AgentGlobalConfigData>> {
+    return apiService.put<AgentGlobalConfigData>('/admin/agent/global-config', data);
   },
 
   async getLiveState(conversationId: string) {
