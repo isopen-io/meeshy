@@ -18,16 +18,23 @@
  */
 
 // Mock RedisWrapper FIRST before imports
-jest.mock('../../../services/RedisWrapper', () => ({
-  RedisWrapper: jest.fn().mockImplementation(() => ({
+// NOTE: jest.mock factories are hoisted before any const/let definitions,
+// so we keep the factory self-contained and wire up the shared instance in beforeEach.
+jest.mock('../../../services/RedisWrapper', () => {
+  const sharedMockRedis = {
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue(undefined),
     setex: jest.fn().mockResolvedValue(undefined),
     del: jest.fn().mockResolvedValue(undefined),
     keys: jest.fn().mockResolvedValue([]),
     getCacheStats: jest.fn().mockReturnValue({ mode: 'Memory', redisAvailable: false }),
-  })),
-}));
+  };
+  return {
+    RedisWrapper: jest.fn().mockImplementation(() => sharedMockRedis),
+    getRedisWrapper: jest.fn().mockReturnValue(sharedMockRedis),
+    __sharedMockRedis: sharedMockRedis,
+  };
+});
 
 // Mock logger
 jest.mock('../../../utils/logger', () => ({
@@ -69,7 +76,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
 
 import { MentionService, MentionSuggestion, MentionValidationResult } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { RedisWrapper } from '../../../services/RedisWrapper';
+import { RedisWrapper, getRedisWrapper } from '../../../services/RedisWrapper';
 
 describe('MentionService', () => {
   let service: MentionService;
@@ -77,23 +84,27 @@ describe('MentionService', () => {
   let mockRedis: any;
 
   beforeEach(() => {
+    // Retrieve the shared mock redis instance created inside the jest.mock factory
+    const redisWrapperMod = jest.requireMock('../../../services/RedisWrapper') as any;
+    mockRedis = redisWrapperMod.__sharedMockRedis;
+
     jest.clearAllMocks();
+
+    // Re-initialise mockRedis fns after clearAllMocks() reset them
+    mockRedis.get.mockResolvedValue(null);
+    mockRedis.set.mockResolvedValue(undefined);
+    mockRedis.setex.mockResolvedValue(undefined);
+    mockRedis.del.mockResolvedValue(undefined);
+    mockRedis.keys.mockResolvedValue([]);
+    mockRedis.getCacheStats.mockReturnValue({ mode: 'Memory', redisAvailable: false });
+
+    // Ensure getRedisWrapper returns the shared mock instance
+    (getRedisWrapper as jest.Mock).mockReturnValue(mockRedis);
+    // Also keep RedisWrapper constructor mock consistent
+    (RedisWrapper as jest.Mock).mockImplementation(() => mockRedis);
 
     // Create new Prisma instance
     prisma = new PrismaClient();
-
-    // Get access to the mock Redis
-    mockRedis = {
-      get: jest.fn().mockResolvedValue(null),
-      set: jest.fn().mockResolvedValue(undefined),
-      setex: jest.fn().mockResolvedValue(undefined),
-      del: jest.fn().mockResolvedValue(undefined),
-      keys: jest.fn().mockResolvedValue([]),
-      getCacheStats: jest.fn().mockReturnValue({ mode: 'Memory', redisAvailable: false }),
-    };
-
-    // Update the mock implementation
-    (RedisWrapper as jest.Mock).mockImplementation(() => mockRedis);
 
     // Create service instance
     service = new MentionService(prisma);
@@ -109,15 +120,15 @@ describe('MentionService', () => {
       expect(newService).toBeInstanceOf(MentionService);
     });
 
-    it('should initialize Redis wrapper', () => {
-      expect(RedisWrapper).toHaveBeenCalled();
+    it('should initialize Redis wrapper via getRedisWrapper', () => {
+      expect(getRedisWrapper).toHaveBeenCalled();
     });
 
     it('should accept optional Redis URL', () => {
       const customRedisUrl = 'redis://custom:6380';
       const newService = new MentionService(prisma, customRedisUrl);
       expect(newService).toBeInstanceOf(MentionService);
-      expect(RedisWrapper).toHaveBeenCalledWith(customRedisUrl);
+      expect(getRedisWrapper).toHaveBeenCalledWith(customRedisUrl);
     });
   });
 
@@ -1383,6 +1394,58 @@ describe('MentionService', () => {
       expect(mockRedis.get).toHaveBeenCalledWith(
         expect.stringContaining(':john')
       );
+    });
+  });
+
+  // ==============================================
+  // EXTRACT MENTIONS WITH PARTICIPANTS TESTS
+  // ==============================================
+
+  describe('extractMentionsWithParticipants', () => {
+    it('extrait username depuis @DisplayName via les participants', () => {
+      const usernames = service.extractMentionsWithParticipants(
+        '@Andre Tabeth tu viens ?',
+        [{ userId: 'u1', username: 'atabeth', displayName: 'Andre Tabeth' }]
+      );
+      expect(usernames).toContain('atabeth');
+    });
+
+    it('rétrocompatibilité : extrait @username classique', () => {
+      const usernames = service.extractMentionsWithParticipants(
+        '@atabeth salut',
+        [{ userId: 'u1', username: 'atabeth', displayName: 'Andre Tabeth' }]
+      );
+      expect(usernames).toContain('atabeth');
+    });
+
+    it('retourne [] si content vide', () => {
+      expect(service.extractMentionsWithParticipants('', [])).toEqual([]);
+    });
+
+    it('déduplique les mentions du même utilisateur', () => {
+      const usernames = service.extractMentionsWithParticipants(
+        '@Andre Tabeth et @atabeth',
+        [{ userId: 'u1', username: 'atabeth', displayName: 'Andre Tabeth' }]
+      );
+      expect(usernames).toEqual(['atabeth']);
+    });
+
+    it('retourne [] si content dépasse MAX_CONTENT_LENGTH', () => {
+      const longContent = 'a'.repeat(10001);
+      const usernames = service.extractMentionsWithParticipants(longContent, []);
+      expect(usernames).toEqual([]);
+    });
+
+    it('résout plusieurs participants distincts', () => {
+      const usernames = service.extractMentionsWithParticipants(
+        '@Andre Tabeth et @Jean Charles',
+        [
+          { userId: 'u1', username: 'atabeth', displayName: 'Andre Tabeth' },
+          { userId: 'u2', username: 'jcharles', displayName: 'Jean Charles' },
+        ]
+      );
+      expect(usernames).toContain('atabeth');
+      expect(usernames).toContain('jcharles');
     });
   });
 });

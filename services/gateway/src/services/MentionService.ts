@@ -8,6 +8,7 @@
 import { PrismaClient, User, ConversationMember } from '@meeshy/shared/prisma/client';
 import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -186,6 +187,45 @@ export class MentionService {
     }
 
     return Array.from(mentions);
+  }
+
+  /**
+   * Extrait les mentions avec connaissance des participants.
+   * Supporte @DisplayName (avec espaces) et @username.
+   * @returns Liste de usernames (strings) résolus
+   */
+  extractMentionsWithParticipants(
+    content: string,
+    participants: MentionParticipant[]
+  ): string[] {
+    if (!content || content.length > this.MAX_CONTENT_LENGTH) return [];
+
+    const results = parseMentions(content, participants);
+
+    const usernames: string[] = [];
+    const seen = new Set<string>();
+
+    for (const result of results) {
+      if (result.startsWith('@')) {
+        // Handle brut non résolu → extraire le username sans @ et valider
+        const raw = result.replace(/^@/, '').toLowerCase();
+        if (this.isValidUsername(raw) && !seen.has(raw)) {
+          usernames.push(raw);
+          seen.add(raw);
+        }
+      } else {
+        // userId résolu → trouver le username correspondant
+        const p = participants.find((x) => x.userId === result);
+        if (p && !seen.has(p.username)) {
+          usernames.push(p.username);
+          seen.add(p.username);
+        }
+      }
+
+      if (usernames.length >= this.MAX_MENTIONS_PER_MESSAGE) break;
+    }
+
+    return usernames;
   }
 
   /**
