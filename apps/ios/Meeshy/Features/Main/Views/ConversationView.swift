@@ -591,6 +591,11 @@ struct ConversationView: View {
                         if shouldShowDateSection(currentDate: msg.createdAt, previousDate: previousDate) { dateSectionView(for: msg.createdAt) }
                         if msg.id == viewModel.firstUnreadMessageId { unreadSeparator }
                         messageRow(index: index, msg: msg)
+                            .onAppear {
+                                if index < 5 && viewModel.hasOlderMessages && !viewModel.isLoadingOlder && !viewModel.isProgrammaticScroll {
+                                    Task { await viewModel.loadOlderMessages() }
+                                }
+                            }
                     }
 
                     if !viewModel.typingUsernames.isEmpty {
@@ -638,6 +643,7 @@ struct ConversationView: View {
             }
             .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in
                 if wasLoading && !isLoading, let anchorId = viewModel.scrollAnchorId {
+                    viewModel.markProgrammaticScroll()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         proxy.scrollTo(anchorId, anchor: .top); viewModel.scrollAnchorId = nil
                     }

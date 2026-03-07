@@ -383,7 +383,7 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+            hasOlderMessages = response.cursorPagination?.hasMore ?? false
 
             // Calculate first unread message position
             if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
@@ -412,7 +412,7 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Load Older Messages (infinite scroll)
 
     func loadOlderMessages() async {
-        guard hasOlderMessages, !isLoadingOlder, !isProgrammaticScroll else { return }
+        guard hasOlderMessages, !isLoadingOlder, !isLoadingInitial, !isProgrammaticScroll else { return }
         guard let oldestId = messages.first?.id else { return }
 
         // Debounce: ignore calls that arrive too soon after the last one
@@ -445,7 +445,7 @@ class ConversationViewModel: ObservableObject {
                 messages.insert(contentsOf: newMessages, at: 0)
 
                 self.nextMessageCursor = response.cursorPagination?.nextCursor
-                hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+                hasOlderMessages = response.cursorPagination?.hasMore ?? false
                 lastError = nil
                 break
             } catch {
@@ -1015,7 +1015,7 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? response.pagination?.hasMore ?? false
+            hasOlderMessages = response.cursorPagination?.hasMore ?? false
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
         } catch {

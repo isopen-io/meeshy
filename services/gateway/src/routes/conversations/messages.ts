@@ -844,26 +844,26 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Construire les métadonnées de pagination standard
-      const paginationMeta = (before || isAroundMode)
-        ? buildPaginationMeta(0, 0, limit, messages.length)
-        : buildPaginationMeta(totalCount, offset, limit, messages.length);
-
       // Construire les métadonnées de cursor pagination
       const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
       const cursorPaginationMeta = buildCursorPaginationMeta(limit, messages.length, lastMessageId);
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
       // Aligné avec MessagesListResponse de @meeshy/shared/types
+      // Note: pagination offset-based uniquement pour les requêtes sans curseur.
+      // Quand before/around est utilisé, seul cursorPagination est pertinent.
       const responsePayload: any = {
         success: true,
         data: mappedMessages,
-        pagination: paginationMeta,
         cursorPagination: cursorPaginationMeta,
         meta: {
           userLanguage: userPreferredLanguage
         }
       };
+
+      if (!before && !isAroundMode) {
+        responsePayload.pagination = buildPaginationMeta(totalCount, offset, limit, messages.length);
+      }
 
       // Add around-specific pagination info
       if (isAroundMode) {
