@@ -2939,6 +2939,17 @@ model AgentConfig {
   agentInstructions        String?
   webSearchEnabled         Boolean  @default(false)
 
+  /// Minimum words per generated message
+  minWordsPerMessage       Int      @default(3)
+  /// Maximum words per generated message
+  maxWordsPerMessage       Int      @default(400)
+  /// LLM temperature for generation (0.0-2.0)
+  generationTemperature    Float    @default(0.8)
+  /// Enable LLM-based quality gate check
+  qualityGateEnabled       Boolean  @default(true)
+  /// Minimum quality score to accept a message (0.0-1.0)
+  qualityGateMinScore      Float    @default(0.5)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
