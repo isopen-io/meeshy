@@ -26,6 +26,13 @@ server.get('/health', async () => ({
   provider: env.LLM_PROVIDER,
 }));
 
+// Debug: ZMQ status
+server.get('/debug/zmq-status', async () => ({
+  zmqListenerAlive: true,
+  uptime: process.uptime(),
+  timestamp: Date.now(),
+}));
+
 server.register(configRoutes);
 server.register(rolesRoutes);
 
@@ -121,6 +128,28 @@ async function start() {
       await zmqPublisher.publish(result.pendingResponse);
     }
   };
+
+  // Debug: test event via HTTP (bypasses ZMQ)
+  server.post('/debug/test-event', async (request) => {
+    const body = request.body as any;
+    const conversationId = body?.conversationId ?? 'test-conv';
+    const content = body?.content ?? 'Test message from debug endpoint';
+    const senderId = body?.senderId ?? 'debug-user';
+
+    server.log.info(`[Debug] test-event received: conv=${conversationId} content="${content}"`);
+
+    try {
+      await runGraph(conversationId, {
+        type: 'user_message',
+        triggeredByMessageId: `debug-${Date.now()}`,
+        triggeredByUserId: senderId,
+      });
+      return { success: true, message: 'Graph executed' };
+    } catch (error) {
+      server.log.error(`[Debug] test-event error: ${error}`);
+      return { success: false, error: String(error) };
+    }
+  });
 
   zmqListener.startListening().catch((error) => {
     server.log.error('ZMQ listener error:', error);

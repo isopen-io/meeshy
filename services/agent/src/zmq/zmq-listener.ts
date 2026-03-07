@@ -31,22 +31,42 @@ export class ZmqAgentListener {
     this.running = true;
     console.log('[ZMQ-Agent] Listening for events...');
 
-    for await (const [msg] of this.pullSocket) {
-      if (!this.running) break;
+    // Heartbeat to confirm loop is alive
+    let messageCount = 0;
+    const heartbeat = setInterval(() => {
+      console.log(`[ZMQ-Agent] Heartbeat: loop alive, messages received=${messageCount}, running=${this.running}`);
+    }, 30000);
 
-      try {
-        const raw = JSON.parse(msg.toString());
-        const parsed = agentEventSchema.safeParse(raw);
+    try {
+      for await (const [msg] of this.pullSocket) {
+        if (!this.running) break;
+        messageCount++;
 
-        if (!parsed.success) {
-          console.warn('[ZMQ-Agent] Invalid event received:', parsed.error.message);
-          continue;
+        try {
+          const rawStr = msg.toString();
+          console.log(`[ZMQ-Agent] Raw message received (${rawStr.length} bytes): ${rawStr.substring(0, 200)}`);
+
+          const raw = JSON.parse(rawStr);
+          const parsed = agentEventSchema.safeParse(raw);
+
+          if (!parsed.success) {
+            console.warn('[ZMQ-Agent] Invalid event received:', parsed.error.message);
+            continue;
+          }
+
+          console.log(`[ZMQ-Agent] Valid event: type=${parsed.data.type}`);
+          await this.handler(parsed.data);
+          console.log(`[ZMQ-Agent] Handler completed for event type=${parsed.data.type}`);
+        } catch (error) {
+          console.error('[ZMQ-Agent] Error processing event:', error);
         }
-
-        await this.handler(parsed.data);
-      } catch (error) {
-        console.error('[ZMQ-Agent] Error processing event:', error);
       }
+      console.log('[ZMQ-Agent] for-await loop exited normally');
+    } catch (error) {
+      console.error('[ZMQ-Agent] for-await loop threw:', error);
+    } finally {
+      clearInterval(heartbeat);
+      console.log(`[ZMQ-Agent] Listener stopped. Total messages: ${messageCount}`);
     }
   }
 
