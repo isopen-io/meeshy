@@ -518,6 +518,10 @@ struct ConversationView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
+                    if !viewModel.mentionSuggestions.isEmpty {
+                        mentionSuggestionPanel
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     if composerState.showTextEmojiPicker {
                         EmojiKeyboardPanel(
                             style: theme.mode.isDark ? .dark : .light,
@@ -542,10 +546,53 @@ struct ConversationView: View {
             }
             .zIndex(50)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.mentionSuggestions.isEmpty)
 
             searchResultsBlurOverlay
             returnToLatestButton
         }
+    }
+
+    // MARK: - Mention Suggestion Panel
+
+    @ViewBuilder
+    private var mentionSuggestionPanel: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                ForEach(viewModel.mentionSuggestions) { candidate in
+                    Button {
+                        messageText = viewModel.insertMention(candidate, into: messageText)
+                    } label: {
+                        HStack(spacing: 10) {
+                            MeeshyAvatar(
+                                name: candidate.displayName,
+                                size: .small,
+                                accentColor: accentColor,
+                                avatarURL: candidate.avatarURL
+                            )
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(candidate.displayName)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(theme.textPrimary)
+                                Text("@\(candidate.username)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                    }
+                    .accessibilityLabel("Mentionner \(candidate.displayName)")
+                    if candidate.id != viewModel.mentionSuggestions.last?.id {
+                        Divider()
+                            .padding(.leading, 58)
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: 200)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Message Scroll View (extracted to help type-checker)

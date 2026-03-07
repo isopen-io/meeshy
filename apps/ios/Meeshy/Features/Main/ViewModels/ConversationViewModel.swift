@@ -87,6 +87,18 @@ class ConversationViewModel: ObservableObject {
     /// When true, next message will be sent with blur (recipient must tap to reveal)
     @Published var isBlurEnabled: Bool = false
 
+    // MARK: - Mention Autocomplete State
+
+    struct MentionCandidate: Identifiable, Equatable {
+        let id: String          // userId or username
+        let username: String
+        let displayName: String
+        let avatarURL: String?
+    }
+
+    @Published var mentionSuggestions: [MentionCandidate] = []
+    @Published var activeMentionQuery: String? = nil
+
     // MARK: - Search State
 
     @Published var searchResults: [SearchResultItem] = []
@@ -269,6 +281,77 @@ class ConversationViewModel: ObservableObject {
         return map
     }
 
+    // MARK: - Mention Autocomplete Logic
+
+    /// Builds the candidate list from all known senders in this conversation.
+    private var mentionCandidates: [MentionCandidate] {
+        var seen = Set<String>()
+        var candidates: [MentionCandidate] = []
+        for msg in messages {
+            guard let username = msg.senderUsername, !seen.contains(username) else { continue }
+            seen.insert(username)
+            candidates.append(MentionCandidate(
+                id: msg.senderId ?? username,
+                username: username,
+                displayName: msg.senderName ?? username,
+                avatarURL: msg.senderAvatarURL
+            ))
+        }
+        return candidates
+    }
+
+    /// Called from the composer's `onTextChange` callback.
+    /// Detects `@query` at the end of typed text (after the last `@` that has no space before content).
+    func handleMentionQuery(in text: String) {
+        // Find the last @ that could start a mention (not preceded by alphanumeric)
+        guard let atRange = text.range(of: "@", options: .backwards) else {
+            clearMentionSuggestions()
+            return
+        }
+
+        let afterAt = text[atRange.upperBound...]
+        // Query with spaces is allowed — but stop if we see a newline
+        let query = String(afterAt)
+        guard !query.contains("\n") else {
+            clearMentionSuggestions()
+            return
+        }
+
+        activeMentionQuery = query
+        let queryLower = query.lowercased()
+
+        let filtered = mentionCandidates.filter { candidate in
+            queryLower.isEmpty
+                || candidate.username.lowercased().hasPrefix(queryLower)
+                || candidate.displayName.lowercased().hasPrefix(queryLower)
+        }
+
+        mentionSuggestions = filtered
+    }
+
+    func clearMentionSuggestions() {
+        mentionSuggestions = []
+        activeMentionQuery = nil
+    }
+
+    /// Replaces the active `@query` at the end of `text` with `@DisplayName ` or `@username `.
+    /// Returns the new text string.
+    func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
+        let insertText: String
+        if candidate.displayName != candidate.username {
+            insertText = "@\(candidate.displayName) "
+        } else {
+            insertText = "@\(candidate.username) "
+        }
+
+        guard let atRange = text.range(of: "@", options: .backwards) else {
+            return text + insertText
+        }
+        let newText = text[..<atRange.lowerBound] + insertText
+        clearMentionSuggestions()
+        return String(newText)
+    }
+
     // MARK: - Top Active Members (cached)
 
     private var _topActiveMembers: [ConversationActiveMember]?
@@ -339,6 +422,11 @@ class ConversationViewModel: ObservableObject {
 
     func onTextChanged(_ text: String) {
         socketHandler?.onTextChanged(text)
+        if text.contains("@") {
+            handleMentionQuery(in: text)
+        } else {
+            clearMentionSuggestions()
+        }
     }
 
     func stopTypingEmission() {

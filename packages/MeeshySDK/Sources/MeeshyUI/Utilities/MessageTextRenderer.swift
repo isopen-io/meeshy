@@ -37,7 +37,7 @@ public enum MessageTextRenderer {
         mentionDisplayNames: [String: String]? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
-        let segments = parse(text)
+        let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
         return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames)
     }
 
@@ -94,6 +94,7 @@ public enum MessageTextRenderer {
 
     private enum RuleKind {
         case bold, italic, strikethrough, underline, meeshyLink, mention, url
+        case displayNameMention(username: String)
     }
 
     private static let meeshyLinkRegex = try! NSRegularExpression(
@@ -119,12 +120,33 @@ public enum MessageTextRenderer {
         types: NSTextCheckingResult.CheckingType.link.rawValue
     )
 
+    /// Build display-name mention rules for known `username → displayName` pairs.
+    /// Sorted by display name length descending to avoid partial matches.
+    private static func displayNameRules(from mentionDisplayNames: [String: String]) -> [(regex: NSRegularExpression, kind: RuleKind)] {
+        mentionDisplayNames
+            .sorted { $0.value.count > $1.value.count }
+            .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in
+                guard displayName != username,
+                      !displayName.isEmpty,
+                      displayName.rangeOfCharacter(from: .whitespaces) != nil else { return nil }
+                let escaped = NSRegularExpression.escapedPattern(for: displayName)
+                guard let regex = try? NSRegularExpression(
+                    pattern: "(?<![a-zA-Z0-9])@\(escaped)",
+                    options: .caseInsensitive
+                ) else { return nil }
+                return (regex, .displayNameMention(username: username))
+            }
+    }
+
     // MARK: - Parser
 
-    private static func parse(_ text: String, inherited: Styles = []) -> [Segment] {
+    private static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
+
+        // Build display-name rules once per render call (only when display names are available)
+        let dnRules: [(regex: NSRegularExpression, kind: RuleKind)] = mentionDisplayNames.map { displayNameRules(from: $0) } ?? []
 
         var segments: [Segment] = []
         var cursor = 0
@@ -134,6 +156,15 @@ public enum MessageTextRenderer {
 
             var bestMatch: NSTextCheckingResult?
             var bestKind: RuleKind?
+
+            // Display-name rules run first (longest match wins over @username fallback)
+            for (regex, kind) in dnRules {
+                if let m = regex.firstMatch(in: text, range: searchRange),
+                   bestMatch == nil || m.range.location < bestMatch!.range.location {
+                    bestMatch = m
+                    bestKind = kind
+                }
+            }
 
             for (regex, kind) in rules {
                 if let m = regex.firstMatch(in: text, range: searchRange),
@@ -189,6 +220,12 @@ public enum MessageTextRenderer {
 
             case .mention:
                 let username = ns.substring(with: match.range(at: 1))
+                let display = ns.substring(with: match.range)
+                if let url = URL(string: "https://meeshy.me/u/\(username)") {
+                    segments.append(.mentionLink(display: display, url: url, username: username))
+                }
+
+            case .displayNameMention(let username):
                 let display = ns.substring(with: match.range)
                 if let url = URL(string: "https://meeshy.me/u/\(username)") {
                     segments.append(.mentionLink(display: display, url: url, username: username))
