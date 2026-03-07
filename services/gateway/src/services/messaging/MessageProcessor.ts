@@ -479,7 +479,8 @@ export class MessageProcessor {
         mentionedUserIds = Array.from(data.mentionedUserIds);
       } else {
         // Parser le contenu pour extraire les mentions (compatibilité)
-        const mentionedUsernames = this.mentionService.extractMentions(processedContent);
+        const participants = await this.getConversationParticipants(data.conversationId);
+        const mentionedUsernames = this.mentionService.extractMentionsWithParticipants(processedContent, participants);
         logger.info('[MessageProcessor] Extracted mentions (legacy):', mentionedUsernames);
 
         if (mentionedUsernames.length > 0 && data.senderId) {
@@ -635,5 +636,33 @@ export class MessageProcessor {
    */
   containsLinks(content: string): boolean {
     return /https?:\/\/[^\s]+/.test(content);
+  }
+
+  /**
+   * Récupère les participants actifs d'une conversation pour la résolution des mentions.
+   */
+  private async getConversationParticipants(
+    conversationId: string
+  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
+    try {
+      const members = await this.prisma.conversationMember.findMany({
+        where: { conversationId, isActive: true },
+        select: {
+          user: {
+            select: { id: true, username: true, displayName: true }
+          }
+        }
+      });
+
+      return members
+        .filter((m): m is typeof m & { user: NonNullable<typeof m.user> } => m.user !== null)
+        .map((m) => ({
+          userId: m.user.id,
+          username: m.user.username,
+          displayName: m.user.displayName ?? m.user.username,
+        }));
+    } catch {
+      return [];
+    }
   }
 }
