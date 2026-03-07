@@ -35,6 +35,11 @@ export interface AgentConfigData {
   maxReactionsPerCycle: number;
   agentInstructions: string | null;
   webSearchEnabled: boolean;
+  minWordsPerMessage: number;
+  maxWordsPerMessage: number;
+  generationTemperature: number;
+  qualityGateEnabled: boolean;
+  qualityGateMinScore: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +68,11 @@ export interface AgentConfigUpsert {
   maxReactionsPerCycle?: number;
   agentInstructions?: string | null;
   webSearchEnabled?: boolean;
+  minWordsPerMessage?: number;
+  maxWordsPerMessage?: number;
+  generationTemperature?: number;
+  qualityGateEnabled?: boolean;
+  qualityGateMinScore?: number;
 }
 
 export interface AgentRoleData {

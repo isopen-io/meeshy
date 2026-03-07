@@ -55,6 +55,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     maxReactionsPerCycle: 8,
     agentInstructions: null,
     webSearchEnabled: false,
+    minWordsPerMessage: 3,
+    maxWordsPerMessage: 400,
+    generationTemperature: 0.8,
+    qualityGateEnabled: true,
+    qualityGateMinScore: 0.5,
   });
 
   useEffect(() => {
@@ -84,6 +89,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         maxReactionsPerCycle: config.maxReactionsPerCycle,
         agentInstructions: config.agentInstructions,
         webSearchEnabled: config.webSearchEnabled,
+        minWordsPerMessage: config.minWordsPerMessage ?? 3,
+        maxWordsPerMessage: config.maxWordsPerMessage ?? 400,
+        generationTemperature: config.generationTemperature ?? 0.8,
+        qualityGateEnabled: config.qualityGateEnabled ?? true,
+        qualityGateMinScore: config.qualityGateMinScore ?? 0.5,
       });
     } else {
       setConversationId('');
@@ -111,6 +121,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         maxReactionsPerCycle: 8,
         agentInstructions: null,
         webSearchEnabled: false,
+        minWordsPerMessage: 3,
+        maxWordsPerMessage: 400,
+        generationTemperature: 0.8,
+        qualityGateEnabled: true,
+        qualityGateMinScore: 0.5,
       });
     }
   }, [config, open]);
@@ -382,6 +397,92 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
               <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Génération */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Génération</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Mots min. par message</Label>
+                <Input
+                  type="number"
+                  value={form.minWordsPerMessage ?? 3}
+                  onChange={e => updateField('minWordsPerMessage', Math.max(1, Math.min(200, parseInt(e.target.value) || 3)))}
+                  min={1}
+                  max={200}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Mots max. par message</Label>
+                <Input
+                  type="number"
+                  value={form.maxWordsPerMessage ?? 400}
+                  onChange={e => updateField('maxWordsPerMessage', Math.max(10, Math.min(2000, parseInt(e.target.value) || 400)))}
+                  min={10}
+                  max={2000}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Température de génération ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400 w-10">Précis</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={5}
+                  value={Math.round((form.generationTemperature ?? 0.8) * 100)}
+                  onChange={e => updateField('generationTemperature', parseInt(e.target.value) / 100)}
+                  className="flex-1"
+                />
+                <span className="text-xs text-gray-400 w-12">Créatif</span>
+              </div>
+              <p className="text-xs text-gray-500">0 = déterministe, 1 = équilibré, 2 = très créatif</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Quality Gate */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Quality Gate</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Vérification LLM activée</Label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Vérifie la cohérence du ton, registre et langue. Les checks déterministes (@@, longueur, révélation IA) s&apos;appliquent toujours.
+                </p>
+              </div>
+              <Switch
+                checked={form.qualityGateEnabled ?? true}
+                onCheckedChange={v => updateField('qualityGateEnabled', v)}
+              />
+            </div>
+            {(form.qualityGateEnabled ?? true) && (
+              <div className="space-y-2 pl-4">
+                <Label>Score minimum ({Math.round((form.qualityGateMinScore ?? 0.5) * 100)}%)</Label>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400 w-10">Laxiste</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round((form.qualityGateMinScore ?? 0.5) * 100)}
+                    onChange={e => updateField('qualityGateMinScore', parseInt(e.target.value) / 100)}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-gray-400 w-10">Strict</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Score en dessous duquel le message est rejeté. 50% = équilibré, 80% = très strict.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Rôles (only for existing configs) */}
