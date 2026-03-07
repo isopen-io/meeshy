@@ -153,7 +153,7 @@ export function useMessageInteractions({
     } else {
       const newContent = prompt(t('editMessagePrompt'), message.content);
       if (newContent && newContent.trim() !== message.content) {
-        await onEditMessage?.(message.id, newContent.trim());
+        await onEditMessage?.(message.id, newContent.trim(), message.originalLanguage);
       }
     }
   }, [onEnterEditMode, onEditMessage, message.id, message.content, t]);
