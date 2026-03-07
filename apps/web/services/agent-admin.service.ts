@@ -28,6 +28,13 @@ export interface AgentConfigData {
   agentType: string;
   contextWindowSize: number;
   useFullHistory: boolean;
+  scanIntervalMinutes: number;
+  minResponsesPerCycle: number;
+  maxResponsesPerCycle: number;
+  reactionsEnabled: boolean;
+  maxReactionsPerCycle: number;
+  agentInstructions: string | null;
+  webSearchEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +56,13 @@ export interface AgentConfigUpsert {
   agentType?: string;
   contextWindowSize?: number;
   useFullHistory?: boolean;
+  scanIntervalMinutes?: number;
+  minResponsesPerCycle?: number;
+  maxResponsesPerCycle?: number;
+  reactionsEnabled?: boolean;
+  maxReactionsPerCycle?: number;
+  agentInstructions?: string | null;
+  webSearchEnabled?: boolean;
 }
 
 export interface AgentRoleData {
@@ -182,5 +196,15 @@ export const agentAdminService = {
 
   async getConversationSummary(conversationId: string): Promise<ApiResponse<AgentSummaryData>> {
     return apiService.get<AgentSummaryData>(`/admin/agent/configs/${conversationId}/summary`);
+  },
+
+  async getLiveState(conversationId: string) {
+    try {
+      const response = await apiService.get(`/admin/agent/configs/${conversationId}/live`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching agent live state:', error);
+      throw error;
+    }
   },
 };
