@@ -47,6 +47,7 @@ struct FeedPostCard: View {
                             showTranslationSheet = true
                         }
                     }
+                    .accessibilityHint("Maintenir pour voir les traductions")
 
                 // Translation indicator
                 if post.isTranslated {
@@ -170,6 +171,8 @@ struct FeedPostCard: View {
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
+            .accessibilityLabel("Plus d'options")
+            .accessibilityHint("Ouvre le menu des actions")
         }
     }
 
@@ -271,6 +274,7 @@ struct FeedPostCard: View {
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isLiked)
+            .accessibilityLabel("\(post.likes + (isLiked ? 1 : 0)) j'aime")
 
             Spacer()
 
@@ -290,6 +294,8 @@ struct FeedPostCard: View {
                 }
                 .foregroundColor(showCommentsSheet ? Color(hex: accentColor) : theme.textSecondary)
             }
+            .accessibilityLabel("\(post.commentCount) commentaires")
+            .accessibilityHint("Ouvre les commentaires")
 
             Spacer()
 
@@ -302,6 +308,7 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
+            .accessibilityLabel("Repartager")
             .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
                 Button("Repartager") { onRepost?(post.id) }
                 Button("Citer") { onQuote?(post.id) }
@@ -319,6 +326,7 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
+            .accessibilityLabel("Enregistrer")
 
             Spacer()
 
@@ -331,6 +339,7 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
+            .accessibilityLabel("Partager")
         }
         .padding(.top, 4)
     }

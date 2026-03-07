@@ -190,6 +190,7 @@ struct EmojiPickerView: View {
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     }
+                    .accessibilityLabel("Effacer la recherche")
                 }
             }
             .padding(.horizontal, 10)
@@ -219,6 +220,8 @@ struct EmojiPickerView: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(category.rawValue)
+                            .accessibilityAddTraits(selectedCategory == category ? [.isSelected] : [])
                         }
                     }
                     .padding(.horizontal, 12)

@@ -144,6 +144,7 @@ struct StoryViewerView: View {
                                     .frame(width: 36, height: 36)
                                     .background(Circle().fill(Color.black.opacity(0.5)))
                             }
+                            .accessibilityLabel("Fermer la story")
                             .padding(.leading, 16)
                             .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
                             Spacer()

@@ -915,31 +915,37 @@ struct FeedView: View {
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "4ECDC4"))
                     }
+                    .accessibilityLabel("Ajouter une photo")
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "FF6B6B"))
                     }
+                    .accessibilityLabel("Prendre une photo")
                     Button {} label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
+                    .accessibilityLabel("Ajouter un emoji")
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
+                    .accessibilityLabel("Joindre un fichier")
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "2ECC71"))
                     }
+                    .accessibilityLabel("Partager la position")
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "FF2E63"))
                     }
+                    .accessibilityLabel("Enregistrer un audio")
 
                     Spacer()
                 }
