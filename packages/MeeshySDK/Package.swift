@@ -9,8 +9,8 @@ let package = Package(
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/socketio/socket.io-client-swift", from: "16.1.0"),
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/socketio/socket.io-client-swift", exact: "16.1.1"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
     ],
     targets: [
         .target(
