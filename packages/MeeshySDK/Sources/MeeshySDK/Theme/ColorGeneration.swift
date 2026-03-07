@@ -80,8 +80,19 @@ public struct ConversationContext: Sendable {
 // Saturation is boosted up to 20% based on member count:
 //   saturationBoost = min(1.0, memberCount / 100) × 0.2
 //
+// Post accent colors (blended from 3 factors like conversations):
+//   colorForPost(authorId, type, originalLanguage) = blend(
+//     authorColor    × 0.40,   ← DJB2 hash of authorId into vibrant palette (most unique)
+//     postTypeColor  × 0.25,   ← POST→#FF7F50, STORY→#9B59B6, STATUS→#00CED1
+//     languageColor  × 0.35    ← ISO 639-1 code → color (fr→#3498DB, en→#E74C3C, ...)
+//   )
+//
 // Fallback for name-only contexts (no conversation metadata):
-//   colorForName(name) → deterministic pick from a 20-color vibrant palette via name.hashValue
+//   colorForName(id) → deterministic pick from a 40-color vibrant palette via DJB2 hash
+//   Prefer passing a stable identifier (userId/ObjectId) over a mutable one (displayName)
+//
+// Theme adaptation for text colors:
+//   adaptedColor(hex, for: mode) → adjusts brightness for readability on light/dark backgrounds
 //
 // Access pattern:
 //   conversation.accentColor     → colorPalette.primary (main accent hex)
@@ -126,6 +137,39 @@ public struct DynamicColorGenerator {
         .food: "FF7F50"
     ]
 
+    // Post type colors (POST/STORY/STATUS from Prisma PostType enum)
+    private static let postTypeColors: [String: String] = [
+        "POST": "FF7F50",
+        "STORY": "9B59B6",
+        "STATUS": "00CED1",
+    ]
+
+    // Post language colors keyed by ISO 639-1 code (originalLanguage from API)
+    private static let postLanguageColors: [String: String] = [
+        "fr": "3498DB", "en": "E74C3C", "es": "F39C12",
+        "de": "27AE60", "ja": "E91E63", "ar": "F8B500",
+        "zh": "C0392B", "pt": "2ECC71", "it": "1ABC9C",
+        "ko": "6366F1", "ru": "4F46E5", "hi": "D946EF",
+        "tr": "EA580C", "nl": "0891B2", "pl": "16A34A",
+        "sv": "0EA5E9", "vi": "EC4899", "th": "CA8A04",
+    ]
+
+    // Deterministic accent color for a post, blending author identity + content type + language.
+    //   authorColor  × 0.40  ← DJB2 hash of authorId into vibrant palette (most unique)
+    //   typeColor    × 0.25  ← POST/STORY/STATUS lookup
+    //   languageColor × 0.35  ← ISO 639-1 code lookup
+    public static func colorForPost(authorId: String, type: String?, originalLanguage: String?) -> String {
+        let authorColor = colorForName(authorId)
+        let typeColor = postTypeColors[type ?? "POST"] ?? "FF7F50"
+        let langColor = postLanguageColors[originalLanguage ?? ""] ?? "4ECDC4"
+
+        return blendColors(
+            color1: authorColor, weight1: 0.40,
+            color2: typeColor, weight2: 0.25,
+            color3: langColor, weight3: 0.35
+        )
+    }
+
     // Generate color based on all context factors
     public static func colorFor(context: ConversationContext) -> ConversationColorPalette {
         let langColor = languageColors[context.language] ?? "4ECDC4"
@@ -151,16 +195,72 @@ public struct DynamicColorGenerator {
         )
     }
 
-    // Simple color for name-based coloring (fallback)
+    // 40-color vibrant palette — all colors optimized for both light and dark modes.
+    // Each color has high saturation (65%+) and mid-range brightness (50-85%)
+    // so they remain legible as text and produce visible tints at low opacity.
+    private static let vibrantPalette = [
+        // Reds & Roses (350°–10°)
+        "E74C3C", "C0392B", "DC4A5A", "D94452", "F43F5E",
+        // Oranges & Corals (15°–40°)
+        "FF7F50", "E67E22", "F97316", "EA580C", "D4763B",
+        // Ambers & Golds (42°–55°)
+        "D97706", "B8860B", "CA8A04",
+        // Greens (120°–155°)
+        "2ECC71", "27AE60", "059669", "16A34A", "22C55E",
+        // Teals & Cyans (165°–195°)
+        "1ABC9C", "14B8A6", "0D9488", "0891B2", "00CED1",
+        // Blues (200°–230°)
+        "3498DB", "2980B9", "0EA5E9", "3B82F6", "2563EB",
+        // Indigos & Violets (240°–270°)
+        "6366F1", "4F46E5", "7C3AED", "6D28D9",
+        // Purples & Fuchsias (275°–320°)
+        "9B59B6", "A855F7", "D946EF", "C026D3",
+        // Pinks (330°–350°)
+        "EC4899", "E91E63", "DB2777",
+    ]
+
+    // DJB2 hash — deterministic across app launches (unlike Swift's String.hashValue
+    // which uses a random seed per process since Swift 4.2).
+    private static func stableHash(_ string: String) -> UInt64 {
+        var hash: UInt64 = 5381
+        for byte in string.utf8 {
+            hash = ((hash &<< 5) &+ hash) &+ UInt64(byte)
+        }
+        return hash
+    }
+
+    // Deterministic color from any stable string (userId, username, or name).
+    // Prefer passing a stable identifier (userId) over a mutable one (displayName).
     public static func colorForName(_ name: String) -> String {
-        let vibrantPalette = [
-            "FF6B6B", "4ECDC4", "45B7D1", "96CEB4", "FFEAA7",
-            "DDA0DD", "98D8C8", "F7DC6F", "BB8FCE", "85C1E9",
-            "F8B500", "00CED1", "FF7F50", "9B59B6", "1ABC9C",
-            "E74C3C", "3498DB", "2ECC71", "F39C12", "E91E63"
-        ]
-        let index = abs(name.hashValue) % vibrantPalette.count
+        let index = Int(stableHash(name) % UInt64(vibrantPalette.count))
         return vibrantPalette[index]
+    }
+
+    // Adapt a hex color for text readability in the given theme mode.
+    // Dark mode: boosts brightness so colored text pops on near-black backgrounds.
+    // Light mode: reduces brightness so colored text stays readable on white backgrounds.
+    public static func adaptedColor(_ hex: String, for mode: ThemeMode) -> String {
+        let rgb = hexToRGB(hex)
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        let color = UIColor(red: CGFloat(rgb.r)/255, green: CGFloat(rgb.g)/255, blue: CGFloat(rgb.b)/255, alpha: 1)
+        color.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+
+        let adjusted: UIColor
+        if mode.isDark {
+            // Dark mode: ensure brightness ≥ 0.70, boost saturation slightly
+            let newB = max(b, 0.70)
+            let newS = min(s * 1.1, 1.0)
+            adjusted = UIColor(hue: h, saturation: newS, brightness: newB, alpha: 1)
+        } else {
+            // Light mode: cap brightness at 0.60, keep saturation strong
+            let newB = min(b, 0.60)
+            let newS = max(s, 0.70)
+            adjusted = UIColor(hue: h, saturation: newS, brightness: newB, alpha: 1)
+        }
+
+        var r: CGFloat = 0, g: CGFloat = 0, bl: CGFloat = 0
+        adjusted.getRed(&r, green: &g, blue: &bl, alpha: &a)
+        return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(bl * 255))
     }
 
     // Color blending helper

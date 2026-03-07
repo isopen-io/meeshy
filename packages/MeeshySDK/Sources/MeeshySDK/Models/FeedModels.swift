@@ -91,7 +91,7 @@ public struct RepostContent: Identifiable, Sendable {
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0) {
         self.id = id; self.author = author; self.authorId = authorId
-        self.authorColor = DynamicColorGenerator.colorForName(author)
+        self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes
     }
@@ -117,7 +117,7 @@ public struct FeedComment: Identifiable, Sendable {
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
-        self.authorColor = DynamicColorGenerator.colorForName(author)
+        self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
@@ -131,6 +131,7 @@ public struct FeedPost: Identifiable, Sendable {
     public let authorId: String
     public let authorColor: String
     public let authorAvatarURL: String?
+    public let type: String?
     public let content: String
     public let timestamp: Date
     public var likes: Int
@@ -151,13 +152,14 @@ public struct FeedPost: Identifiable, Sendable {
     public var availableLanguages: [String] { Array(translations?.keys ?? [String: PostTranslation]().keys) }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorAvatarURL: String? = nil,
-                content: String, timestamp: Date = Date(), likes: Int = 0,
+                type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,
                 comments: [FeedComment] = [], commentCount: Int? = nil, repost: RepostContent? = nil, repostAuthor: String? = nil,
                 media: [FeedMedia] = [], mediaUrl: String? = nil,
                 originalLanguage: String? = nil, translations: [String: PostTranslation]? = nil, translatedContent: String? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
-        self.authorColor = DynamicColorGenerator.colorForName(author)
-        self.authorAvatarURL = authorAvatarURL
+        let stableId = authorId.isEmpty ? author : authorId
+        self.authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
+        self.authorAvatarURL = authorAvatarURL; self.type = type
         self.content = content; self.timestamp = timestamp; self.likes = likes
         self.comments = comments; self.commentCount = commentCount ?? comments.count
         self.repost = repost; self.repostAuthor = repostAuthor

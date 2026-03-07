@@ -29,7 +29,7 @@ Meeshy/
 
 ## Build Commands
 **TOUJOURS utiliser `./apps/ios/meeshy.sh`** pour builder et lancer l'app. Ne jamais utiliser `xcodebuild` directement.
-Le script utilise le dossier `build/` comme output directory pour les artefacts de compilation.
+Le build utilise le dossier `Build/` relatif au workspace (`apps/ios/Build/`). Xcode et meeshy.sh partagent ce meme dossier via `WorkspaceSettings.xcsettings` (DerivedData workspace-relative).
 ```bash
 ./meeshy.sh build              # Build only (non-blocking)
 ./meeshy.sh run                # Build+install+launch (preferred for dev)

@@ -11,7 +11,7 @@ APP_NAME="Meeshy"
 BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
-DERIVED_DATA="build"
+DERIVED_DATA="Build"
 LOG_DIR="logs"
 TEST_OUTPUT_DIR="test-results"
 
@@ -41,6 +41,7 @@ LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
 ENTITLEMENTS_FILE="Meeshy/Meeshy.entitlements"
+NOTIF_ENTITLEMENTS_FILE="MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements"
 PHYSICAL_DEVICE_ID=""
 PHYSICAL_DEVICE_NAME=""
 
@@ -180,6 +181,10 @@ strip_entitlements() {
     cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.bak"
     /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+    if [ -f "$NOTIF_ENTITLEMENTS_FILE" ]; then
+        cp "$NOTIF_ENTITLEMENTS_FILE" "${NOTIF_ENTITLEMENTS_FILE}.bak"
+        /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$NOTIF_ENTITLEMENTS_FILE" 2>/dev/null || true
+    fi
     # Remove final .app, the .xcent derived from entitlements (so Xcode regenerates it from
     # the stripped source), and build.db — keeps all .o intermediates for a fast re-link (~30s vs ~3min)
     rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
@@ -194,8 +199,11 @@ strip_entitlements() {
 restore_entitlements() {
     if [ -f "${ENTITLEMENTS_FILE}.bak" ]; then
         mv "${ENTITLEMENTS_FILE}.bak" "$ENTITLEMENTS_FILE"
-        ok "Entitlements restored"
     fi
+    if [ -f "${NOTIF_ENTITLEMENTS_FILE}.bak" ]; then
+        mv "${NOTIF_ENTITLEMENTS_FILE}.bak" "$NOTIF_ENTITLEMENTS_FILE"
+    fi
+    ok "Entitlements restored"
 }
 
 do_device_deploy() {

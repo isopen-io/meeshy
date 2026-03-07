@@ -168,6 +168,12 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
         mode.isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4)
     }
 
+    // MARK: - Accent Text Color (theme-adapted)
+
+    public func accentText(_ hex: String) -> Color {
+        Color(hex: DynamicColorGenerator.adaptedColor(hex, for: mode))
+    }
+
     // MARK: - Button/Interactive Colors
 
     public func buttonGradient(color: String) -> LinearGradient {

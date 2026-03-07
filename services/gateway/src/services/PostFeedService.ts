@@ -27,6 +27,20 @@ const mediaSelect = {
 const feedPostInclude = {
   author: { select: authorSelect },
   media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+  comments: {
+    select: {
+      id: true,
+      content: true,
+      originalLanguage: true,
+      translations: true,
+      likeCount: true,
+      replyCount: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    },
+    orderBy: { likeCount: 'desc' as const },
+    take: 3,
+  },
   repostOf: {
     select: {
       id: true,

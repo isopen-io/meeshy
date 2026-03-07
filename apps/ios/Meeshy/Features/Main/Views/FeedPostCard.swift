@@ -158,7 +158,7 @@ struct FeedPostCard: View {
 
                 Text(timeAgo(from: post.timestamp))
                     .font(.system(size: 12))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(theme.accentText(accentColor))
             }
 
             Spacer()
@@ -182,17 +182,17 @@ struct FeedPostCard: View {
             // Original author
             HStack(spacing: 8) {
                 Circle()
-                    .fill(Color(hex: repost.authorColor).opacity(0.3))
+                    .fill(theme.accentText(repost.authorColor).opacity(0.3))
                     .frame(width: 28, height: 28)
                     .overlay(
                         Text(String(repost.author.prefix(1)))
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: repost.authorColor))
+                            .foregroundColor(theme.accentText(repost.authorColor))
                     )
 
                 Text(repost.author)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(hex: repost.authorColor))
+                    .foregroundColor(theme.accentText(repost.authorColor))
 
                 Text("·")
                     .foregroundColor(theme.textMuted)
@@ -216,7 +216,7 @@ struct FeedPostCard: View {
                     Text("\(repost.likes)")
                         .font(.system(size: 11, weight: .medium))
                 }
-                .foregroundColor(Color(hex: repost.authorColor).opacity(0.7))
+                .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
             }
         }
         .padding(12)
@@ -225,7 +225,7 @@ struct FeedPostCard: View {
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color(hex: repost.authorColor).opacity(0.2), lineWidth: 1)
+                        .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
                 )
         )
     }
@@ -292,7 +292,7 @@ struct FeedPostCard: View {
                             .font(.system(size: 13, weight: .medium))
                     }
                 }
-                .foregroundColor(showCommentsSheet ? Color(hex: accentColor) : theme.textSecondary)
+                .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
             }
             .accessibilityLabel("\(post.commentCount) commentaires")
             .accessibilityHint("Ouvre les commentaires")
@@ -372,7 +372,7 @@ struct FeedPostCard: View {
                             HStack(spacing: -6) {
                                 ForEach(Array(post.comments.dropFirst(3).prefix(3).enumerated()), id: \.element.id) { index, comment in
                                     Circle()
-                                        .fill(Color(hex: comment.authorColor))
+                                        .fill(theme.accentText(comment.authorColor))
                                         .frame(width: 20, height: 20)
                                         .overlay(
                                             Text(String(comment.author.prefix(1)))
@@ -390,7 +390,7 @@ struct FeedPostCard: View {
 
                         Text("Voir les \(post.comments.count) commentaires")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundColor(theme.accentText(accentColor))
 
                         Spacer()
 
@@ -429,7 +429,7 @@ struct FeedPostCard: View {
                     // Author name
                     Text(comment.author)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Color(hex: comment.authorColor))
+                        .foregroundColor(theme.accentText(comment.authorColor))
 
                     // Content (Prisme Linguistique)
                     Text(comment.displayContent)
@@ -454,7 +454,7 @@ struct FeedPostCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.system(size: 10))
-                                    .foregroundColor(Color(hex: accentColor).opacity(0.7))
+                                    .foregroundColor(theme.accentText(accentColor).opacity(0.7))
                                 Text("\(comment.replies) réponses")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(theme.textMuted)
