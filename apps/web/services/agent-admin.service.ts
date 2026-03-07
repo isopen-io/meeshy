@@ -217,4 +217,24 @@ export const agentAdminService = {
       throw error;
     }
   },
+
+  async resetConversation(conversationId: string) {
+    try {
+      const response = await apiService.delete(`/admin/agent/reset/conversation/${conversationId}`);
+      return response;
+    } catch (error) {
+      console.error('Error resetting conversation:', error);
+      throw error;
+    }
+  },
+
+  async resetUser(userId: string) {
+    try {
+      const response = await apiService.delete(`/admin/agent/reset/user/${userId}`);
+      return response;
+    } catch (error) {
+      console.error('Error resetting user:', error);
+      throw error;
+    }
+  },
 };

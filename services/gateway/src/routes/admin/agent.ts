@@ -327,6 +327,109 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // DELETE /reset/conversation/:conversationId — Reset agent data for a single conversation
+  fastify.delete('/reset/conversation/:conversationId', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { conversationId } = request.params as { conversationId: string };
+
+      const [config, roles, summary, analytic] = await fastify.prisma.$transaction([
+        fastify.prisma.agentConfig.deleteMany({ where: { conversationId } }),
+        fastify.prisma.agentUserRole.deleteMany({ where: { conversationId } }),
+        fastify.prisma.agentConversationSummary.deleteMany({ where: { conversationId } }),
+        fastify.prisma.agentAnalytic.deleteMany({ where: { conversationId } }),
+      ]);
+
+      const redis = getRedisWrapper();
+      const keysToDelete = [
+        `agent:messages:${conversationId}`,
+        `agent:summary:${conversationId}`,
+        `agent:profiles:${conversationId}`,
+      ];
+      const cooldownKeys = await redis.keys(`agent:cooldown:${conversationId}:*`);
+      keysToDelete.push(...cooldownKeys);
+
+      let redisKeysDeleted = 0;
+      for (const key of keysToDelete) {
+        await redis.del(key);
+        redisKeysDeleted++;
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          conversationId,
+          deleted: {
+            configs: config.count,
+            roles: roles.count,
+            summaries: summary.count,
+            analytics: analytic.count,
+            redisKeys: redisKeysDeleted,
+          },
+        },
+        message: 'Reset conversation effectué',
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error during conversation reset:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur lors du reset conversation' });
+    }
+  });
+
+  // DELETE /reset/user/:userId — Reset agent profile for a single user (all conversations)
+  fastify.delete('/reset/user/:userId', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.params as { userId: string };
+
+      const [roles, globalProfile] = await fastify.prisma.$transaction([
+        fastify.prisma.agentUserRole.deleteMany({ where: { userId } }),
+        fastify.prisma.agentGlobalProfile.deleteMany({ where: { userId } }),
+      ]);
+
+      // Clear tone profiles from Redis for all conversations that had this user
+      const redis = getRedisWrapper();
+      const profileKeys = await redis.keys('agent:profiles:*');
+      let profilesCleaned = 0;
+      for (const key of profileKeys) {
+        const raw = await redis.get(key);
+        if (!raw) continue;
+        try {
+          const profiles = JSON.parse(raw) as Record<string, unknown>;
+          if (userId in profiles) {
+            delete profiles[userId];
+            await redis.set(key, JSON.stringify(profiles), 3600);
+            profilesCleaned++;
+          }
+        } catch { /* skip malformed */ }
+      }
+
+      // Clear cooldowns for this user
+      const cooldownKeys = await redis.keys(`agent:cooldown:*:${userId}`);
+      for (const key of cooldownKeys) {
+        await redis.del(key);
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          userId,
+          deleted: {
+            roles: roles.count,
+            globalProfiles: globalProfile.count,
+            redisProfilesCleaned: profilesCleaned,
+            cooldownsCleared: cooldownKeys.length,
+          },
+        },
+        message: 'Reset utilisateur effectué',
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error during user reset:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur lors du reset utilisateur' });
+    }
+  });
+
   // DELETE /reset — Nuclear reset: all configs, roles, summaries, analytics + Redis
   fastify.delete('/reset', {
     onRequest: [fastify.authenticate, requireAgentAdmin],

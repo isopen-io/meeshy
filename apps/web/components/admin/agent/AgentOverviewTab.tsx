@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Zap, Users, Shapes, RotateCcw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { MessageSquare, Zap, Users, Shapes, RotateCcw, Trash2 } from 'lucide-react';
 import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 
@@ -14,6 +15,10 @@ export function AgentOverviewTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [conversationIdToReset, setConversationIdToReset] = useState('');
+  const [userIdToReset, setUserIdToReset] = useState('');
+  const [resettingConversation, setResettingConversation] = useState(false);
+  const [resettingUser, setResettingUser] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -57,6 +62,50 @@ export function AgentOverviewTab() {
       setResetting(false);
     }
   }, [fetchStats]);
+
+  const handleResetConversation = useCallback(async () => {
+    const id = conversationIdToReset.trim();
+    if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      toast.error('ID de conversation invalide (24 caractères hex)');
+      return;
+    }
+    if (!confirm(`Supprimer toutes les données agent pour la conversation ${id} ?`)) return;
+    try {
+      setResettingConversation(true);
+      const response = await agentAdminService.resetConversation(id);
+      if (response.success) {
+        toast.success(`Conversation ${id.slice(0, 8)}... réinitialisée`);
+        setConversationIdToReset('');
+        fetchStats();
+      }
+    } catch {
+      toast.error('Erreur lors du reset conversation');
+    } finally {
+      setResettingConversation(false);
+    }
+  }, [conversationIdToReset, fetchStats]);
+
+  const handleResetUser = useCallback(async () => {
+    const id = userIdToReset.trim();
+    if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      toast.error('ID utilisateur invalide (24 caractères hex)');
+      return;
+    }
+    if (!confirm(`Supprimer tous les profils agent pour l'utilisateur ${id} (toutes conversations) ?`)) return;
+    try {
+      setResettingUser(true);
+      const response = await agentAdminService.resetUser(id);
+      if (response.success) {
+        toast.success(`Utilisateur ${id.slice(0, 8)}... réinitialisé`);
+        setUserIdToReset('');
+        fetchStats();
+      }
+    } catch {
+      toast.error('Erreur lors du reset utilisateur');
+    } finally {
+      setResettingUser(false);
+    }
+  }, [userIdToReset, fetchStats]);
 
   if (loading) {
     return (
@@ -149,6 +198,66 @@ export function AgentOverviewTab() {
           );
         })}
       </div>
+
+      <Card className="border-amber-200 dark:border-amber-900">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            Reset par conversation
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Input
+              placeholder="ID conversation (24 hex)"
+              value={conversationIdToReset}
+              onChange={e => setConversationIdToReset(e.target.value)}
+              className="max-w-xs font-mono text-sm"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetConversation}
+              disabled={resettingConversation || !conversationIdToReset.trim()}
+            >
+              <Trash2 className={`h-4 w-4 mr-2 ${resettingConversation ? 'animate-spin' : ''}`} />
+              {resettingConversation ? 'Reset...' : 'Reset conversation'}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Supprime config, rôles, résumé, analytics et cache Redis pour cette conversation.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-amber-200 dark:border-amber-900">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            Reset par utilisateur
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Input
+              placeholder="ID utilisateur (24 hex)"
+              value={userIdToReset}
+              onChange={e => setUserIdToReset(e.target.value)}
+              className="max-w-xs font-mono text-sm"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetUser}
+              disabled={resettingUser || !userIdToReset.trim()}
+            >
+              <Trash2 className={`h-4 w-4 mr-2 ${resettingUser ? 'animate-spin' : ''}`} />
+              {resettingUser ? 'Reset...' : 'Reset utilisateur'}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Supprime profils de ton, profil global et cooldowns pour cet utilisateur (toutes conversations).
+          </p>
+        </CardContent>
+      </Card>
 
       <Card className="border-red-200 dark:border-red-900">
         <CardHeader className="pb-2">
