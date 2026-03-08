@@ -78,8 +78,8 @@ export function transformToConversationItem(
   const { typingUserIds = new Set(), onlineUserIds = new Set(), currentUserId } = options;
 
   const isGroup = conversation.type === 'group' || conversation.type === 'public' || conversation.type === 'global';
-  const members = conversation.members ?? [];
-  const otherMembers = members.filter((m) => m.userId !== currentUserId);
+  const participants = conversation.participants ?? [];
+  const otherMembers = participants.filter((m) => m.userId !== currentUserId);
 
   // Determine name and language
   let name: string;
@@ -125,7 +125,7 @@ export function transformToConversationItem(
   const isTyping = otherMembers.some((m) => typingUserIds.has(m.userId));
 
   // Check for anonymous participants
-  const hasAnonymousParticipants = members.some((m) => (m as any).isAnonymous);
+  const hasAnonymousParticipants = participants.some((m) => m.type === 'anonymous');
 
   // Get user preferences if available
   const userPrefs = conversation.userPreferences;
@@ -140,7 +140,7 @@ export function transformToConversationItem(
     isImportant: userPrefs?.isImportant ?? false,
     isMuted: userPrefs?.isMuted ?? false,
     isGroup,
-    participantCount: isGroup ? conversation.memberCount || members.length : undefined,
+    participantCount: isGroup ? conversation.memberCount || participants.length : undefined,
     hasAnonymousParticipants: isGroup ? hasAnonymousParticipants : undefined,
     tags: transformTags((conversation as any).tags),
     categoryId: userPrefs?.categoryId,

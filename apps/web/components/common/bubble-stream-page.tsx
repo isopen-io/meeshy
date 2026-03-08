@@ -235,7 +235,7 @@ export function BubbleStreamPage({
       conversationIdentifier: conversationId,
       willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
-      messageSender: message.sender?.username || message.anonymousSender?.displayName,
+      messageSender: message.sender?.username || message.sender?.displayName,
       attachments: message.attachments,
       attachmentCount: message.attachments?.length ?? 0,
       messageType: message.messageType,
@@ -252,7 +252,7 @@ export function BubbleStreamPage({
     console.log('✅ [BubbleStreamPage] addMessage returned:', wasAdded);
 
     // Scroll automatique pour les nouveaux messages
-    if (message.senderId !== user.id && message.anonymousSenderId !== user.id) {
+    if (message.senderId !== user.id) {
       setTimeout(() => {
         if (messagesContainerRef.current) {
           const { scrollTop } = messagesContainerRef.current;

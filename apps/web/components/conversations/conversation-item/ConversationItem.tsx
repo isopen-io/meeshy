@@ -158,8 +158,8 @@ export const ConversationItem = memo(function ConversationItem({
   }, [t]);
 
   const getSenderName = useCallback((message: any) => {
-    const sender = message?.anonymousSender || message?.sender;
-    const isAnonymous = !!message?.anonymousSender;
+    const sender = message?.sender;
+    const isAnonymous = false;
 
     if (!sender) return null;
 

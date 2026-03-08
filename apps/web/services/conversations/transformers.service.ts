@@ -165,7 +165,7 @@ export class TransformersService {
   /**
    * Transformer les données d'un sender (authentifié ou anonyme)
    */
-  private transformSender(sender: any, anonymousSender: any, defaultId: string): User {
+  private transformSender(sender: any, _unused: any, defaultId: string): User {
     if (sender) {
       const {
         id = defaultId,
@@ -213,38 +213,6 @@ export class TransformersService {
         lastActiveAt: new Date(lastActiveAt),
         isActive: Boolean(isActive),
         updatedAt: new Date(updatedAt),
-      };
-    }
-
-    if (anonymousSender) {
-      const firstName = anonymousSender.firstName || '';
-      const lastName = anonymousSender.lastName || '';
-      const fullName = `${firstName} ${lastName}`.trim();
-      const displayName = fullName || anonymousSender.username || 'Utilisateur anonyme';
-
-      return {
-        id: String(anonymousSender.id || defaultId),
-        username: String(anonymousSender.username || 'Anonymous'),
-        firstName: String(firstName),
-        lastName: String(lastName),
-        displayName,
-        email: '',
-        phoneNumber: '',
-        role: 'USER',
-        permissions: this.DEFAULT_PERMISSIONS,
-        systemLanguage: String(anonymousSender.language || 'fr'),
-        regionalLanguage: String(anonymousSender.language || 'fr'),
-        customDestinationLanguage: undefined,
-        autoTranslateEnabled: false,
-        translateToSystemLanguage: false,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
-        isOnline: false,
-        avatar: undefined,
-        createdAt: new Date(),
-        lastActiveAt: new Date(),
-        isActive: true,
-        updatedAt: new Date(),
       };
     }
 
@@ -334,12 +302,11 @@ export class TransformersService {
     }
 
     const messageId = String(msg.id);
-    const senderId = String(msg.senderId || msg.anonymousSenderId || 'unknown');
+    const senderId = String(msg.senderId || 'unknown');
 
     const sender = msg.sender as Record<string, unknown> | undefined;
-    const anonymousSender = msg.anonymousSender as Record<string, unknown> | undefined;
 
-    const finalSender = this.transformSender(sender, anonymousSender, senderId);
+    const finalSender = this.transformSender(sender, undefined, senderId);
     const originalLanguage = msg.originalLanguage ? String(msg.originalLanguage) : 'fr';
 
     const translations = this.transformTranslations(
@@ -358,18 +325,17 @@ export class TransformersService {
     if (msg.replyTo) {
       const replyToMsg = msg.replyTo as Record<string, unknown>;
       const replyToSender = replyToMsg.sender as Record<string, unknown> | undefined;
-      const replyToAnonymousSender = replyToMsg.anonymousSender as Record<string, unknown> | undefined;
 
       const replyToFinalSender = this.transformSender(
         replyToSender,
-        replyToAnonymousSender,
-        String(replyToMsg.senderId || replyToMsg.anonymousSenderId || 'unknown')
+        undefined,
+        String(replyToMsg.senderId || 'unknown')
       );
 
       replyTo = {
         id: String(replyToMsg.id),
         content: String(replyToMsg.content),
-        senderId: String(replyToMsg.senderId || replyToMsg.anonymousSenderId || ''),
+        senderId: String(replyToMsg.senderId || ''),
         conversationId: String(replyToMsg.conversationId),
         originalLanguage: String(replyToMsg.originalLanguage || 'fr'),
         messageType: String(replyToMsg.messageType || 'text') as MessageType,
@@ -446,9 +412,9 @@ export class TransformersService {
       return this.conversationCache.get(conv)!;
     }
 
-    // Extract members with user data merged
-    const members = Array.isArray(conv.members)
-      ? conv.members.map((p: unknown) => {
+    // Extract participants with user data merged
+    const participants = Array.isArray(conv.participants)
+      ? conv.participants.map((p: unknown) => {
           const participant = p as Record<string, unknown>;
           const user = participant.user as Record<string, unknown>;
 
@@ -468,11 +434,6 @@ export class TransformersService {
         })
       : [];
 
-    // Create user map for participants
-    const userMap = new Map(
-      members.map(m => [String((m as any).userId), (m as any).user])
-    );
-
     const transformedConversation: Conversation = {
       id: String(conv.id),
       identifier: conv.identifier as string | undefined,
@@ -489,22 +450,13 @@ export class TransformersService {
       isArchived: Boolean(conv.isArchived ?? false),
       isGroup: String(conv.type) === 'group',
       isPrivate: this.mapConversationVisibility(String(conv.type) || 'direct') === 'private',
-      memberCount: members.length,
+      memberCount: participants.length,
       lastMessageAt: conv.lastMessageAt ? new Date(String(conv.lastMessageAt)) : new Date(String(conv.updatedAt)),
       createdAt: new Date(String(conv.createdAt)),
       updatedAt: new Date(String(conv.updatedAt)),
 
-      // Participants mappés depuis members (avec user data enrichi)
-      participants: members.map((m: any) => ({
-        userId: String(m.userId),
-        role: String(m.role || 'MEMBER').toUpperCase() as UserRole,
-        joinedAt: new Date(String(m.joinedAt)),
-        isActive: Boolean(m.isActive ?? true),
-        user: userMap.get(String(m.userId)), // ✅ Enrichir avec les données user
-      })),
-
-      // Members conservés pour compatibilité
-      members,
+      // Unified participants
+      participants: participants as any,
 
       // Last message transformé
       lastMessage: conv.lastMessage ? this.transformMessageData(conv.lastMessage) : undefined,

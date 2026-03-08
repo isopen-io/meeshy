@@ -10,7 +10,7 @@ export type { Message as BubbleMessage } from '@meeshy/shared/types';
 export type { MessageTranslation } from '@meeshy/shared/types/conversation';
 export type { BubbleTranslation as MessageVersion } from '@meeshy/shared/types';
 export type { User as MessageSender } from '@meeshy/shared/types';
-export type { AnonymousParticipant as AnonymousSender } from '@meeshy/shared/types';
+export type { Participant as AnonymousSender } from '@meeshy/shared/types/participant';
 export type { TranslationModel } from '@meeshy/shared/types';
 
 // Types spécifiques au système de vues de messages

@@ -189,16 +189,17 @@ describe('User Status Module', () => {
         expect(getUserStatus(user as any)).toBe('online');
       });
 
-      it('should handle AnonymousParticipant type', () => {
+      it('should handle Participant type', () => {
         const now = new Date();
         const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
 
-        const anonymousUser = {
-          anonId: 'anon-123',
+        const participant = {
+          id: 'participant-123',
+          type: 'anonymous',
           lastActiveAt: twoMinutesAgo.toISOString(),
         };
 
-        expect(getUserStatus(anonymousUser as any)).toBe('online');
+        expect(getUserStatus(participant as any)).toBe('online');
       });
 
       it('should prioritize isOnline=false over recent activity', () => {

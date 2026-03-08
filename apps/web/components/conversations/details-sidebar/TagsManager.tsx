@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { getTagColor } from '@/utils/tag-colors';
 import { useI18n } from '@/hooks/use-i18n';
 import type { User } from '@meeshy/shared/types';
-import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { Participant } from '@meeshy/shared/types/participant';
 import {
   Command,
   CommandEmpty,
@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 // Helper to detect anonymous users
-function isAnonymousUser(user: any): user is AnonymousParticipant {
-  return user && ('sessionToken' in user || 'shareLinkId' in user);
+function isAnonymousUser(user: any): user is Participant {
+  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 
 interface TagsManagerProps {

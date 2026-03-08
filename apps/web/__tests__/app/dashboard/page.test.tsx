@@ -669,10 +669,11 @@ describe('DashboardPage', () => {
     });
 
     it('should handle anonymous sender', async () => {
-      mockDashboardData.recentConversations[0].lastMessage.anonymousSender = {
+      mockDashboardData.recentConversations[0].lastMessage.sender = {
+        id: 'anon-1',
         displayName: 'Anonymous Guest',
+        type: 'anonymous',
       };
-      mockDashboardData.recentConversations[0].lastMessage.sender = null;
 
       render(<DashboardPage />);
 

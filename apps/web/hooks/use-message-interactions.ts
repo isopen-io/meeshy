@@ -8,7 +8,7 @@ import { formatFullDate } from '@/utils/date-format';
 import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface UseMessageInteractionsProps {
-  message: Partial<Message> & { id: string; content: string; createdAt: Date | string; senderId?: string; anonymousSenderId?: string; };
+  message: Partial<Message> & { id: string; content: string; createdAt: Date | string; senderId?: string; };
   currentUserId?: string;
   currentAnonymousUserId?: string;
   isAnonymous?: boolean;
@@ -43,9 +43,9 @@ export function useMessageInteractions({
   // Détermine si c'est le message de l'utilisateur connecté
   const isOwnMessage = useMemo(() => {
     return Boolean(isAnonymous
-      ? (currentAnonymousUserId && message.anonymousSenderId === currentAnonymousUserId)
+      ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
       : (currentUserId && message.senderId === currentUserId));
-  }, [isAnonymous, currentAnonymousUserId, currentUserId, message.anonymousSenderId, message.senderId]);
+  }, [isAnonymous, currentAnonymousUserId, currentUserId, message.senderId]);
 
   // Permissions de modification (edit)
   const canModifyMessage = useCallback(() => {
@@ -104,7 +104,7 @@ export function useMessageInteractions({
         messageUrl = `${baseUrl}/message/${message.id}`;
       }
 
-      const senderUser = message.anonymousSender || message.sender;
+      const senderUser = message.sender;
       const senderName = senderUser
         ? getUserDisplayName(senderUser, t('anonymous'))
         : t('unknownUser');

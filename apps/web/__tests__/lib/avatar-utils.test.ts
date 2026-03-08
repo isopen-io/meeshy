@@ -155,20 +155,23 @@ describe('Avatar Utils Module', () => {
       expect(getMessageInitials(message)).toBe('JD');
     });
 
-    it('should use anonymous sender when no regular sender', () => {
+    it('should use sender with anonymous participant data', () => {
       const message = {
-        anonymousSender: {
+        sender: {
+          id: 'anon-1',
           firstName: 'Anonymous',
           lastName: 'User',
+          type: 'anonymous',
         },
       };
 
       expect(getMessageInitials(message)).toBe('AU');
     });
 
-    it('should handle anonymous sender with only firstName', () => {
+    it('should handle sender with only firstName', () => {
       const message = {
-        anonymousSender: {
+        sender: {
+          id: 'anon-1',
           firstName: 'Anonymous',
         },
       };
@@ -176,9 +179,10 @@ describe('Avatar Utils Module', () => {
       expect(getMessageInitials(message)).toBe('A');
     });
 
-    it('should handle anonymous sender with only lastName', () => {
+    it('should handle sender with only lastName', () => {
       const message = {
-        anonymousSender: {
+        sender: {
+          id: 'anon-1',
           lastName: 'User',
         },
       };
@@ -186,9 +190,10 @@ describe('Avatar Utils Module', () => {
       expect(getMessageInitials(message)).toBe('U');
     });
 
-    it('should handle anonymous sender with username', () => {
+    it('should handle sender with username only', () => {
       const message = {
-        anonymousSender: {
+        sender: {
+          id: 'anon-1',
           username: 'anon123',
         },
       };
@@ -202,28 +207,12 @@ describe('Avatar Utils Module', () => {
       expect(getMessageInitials(message)).toBe('??');
     });
 
-    it('should return ?? when anonymous sender has no data', () => {
+    it('should return ?? when sender has no useful data', () => {
       const message = {
-        anonymousSender: {},
+        sender: {},
       };
 
       expect(getMessageInitials(message)).toBe('??');
-    });
-
-    it('should prefer sender over anonymousSender', () => {
-      const message = {
-        sender: {
-          id: '1',
-          firstName: 'Regular',
-          lastName: 'User',
-        },
-        anonymousSender: {
-          firstName: 'Anonymous',
-          lastName: 'User',
-        },
-      };
-
-      expect(getMessageInitials(message)).toBe('RU');
     });
   });
 

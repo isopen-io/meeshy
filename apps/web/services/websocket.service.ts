@@ -206,7 +206,7 @@ class WebSocketService {
     return {
       id: socketMessage.id,
       conversationId: socketMessage.conversationId,
-      senderId: socketMessage.senderId || socketMessage.anonymousSenderId || '',
+      senderId: socketMessage.senderId || '',
       content: socketMessage.content,
       originalLanguage: socketMessage.originalLanguage || 'fr',
       messageType: socketMessage.messageType || 'text',
@@ -217,8 +217,7 @@ class WebSocketService {
       isDeleted: socketMessage.isDeleted || false,
       translations: socketMessage.translations || [],
       replyToId: socketMessage.replyToId,
-      sender: socketMessage.sender || socketMessage.anonymousSender,
-      anonymousSenderId: socketMessage.anonymousSenderId
+      sender: socketMessage.sender
     } as Message;
   }
 

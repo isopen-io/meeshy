@@ -6,20 +6,10 @@
 import { buildApiUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { authManager } from './auth-manager.service';
-
-export interface AnonymousParticipant {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  language: string;
-  canSendMessages: boolean;
-  canSendFiles: boolean;
-  canSendImages: boolean;
-}
+import type { Participant } from '@meeshy/shared/types/participant';
 
 export interface AnonymousChatData {
-  participant: AnonymousParticipant;
+  participant: Participant;
   conversation: {
     id: string;
     title: string;

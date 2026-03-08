@@ -164,8 +164,8 @@ export function ConversationSettingsModal({
       if (other?.user) return other.user;
     }
 
-    // Fallback sur conversation.members
-    const members = (conversation as any).members;
+    // Fallback sur conversation.participants
+    const members = (conversation as any).participants;
     if (Array.isArray(members)) {
       const other = members.find((m: any) => m.userId !== safeCurrentUser.id);
       if (other?.user) return other.user;

@@ -43,7 +43,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
-import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { Participant } from '@meeshy/shared/types/participant';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
@@ -51,8 +51,8 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 
 // Helper pour détecter si un utilisateur est anonyme
-function isAnonymousUser(user: any): user is AnonymousParticipant {
-  return user && ('sessionToken' in user || 'shareLinkId' in user);
+function isAnonymousUser(user: any): user is Participant {
+  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 
 interface ConversationParticipantsDrawerProps {

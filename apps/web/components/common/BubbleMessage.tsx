@@ -105,10 +105,10 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   const isOwnMessage = useMemo(() => {
     if (!currentUser) return false;
     if (isAnonymous && currentAnonymousUserId) {
-      return message.anonymousSender?.id === currentAnonymousUserId;
+      return message.sender?.id === currentAnonymousUserId;
     }
     return message.sender?.id === currentUser.id;
-  }, [message.sender?.id, message.anonymousSender?.id, currentUser, isAnonymous, currentAnonymousUserId]);
+  }, [message.sender?.id, currentUser, isAnonymous, currentAnonymousUserId]);
 
   // Permissions
   const canEdit = useMemo(() => {

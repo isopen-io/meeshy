@@ -41,7 +41,7 @@ export function useParticipantInfo(
       }
     }
 
-    const members = (conversation as any).members;
+    const members = (conversation as any).participants;
     if (Array.isArray(members) && members.length > 0) {
       const otherMember = members.find((m: any) => m.userId !== currentUser?.id);
       if (otherMember?.user) {
@@ -82,8 +82,8 @@ export function useParticipantInfo(
         return otherConvParticipant.user.avatar;
       }
 
-      if ((conversation as any).members) {
-        const otherMember = (conversation as any).members.find((m: any) => m.userId !== currentUser?.id);
+      if ((conversation as any).participants) {
+        const otherMember = (conversation as any).participants.find((m: any) => m.userId !== currentUser?.id);
         return otherMember?.user?.avatar;
       }
     }
@@ -102,8 +102,8 @@ export function useParticipantInfo(
         return isAnonymousUser(otherConvParticipant.user);
       }
 
-      if ((conversation as any).members) {
-        const otherMember = (conversation as any).members.find((m: any) => m.userId !== currentUser?.id);
+      if ((conversation as any).participants) {
+        const otherMember = (conversation as any).participants.find((m: any) => m.userId !== currentUser?.id);
         return otherMember?.user ? isAnonymousUser(otherMember.user) : false;
       }
     }
