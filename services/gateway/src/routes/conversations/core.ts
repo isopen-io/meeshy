@@ -394,7 +394,7 @@ export function registerCoreRoutes(
           : Promise.resolve([]),
 
         // Unread counts
-        readStatusService.getUnreadCountsForConversations(userId, conversationIds),
+        readStatusService.getUnreadCountsForConversations([userId], conversationIds),
 
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
@@ -721,7 +721,7 @@ export function registerCoreRoutes(
       if (communityId) {
         const community = await prisma.community.findFirst({
           where: { id: communityId },
-          include: { participants: true }
+          include: { members: true }
         });
 
         if (!community) {

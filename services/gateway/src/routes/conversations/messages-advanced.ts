@@ -363,7 +363,7 @@ export function registerMessagesAdvancedRoutes(
                       });
 
                       if (conversationInfo) {
-                        const memberIds = conversationInfo.members.map((m: any) => m.userId);
+                        const memberIds = conversationInfo.participants.map((m: { userId: string | null }) => m.userId).filter(Boolean);
 
                         // PERFORMANCE: Créer toutes les notifications de mention en batch
                         const count = await notificationService.createMentionNotificationsBatch(
@@ -795,10 +795,10 @@ export function registerMessagesAdvancedRoutes(
           sender: {
             select: {
               id: true,
-              username: true,
               displayName: true,
               avatar: true,
-              role: true
+              role: true,
+              user: { select: { username: true } }
             }
           }
         }
@@ -894,20 +894,13 @@ export function registerMessagesAdvancedRoutes(
           }
         },
         include: {
-          user: {
+          participant: {
             select: {
               id: true,
-              username: true,
               displayName: true,
-              avatar: true
-            }
-          },
-          anonymousUser: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true
+              avatar: true,
+              type: true,
+              user: { select: { username: true } }
             }
           }
         },
@@ -934,8 +927,8 @@ export function registerMessagesAdvancedRoutes(
         messageReactions[reaction.emoji].count++;
         messageReactions[reaction.emoji].users.push({
           participantId: reaction.participantId,
-          isAnonymous: false,
-          user: reaction.user || reaction.anonymousUser
+          isAnonymous: reaction.participant.type === 'anonymous',
+          user: { ...reaction.participant, username: reaction.participant.user?.username }
         });
       }
 
@@ -1071,7 +1064,6 @@ export function registerMessagesAdvancedRoutes(
       const reaction = await reactionService.addReaction({
         messageId,
         emoji,
-        userId: !isAnonymous ? userId : undefined,
         participantId: authRequest.authContext.participantId
       });
 
@@ -1088,8 +1080,7 @@ export function registerMessagesAdvancedRoutes(
           messageId,
           emoji,
           'add',
-          !isAnonymous ? userId : undefined,
-          isAnonymous && sessionToken ? sessionToken : undefined
+          authRequest.authContext.participantId
         );
 
         if (socketIOHandler) {
@@ -1227,7 +1218,6 @@ export function registerMessagesAdvancedRoutes(
       const removed = await reactionService.removeReaction({
         messageId,
         emoji,
-        userId: !isAnonymous ? userId : undefined,
         participantId: authRequest.authContext.participantId
       });
 
@@ -1244,8 +1234,7 @@ export function registerMessagesAdvancedRoutes(
           messageId,
           emoji,
           'remove',
-          !isAnonymous ? userId : undefined,
-          isAnonymous && sessionToken ? sessionToken : undefined
+          authRequest.authContext.participantId
         );
 
         if (socketIOHandler) {
@@ -1362,24 +1351,16 @@ export function registerMessagesAdvancedRoutes(
           createdAt: true,
           statusEntries: {
             select: {
-              userId: true,
-              anonymousId: true,
+              participantId: true,
               deliveredAt: true,
               readAt: true,
-              user: {
+              participant: {
                 select: {
                   id: true,
-                  username: true,
                   displayName: true,
-                  avatar: true
-                }
-              },
-              anonymousUser: {
-                select: {
-                  id: true,
-                  username: true,
-                  firstName: true,
-                  lastName: true
+                  avatar: true,
+                  type: true,
+                  user: { select: { username: true } }
                 }
               }
             }
@@ -1400,10 +1381,10 @@ export function registerMessagesAdvancedRoutes(
         },
         entries: message.statusEntries.map(entry => ({
           participantId: entry.participantId,
-          isAnonymous: false,
+          isAnonymous: entry.participant.type === 'anonymous',
           deliveredAt: entry.deliveredAt,
           readAt: entry.readAt,
-          user: entry.user || entry.anonymousUser
+          user: { ...entry.participant, username: entry.participant.user?.username }
         }))
       }));
 

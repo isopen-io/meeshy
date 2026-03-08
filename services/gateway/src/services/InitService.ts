@@ -175,13 +175,16 @@ export class InitService {
       });
 
       // Ajouter l'utilisateur comme CREATOR de la conversation meeshy
-      await this.prisma.conversationMember.create({
+      await this.prisma.participant.create({
         data: {
           conversationId: this.globalConversationId,
           userId: user.id,
+          type: 'user',
+          displayName: user.displayName || user.username,
           role: 'CREATOR',
           joinedAt: new Date(),
-          isActive: true
+          isActive: true,
+          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
         }
       });
 
@@ -374,7 +377,7 @@ export class InitService {
       }
 
       // Vérifier si l'utilisateur est déjà membre de la conversation
-      const existingMember = await this.prisma.conversationMember.findFirst({
+      const existingMember = await this.prisma.participant.findFirst({
         where: {
           conversationId: globalConversation.id,
           userId: userId
@@ -387,13 +390,16 @@ export class InitService {
                     username === 'admin' ? 'ADMIN' : 'MEMBER';
         
         // Ajouter l'utilisateur comme membre de la conversation meeshy
-        await this.prisma.conversationMember.create({
+        await this.prisma.participant.create({
           data: {
             conversationId: globalConversation.id,
             userId: userId,
+            type: 'user',
+            displayName: username,
             role: role,
             joinedAt: new Date(),
-            isActive: true
+            isActive: true,
+            permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
           }
         });
         
@@ -487,21 +493,27 @@ export class InitService {
       this.directConversationId = conversation.id;
 
       // Ajouter les deux utilisateurs comme membres
-      await this.prisma.conversationMember.createMany({
+      await this.prisma.participant.createMany({
         data: [
           {
             conversationId: conversation.id,
             userId: userId1,
+            type: 'user',
+            displayName: 'User 1',
             role: 'ADMIN',
             joinedAt: new Date(),
-            isActive: true
+            isActive: true,
+            permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
           },
           {
             conversationId: conversation.id,
             userId: userId2,
+            type: 'user',
+            displayName: 'User 2',
             role: 'ADMIN',
             joinedAt: new Date(),
-            isActive: true
+            isActive: true,
+            permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
           }
         ]
       });
@@ -549,12 +561,15 @@ export class InitService {
       const membersData = userIds.map((userId, index) => ({
         conversationId: conversation.id,
         userId,
-        role: index === 0 ? 'CREATOR' : 'ADMIN', // Premier utilisateur = admin
+        type: 'user' as const,
+        displayName: `User ${index + 1}`,
+        role: index === 0 ? 'CREATOR' : 'ADMIN',
         joinedAt: new Date(),
-        isActive: true
+        isActive: true,
+        permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
       }));
 
-      await this.prisma.conversationMember.createMany({
+      await this.prisma.participant.createMany({
         data: membersData
       });
 
@@ -605,7 +620,7 @@ export class InitService {
       let adminMember = null;
 
       if (globalConversation && bigbossUser) {
-        bigbossMember = await this.prisma.conversationMember.findFirst({
+        bigbossMember = await this.prisma.participant.findFirst({
           where: {
             conversationId: globalConversation.id,
             userId: bigbossUser.id
@@ -614,7 +629,7 @@ export class InitService {
       }
 
       if (globalConversation && adminUser) {
-        adminMember = await this.prisma.conversationMember.findFirst({
+        adminMember = await this.prisma.participant.findFirst({
           where: {
             conversationId: globalConversation.id,
             userId: adminUser.id

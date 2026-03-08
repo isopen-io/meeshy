@@ -529,7 +529,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           createdAt: conversation.createdAt,
           lastMessageAt: conversation.lastMessageAt,
           messageCount: conversation._count.messages,
-          memberCount: conversation._count.members
+          memberCount: conversation._count.participants
         }
       });
 

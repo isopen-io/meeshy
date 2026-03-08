@@ -444,8 +444,8 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true,
-              displayName: true
+              displayName: true,
+              user: { select: { username: true } }
             }
           },
           conversation: {
@@ -649,11 +649,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 identifier: true,
                 title: true,
                 type: true
-              }
-            },
-            _count: {
-              select: {
-                participants: true
               }
             }
           },

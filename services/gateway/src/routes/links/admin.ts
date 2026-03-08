@@ -133,11 +133,6 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
               type: true,
               description: true
             }
-          },
-          participants: {
-            select: {
-              id: true
-            }
           }
         },
         orderBy: {
@@ -162,9 +157,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
           avatar: authContext.registeredUser.avatar
         },
         stats: {
-          totalParticipants: link.participants?.length ?? 0,
+          totalParticipants: link.currentUses ?? 0,
           memberCount: 0,
-          anonymousCount: link.participants?.length ?? 0,
+          anonymousCount: link.currentUses ?? 0,
           languageCount: link.allowedLanguages?.length || 0,
           spokenLanguages: link.allowedLanguages || []
         }

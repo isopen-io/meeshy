@@ -70,7 +70,7 @@ export async function invalidateConversationCacheAsync(
 
   try {
     // Récupérer tous les membres actifs de la conversation
-    const members = await prisma.conversationMember.findMany({
+    const members = await prisma.participant.findMany({
       where: {
         conversationId,
         isActive: true

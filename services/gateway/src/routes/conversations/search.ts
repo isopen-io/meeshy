@@ -117,7 +117,7 @@ export function registerSearchRoutes(
       // Compute unread counts for all matched conversations
       const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
-      const unreadCountMap = await readStatusService.getUnreadCountsForConversations(userId, conversationIds);
+      const unreadCountMap = await readStatusService.getUnreadCountsForConversations([userId], conversationIds);
 
       // Transformer les conversations pour garantir qu'un titre existe toujours
       const conversationsWithTitle = conversations.map((conversation) => {

@@ -172,8 +172,8 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                 createdAt: true,
                 sender: {
                   select: {
-                    username: true,
-                    displayName: true
+                    displayName: true,
+                    user: { select: { username: true } }
                   }
                 }
               }
@@ -203,7 +203,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         }),
         fastify.prisma.community.findMany({
           where: {
-            participants: {
+            members: {
               some: {
                 userId
               }
@@ -216,9 +216,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             isPrivate: true,
             updatedAt: true,
             _count: {
-              select: { participants: true }
+              select: { members: true }
             },
-            participants: {
+            members: {
               take: 5,
               select: {
                 user: {
@@ -279,8 +279,8 @@ export async function getDashboardStats(fastify: FastifyInstance) {
       const transformedConversations = recentConversations.map(conv => {
         let displayTitle = conv.title;
         if (!displayTitle || displayTitle.trim() === '') {
-          if (conv.type === 'direct' && conv.members && conv.members.length > 0) {
-            const otherMember = conv.members.find((m: any) => m.user?.id !== userId);
+          if (conv.type === 'direct' && conv.participants && conv.participants.length > 0) {
+            const otherMember = conv.participants.find((m: any) => m.user?.id !== userId);
             if (otherMember?.user) {
               displayTitle = otherMember.user.displayName ||
                             `${otherMember.user.username || ''}`.trim() ||
@@ -303,7 +303,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             createdAt: conv.messages[0].createdAt,
             sender: conv.messages[0].sender
           } : null,
-          members: conv.members.map((member: any) => member.user)
+          members: conv.participants.map((member: any) => member.user)
         };
       });
 

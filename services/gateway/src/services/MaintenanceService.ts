@@ -48,8 +48,8 @@ export class MaintenanceService {
           where: { isOnline: true },
           data: { isOnline: false }
         }),
-        this.prisma.anonymousParticipant.updateMany({
-          where: { isOnline: true },
+        this.prisma.participant.updateMany({
+          where: { isOnline: true, type: 'anonymous' },
           data: { isOnline: false }
         })
       ]);
@@ -147,9 +147,10 @@ export class MaintenanceService {
       }
 
       // CORRECTION: Gérer également les participants anonymes inactifs
-      const inactiveAnonymous = await this.prisma.anonymousParticipant.findMany({
+      const inactiveAnonymous = await this.prisma.participant.findMany({
         where: {
           isOnline: true,
+          type: 'anonymous',
           lastActiveAt: {
             lt: offlineThreshold
           },
@@ -157,13 +158,13 @@ export class MaintenanceService {
         },
         select: {
           id: true,
-          username: true,
+          displayName: true,
           lastActiveAt: true
         }
       });
 
       if (inactiveAnonymous.length > 0) {
-        await this.prisma.anonymousParticipant.updateMany({
+        await this.prisma.participant.updateMany({
           where: {
             id: {
               in: inactiveAnonymous.map(participant => participant.id)
@@ -184,7 +185,7 @@ export class MaintenanceService {
         logger.warn(`🔄 [CLEANUP] ${inactiveAnonymous.length} participants anonymes marqués comme hors ligne (inactifs depuis >${this.OFFLINE_THRESHOLD_MINUTES}min)`, {
           participants: inactiveAnonymous.map(p => ({
             id: p.id,
-            username: p.username,
+            displayName: p.displayName,
             lastActiveAt: p.lastActiveAt,
             inactiveMinutes: Math.floor((Date.now() - p.lastActiveAt.getTime()) / 60000)
           }))
@@ -233,7 +234,7 @@ export class MaintenanceService {
   async updateUserLastActive(userId: string, isAnonymous: boolean = false): Promise<void> {
     try {
       if (isAnonymous) {
-        await this.prisma.anonymousParticipant.update({
+        await this.prisma.participant.update({
           where: { id: userId },
           data: {
             lastActiveAt: new Date()
@@ -265,7 +266,7 @@ export class MaintenanceService {
         updateData.lastActiveAt = new Date();
       }
 
-      await this.prisma.anonymousParticipant.update({
+      await this.prisma.participant.update({
         where: { id: participantId },
         data: updateData
       });
@@ -451,8 +452,9 @@ export class MaintenanceService {
   async cleanupExpiredData(): Promise<void> {
     try {
       // Nettoyer les sessions anonymes expirées (plus de 24h)
-      const expiredAnonymousSessions = await this.prisma.anonymousParticipant.deleteMany({
+      const expiredAnonymousSessions = await this.prisma.participant.deleteMany({
         where: {
+          type: 'anonymous',
           lastActiveAt: {
             lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 heures
           }
@@ -610,11 +612,11 @@ export class MaintenanceService {
         this.prisma.user.count({
           where: { isActive: true }
         }),
-        this.prisma.anonymousParticipant.count({
-          where: { isActive: true }
+        this.prisma.participant.count({
+          where: { isActive: true, type: 'anonymous' }
         }),
-        this.prisma.anonymousParticipant.count({
-          where: { isOnline: true, isActive: true }
+        this.prisma.participant.count({
+          where: { isOnline: true, isActive: true, type: 'anonymous' }
         })
       ]);
 

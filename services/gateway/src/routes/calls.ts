@@ -177,9 +177,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Initiating call', { conversationId, userId, type });
 
+      const participantId = authRequest.authContext.participantId;
+
       const callSession = await callService.initiateCall({
         conversationId,
         initiatorId: userId,
+        participantId,
         type,
         settings
       });
@@ -464,7 +467,8 @@ export default async function callRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const callSession = await callService.endCall(callId, userId);
+      const endParticipantId = authRequest.authContext.participantId;
+      const callSession = await callService.endCall(callId, userId, endParticipantId);
 
       return reply.send({
         success: true,
@@ -603,9 +607,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Joining call', { callId, userId });
 
+      const joinParticipantId = authRequest.authContext.participantId;
       const callSession = await callService.joinCall({
         callId,
         userId,
+        participantId: joinParticipantId,
         settings
       });
 
@@ -764,9 +770,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         }
       }
 
+      const leaveParticipantId = authRequest.authContext.participantId;
       const callSession = await callService.leaveCall({
         callId,
-        userId: participantId
+        userId: participantId,
+        participantId: leaveParticipantId
       });
 
       return reply.send({

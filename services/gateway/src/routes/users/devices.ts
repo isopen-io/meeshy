@@ -486,8 +486,8 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
             where: {
               type: 'direct',
               AND: [
-                { members: { some: { userId: friendRequest.senderId } } },
-                { members: { some: { userId: friendRequest.receiverId } } }
+                { participants: { some: { userId: friendRequest.senderId } } },
+                { participants: { some: { userId: friendRequest.receiverId } } }
               ]
             }
           });
@@ -495,14 +495,17 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
           let conversationId: string | undefined;
           if (!existingConversation) {
             const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
+            const defaultPermissions = { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendAudio: true, canSendVideo: true, canSendLinks: true, canReact: true, canReply: true, canMention: true };
+            const senderUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.senderId }, select: { displayName: true } });
+            const receiverUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.receiverId }, select: { displayName: true } });
             const conversation = await fastify.prisma.conversation.create({
               data: {
                 identifier,
                 type: 'direct',
-                members: {
+                participants: {
                   create: [
-                    { userId: friendRequest.senderId, role: 'member' },
-                    { userId: friendRequest.receiverId, role: 'member' }
+                    { userId: friendRequest.senderId, type: 'user', displayName: senderUser?.displayName || 'User', role: 'member', permissions: defaultPermissions },
+                    { userId: friendRequest.receiverId, type: 'user', displayName: receiverUser?.displayName || 'User', role: 'member', permissions: defaultPermissions }
                   ]
                 }
               }

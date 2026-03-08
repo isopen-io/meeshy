@@ -214,7 +214,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
             createdAt: mention.message.createdAt,
             sender: mention.message.sender ? {
               id: mention.message.sender.id,
-              username: mention.message.sender.username,
+              username: mention.message.sender.user?.username,
               displayName: mention.message.sender.displayName,
               avatar: mention.message.sender.avatar
             } : null,

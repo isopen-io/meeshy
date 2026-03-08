@@ -109,8 +109,7 @@ export class UserManagementService {
       include: {
         _count: {
           select: {
-            sentMessages: true,
-            conversations: true,
+            participations: true,
             createdShareLinks: true,
             createdTrackingLinks: true,
             createdAffiliateTokens: true,

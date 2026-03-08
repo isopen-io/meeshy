@@ -135,11 +135,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
 
       // Ajouter la réaction
+      const participantId = authRequest.authContext.participantId;
+
       const reaction = await reactionService.addReaction({
         messageId,
         emoji,
-        userId: actualUserId,
-        participantId: authRequest.authContext.participantId
+        participantId
       });
 
       if (!reaction) {
@@ -154,8 +155,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         emoji,
         'add',
-        actualUserId,
-        actualAnonymousUserId
+        participantId
       );
 
       // Broadcast via Socket.IO à tous les participants de la conversation
@@ -279,11 +279,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
 
       // Supprimer la réaction
+      const removeParticipantId = authRequest.authContext.participantId;
+
       const removed = await reactionService.removeReaction({
         messageId,
         emoji: decodedEmoji,
-        userId: actualUserId,
-        participantId: authRequest.authContext.participantId
+        participantId: removeParticipantId
       });
 
       if (!removed) {
@@ -298,8 +299,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         decodedEmoji,
         'remove',
-        actualUserId,
-        actualAnonymousUserId
+        removeParticipantId
       );
 
       // Broadcast via Socket.IO
@@ -411,7 +411,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              participants: true,
               participants: true
             }
           }
@@ -449,8 +448,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       // Récupérer les réactions avec agrégation
       const reactions = await reactionService.getMessageReactions({
         messageId,
-        currentUserId: !isAnonymous ? userId : undefined,
-        currentAnonymousUserId: isAnonymous ? anonymousUserId : undefined
+        currentParticipantId: authRequest.authContext.participantId
       });
 
       return reply.send({
@@ -537,7 +535,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       // Récupérer les réactions de l'utilisateur
-      const reactions = await reactionService.getUserReactions(targetUserId);
+      const reactions = await reactionService.getParticipantReactions(targetUserId);
 
       return reply.send({
         success: true,

@@ -299,8 +299,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true,
-              avatar: true
+              displayName: true,
+              avatar: true,
+              user: { select: { username: true } }
             }
           }
         }
@@ -388,7 +389,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true
+              displayName: true,
+              user: { select: { username: true } }
             }
           },
           conversation: {

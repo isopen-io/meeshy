@@ -732,7 +732,7 @@ export class NotificationService {
     });
 
     // Compter les membres
-    const memberCount = await this.prisma.conversationMember.count({
+    const memberCount = await this.prisma.participant.count({
       where: { conversationId: params.conversationId },
     });
 

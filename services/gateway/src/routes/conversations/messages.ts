@@ -729,7 +729,6 @@ export function registerMessagesRoutes(
 
           // Relations obligatoires
           sender: message.sender,
-          sender: message.sender,
           attachments: cleanAttachmentsForApi(message.attachments),
           _count: message._count
         };
@@ -777,7 +776,7 @@ export function registerMessagesRoutes(
             messageType: true,
             createdAt: true,
             sender: {
-              select: { id: true, username: true, displayName: true, avatar: true }
+              select: { id: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
             attachments: {
               select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true },
@@ -957,15 +956,25 @@ export function registerMessagesRoutes(
         });
       }
 
+      // Resolve participant ID for this user
+      const currentParticipant = await prisma.participant.findFirst({
+        where: { conversationId, userId, isActive: true },
+        select: { id: true }
+      });
+
+      if (!currentParticipant) {
+        return reply.status(403).send({ success: false, error: 'Not a participant' });
+      }
+
       // Récupérer tous les messages non lus de cette conversation pour cet utilisateur
       const unreadMessages = await prisma.message.findMany({
         where: {
           conversationId: conversationId,
           deletedAt: null,
-          senderId: { not: userId }, // Ne pas marquer ses propres messages
+          senderId: { not: currentParticipant.id },
           statusEntries: {
             none: {
-              userId: userId,
+              participantId: currentParticipant.id,
               readAt: { not: null }
             }
           }
@@ -1220,10 +1229,10 @@ export function registerMessagesRoutes(
           sender: {
             select: {
               id: true,
-              username: true,
               displayName: true,
               avatar: true,
-              role: true
+              role: true,
+              user: { select: { username: true } }
             }
           },
           replyTo: {
@@ -1231,9 +1240,9 @@ export function registerMessagesRoutes(
               sender: {
                 select: {
                   id: true,
-                  username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  user: { select: { username: true } }
                 }
               }
             }
@@ -1767,12 +1776,21 @@ export function registerMessagesRoutes(
       });
 
       // Update the cursor: set lastReadAt before the latest message
+      const participantForCursor = await prisma.participant.findFirst({
+        where: { conversationId, userId, isActive: true },
+        select: { id: true }
+      });
+
+      if (!participantForCursor) {
+        return reply.status(403).send({ success: false, error: 'Not a participant' });
+      }
+
       await prisma.conversationReadCursor.upsert({
         where: {
-          conversation_user_cursor: { userId, conversationId }
+          conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
         },
         create: {
-          userId,
+          participantId: participantForCursor.id,
           conversationId,
           lastReadMessageId: previousMessage?.id || null,
           lastReadAt: lastReadAt,
@@ -2043,10 +2061,16 @@ export function registerMessagesRoutes(
       const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
 
       // Update status entry for this user
-      await prisma.messageStatusEntry.updateMany({
-        where: { messageId, userId },
-        data: { viewedOnceAt: now, revealedAt: now }
+      const viewParticipant = await prisma.participant.findFirst({
+        where: { conversationId: message.conversationId, userId, isActive: true },
+        select: { id: true }
       });
+      if (viewParticipant) {
+        await prisma.messageStatusEntry.updateMany({
+          where: { messageId, participantId: viewParticipant.id },
+          data: { viewedOnceAt: now, revealedAt: now }
+        });
+      }
 
       logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
 

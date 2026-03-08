@@ -224,9 +224,13 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       const veryActive = await fastify.prisma.user.count({
         where: {
           lastActiveAt: { gte: sevenDaysAgo },
-          sentMessages: {
+          participations: {
             some: {
-              createdAt: { gte: sevenDaysAgo }
+              sentMessages: {
+                some: {
+                  createdAt: { gte: sevenDaysAgo }
+                }
+              }
             }
           }
         }

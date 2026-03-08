@@ -5,7 +5,7 @@
  * dans les messages, ainsi que la suggestion d'utilisateurs pour l'autocomplete.
  */
 
-import { PrismaClient, User, ConversationMember } from '@meeshy/shared/prisma/client';
+import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getRedisWrapper, RedisWrapper } from './RedisWrapper';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
@@ -309,7 +309,7 @@ export class MentionService {
     logger.info('[MentionService] Fetching conversation members...');
     let conversationMembers;
     try {
-      conversationMembers = await this.prisma.conversationMember.findMany({
+      conversationMembers = await this.prisma.participant.findMany({
         where: {
           conversationId,
           isActive: true,
@@ -542,7 +542,7 @@ export class MentionService {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
-        members: {
+        participants: {
           where: { isActive: true },
           select: { userId: true }
         }
@@ -558,7 +558,7 @@ export class MentionService {
       };
     }
 
-    const memberIds = conversation.members.map(m => m.userId);
+    const memberIds = conversation.participants.map(m => m.userId).filter(Boolean) as string[];
     const validUserIds: string[] = [];
     const invalidUserIds: string[] = [];
     const errors: string[] = [];
@@ -654,7 +654,7 @@ export class MentionService {
         this.prisma.mention.create({
           data: {
             messageId,
-            mentionedUserId: userId
+            mentionedParticipantId: userId
           }
         }).catch((error: any) => {
           // Ignorer les erreurs de doublons (code P2002)
@@ -676,20 +676,24 @@ export class MentionService {
     const mentions = await this.prisma.mention.findMany({
       where: { messageId },
       include: {
-        mentionedUser: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true
+        mentionedParticipant: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                displayName: true,
+                avatar: true
+              }
+            }
           }
         }
       }
     });
 
-    return mentions.map(m => m.mentionedUser as User);
+    return mentions.map(m => m.mentionedParticipant?.user).filter(Boolean) as User[];
   }
 
   /**
@@ -702,7 +706,7 @@ export class MentionService {
   async getRecentMentionsForUser(userId: string, limit: number = 50) {
     const mentions = await this.prisma.mention.findMany({
       where: {
-        mentionedUserId: userId
+        mentionedParticipantId: userId
       },
       include: {
         message: {
@@ -715,9 +719,13 @@ export class MentionService {
             sender: {
               select: {
                 id: true,
-                username: true,
                 displayName: true,
-                avatar: true
+                avatar: true,
+                user: {
+                  select: {
+                    username: true
+                  }
+                }
               }
             },
             conversation: {
@@ -764,7 +772,7 @@ export class MentionService {
     }
 
     // Pour les autres types, vérifier l'appartenance à la conversation
-    const member = await this.prisma.conversationMember.findFirst({
+    const member = await this.prisma.participant.findFirst({
       where: {
         conversationId,
         userId,

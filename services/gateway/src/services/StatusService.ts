@@ -104,7 +104,7 @@ export class StatusService {
     this.onlineEnsureCache.set(cacheKey, now);
 
     const updatePromise = isAnonymous
-      ? this.prisma.anonymousParticipant.update({
+      ? this.prisma.participant.update({
           where: { id: userId },
           data: { isOnline: true, lastActiveAt: new Date() }
         })
@@ -273,7 +273,7 @@ export class StatusService {
     this.redis.setex(`presence:anon:${participantId}`, this.PRESENCE_TTL_SECONDS, String(now)).catch(() => {});
 
     // Update asynchrone (ne bloque pas la requête)
-    this.prisma.anonymousParticipant.update({
+    this.prisma.participant.update({
       where: { id: participantId },
       data: { lastActiveAt: new Date() }
     })
@@ -314,7 +314,7 @@ export class StatusService {
     this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
 
     // Update asynchrone (ne bloque pas la requête)
-    this.prisma.anonymousParticipant.update({
+    this.prisma.participant.update({
       where: { id: participantId },
       data: { lastActiveAt: new Date() }
     })
@@ -419,7 +419,7 @@ export class StatusService {
     this.activityCache.set(cacheKey, Date.now());
 
     if (isAnonymous) {
-      await this.prisma.anonymousParticipant.update({
+      await this.prisma.participant.update({
         where: { id: userId },
         data: { lastActiveAt: new Date() }
       });
@@ -440,7 +440,7 @@ export class StatusService {
     this.connectionCache.set(cacheKey, Date.now());
 
     if (isAnonymous) {
-      await this.prisma.anonymousParticipant.update({
+      await this.prisma.participant.update({
         where: { id: userId },
         data: { lastActiveAt: new Date() }
       });

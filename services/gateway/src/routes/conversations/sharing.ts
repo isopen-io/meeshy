@@ -558,19 +558,14 @@ export function registerSharingRoutes(
               type: true
             }
           },
-          _count: {
-            select: {
-              participants: true
-            }
-          }
         },
         orderBy: { createdAt: 'desc' }
       });
 
       return reply.send({
         success: true,
-        data: links,
-        isModerator // Indiquer au frontend si l'utilisateur peut gérer les liens
+        data: links.map(l => ({ ...l, participantCount: l.currentUses })),
+        isModerator
       });
     } catch (error) {
       console.error('Error fetching conversation links:', error);

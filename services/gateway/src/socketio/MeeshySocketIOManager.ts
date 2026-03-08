@@ -2016,7 +2016,8 @@ export class MeeshySocketIOManager {
               try {
                 await this.callService.leaveCall({
                   callId: participation.callSessionId,
-                  userId
+                  userId,
+                  participantId: participation.participantId
                 });
               } catch (error) {
                 logger.error(`❌ Error auto-leaving call ${participation.callSessionId}:`, error);

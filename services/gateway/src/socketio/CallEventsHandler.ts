@@ -61,6 +61,23 @@ export class CallEventsHandler {
     this.callService = new CallService(prisma);
   }
 
+  private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
+    const participant = await this.prisma.participant.findFirst({
+      where: { userId, conversationId, isActive: true },
+      select: { id: true }
+    });
+    return participant?.id ?? null;
+  }
+
+  private async resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { conversationId: true }
+    });
+    if (!call) return null;
+    return this.resolveParticipantId(userId, call.conversationId);
+  }
+
   /**
    * Initialiser le service de notifications
    */
@@ -123,10 +140,21 @@ export class CallEventsHandler {
           type: data.type
         });
 
+        // Resolve participantId from userId + conversationId
+        const participantId = await this.resolveParticipantId(userId, data.conversationId);
+        if (!participantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // Initiate call via service
         const callSession = await this.callService.initiateCall({
           conversationId: data.conversationId,
           initiatorId: userId,
+          participantId,
           type: data.type,
           settings: data.settings as any
         });
@@ -278,10 +306,21 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
+        // Resolve participantId from userId + callId
+        const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!joinParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // CVE-005: Join call via service (returns dynamic ICE servers)
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
+          participantId: joinParticipantId,
           settings: data.settings
         });
 
@@ -409,10 +448,14 @@ export class CallEventsHandler {
           return;
         }
 
+        // Resolve participantId from userId + callId
+        const leaveParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+
         // Leave call via service
         const callSession = await this.callService.leaveCall({
           callId: data.callId,
-          userId
+          userId,
+          participantId: leaveParticipantId || userId
         });
 
         // Prepare event data BEFORE leaving room
@@ -538,10 +581,14 @@ export class CallEventsHandler {
             });
 
             try {
+              // Resolve participantId for cleanup
+              const cleanupParticipantId = await this.resolveParticipantIdFromCall(userId, call.id);
+
               // Leave the call
               const callSession = await this.callService.leaveCall({
                 callId: call.id,
-                userId
+                userId,
+                participantId: cleanupParticipantId || userId
               });
 
               // Broadcast participant left event
@@ -898,10 +945,21 @@ export class CallEventsHandler {
           isAnonymous
         });
 
+        // Resolve participantId from userId + callId
+        const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!endParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // CVE-004: End call via service (with anonymous check)
         const callSession = await this.callService.endCall(
           data.callId,
           userId,
+          endParticipantId,
           isAnonymous
         );
 
@@ -971,7 +1029,8 @@ export class CallEventsHandler {
               // Try normal leave flow first
               await this.callService.leaveCall({
                 callId: participation.callSessionId,
-                userId
+                userId,
+                participantId: participation.participantId
               });
 
               // Broadcast to call participants
