@@ -5,8 +5,8 @@
  * 2. UIMessage - Messages avec détails visuels pour BubbleMessage
  */
 
-import type { SocketIOUser as User, MessageType } from './socketio-events.js';
-import type { AnonymousParticipant } from './anonymous.js';
+import type { MessageType } from './socketio-events.js';
+import type { Participant } from './participant.js';
 
 // ===== 1. MESSAGES GATEWAY (API/Backend) =====
 
@@ -44,8 +44,7 @@ export interface MessageStatusEntry {
   readonly id: string;
   readonly messageId: string;
   readonly conversationId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
 
   // Statuts de livraison
   readonly deliveredAt?: Date;
@@ -79,8 +78,7 @@ export interface GatewayMessage {
   // ===== IDENTIFIANTS =====
   readonly id: string;
   readonly conversationId: string;
-  readonly senderId?: string;
-  readonly anonymousSenderId?: string;
+  readonly senderId: string;
 
   // ===== CONTENU =====
   readonly content: string;
@@ -146,8 +144,8 @@ export interface GatewayMessage {
   readonly updatedAt?: Date;
 
   // ===== RELATIONS =====
-  /** Sender résolu (authentifié ou anonyme) */
-  readonly sender?: User | AnonymousParticipant;
+  /** Sender resolved as unified Participant */
+  readonly sender?: Participant;
   /** Traductions disponibles (optionnel: include_translations=true) */
   readonly translations?: readonly MessageTranslation[];
   /** Message de réponse référencé */
@@ -166,8 +164,7 @@ export interface GatewayMessage {
 export interface MessageReaction {
   readonly id: string;
   readonly messageId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
   readonly emoji: string;
   readonly createdAt: Date;
 }

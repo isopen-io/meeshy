@@ -1,37 +1,35 @@
 /**
- * Types unifiés pour les participants anonymes Meeshy
- * Harmonisation Gateway ↔ Frontend
+ * Legacy anonymous types - DEPRECATED
+ *
+ * All anonymous participant data is now embedded in the unified Participant model
+ * via the anonymousSession composite type.
+ *
+ * @see participant.ts for AnonymousSession, AnonymousProfile, Participant
+ * @deprecated This entire file is deprecated. Import from participant.ts instead.
  */
 
 import type { ConversationShareLink } from './conversation.js';
 
 /**
- * Branded type pour les identifiants de participants anonymes
+ * @deprecated Use string IDs directly. Participant.id is the unified identifier.
  */
 export type AnonymousParticipantId = string & { readonly __brand: 'AnonymousParticipantId' };
 
 /**
- * Branded type pour les tokens de session anonymes
+ * Branded type for anonymous session tokens (still used in join flow)
  */
 export type AnonymousSessionToken = string & { readonly __brand: 'AnonymousSessionToken' };
 
 /**
- * Branded type pour les identifiants de lien de partage
+ * @deprecated Use string IDs directly.
  */
 export type ShareLinkId = string & { readonly __brand: 'ShareLinkId' };
 
-/**
- * Code de langue ISO 639-1
- */
 export type LanguageCode = string;
-
-/**
- * Code de pays ISO 3166-1 alpha-2
- */
 export type CountryCode = string;
 
 /**
- * Permissions pour un participant anonyme
+ * @deprecated Use ParticipantPermissions from participant.ts instead
  */
 export interface AnonymousParticipantPermissions {
   readonly canSendMessages: boolean;
@@ -40,7 +38,7 @@ export interface AnonymousParticipantPermissions {
 }
 
 /**
- * Participant anonyme via lien de partage
+ * @deprecated Use Participant with type='anonymous' from participant.ts instead
  */
 export interface AnonymousParticipant {
   readonly id: string;
@@ -68,28 +66,28 @@ export interface AnonymousParticipant {
 }
 
 /**
- * Type guard pour vérifier si un ID est un AnonymousParticipantId
+ * @deprecated Use Participant type checks instead
  */
 export function isAnonymousParticipantId(id: string): id is AnonymousParticipantId {
   return typeof id === 'string' && id.length > 0;
 }
 
 /**
- * Type guard pour vérifier si un token est un AnonymousSessionToken
+ * Type guard for anonymous session tokens (still used in join flow)
  */
 export function isAnonymousSessionToken(token: string): token is AnonymousSessionToken {
   return typeof token === 'string' && token.length > 0;
 }
 
 /**
- * Crée un AnonymousParticipantId à partir d'une chaîne
+ * @deprecated Use Participant type checks instead
  */
 export function createAnonymousParticipantId(id: string): AnonymousParticipantId {
   return id as AnonymousParticipantId;
 }
 
 /**
- * Crée un AnonymousSessionToken à partir d'une chaîne
+ * Creates an AnonymousSessionToken from a string
  */
 export function createAnonymousSessionToken(token: string): AnonymousSessionToken {
   return token as AnonymousSessionToken;

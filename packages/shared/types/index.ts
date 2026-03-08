@@ -5,14 +5,12 @@
  * Gateway, Frontend, et Translator
  */
 
-// ===== NOUVEAUX TYPES UNIFIÉS =====
-// Export des types unifiés - Participant (unified model)
-// Note: ParticipantPermissions re-exported explicitly to avoid conflict with conversation.ts legacy type
+// ===== UNIFIED PARTICIPANT TYPES =====
 export {
   ParticipantTypeEnum,
   type ParticipantType,
   ParticipantPermissionsSchema,
-  type ParticipantPermissions as UnifiedParticipantPermissions,
+  type ParticipantPermissions,
   AnonymousSessionDetailsSchema,
   AnonymousProfileSchema,
   type AnonymousProfile,
@@ -25,16 +23,13 @@ export {
   DEFAULT_ANONYMOUS_PERMISSIONS,
 } from './participant.js';
 
-// Export des types unifiés Phase 1
+// Export des types unifies Phase 1
 export * from './conversation.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
 export * from './api-schemas.js';
 export * from './migration-utils.js';
-
-// Import pour usage interne
-import type { AnonymousParticipant } from './anonymous.js';
 
 // Message types are now consolidated - export only UIMessage and GatewayMessage to avoid conflicts with conversation.ts
 export type { UIMessage, GatewayMessage } from './message-types.js';
@@ -256,8 +251,8 @@ export enum UserRoleEnum {
 }
 
 /**
- * Rôles dans une conversation ou communauté (aligné avec ConversationMember.role)
- * @see shared/schema.prisma ligne 94
+ * Roles dans une conversation ou communaute (aligne avec Participant.role)
+ * @see shared/schema.prisma Participant model
  */
 export type ConversationRole = 'admin' | 'moderator' | 'member';
 
@@ -342,8 +337,7 @@ export interface TranslatedMessage {
   // Core message properties
   readonly id: string;
   readonly conversationId: string;
-  readonly senderId?: string;
-  readonly anonymousSenderId?: string;
+  readonly senderId: string;
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
@@ -355,8 +349,10 @@ export interface TranslatedMessage {
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly timestamp: Date;
-  readonly sender?: SocketIOUser | AnonymousParticipant;
-  readonly anonymousSender?: AnonymousParticipant;
+  /** @deprecated Use Participant type for sender */
+  readonly sender?: SocketIOUser;
+  /** @deprecated Use Participant type */
+  readonly anonymousSender?: unknown;
   
   // Translation-specific properties
   readonly translation?: BubbleTranslation;
@@ -477,9 +473,8 @@ import type {
   ThreadMember as UnifiedThreadMember
 } from './conversation.js';
 
-// Export des types unifiés (plus de duplication)
-// Note: ThreadMember est le type simplifié pour Socket.IO/UI
-// ConversationMember (Prisma-aligned) est maintenant exporté depuis conversation.ts
+// Export des types unifies (plus de duplication)
+// Note: These types are deprecated - use Participant from participant.ts instead
 export type ThreadMember = UnifiedThreadMember;
 export type Conversation = UnifiedConversation;
 export type ConversationParticipant = UnifiedConversationParticipant;

@@ -3,8 +3,8 @@
  * Remplace les anciens types WebSocket pour correspondre à la nouvelle architecture Socket.IO
  */
 
-// Import pour AnonymousParticipant
-import type { AnonymousParticipant } from './anonymous.js';
+// Import unified Participant
+import type { Participant } from './participant.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -302,15 +302,13 @@ export interface ConversationUnreadUpdatedEventData {
  */
 export interface ReactionUpdateEventData {
   readonly messageId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
   readonly aggregation: {
     readonly emoji: string;
     readonly count: number;
-    readonly userIds: readonly string[];
-    readonly anonymousIds: readonly string[];
+    readonly participantIds: readonly string[];
     readonly hasCurrentUser: boolean;
   };
   readonly timestamp: Date;
@@ -324,8 +322,7 @@ export interface ReactionSyncEventData {
   readonly reactions: readonly {
     readonly emoji: string;
     readonly count: number;
-    readonly userIds: readonly string[];
-    readonly anonymousIds: readonly string[];
+    readonly participantIds: readonly string[];
     readonly hasCurrentUser: boolean;
   }[];
   readonly totalCount: number;
@@ -744,21 +741,18 @@ export type MessageType = 'text' | 'image' | 'file' | 'audio' | 'video' | 'locat
 export interface SocketIOMessage {
   id: string;
   conversationId: string;
-  senderId?: string; // ID unique - sera résolu en User ou AnonymousParticipant via requête
-  anonymousSenderId?: string; // ID de l'expéditeur anonyme
+  senderId: string; // Participant.id (unified)
   content: string;
   originalLanguage: string;
   messageType: MessageType;
-  isEdited?: boolean; // Indique si le message a été édité
-  isDeleted?: boolean; // Indique si le message a été supprimé
-  editedAt?: Date; // Présent = message édité
-  deletedAt?: Date; // Présent = message supprimé
-  replyToId?: string; // Support des réponses
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  editedAt?: Date;
+  deletedAt?: Date;
+  replyToId?: string;
   createdAt: Date;
-  updatedAt?: Date; // Date de dernière modification
-  // Sender résolu (authentifié ou anonyme) - sera attaché via requête
-  sender?: SocketIOUser | AnonymousParticipant;
-
+  updatedAt?: Date;
+  sender?: Participant;
 }
 
 export interface UserPermissions {

@@ -1,15 +1,15 @@
 /**
- * Utilitaires de migration pour les types unifiés
+ * Utilitaires de migration pour les types unifies
  * Facilite la transition vers les nouveaux types Phase 1
  */
 
 import type { Message, Conversation } from './conversation.js';
 import type { SocketIOUser as User, SocketIOUser } from './socketio-events.js';
-import type { AnonymousParticipant } from './anonymous.js';
+import type { Participant } from './participant.js';
 import type { ApiResponse } from './api-responses.js';
 
 /**
- * Convertit un SocketIOUser vers User unifié
+ * Convertit un SocketIOUser vers User unifie
  */
 export function socketIOUserToUser(socketUser: SocketIOUser): User {
   return {
@@ -21,7 +21,7 @@ export function socketIOUserToUser(socketUser: SocketIOUser): User {
     phoneNumber: socketUser.phoneNumber,
     displayName: socketUser.displayName,
     avatar: socketUser.avatar,
-    role: socketUser.role, // Déjà string, compatible directement
+    role: socketUser.role,
     permissions: socketUser.permissions,
     isOnline: socketUser.isOnline,
     lastActiveAt: socketUser.lastActiveAt,
@@ -42,7 +42,7 @@ export function socketIOUserToUser(socketUser: SocketIOUser): User {
 }
 
 /**
- * Vérifie si un ID est un ObjectId MongoDB valide
+ * Verifie si un ID est un ObjectId MongoDB valide
  */
 export function isValidObjectId(id: string): boolean {
   if (!id || typeof id !== 'string') return false;
@@ -50,7 +50,7 @@ export function isValidObjectId(id: string): boolean {
 }
 
 /**
- * Type guard pour vérifier si un objet a une propriété id valide
+ * Type guard pour verifier si un objet a une propriete id valide
  */
 function hasValidId(obj: unknown): obj is { id: string } {
   return (
@@ -63,7 +63,7 @@ function hasValidId(obj: unknown): obj is { id: string } {
 }
 
 /**
- * Type guard pour vérifier si un objet a une propriété identifier
+ * Type guard pour verifier si un objet a une propriete identifier
  */
 function hasIdentifier(obj: unknown): obj is { identifier: string } {
   return (
@@ -75,7 +75,7 @@ function hasIdentifier(obj: unknown): obj is { identifier: string } {
 }
 
 /**
- * Type guard pour vérifier si un objet ressemble à une conversation
+ * Type guard pour verifier si un objet ressemble a une conversation
  */
 export function isConversationLike(obj: unknown): obj is { id: string; identifier?: string } {
   return hasValidId(obj);
@@ -88,11 +88,11 @@ export function getApiConversationId(conversation: unknown): string {
   if (!conversation) {
     throw new Error('Conversation object is null or undefined');
   }
-  
+
   if (!hasValidId(conversation)) {
     throw new Error(`Invalid conversation object: missing valid ObjectId. Got: ${JSON.stringify(conversation)}`);
   }
-  
+
   return conversation.id;
 }
 
@@ -103,27 +103,25 @@ export function getDisplayConversationId(conversation: unknown): string {
   if (!conversation) {
     throw new Error('Conversation object is null or undefined');
   }
-  
-  // Priorité à l'identifier pour les URLs
+
   if (hasIdentifier(conversation)) {
     return conversation.identifier;
   }
-  
-  // Fallback sur l'ID
+
   if (hasValidId(conversation)) {
     return conversation.id;
   }
-  
+
   throw new Error(`Invalid conversation object: missing identifier and id. Got: ${JSON.stringify(conversation)}`);
 }
 
 /**
- * Type pour les métadonnées de réponse API
+ * Type pour les metadonnees de reponse API
  */
 export type ApiResponseMeta = Readonly<Record<string, string | number | boolean | null>>;
 
 /**
- * Crée une réponse API de succès
+ * Cree une reponse API de succes
  */
 export function createApiSuccessResponse<T>(data: T, meta?: ApiResponseMeta): ApiResponse<T> {
   return {
@@ -134,7 +132,7 @@ export function createApiSuccessResponse<T>(data: T, meta?: ApiResponseMeta): Ap
 }
 
 /**
- * Crée une réponse API d'erreur
+ * Cree une reponse API d'erreur
  */
 export function createApiErrorResponse(error: string, code?: string): ApiResponse<never> {
   return {
@@ -145,25 +143,33 @@ export function createApiErrorResponse(error: string, code?: string): ApiRespons
 }
 
 /**
- * Type guard pour vérifier si c'est un utilisateur authentifié
+ * Type guard: checks if a Participant is a registered user
  */
-export function isAuthenticatedUser(sender: User | AnonymousParticipant | undefined): sender is User {
-  return sender !== undefined && 'email' in sender;
+export function isRegisteredParticipant(participant: Participant): boolean {
+  return participant.type === 'user' && participant.userId !== undefined;
 }
 
 /**
- * Type guard pour vérifier si c'est un participant anonyme
+ * Type guard: checks if a Participant is anonymous
  */
-export function isAnonymousParticipant(sender: User | AnonymousParticipant | undefined): sender is AnonymousParticipant {
-  return sender !== undefined && 'sessionToken' in sender;
+export function isAnonymousParticipant(participant: Participant): boolean {
+  return participant.type === 'anonymous' && participant.anonymousSession !== undefined;
 }
 
 /**
- * Type guard pour vérifier si un objet ressemble à un message brut
+ * @deprecated Use isRegisteredParticipant instead
  */
-function isRawMessageLike(obj: unknown): obj is { 
-  id: unknown; 
-  conversationId: unknown; 
+export function isAuthenticatedUser(sender: User | Participant | undefined): sender is User {
+  if (sender === undefined) return false;
+  return 'email' in sender;
+}
+
+/**
+ * Type guard pour verifier si un objet ressemble a un message brut
+ */
+function isRawMessageLike(obj: unknown): obj is {
+  id: unknown;
+  conversationId: unknown;
   content: unknown;
 } {
   return (
@@ -176,7 +182,7 @@ function isRawMessageLike(obj: unknown): obj is {
 }
 
 /**
- * Normalise un message depuis différentes sources
+ * Normalise un message depuis differentes sources
  * Assure la synchronisation entre createdAt et timestamp
  */
 export function normalizeMessage(rawMessage: unknown): Message {
@@ -185,8 +191,7 @@ export function normalizeMessage(rawMessage: unknown): Message {
   }
 
   const raw = rawMessage as Record<string, unknown>;
-  
-  // Helper pour normaliser les dates
+
   const toDate = (val: unknown): Date => {
     if (val instanceof Date) return val;
     if (typeof val === 'string' || typeof val === 'number') return new Date(val);
@@ -196,8 +201,7 @@ export function normalizeMessage(rawMessage: unknown): Message {
   const normalizedMessage: Message = {
     id: String(raw.id),
     conversationId: String(raw.conversationId),
-    senderId: raw.senderId ? String(raw.senderId) : undefined,
-    anonymousSenderId: raw.anonymousSenderId ? String(raw.anonymousSenderId) : undefined,
+    senderId: String(raw.senderId || raw.anonymousSenderId || ''),
     content: String(raw.content),
     originalLanguage: String(raw.originalLanguage || 'fr'),
     messageType: (raw.messageType as 'text' | 'image' | 'file' | 'audio' | 'video' | 'location' | 'system') || 'text',
@@ -228,27 +232,19 @@ export function normalizeMessage(rawMessage: unknown): Message {
     isEncrypted: Boolean(raw.isEncrypted),
     encryptionMode: raw.encryptionMode as 'server' | 'e2ee' | 'hybrid' | null | undefined,
 
-    // Synchroniser timestamp avec createdAt pour compatibilité
+    // Synchroniser timestamp avec createdAt pour compatibilite
     timestamp: toDate(raw.createdAt || raw.timestamp),
 
-    sender: (raw.sender || raw.anonymousSender) as User | AnonymousParticipant | undefined,
-    anonymousSender: raw.anonymousSender ? {
-      id: String((raw.anonymousSender as any).id),
-      username: String((raw.anonymousSender as any).username || ''),
-      firstName: String((raw.anonymousSender as any).firstName || ''),
-      lastName: String((raw.anonymousSender as any).lastName || ''),
-      language: String((raw.anonymousSender as any).language || 'fr'),
-      isMeeshyer: Boolean((raw.anonymousSender as any).isMeeshyer)
-    } : undefined,
+    sender: raw.sender as Participant | undefined,
     translations: Array.isArray(raw.translations) ? raw.translations : [],
     replyTo: raw.replyTo ? normalizeMessage(raw.replyTo) : undefined
   };
-  
+
   return normalizedMessage;
 }
 
 /**
- * Type guard pour vérifier si un objet ressemble à une conversation brute
+ * Type guard pour verifier si un objet ressemble a une conversation brute
  */
 function isRawConversationLike(obj: unknown): obj is {
   id: unknown;
@@ -265,8 +261,7 @@ function isRawConversationLike(obj: unknown): obj is {
 }
 
 /**
- * Normalise une conversation depuis différentes sources
- * Assure la synchronisation entre les alias de champs
+ * Normalise une conversation depuis differentes sources
  */
 export function normalizeConversation(rawConversation: unknown): Conversation {
   if (!isRawConversationLike(rawConversation)) {
@@ -274,8 +269,7 @@ export function normalizeConversation(rawConversation: unknown): Conversation {
   }
 
   const raw = rawConversation as Record<string, unknown>;
-  
-  // Helper pour normaliser les dates
+
   const toDate = (val: unknown): Date => {
     if (val instanceof Date) return val;
     if (typeof val === 'string' || typeof val === 'number') return new Date(val);
@@ -290,7 +284,7 @@ export function normalizeConversation(rawConversation: unknown): Conversation {
     description: raw.description as string | undefined,
     status: (raw.status as 'active' | 'archived' | 'deleted') || 'active',
     visibility: (raw.visibility as 'public' | 'private' | 'restricted') || 'private',
-    isActive: raw.isActive !== false,  // Default to true
+    isActive: raw.isActive !== false,
     memberCount: Number(raw.memberCount || raw.participantCount || 0),
     lastMessage: raw.lastMessage ? normalizeMessage(raw.lastMessage) : undefined,
     messageCount: Number(raw.messageCount || 0),
@@ -301,6 +295,6 @@ export function normalizeConversation(rawConversation: unknown): Conversation {
     lastActivityAt: raw.lastActivityAt ? toDate(raw.lastActivityAt) : undefined,
     createdBy: raw.createdBy as string | undefined
   };
-  
+
   return normalizedConversation;
 }
