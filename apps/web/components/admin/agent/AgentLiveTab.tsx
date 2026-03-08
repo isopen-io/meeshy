@@ -14,7 +14,8 @@ import {
   type ToneProfileEntry,
 } from '@/services/agent-admin.service';
 
-function truncateId(id: string) {
+function truncateId(id: string | undefined | null) {
+  if (!id) return '???';
   if (id.length <= 8) return id;
   return `${id.slice(0, 4)}...${id.slice(-4)}`;
 }
@@ -60,7 +61,7 @@ function LoadingSkeleton() {
 
 function ActivityCard({ data }: { data: LiveStateData }) {
   const score = data.analytics?.avgConfidence ?? 0;
-  const hasCooldown = data.controlledUsers.some(u => u.locked);
+  const hasCooldown = (data.controlledUsers ?? []).some(u => u.locked);
 
   return (
     <Card>
@@ -102,13 +103,13 @@ function ActivityCard({ data }: { data: LiveStateData }) {
 
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-            Utilisateurs contr&ocirc;l&eacute;s ({data.controlledUsers.length})
+            Utilisateurs contr&ocirc;l&eacute;s ({(data.controlledUsers ?? []).length})
           </p>
-          {data.controlledUsers.length === 0 ? (
+          {(data.controlledUsers ?? []).length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun utilisateur</p>
           ) : (
             <div className="space-y-1.5">
-              {data.controlledUsers.map(user => (
+              {(data.controlledUsers ?? []).map(user => (
                 <div key={user.userId} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="text-gray-900 dark:text-gray-100">{user.displayName}</span>
@@ -235,11 +236,11 @@ function SummaryCard({ data }: { data: LiveStateData }) {
               {record.summary}
             </p>
 
-            {record.currentTopics.length > 0 && (
+            {(record.currentTopics ?? []).length > 0 && (
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Sujets</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {record.currentTopics.map(topic => (
+                  {(record.currentTopics ?? []).map(topic => (
                     <Badge key={topic} variant="secondary" className="text-xs">
                       {topic}
                     </Badge>

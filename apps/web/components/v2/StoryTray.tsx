@@ -113,15 +113,15 @@ function StoryTray({
             {/* White gap ring */}
             <div className="w-full h-full rounded-full bg-[var(--gp-surface)] p-[2px] transition-colors duration-300">
               <Avatar
-                src={story.thumbnailUrl || story.author.avatar}
-                name={story.author.name}
+                src={story.thumbnailUrl || story.author?.avatar}
+                name={story.author?.name ?? ''}
                 size="lg"
                 className="w-full h-full [&>img]:w-full [&>img]:h-full [&>div]:w-full [&>div]:h-full"
               />
             </div>
           </div>
           <span className="text-xs text-[var(--gp-text-secondary)] truncate max-w-[64px] transition-colors duration-300">
-            {story.isOwn ? 'You' : story.author.name.slice(0, 8)}
+            {story.isOwn ? 'You' : (story.author?.name ?? '').slice(0, 8)}
           </span>
         </button>
       ))}

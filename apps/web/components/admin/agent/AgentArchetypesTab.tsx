@@ -93,11 +93,11 @@ export function AgentArchetypesTab() {
               </div>
 
               {/* Catchphrases */}
-              {archetype.catchphrases.length > 0 && (
+              {(archetype.catchphrases ?? []).length > 0 && (
                 <div className="space-y-1">
                   <span className="text-xs font-medium text-gray-500 uppercase">Catchphrases</span>
                   <div className="flex flex-wrap gap-1">
-                    {archetype.catchphrases.map((phrase, i) => (
+                    {(archetype.catchphrases ?? []).map((phrase, i) => (
                       <span
                         key={i}
                         className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 italic"
@@ -116,21 +116,21 @@ export function AgentArchetypesTab() {
                   Triggers
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2 space-y-2">
-                  {archetype.responseTriggers.length > 0 && (
+                  {(archetype.responseTriggers ?? []).length > 0 && (
                     <div>
                       <span className="text-xs font-medium text-green-600">Répond à :</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {archetype.responseTriggers.map((t, i) => (
+                        {(archetype.responseTriggers ?? []).map((t, i) => (
                           <Badge key={i} variant="outline" className="text-xs border-green-200 text-green-700">{t}</Badge>
                         ))}
                       </div>
                     </div>
                   )}
-                  {archetype.silenceTriggers.length > 0 && (
+                  {(archetype.silenceTriggers ?? []).length > 0 && (
                     <div>
                       <span className="text-xs font-medium text-red-600">Se tait sur :</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {archetype.silenceTriggers.map((t, i) => (
+                        {(archetype.silenceTriggers ?? []).map((t, i) => (
                           <Badge key={i} variant="outline" className="text-xs border-red-200 text-red-700">{t}</Badge>
                         ))}
                       </div>

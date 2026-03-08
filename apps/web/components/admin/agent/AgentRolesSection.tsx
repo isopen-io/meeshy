@@ -116,7 +116,7 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCog className="h-4 w-4 text-gray-400" />
-              <span className="font-mono text-sm">{role.userId.slice(0, 8)}...</span>
+              <span className="font-mono text-sm">{(role.userId ?? '').slice(0, 8)}...</span>
               <Badge variant="outline" className="text-xs">{originLabel(role.origin)}</Badge>
               {role.locked && (
                 <Badge variant="secondary" className="text-xs">

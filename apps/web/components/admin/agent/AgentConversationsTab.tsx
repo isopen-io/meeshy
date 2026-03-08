@@ -120,7 +120,7 @@ export function AgentConversationsTab() {
                   className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4 py-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <span className="font-mono text-sm truncate" title={config.conversationId}>
-                    {config.conversationId.slice(0, 8)}...
+                    {(config.conversationId ?? '').slice(0, 8)}...
                   </span>
                   <div>
                     <Switch
@@ -137,7 +137,7 @@ export function AgentConversationsTab() {
                     {config.triggerOnReplyTo && <Badge variant="outline">Reply</Badge>}
                   </div>
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {config.manualUserIds.length} / {config.maxControlledUsers}
+                    {(config.manualUserIds ?? []).length} / {config.maxControlledUsers}
                   </span>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(config)}>

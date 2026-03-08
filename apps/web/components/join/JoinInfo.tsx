@@ -65,7 +65,7 @@ export function JoinInfo({ conversationLink }: JoinInfoProps) {
               {conversationLink.stats.languageCount} {t('languages')}
             </span>
             <div className="flex gap-1">
-              {conversationLink.stats.spokenLanguages.slice(0, 3).map((lang: string) => (
+              {(conversationLink.stats.spokenLanguages ?? []).slice(0, 3).map((lang: string) => (
                 <span
                   key={lang}
                   className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full"

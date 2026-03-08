@@ -331,7 +331,7 @@ export function ConversationSidebar() {
       filtered = filtered.filter(
         (conv) =>
           conv.name.toLowerCase().includes(query) ||
-          conv.lastMessage.content.toLowerCase().includes(query) ||
+          conv.lastMessage?.content?.toLowerCase().includes(query) ||
           conv.customName?.toLowerCase().includes(query)
       );
     }

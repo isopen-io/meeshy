@@ -160,7 +160,7 @@ export const ConversationItem = memo(function ConversationItem({
       );
     }
 
-    const { lastMessage } = conversation;
+    const lastMessage = conversation.lastMessage ?? { content: '', type: 'text' as const, timestamp: '' };
 
     if (lastMessage.type === 'photo') {
       return (
@@ -298,7 +298,7 @@ export const ConversationItem = memo(function ConversationItem({
         {/* Contenu */}
         <div className="flex-1 min-w-0">
           {/* Tags au-dessus du nom */}
-          {conversation.tags.length > 0 && (
+          {conversation.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1">
               {conversation.tags.slice(0, 3).map((tag) => (
                 <span
@@ -309,12 +309,12 @@ export const ConversationItem = memo(function ConversationItem({
                   {tag.name}
                 </span>
               ))}
-              {conversation.tags.length > 3 && (
+              {(conversation.tags?.length ?? 0) > 3 && (
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded-full transition-colors duration-300"
                   style={{ color: 'var(--gp-text-muted)' }}
                 >
-                  +{conversation.tags.length - 3}
+                  +{(conversation.tags?.length ?? 0) - 3}
                 </span>
               )}
             </div>
@@ -337,7 +337,7 @@ export const ConversationItem = memo(function ConversationItem({
               )}
             </div>
             <span className="text-xs flex-shrink-0 transition-colors duration-300" style={{ color: 'var(--gp-text-muted)' }}>
-              {conversation.lastMessage.timestamp}
+              {conversation.lastMessage?.timestamp}
             </span>
           </div>
 
