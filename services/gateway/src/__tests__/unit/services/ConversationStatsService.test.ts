@@ -76,7 +76,7 @@ describe('ConversationStatsService', () => {
       user: {
         findMany: jest.fn()
       },
-      conversationMember: {
+      participant: {
         findMany: jest.fn()
       }
     };
@@ -122,7 +122,7 @@ describe('ConversationStatsService', () => {
         mockPrisma.message.groupBy.mockResolvedValue([
           { originalLanguage: 'en', _count: { _all: 5 } }
         ]);
-        mockPrisma.conversationMember.findMany.mockResolvedValue([
+        mockPrisma.participant.findMany.mockResolvedValue([
           { user: { id: testUserId1, systemLanguage: 'en' } }
         ]);
         mockPrisma.user.findMany.mockResolvedValue([]);
@@ -142,7 +142,7 @@ describe('ConversationStatsService', () => {
         mockPrisma.message.groupBy.mockResolvedValue([
           { originalLanguage: 'fr', _count: { _all: 10 } }
         ]);
-        mockPrisma.conversationMember.findMany.mockResolvedValue([
+        mockPrisma.participant.findMany.mockResolvedValue([
           { user: { id: testUserId1, systemLanguage: 'fr' } }
         ]);
         mockPrisma.user.findMany.mockResolvedValue([]);
@@ -172,7 +172,7 @@ describe('ConversationStatsService', () => {
       it('should return conversation IDs with valid cache entries', async () => {
         mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
         mockPrisma.message.groupBy.mockResolvedValue([]);
-        mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+        mockPrisma.participant.findMany.mockResolvedValue([]);
         mockPrisma.user.findMany.mockResolvedValue([]);
 
         const getConnectedUserIds = () => [];
@@ -185,7 +185,7 @@ describe('ConversationStatsService', () => {
       it('should not return expired cache entries', async () => {
         mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
         mockPrisma.message.groupBy.mockResolvedValue([]);
-        mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+        mockPrisma.participant.findMany.mockResolvedValue([]);
         mockPrisma.user.findMany.mockResolvedValue([]);
 
         const getConnectedUserIds = () => [];
@@ -220,7 +220,7 @@ describe('ConversationStatsService', () => {
         { originalLanguage: 'en', _count: { _all: 10 } },
         { originalLanguage: 'fr', _count: { _all: 5 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } },
         { user: { id: testUserId2, systemLanguage: 'fr' } }
       ]);
@@ -242,7 +242,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -269,7 +269,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -286,7 +286,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'es', _count: { _all: 20 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'es' } }
       ]);
 
@@ -313,7 +313,7 @@ describe('ConversationStatsService', () => {
 
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 },
         { user: { id: testUserId2, systemLanguage: 'fr' }, userId: testUserId2 }
       ]);
@@ -350,7 +350,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -375,7 +375,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -401,7 +401,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -436,7 +436,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -463,7 +463,7 @@ describe('ConversationStatsService', () => {
       // Populate cache
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -506,7 +506,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -530,7 +530,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'de', _count: { _all: 25 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'de' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -638,7 +638,7 @@ describe('ConversationStatsService', () => {
     it('should return empty array when no connected users', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -653,7 +653,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
       // Only testUserId1 is a member
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([
@@ -671,7 +671,7 @@ describe('ConversationStatsService', () => {
     it('should include user details in online users', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([{
@@ -702,7 +702,7 @@ describe('ConversationStatsService', () => {
     it('should handle null avatar and displayName', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([{
@@ -742,7 +742,7 @@ describe('ConversationStatsService', () => {
         .mockResolvedValueOnce(createMockConversation(testConversationId)) // for computeStats
         .mockResolvedValueOnce(null); // for computeOnlineUsers - conversation not found
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [testUserId1];
@@ -755,7 +755,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
       // Member lookup returns empty (no connected members are in the conversation)
-      mockPrisma.conversationMember.findMany
+      mockPrisma.participant.findMany
         .mockResolvedValueOnce([{ user: { id: testUserId1, systemLanguage: 'en' } }]) // for participants count
         .mockResolvedValueOnce([]); // for online users - no matching members
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -787,7 +787,7 @@ describe('ConversationStatsService', () => {
       ]);
       // computeOnlineUsers will check members since the conversationId passed is the real ID
       // not "meeshy", so it goes through the member check path
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { userId: testUserId1 },
         { userId: testUserId2 }
       ]);
@@ -818,7 +818,7 @@ describe('ConversationStatsService', () => {
     it('should handle message.groupBy errors gracefully', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockRejectedValue(new Error('Database error'));
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -828,10 +828,10 @@ describe('ConversationStatsService', () => {
       expect(stats.messagesPerLanguage).toEqual({});
     });
 
-    it('should handle conversationMember.findMany errors gracefully', async () => {
+    it('should handle participant.findMany errors gracefully', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockRejectedValue(new Error('Database error'));
+      mockPrisma.participant.findMany.mockRejectedValue(new Error('Database error'));
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -844,7 +844,7 @@ describe('ConversationStatsService', () => {
     it('should handle user.findMany errors gracefully for online users', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
       ]);
       mockPrisma.user.findMany.mockRejectedValue(new Error('Database error'));
@@ -856,11 +856,11 @@ describe('ConversationStatsService', () => {
       expect(stats.onlineUsers).toEqual([]);
     });
 
-    it('should handle conversationMember.findMany errors gracefully in computeOnlineUsers', async () => {
+    it('should handle participant.findMany errors gracefully in computeOnlineUsers', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
       // First call for participant count succeeds
-      mockPrisma.conversationMember.findMany
+      mockPrisma.participant.findMany
         .mockResolvedValueOnce([{ user: { id: testUserId1, systemLanguage: 'en' } }])
         // Second call in computeOnlineUsers fails
         .mockRejectedValueOnce(new Error('Database error'));
@@ -891,7 +891,7 @@ describe('ConversationStatsService', () => {
     it('should handle conversation with no messages', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } }
       ]);
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -908,7 +908,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 5 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -927,7 +927,7 @@ describe('ConversationStatsService', () => {
         { originalLanguage: 'de', _count: { _all: 10 } },
         { originalLanguage: 'ja', _count: { _all: 5 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -945,7 +945,7 @@ describe('ConversationStatsService', () => {
     it('should handle same user language for multiple participants', async () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } },
         { user: { id: testUserId2, systemLanguage: 'en' } },
         { user: { id: testUserId3, systemLanguage: 'en' } }
@@ -966,7 +966,7 @@ describe('ConversationStatsService', () => {
         { originalLanguage: 'fr', _count: { _all: 5 } }
       ]);
       // Simulate members where some have null user (deleted users)
-      mockPrisma.conversationMember.findMany.mockResolvedValue([
+      mockPrisma.participant.findMany.mockResolvedValue([
         { user: { id: testUserId1, systemLanguage: 'en' } },
         { user: null }, // deleted user
         { user: { id: testUserId2, systemLanguage: 'fr' } },
@@ -1018,7 +1018,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -1040,7 +1040,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -1078,7 +1078,7 @@ describe('ConversationStatsService', () => {
       mockPrisma.message.groupBy.mockResolvedValue([
         { originalLanguage: 'en', _count: { _all: 10 } }
       ]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];
@@ -1113,7 +1113,7 @@ describe('ConversationStatsService', () => {
       });
 
       mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const getConnectedUserIds = () => [];

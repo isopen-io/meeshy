@@ -72,7 +72,7 @@ const mockPrisma = {
   messageAttachment: {
     findUnique: jest.fn() as jest.Mock<any>
   },
-  conversationMember: {
+  participant: {
     findFirst: jest.fn() as jest.Mock<any>
   }
 };
@@ -618,7 +618,7 @@ describe('VoiceProfileService', () => {
         message: { conversationId: 'conv-123' }
       };
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(mockAttachment);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
 
       const result = await service.registerProfile('user-123', {
         attachmentId: 'att-123'
@@ -1121,7 +1121,7 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.conversationMember.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
     });
 
     it('should allow access when user is conversation member', async () => {
@@ -1136,7 +1136,7 @@ describe('VoiceProfileService', () => {
         message: { conversationId: 'conv-123', senderId: 'other-user' }
       };
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(mockAttachment);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         userId: 'user-123',
         conversationId: 'conv-123',
         isActive: true
@@ -1157,7 +1157,7 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.conversationMember.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith({
         where: {
           conversationId: 'conv-123',
           userId: 'user-123',
@@ -1178,7 +1178,7 @@ describe('VoiceProfileService', () => {
         message: { conversationId: 'conv-123', senderId: 'other-user' }
       };
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(mockAttachment);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
 
       const result = await service.registerProfile('user-123', {
         attachmentId: 'att-123'

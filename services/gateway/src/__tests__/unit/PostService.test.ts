@@ -56,7 +56,7 @@ function createMockPrisma() {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
-    conversationMember: {
+    participant: {
       findMany: jest.fn(),
     },
   } as any;

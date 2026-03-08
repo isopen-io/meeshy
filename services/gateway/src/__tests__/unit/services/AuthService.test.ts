@@ -145,7 +145,7 @@ const mockPrisma = {
   conversation: {
     findFirst: jest.fn()
   },
-  conversationMember: {
+  participant: {
     findFirst: jest.fn(),
     create: jest.fn()
   }
@@ -533,24 +533,28 @@ describe('AuthService', () => {
       mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
       mockPrisma.user.create.mockResolvedValue(createdUser);
       mockPrisma.conversation.findFirst.mockResolvedValue(globalConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null); // Not already a member
-      mockPrisma.conversationMember.create.mockResolvedValue({});
+      mockPrisma.participant.findFirst.mockResolvedValue(null); // Not already a member
+      mockPrisma.participant.create.mockResolvedValue({});
 
       const result = await authService.register(validRegisterData);
 
       expect(result).not.toBeNull();
-      expect(mockPrisma.conversationMember.create).toHaveBeenCalledWith({
+      expect(mockPrisma.participant.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'global-conv-id',
           userId: 'new-user-id',
+          type: 'user',
+          displayName: expect.any(String),
           role: 'MEMBER',
-          canSendMessage: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendVideos: true,
-          canSendAudios: true,
-          canSendLocations: true,
-          canSendLinks: true,
+          permissions: {
+            canSendMessages: true,
+            canSendFiles: true,
+            canSendImages: true,
+            canSendVideos: true,
+            canSendAudios: true,
+            canSendLocations: true,
+            canSendLinks: true
+          },
           joinedAt: expect.any(Date),
           isActive: true
         }
@@ -566,12 +570,12 @@ describe('AuthService', () => {
       mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
       mockPrisma.user.create.mockResolvedValue(createdUser);
       mockPrisma.conversation.findFirst.mockResolvedValue(globalConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(existingMember);
+      mockPrisma.participant.findFirst.mockResolvedValue(existingMember);
 
       const result = await authService.register(validRegisterData);
 
       expect(result).not.toBeNull();
-      expect(mockPrisma.conversationMember.create).not.toHaveBeenCalled();
+      expect(mockPrisma.participant.create).not.toHaveBeenCalled();
     });
 
     it('should use default languages if not provided', async () => {
@@ -616,8 +620,8 @@ describe('AuthService', () => {
       mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
       mockPrisma.user.create.mockResolvedValue(createdUser);
       mockPrisma.conversation.findFirst.mockResolvedValue(globalConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
-      mockPrisma.conversationMember.create.mockRejectedValue(new Error('Member creation failed'));
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.create.mockRejectedValue(new Error('Member creation failed'));
 
       // Should still return user even if conversation member creation fails
       const result = await authService.register(validRegisterData);

@@ -56,7 +56,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
-    conversationMember: {
+    participant: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
     },
@@ -405,7 +405,7 @@ describe('MentionService', () => {
 
     beforeEach(() => {
       // Default: no conversation members
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
       // Default: no friendships
       prisma.friendRequest.findMany.mockResolvedValue([]);
       // Default: no other users
@@ -430,7 +430,7 @@ describe('MentionService', () => {
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId, 'j');
 
       expect(result).toEqual(cachedSuggestions);
-      expect(prisma.conversationMember.findMany).not.toHaveBeenCalled();
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
     });
 
     it('should fetch and cache suggestions on cache miss', async () => {
@@ -450,7 +450,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
@@ -493,7 +493,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
       prisma.friendRequest.findMany.mockResolvedValue(mockFriendships);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
@@ -530,7 +530,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId, 'jo');
 
@@ -553,7 +553,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId, 'johnny');
 
@@ -576,7 +576,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId, 'doe');
 
@@ -584,11 +584,11 @@ describe('MentionService', () => {
     });
 
     it('should exclude current user from suggestions', async () => {
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
 
       await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
-      expect(prisma.conversationMember.findMany).toHaveBeenCalledWith(
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             userId: { not: currentUserId },
@@ -610,7 +610,7 @@ describe('MentionService', () => {
         },
       }));
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
@@ -633,7 +633,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
@@ -674,7 +674,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
       prisma.friendRequest.findMany.mockResolvedValue(mockFriendships);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
@@ -684,7 +684,7 @@ describe('MentionService', () => {
     });
 
     it('should fetch global users when query provided and not enough results', async () => {
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
       prisma.user.findMany.mockResolvedValue([
         {
@@ -706,7 +706,7 @@ describe('MentionService', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      prisma.conversationMember.findMany.mockRejectedValue(new Error('Database error'));
+      prisma.participant.findMany.mockRejectedValue(new Error('Database error'));
 
       await expect(
         service.getUserSuggestionsForConversation(conversationId, currentUserId)
@@ -740,7 +740,7 @@ describe('MentionService', () => {
         },
       ];
 
-      prisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      prisma.participant.findMany.mockResolvedValue(mockMembers);
 
       const result = await service.getUserSuggestionsForConversation(conversationId, currentUserId);
 
@@ -813,7 +813,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'direct',
-          members: [{ userId: senderId }, { userId: 'user-other' }],
+          participants: [{ userId: senderId }, { userId: 'user-other' }],
         });
       });
 
@@ -855,7 +855,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'group',
-          members: [
+          participants: [
             { userId: senderId },
             { userId: 'member-1' },
             { userId: 'member-2' },
@@ -894,7 +894,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'public',
-          members: [{ userId: senderId }],
+          participants: [{ userId: senderId }],
         });
       });
 
@@ -936,7 +936,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'global',
-          members: [{ userId: senderId }],
+          participants: [{ userId: senderId }],
         });
       });
 
@@ -959,7 +959,7 @@ describe('MentionService', () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'unknown_type',
-          members: [],
+          participants: [],
         });
 
         const result = await service.validateMentionPermissions(
@@ -1005,7 +1005,7 @@ describe('MentionService', () => {
       expect(prisma.mention.create).toHaveBeenCalledWith({
         data: {
           messageId,
-          mentionedUserId: userId,
+          mentionedParticipantId: userId,
         },
       });
     });
@@ -1052,24 +1052,28 @@ describe('MentionService', () => {
       const mockMentions = [
         {
           id: 'mention-1',
-          mentionedUser: {
-            id: 'user-1',
-            username: 'john',
-            firstName: 'John',
-            lastName: 'Doe',
-            displayName: 'John Doe',
-            avatar: null,
+          mentionedParticipant: {
+            user: {
+              id: 'user-1',
+              username: 'john',
+              firstName: 'John',
+              lastName: 'Doe',
+              displayName: 'John Doe',
+              avatar: null,
+            },
           },
         },
         {
           id: 'mention-2',
-          mentionedUser: {
-            id: 'user-2',
-            username: 'jane',
-            firstName: 'Jane',
-            lastName: 'Smith',
-            displayName: null,
-            avatar: null,
+          mentionedParticipant: {
+            user: {
+              id: 'user-2',
+              username: 'jane',
+              firstName: 'Jane',
+              lastName: 'Smith',
+              displayName: null,
+              avatar: null,
+            },
           },
         },
       ];
@@ -1099,14 +1103,18 @@ describe('MentionService', () => {
       expect(prisma.mention.findMany).toHaveBeenCalledWith({
         where: { messageId: 'msg-123' },
         include: {
-          mentionedUser: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
+          mentionedParticipant: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  displayName: true,
+                  avatar: true,
+                },
+              },
             },
           },
         },
@@ -1249,7 +1257,7 @@ describe('MentionService', () => {
           id: conversationId,
           type: 'direct',
         });
-        prisma.conversationMember.findFirst.mockResolvedValue({
+        prisma.participant.findFirst.mockResolvedValue({
           userId,
           isActive: true,
         });
@@ -1264,7 +1272,7 @@ describe('MentionService', () => {
           id: conversationId,
           type: 'group',
         });
-        prisma.conversationMember.findFirst.mockResolvedValue(null);
+        prisma.participant.findFirst.mockResolvedValue(null);
 
         const result = await service.canMentionUser(conversationId, userId);
 
@@ -1276,11 +1284,11 @@ describe('MentionService', () => {
           id: conversationId,
           type: 'direct',
         });
-        prisma.conversationMember.findFirst.mockResolvedValue(null);
+        prisma.participant.findFirst.mockResolvedValue(null);
 
         await service.canMentionUser(conversationId, userId);
 
-        expect(prisma.conversationMember.findFirst).toHaveBeenCalledWith({
+        expect(prisma.participant.findFirst).toHaveBeenCalledWith({
           where: {
             conversationId,
             userId,
@@ -1330,7 +1338,7 @@ describe('MentionService', () => {
     it('should handle cache read errors gracefully', async () => {
       mockRedis.get.mockRejectedValue(new Error('Cache read error'));
 
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       // Should fall back to database query
@@ -1343,7 +1351,7 @@ describe('MentionService', () => {
       mockRedis.get.mockResolvedValue(null);
       mockRedis.setex.mockRejectedValue(new Error('Cache write error'));
 
-      prisma.conversationMember.findMany.mockResolvedValue([
+      prisma.participant.findMany.mockResolvedValue([
         {
           user: {
             id: 'user-1',
@@ -1372,7 +1380,7 @@ describe('MentionService', () => {
   describe('Cache Key Generation', () => {
     it('should normalize query to lowercase', async () => {
       mockRedis.get.mockResolvedValue(null);
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getUserSuggestionsForConversation('conv-123', 'user-123', 'JOHN');
@@ -1385,7 +1393,7 @@ describe('MentionService', () => {
 
     it('should trim query whitespace', async () => {
       mockRedis.get.mockResolvedValue(null);
-      prisma.conversationMember.findMany.mockResolvedValue([]);
+      prisma.participant.findMany.mockResolvedValue([]);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
       await service.getUserSuggestionsForConversation('conv-123', 'user-123', '  john  ');

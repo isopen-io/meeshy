@@ -38,6 +38,43 @@ jest.mock('../../../services/ZmqSingleton', () => ({
   }
 }));
 
+// Mock fs promises for audio file operations
+jest.mock('fs', () => ({
+  promises: {
+    mkdir: jest.fn().mockResolvedValue(undefined),
+    writeFile: jest.fn().mockResolvedValue(undefined),
+    readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio')),
+    unlink: jest.fn().mockResolvedValue(undefined),
+    stat: jest.fn().mockResolvedValue({ size: 1024 })
+  },
+  existsSync: jest.fn().mockReturnValue(false),
+  readFileSync: jest.fn()
+}));
+
+// Mock path module for consistent results
+jest.mock('path', () => {
+  const original = jest.requireActual('path');
+  return {
+    ...original,
+    resolve: (...args: string[]) => original.resolve(...args),
+    join: (...args: string[]) => original.join(...args)
+  };
+});
+
+// Mock shared audio types
+jest.mock('@meeshy/shared/types/attachment-audio', () => ({
+  toSocketIOTranslation: jest.fn((attachmentId: string, lang: string, translation: any) => ({
+    targetLanguage: lang,
+    url: translation?.url || '',
+    path: translation?.path || '',
+    transcription: translation?.transcription || '',
+    durationMs: translation?.durationMs || 0,
+    format: translation?.format || 'mp3',
+    cloned: translation?.cloned || false,
+    quality: translation?.quality || 0
+  }))
+}));
+
 // Import after mocking
 import { MessageTranslationService, MessageData, TranslationServiceStats } from '../../../services/message-translation/MessageTranslationService';
 import { TranslationResult } from '../../../services/zmq-translation';
@@ -53,6 +90,7 @@ const createMockPrisma = () => ({
   },
   message: {
     findFirst: jest.fn() as MockFn,
+    findUnique: jest.fn() as MockFn,
     create: jest.fn() as MockFn,
     update: jest.fn() as MockFn
   },
@@ -363,15 +401,15 @@ describe('MessageTranslationService', () => {
     });
 
     it('should return translation from database if not in cache', async () => {
-      mockPrisma.messageTranslation.findFirst.mockResolvedValue({
-        id: 'trans-456',
-        messageId: 'msg-456',
-        targetLanguage: 'en',
-        translatedContent: 'Hello world',
-        translationModel: 'basic',
-        confidenceScore: 0.90,
-        message: {
-          originalLanguage: 'fr'
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-456',
+        originalLanguage: 'fr',
+        translations: {
+          en: {
+            text: 'Hello world',
+            translationModel: 'basic',
+            confidenceScore: 0.90
+          }
         }
       });
 
@@ -380,21 +418,14 @@ describe('MessageTranslationService', () => {
       expect(result).toBeDefined();
       expect(result?.translatedText).toBe('Hello world');
       expect(result?.sourceLanguage).toBe('fr');
-      expect(mockPrisma.messageTranslation.findFirst).toHaveBeenCalledWith({
-        where: {
-          messageId: 'msg-456',
-          targetLanguage: 'en'
-        },
-        include: {
-          message: {
-            select: { originalLanguage: true }
-          }
-        }
-      });
     });
 
     it('should return null if translation not found', async () => {
-      mockPrisma.messageTranslation.findFirst.mockResolvedValue(null);
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-not-found',
+        originalLanguage: 'en',
+        translations: null
+      });
 
       const result = await translationService.getTranslation('msg-not-found', 'de');
 
@@ -402,7 +433,7 @@ describe('MessageTranslationService', () => {
     });
 
     it('should return null on database error', async () => {
-      mockPrisma.messageTranslation.findFirst.mockRejectedValue(new Error('DB error'));
+      mockPrisma.message.findUnique.mockRejectedValue(new Error('DB error'));
 
       const result = await translationService.getTranslation('msg-error', 'fr');
 
@@ -410,15 +441,15 @@ describe('MessageTranslationService', () => {
     });
 
     it('should use cache key with source language when provided', async () => {
-      mockPrisma.messageTranslation.findFirst.mockResolvedValue({
-        id: 'trans-src',
-        messageId: 'msg-src',
-        targetLanguage: 'fr',
-        translatedContent: 'Bonjour',
-        translationModel: 'premium',
-        confidenceScore: 0.95,
-        message: {
-          originalLanguage: 'en'
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-src',
+        originalLanguage: 'en',
+        translations: {
+          fr: {
+            text: 'Bonjour',
+            translationModel: 'premium',
+            confidenceScore: 0.95
+          }
         }
       });
 
@@ -1387,8 +1418,10 @@ describe('MessageTranslationService - Audio Translation Handling', () => {
       expect(data.messageId).toBe('msg-audio-123');
       expect(data.attachmentId).toBe('attach-123');
       expect(data.transcription.text).toBe('Hello, this is a voice message');
-      expect(data.translatedAudios).toHaveLength(1);
-      expect(data.translatedAudios[0].targetLanguage).toBe('fr');
+      // New format: per-language emission with translatedAudio (singular)
+      expect(data.language).toBe('fr');
+      expect(data.translatedAudio).toBeDefined();
+      expect(data.translatedAudio.targetLanguage).toBe('fr');
       done();
     });
 
@@ -1447,7 +1480,15 @@ describe('MessageTranslationService - Audio Translation Handling', () => {
         confidence: 0.98,
         source: 'whisper'
       },
-      translatedAudios: [],
+      translatedAudios: [{
+        targetLanguage: 'fr',
+        translatedText: 'Test profil vocal',
+        audioUrl: '/translated/attach-profile_fr.mp3',
+        audioPath: '/app/uploads/translated/attach-profile_fr.mp3',
+        durationMs: 3000,
+        voiceCloned: true,
+        voiceQuality: 0.9
+      }],
       voiceModelUserId: 'user-voice-123',
       voiceModelQuality: 0.95,
       processingTimeMs: 3000,
@@ -1749,7 +1790,12 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
       content: 'Content to retranslate',
       originalLanguage: 'en'
     });
-    mockPrisma.messageTranslation.deleteMany.mockResolvedValue({ count: 2 });
+    // Now translations are stored as JSON in the message
+    mockPrisma.message.findUnique.mockResolvedValue({
+      id: 'existing-retrans-msg',
+      translations: { fr: { text: 'Old translation', translationModel: 'basic' } }
+    });
+    mockPrisma.message.update.mockResolvedValue({});
     mockPrisma.participant.findMany.mockResolvedValue([]);
 
     const result = await translationService.handleNewMessage(messageData);
@@ -1759,14 +1805,10 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
     // Wait for async processing
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Should have called deleteMany to remove old translations
-    expect(mockPrisma.messageTranslation.deleteMany).toHaveBeenCalledWith({
-      where: {
-        messageId: 'existing-retrans-msg',
-        targetLanguage: {
-          in: ['fr']
-        }
-      }
+    // Should have called message.update to remove old translations from JSON
+    expect(mockPrisma.message.update).toHaveBeenCalledWith({
+      where: { id: 'existing-retrans-msg' },
+      data: { translations: {} }
     });
   });
 });
@@ -1784,28 +1826,28 @@ describe('MessageTranslationService - Cache Management', () => {
   });
 
   it('should return cached translation on second request', async () => {
-    // First request - from database
-    mockPrisma.messageTranslation.findFirst.mockResolvedValue({
-      id: 'trans-cache-1',
-      messageId: 'msg-cache',
-      targetLanguage: 'fr',
-      translatedContent: 'Bonjour du cache',
-      translationModel: 'basic',
-      confidenceScore: 0.95,
-      message: {
-        originalLanguage: 'en'
+    // First request - from database (now uses message.findUnique with translations JSON)
+    mockPrisma.message.findUnique.mockResolvedValue({
+      id: 'msg-cache',
+      originalLanguage: 'en',
+      translations: {
+        fr: {
+          text: 'Bonjour du cache',
+          translationModel: 'basic',
+          confidenceScore: 0.95
+        }
       }
     });
 
     const result1 = await translationService.getTranslation('msg-cache', 'fr');
     expect(result1?.translatedText).toBe('Bonjour du cache');
-    expect(mockPrisma.messageTranslation.findFirst).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.message.findUnique).toHaveBeenCalledTimes(1);
 
     // Second request - should be from cache
     const result2 = await translationService.getTranslation('msg-cache', 'fr');
     expect(result2?.translatedText).toBe('Bonjour du cache');
     // Should still only have 1 database call (second was cached)
-    expect(mockPrisma.messageTranslation.findFirst).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.message.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it('should update cache when translation completed', (done) => {

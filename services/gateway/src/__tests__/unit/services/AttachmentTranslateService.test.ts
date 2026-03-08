@@ -31,7 +31,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findUnique: jest.fn(),
       update: jest.fn()
     },
-    conversationMember: {
+    participant: {
       findFirst: jest.fn()
     },
     userVoiceModel: {
@@ -200,7 +200,7 @@ describe('AttachmentTranslateService', () => {
           message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'other-user' }
         });
         prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.conversationMember.findFirst.mockResolvedValue(null);
+        prisma.participant.findFirst.mockResolvedValue(null);
 
         const result = await service.translate('unauthorized-user', 'att-123', {
           targetLanguages: ['fr']
@@ -312,7 +312,7 @@ describe('AttachmentTranslateService', () => {
           message: { id: 'msg-123', conversationId: 'conv-123', senderId: 'other-user' }
         });
         prisma.messageAttachment.findUnique.mockResolvedValue(attachment);
-        prisma.conversationMember.findFirst.mockResolvedValue({
+        prisma.participant.findFirst.mockResolvedValue({
           userId: 'user-123',
           conversationId: 'conv-123',
           isActive: true
