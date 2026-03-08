@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
 import { getRedisWrapper } from '../../services/RedisWrapper';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -92,10 +93,104 @@ const llmConfigSchema = z.object({
   fallbackApiKeyEncrypted: z.string().nullable().optional(),
 });
 
+// ── Reusable JSON Schema fragments ──────────────────────────────────────────
+
+const objectIdParam = { type: 'string', pattern: '^[0-9a-fA-F]{24}$' } as const;
+
+const conversationIdParams = {
+  type: 'object',
+  required: ['conversationId'],
+  properties: { conversationId: objectIdParam },
+} as const;
+
+const conversationUserParams = {
+  type: 'object',
+  required: ['conversationId', 'userId'],
+  properties: { conversationId: objectIdParam, userId: objectIdParam },
+} as const;
+
+const successDataResponse = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: { type: 'object' },
+  },
+} as const;
+
+const successArrayResponse = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: { type: 'array', items: { type: 'object' } },
+  },
+} as const;
+
+const paginatedArrayResponse = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: { type: 'array', items: { type: 'object' } },
+    pagination: {
+      type: 'object',
+      properties: {
+        total: { type: 'integer' },
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        hasMore: { type: 'boolean' },
+      },
+    },
+  },
+} as const;
+
+const successMessageResponse = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    message: { type: 'string' },
+  },
+} as const;
+
+const resetResultResponse = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        deleted: { type: 'object' },
+      },
+    },
+    message: { type: 'string' },
+  },
+} as const;
+
+const securityBearerAuth = [{ bearerAuth: [] }];
+
+const stdErrors = {
+  400: errorResponseSchema,
+  401: errorResponseSchema,
+  403: errorResponseSchema,
+  500: errorResponseSchema,
+} as const;
+
+const stdErrorsWithNotFound = {
+  ...stdErrors,
+  404: errorResponseSchema,
+} as const;
+
+// ── Routes ──────────────────────────────────────────────────────────────────
+
 export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /stats
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Agent statistics: total configs, active configs, roles, archetypes.',
+      tags: ['admin-agent'],
+      summary: 'Agent stats',
+      security: securityBearerAuth,
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const [configsCount, activeCount, rolesCount] = await Promise.all([
@@ -121,6 +216,20 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /configs
   fastify.get('/configs', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List all agent conversation configs with pagination.',
+      tags: ['admin-agent'],
+      summary: 'List agent configs',
+      security: securityBearerAuth,
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', description: 'Page number (default: 1)' },
+          limit: { type: 'string', description: 'Items per page (default: 20, max: 100)' },
+        },
+      },
+      response: { 200: paginatedArrayResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string };
@@ -151,6 +260,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /configs/:conversationId
   fastify.get('/configs/:conversationId', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get a single agent config by conversation ID.',
+      tags: ['admin-agent'],
+      summary: 'Get agent config',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -169,6 +286,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // PUT /configs/:conversationId
   fastify.put('/configs/:conversationId', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Create or update an agent config for a conversation. Publishes config-invalidated event.',
+      tags: ['admin-agent'],
+      summary: 'Upsert agent config',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      body: { type: 'object' },
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -198,6 +324,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // DELETE /configs/:conversationId
   fastify.delete('/configs/:conversationId', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Delete an agent config for a conversation.',
+      tags: ['admin-agent'],
+      summary: 'Delete agent config',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successMessageResponse, ...stdErrorsWithNotFound },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -213,6 +347,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /configs/:conversationId/roles
   fastify.get('/configs/:conversationId/roles', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List all agent user roles for a conversation.',
+      tags: ['admin-agent'],
+      summary: 'List conversation roles',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successArrayResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -228,6 +370,19 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // POST /roles/:conversationId/:userId/assign
   fastify.post('/roles/:conversationId/:userId/assign', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Assign an archetype to a user role in a conversation.',
+      tags: ['admin-agent'],
+      summary: 'Assign archetype to role',
+      security: securityBearerAuth,
+      params: conversationUserParams,
+      body: {
+        type: 'object',
+        required: ['archetypeId'],
+        properties: { archetypeId: { type: 'string', minLength: 1 } },
+      },
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
@@ -289,6 +444,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // POST /roles/:conversationId/:userId/unlock
   fastify.post('/roles/:conversationId/:userId/unlock', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Unlock a user role, resetting confidence to 0 to allow re-observation.',
+      tags: ['admin-agent'],
+      summary: 'Unlock user role',
+      security: securityBearerAuth,
+      params: conversationUserParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
@@ -308,6 +471,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /archetypes
   fastify.get('/archetypes', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'List all available agent archetypes (hardcoded catalogue).',
+      tags: ['admin-agent'],
+      summary: 'List archetypes',
+      security: securityBearerAuth,
+      response: { 200: successArrayResponse, ...stdErrors },
+    },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({ success: true, data: listArchetypes() });
   });
@@ -315,6 +485,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /llm
   fastify.get('/llm', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get the current LLM provider config. Sensitive keys are redacted (hasApiKey flag instead).',
+      tags: ['admin-agent'],
+      summary: 'Get LLM config',
+      security: securityBearerAuth,
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const config = await fastify.prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
@@ -339,6 +516,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // PUT /llm
   fastify.put('/llm', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Create or update the LLM provider config (provider, model, API key, budget).',
+      tags: ['admin-agent'],
+      summary: 'Update LLM config',
+      security: securityBearerAuth,
+      body: { type: 'object' },
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const parsed = llmConfigSchema.safeParse(request.body);
@@ -380,9 +565,17 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /reset/conversation/:conversationId — Reset agent data for a single conversation
+  // DELETE /reset/conversation/:conversationId
   fastify.delete('/reset/conversation/:conversationId', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Reset all agent data (config, roles, summary, analytics, Redis cache) for a single conversation.',
+      tags: ['admin-agent'],
+      summary: 'Reset conversation agent data',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: resetResultResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -430,9 +623,21 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /reset/user/:userId — Reset agent profile for a single user (all conversations)
+  // DELETE /reset/user/:userId
   fastify.delete('/reset/user/:userId', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Reset all agent data (roles, global profile, Redis tone profiles, cooldowns) for a single user across all conversations.',
+      tags: ['admin-agent'],
+      summary: 'Reset user agent data',
+      security: securityBearerAuth,
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: { userId: objectIdParam },
+      },
+      response: { 200: resetResultResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.params as { userId: string };
@@ -443,7 +648,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentGlobalProfile.deleteMany({ where: { userId } }),
       ]);
 
-      // Clear tone profiles from Redis for all conversations that had this user
       const redis = getRedisWrapper();
       const profileKeys = await redis.keys('agent:profiles:*');
       let profilesCleaned = 0;
@@ -460,7 +664,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         } catch { /* skip malformed */ }
       }
 
-      // Clear cooldowns for this user
       const cooldownKeys = await redis.keys(`agent:cooldown:*:${userId}`);
       for (const key of cooldownKeys) {
         await redis.del(key);
@@ -485,9 +688,16 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /reset — Nuclear reset: all configs, roles, summaries, analytics + Redis
+  // DELETE /reset
   fastify.delete('/reset', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache.',
+      tags: ['admin-agent'],
+      summary: 'Reset all agent data',
+      security: securityBearerAuth,
+      response: { 200: resetResultResponse, ...stdErrors },
+    },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const [configs, roles, summaries, analytics, globalProfiles] = await fastify.prisma.$transaction([
@@ -529,6 +739,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /configs/:conversationId/summary
   fastify.get('/configs/:conversationId/summary', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get the conversation summary generated by the agent.',
+      tags: ['admin-agent'],
+      summary: 'Get conversation summary',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -547,6 +765,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /configs/:conversationId/live
   fastify.get('/configs/:conversationId/live', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get live agent state for a conversation: Redis cache, tone profiles, analytics, summary, controlled users.',
+      tags: ['admin-agent'],
+      summary: 'Get live agent state',
+      security: securityBearerAuth,
+      params: conversationIdParams,
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
@@ -632,6 +858,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // GET /global-config
   fastify.get('/global-config', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Get the global agent configuration (system prompt, provider defaults, budget).',
+      tags: ['admin-agent'],
+      summary: 'Get global agent config',
+      security: securityBearerAuth,
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       let config = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
@@ -648,6 +881,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // PUT /global-config
   fastify.put('/global-config', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    schema: {
+      description: 'Update the global agent configuration. Publishes config-invalidated event.',
+      tags: ['admin-agent'],
+      summary: 'Update global agent config',
+      security: securityBearerAuth,
+      body: { type: 'object' },
+      response: { 200: successDataResponse, ...stdErrors },
+    },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const parsed = globalConfigSchema.safeParse(request.body);
