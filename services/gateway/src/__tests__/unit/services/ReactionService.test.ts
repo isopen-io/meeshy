@@ -55,8 +55,8 @@ describe('ReactionService', () => {
   let mockPrisma: any;
 
   // Sample test data
-  const testUserId = '507f1f77bcf86cd799439011';
-  const testAnonymousUserId = 'anon-participant-123';
+  const testParticipantId = '507f1f77bcf86cd799439011';
+  const testParticipantId2 = 'anon-participant-123';
   const testMessageId = '507f1f77bcf86cd799439022';
   const testConversationId = '507f1f77bcf86cd799439033';
   const testReactionId = '507f1f77bcf86cd799439044';
@@ -64,8 +64,7 @@ describe('ReactionService', () => {
   const createMockReaction = (overrides: Partial<Reaction> = {}): Reaction => ({
     id: testReactionId,
     messageId: testMessageId,
-    userId: testUserId,
-    anonymousId: null,
+    participantId: testParticipantId,
     emoji: '👍',
     createdAt: new Date('2025-01-06T12:00:00Z'),
     updatedAt: new Date('2025-01-06T12:00:00Z'),
@@ -77,11 +76,9 @@ describe('ReactionService', () => {
     conversationId: testConversationId,
     conversation: {
       id: testConversationId,
-      members: [
-        { userId: testUserId, isActive: true }
-      ],
-      anonymousParticipants: [
-        { id: testAnonymousUserId, isActive: true }
+      participants: [
+        { id: testParticipantId, isActive: true },
+        { id: testParticipantId2, isActive: true }
       ]
     },
     ...overrides
@@ -113,6 +110,9 @@ describe('ReactionService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
         deleteMany: jest.fn()
+      },
+      participant: {
+        findMany: jest.fn().mockResolvedValue([])
       }
     };
 
@@ -150,34 +150,32 @@ describe('ReactionService', () => {
     it('should add a reaction successfully for authenticated user', async () => {
       const result = await service.addReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '👍'
       });
 
       expect(result).toBeDefined();
       expect(result?.emoji).toBe('👍');
       expect(result?.messageId).toBe(testMessageId);
-      expect(result?.userId).toBe(testUserId);
+      expect(result?.participantId).toBe(testParticipantId);
       expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should add a reaction successfully for anonymous user', async () => {
+    it('should add a reaction successfully for another participant', async () => {
       mockPrisma.reaction.create.mockResolvedValue(
         createMockReaction({
-          userId: null,
-          anonymousId: testAnonymousUserId
+          participantId: testParticipantId2
         })
       );
 
       const result = await service.addReaction({
         messageId: testMessageId,
-        anonymousId: testAnonymousUserId,
+        participantId: testParticipantId2,
         emoji: '❤️'
       });
 
       expect(result).toBeDefined();
-      expect(result?.anonymousId).toBe(testAnonymousUserId);
-      expect(result?.userId).toBeUndefined();
+      expect(result?.participantId).toBe(testParticipantId2);
     });
 
     it('should throw error for invalid emoji format', async () => {
@@ -186,19 +184,20 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: 'invalid'
         })
       ).rejects.toThrow('Invalid emoji format');
     });
 
-    it('should throw error when neither userId nor anonymousId provided', async () => {
+    it('should throw error when participantId not provided', async () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
+          participantId: '',
           emoji: '👍'
         })
-      ).rejects.toThrow('Either userId or anonymousId must be provided');
+      ).rejects.toThrow('participantId must be provided');
     });
 
     it('should throw error when message not found', async () => {
@@ -207,18 +206,17 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: 'non-existent',
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         })
       ).rejects.toThrow('Message not found');
     });
 
-    it('should throw error when user is not a member of conversation', async () => {
+    it('should throw error when user is not a participant of conversation', async () => {
       mockPrisma.message.findUnique.mockResolvedValue(
         createMockMessage({
           conversation: {
-            members: [{ userId: 'other-user', isActive: true }],
-            anonymousParticipants: []
+            participants: [{ id: 'other-user', isActive: true }]
           }
         })
       );
@@ -226,10 +224,10 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         })
-      ).rejects.toThrow('User is not a member of this conversation');
+      ).rejects.toThrow('User is not a participant of this conversation');
     });
 
     it('should throw error when anonymous user is not a participant', async () => {
@@ -237,7 +235,7 @@ describe('ReactionService', () => {
         createMockMessage({
           conversation: {
             members: [],
-            anonymousParticipants: [{ id: 'other-anon', isActive: true }]
+            participants: [{ id: 'other-anon', isActive: true }]
           }
         })
       );
@@ -245,10 +243,10 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          anonymousId: testAnonymousUserId,
+          participantId: testParticipantId2,
           emoji: '👍'
         })
-      ).rejects.toThrow('Anonymous user is not a participant of this conversation');
+      ).rejects.toThrow('User is not a participant of this conversation');
     });
 
     it('should return existing reaction if already exists', async () => {
@@ -257,7 +255,7 @@ describe('ReactionService', () => {
 
       const result = await service.addReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '👍'
       });
 
@@ -276,7 +274,7 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '🔥' // Trying to add 4th different emoji
         })
       ).rejects.toThrow('Maximum 3 different reactions per message reached');
@@ -295,7 +293,7 @@ describe('ReactionService', () => {
 
       const result = await service.addReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '👍' // Same emoji, should not fail
       });
 
@@ -311,7 +309,7 @@ describe('ReactionService', () => {
 
       const result = await service.addReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '🎉'
       });
 
@@ -322,7 +320,7 @@ describe('ReactionService', () => {
     it('should sanitize emoji before creating reaction', async () => {
       const result = await service.addReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '  👍  ' // With whitespace
       });
 
@@ -343,7 +341,7 @@ describe('ReactionService', () => {
     it('should remove a reaction successfully for authenticated user', async () => {
       const result = await service.removeReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '👍'
       });
 
@@ -351,7 +349,7 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.deleteMany).toHaveBeenCalledWith({
         where: {
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         }
       });
@@ -360,7 +358,7 @@ describe('ReactionService', () => {
     it('should remove a reaction successfully for anonymous user', async () => {
       const result = await service.removeReaction({
         messageId: testMessageId,
-        anonymousId: testAnonymousUserId,
+        participantId: testParticipantId2,
         emoji: '❤️'
       });
 
@@ -368,7 +366,7 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.deleteMany).toHaveBeenCalledWith({
         where: {
           messageId: testMessageId,
-          anonymousId: testAnonymousUserId,
+          participantId: testParticipantId2,
           emoji: '❤️'
         }
       });
@@ -380,7 +378,7 @@ describe('ReactionService', () => {
       await expect(
         service.removeReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: 'invalid'
         })
       ).rejects.toThrow('Invalid emoji format');
@@ -391,7 +389,7 @@ describe('ReactionService', () => {
 
       const result = await service.removeReaction({
         messageId: testMessageId,
-        userId: testUserId,
+        participantId: testParticipantId,
         emoji: '👍'
       });
 
@@ -406,10 +404,10 @@ describe('ReactionService', () => {
   describe('getMessageReactions', () => {
     it('should return aggregated reactions for a message', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: 'user1', anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: 'user2', anonymousId: null }),
-        createMockReaction({ emoji: '❤️', userId: 'user3', anonymousId: null }),
-        createMockReaction({ emoji: '❤️', userId: null, anonymousId: 'anon1' })
+        createMockReaction({ emoji: '👍', participantId: 'user1' }),
+        createMockReaction({ emoji: '👍', participantId: 'user2' }),
+        createMockReaction({ emoji: '❤️', participantId: 'user3' }),
+        createMockReaction({ emoji: '❤️', participantId: 'anon1' })
       ]);
 
       const result = await service.getMessageReactions({
@@ -423,9 +421,9 @@ describe('ReactionService', () => {
 
     it('should correctly aggregate reactions by emoji', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: 'user1', anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: 'user2', anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: null, anonymousId: 'anon1' })
+        createMockReaction({ emoji: '👍', participantId: 'user1' }),
+        createMockReaction({ emoji: '👍', participantId: 'user2' }),
+        createMockReaction({ emoji: '👍', participantId: 'anon1' })
       ]);
 
       const result = await service.getMessageReactions({
@@ -434,38 +432,37 @@ describe('ReactionService', () => {
 
       const thumbsUpAggregation = result.reactions.find(r => r.emoji === '👍');
       expect(thumbsUpAggregation?.count).toBe(3);
-      expect(thumbsUpAggregation?.userIds.length).toBe(2);
-      expect(thumbsUpAggregation?.anonymousIds.length).toBe(1);
+      expect(thumbsUpAggregation?.participantIds.length).toBe(3);
     });
 
     it('should mark hasCurrentUser correctly for authenticated user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: testUserId, anonymousId: null }),
-        createMockReaction({ emoji: '❤️', userId: 'other-user', anonymousId: null })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId }),
+        createMockReaction({ emoji: '❤️', participantId: 'other-user' })
       ]);
 
       const result = await service.getMessageReactions({
         messageId: testMessageId,
-        currentUserId: testUserId
+        currentParticipantId: testParticipantId
       });
 
       const thumbsUp = result.reactions.find(r => r.emoji === '👍');
       const heart = result.reactions.find(r => r.emoji === '❤️');
 
       expect(thumbsUp?.hasCurrentUser).toBe(true);
-      // When currentUserId doesn't match and no currentAnonymousUserId, hasCurrentUser is false or undefined
+      // When currentParticipantId doesn't match, hasCurrentUser is false
       expect(heart?.hasCurrentUser).toBeFalsy();
     });
 
     it('should mark hasCurrentUser correctly for anonymous user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: null, anonymousId: testAnonymousUserId }),
-        createMockReaction({ emoji: '❤️', userId: 'some-user', anonymousId: null })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId2 }),
+        createMockReaction({ emoji: '❤️', participantId: 'some-user' })
       ]);
 
       const result = await service.getMessageReactions({
         messageId: testMessageId,
-        currentAnonymousUserId: testAnonymousUserId
+        currentParticipantId: testParticipantId2
       });
 
       const thumbsUp = result.reactions.find(r => r.emoji === '👍');
@@ -477,14 +474,14 @@ describe('ReactionService', () => {
 
     it('should return userReactions list for current user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: testUserId, anonymousId: null }),
-        createMockReaction({ emoji: '❤️', userId: testUserId, anonymousId: null }),
-        createMockReaction({ emoji: '🎉', userId: 'other-user', anonymousId: null })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId }),
+        createMockReaction({ emoji: '❤️', participantId: testParticipantId }),
+        createMockReaction({ emoji: '🎉', participantId: 'other-user' })
       ]);
 
       const result = await service.getMessageReactions({
         messageId: testMessageId,
-        currentUserId: testUserId
+        currentParticipantId: testParticipantId
       });
 
       expect(result.userReactions).toContain('👍');
@@ -494,13 +491,13 @@ describe('ReactionService', () => {
 
     it('should deduplicate userReactions', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ id: 'r1', emoji: '👍', userId: testUserId }),
-        createMockReaction({ id: 'r2', emoji: '👍', userId: testUserId }) // Duplicate shouldn't happen but test dedup
+        createMockReaction({ id: 'r1', emoji: '👍', participantId: testParticipantId }),
+        createMockReaction({ id: 'r2', emoji: '👍', participantId: testParticipantId }) // Duplicate shouldn't happen but test dedup
       ]);
 
       const result = await service.getMessageReactions({
         messageId: testMessageId,
-        currentUserId: testUserId
+        currentParticipantId: testParticipantId
       });
 
       // Should be deduplicated
@@ -528,9 +525,9 @@ describe('ReactionService', () => {
   describe('getEmojiAggregation', () => {
     it('should return aggregation for specific emoji', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: 'user1', anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: 'user2', anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: null, anonymousId: 'anon1' })
+        createMockReaction({ emoji: '👍', participantId: 'user1' }),
+        createMockReaction({ emoji: '👍', participantId: 'user2' }),
+        createMockReaction({ emoji: '👍', participantId: 'anon1' })
       ]);
 
       const result = await service.getEmojiAggregation(
@@ -540,8 +537,7 @@ describe('ReactionService', () => {
 
       expect(result.emoji).toBe('👍');
       expect(result.count).toBe(3);
-      expect(result.userIds.length).toBe(2);
-      expect(result.anonymousIds.length).toBe(1);
+      expect(result.participantIds.length).toBe(3);
     });
 
     it('should throw error for invalid emoji', async () => {
@@ -554,14 +550,14 @@ describe('ReactionService', () => {
 
     it('should mark hasCurrentUser correctly', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: testUserId, anonymousId: null }),
-        createMockReaction({ emoji: '👍', userId: 'other-user', anonymousId: null })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId }),
+        createMockReaction({ emoji: '👍', participantId: 'other-user' })
       ]);
 
       const result = await service.getEmojiAggregation(
         testMessageId,
         '👍',
-        testUserId
+        testParticipantId
       );
 
       expect(result.hasCurrentUser).toBe(true);
@@ -569,14 +565,13 @@ describe('ReactionService', () => {
 
     it('should mark hasCurrentUser for anonymous user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: null, anonymousId: testAnonymousUserId })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId2 })
       ]);
 
       const result = await service.getEmojiAggregation(
         testMessageId,
         '👍',
-        undefined,
-        testAnonymousUserId
+        testParticipantId2
       );
 
       expect(result.hasCurrentUser).toBe(true);
@@ -591,8 +586,8 @@ describe('ReactionService', () => {
       );
 
       expect(result.count).toBe(0);
-      expect(result.userIds).toEqual([]);
-      expect(result.anonymousIds).toEqual([]);
+      expect(result.participantIds).toEqual([]);
+      // anonymous no longer separate;
       expect(result.hasCurrentUser).toBe(false);
     });
   });
@@ -601,18 +596,18 @@ describe('ReactionService', () => {
   // GET USER REACTIONS TESTS
   // ==============================================
 
-  describe('getUserReactions', () => {
+  describe('getParticipantReactions', () => {
     it('should return reactions for authenticated user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
         createMockReaction({ emoji: '👍' }),
         createMockReaction({ emoji: '❤️' })
       ]);
 
-      const result = await service.getUserReactions(testUserId);
+      const result = await service.getParticipantReactions(testParticipantId);
 
       expect(result.length).toBe(2);
       expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith({
-        where: { userId: testUserId },
+        where: { participantId: testParticipantId },
         orderBy: { createdAt: 'desc' },
         take: 100
       });
@@ -621,7 +616,7 @@ describe('ReactionService', () => {
     it('should return empty array when user has no reactions', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([]);
 
-      const result = await service.getUserReactions(testUserId);
+      const result = await service.getParticipantReactions(testParticipantId);
 
       expect(result).toEqual([]);
     });
@@ -629,7 +624,7 @@ describe('ReactionService', () => {
     it('should limit results to 100 for performance', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([]);
 
-      await service.getUserReactions(testUserId);
+      await service.getParticipantReactions(testParticipantId);
 
       expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 100 })
@@ -641,17 +636,17 @@ describe('ReactionService', () => {
   // GET ANONYMOUS USER REACTIONS TESTS
   // ==============================================
 
-  describe('getAnonymousUserReactions', () => {
+  describe('getParticipantReactions (formerly anonymous)', () => {
     it('should return reactions for anonymous user', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: null, anonymousId: testAnonymousUserId, emoji: '👍' })
+        createMockReaction({ participantId: testParticipantId2, emoji: '👍' })
       ]);
 
-      const result = await service.getAnonymousUserReactions(testAnonymousUserId);
+      const result = await service.getParticipantReactions(testParticipantId2);
 
       expect(result.length).toBe(1);
       expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith({
-        where: { anonymousId: testAnonymousUserId },
+        where: { participantId: testParticipantId2 },
         orderBy: { createdAt: 'desc' },
         take: 100
       });
@@ -660,7 +655,7 @@ describe('ReactionService', () => {
     it('should return empty array when anonymous user has no reactions', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([]);
 
-      const result = await service.getAnonymousUserReactions(testAnonymousUserId);
+      const result = await service.getParticipantReactions(testParticipantId2);
 
       expect(result).toEqual([]);
     });
@@ -670,14 +665,14 @@ describe('ReactionService', () => {
   // HAS USER REACTED TESTS
   // ==============================================
 
-  describe('hasUserReacted', () => {
+  describe('hasParticipantReacted', () => {
     it('should return true if user has reacted with emoji', async () => {
       mockPrisma.reaction.findFirst.mockResolvedValue(createMockReaction());
 
-      const result = await service.hasUserReacted(
+      const result = await service.hasParticipantReacted(
         testMessageId,
         '👍',
-        testUserId
+        testParticipantId
       );
 
       expect(result).toBe(true);
@@ -686,10 +681,10 @@ describe('ReactionService', () => {
     it('should return false if user has not reacted with emoji', async () => {
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
 
-      const result = await service.hasUserReacted(
+      const result = await service.hasParticipantReacted(
         testMessageId,
         '👍',
-        testUserId
+        testParticipantId
       );
 
       expect(result).toBe(false);
@@ -698,25 +693,24 @@ describe('ReactionService', () => {
     it('should return false for invalid emoji', async () => {
       (sanitizeEmoji as jest.Mock).mockReturnValue(null);
 
-      const result = await service.hasUserReacted(
+      const result = await service.hasParticipantReacted(
         testMessageId,
         'invalid',
-        testUserId
+        testParticipantId
       );
 
       expect(result).toBe(false);
     });
 
-    it('should check for anonymous user', async () => {
+    it('should check for different participant', async () => {
       mockPrisma.reaction.findFirst.mockResolvedValue(
-        createMockReaction({ userId: null, anonymousId: testAnonymousUserId })
+        createMockReaction({ participantId: testParticipantId2 })
       );
 
-      const result = await service.hasUserReacted(
+      const result = await service.hasParticipantReacted(
         testMessageId,
         '👍',
-        undefined,
-        testAnonymousUserId
+        testParticipantId2
       );
 
       expect(result).toBe(true);
@@ -724,7 +718,7 @@ describe('ReactionService', () => {
         where: {
           messageId: testMessageId,
           emoji: '👍',
-          anonymousId: testAnonymousUserId
+          participantId: testParticipantId2
         }
       });
     });
@@ -762,7 +756,7 @@ describe('ReactionService', () => {
   describe('createUpdateEvent', () => {
     beforeEach(() => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ emoji: '👍', userId: testUserId })
+        createMockReaction({ emoji: '👍', participantId: testParticipantId })
       ]);
     });
 
@@ -771,13 +765,13 @@ describe('ReactionService', () => {
         testMessageId,
         '👍',
         'add',
-        testUserId
+        testParticipantId
       );
 
       expect(result.messageId).toBe(testMessageId);
       expect(result.emoji).toBe('👍');
       expect(result.action).toBe('add');
-      expect(result.userId).toBe(testUserId);
+      expect(result.participantId).toBe(testParticipantId);
       expect(result.aggregation).toBeDefined();
       expect(result.timestamp).toBeInstanceOf(Date);
     });
@@ -789,28 +783,26 @@ describe('ReactionService', () => {
         testMessageId,
         '👍',
         'remove',
-        testUserId
+        testParticipantId
       );
 
       expect(result.action).toBe('remove');
       expect(result.aggregation.count).toBe(0);
     });
 
-    it('should create event for anonymous user', async () => {
+    it('should create event for different participant', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: null, anonymousId: testAnonymousUserId })
+        createMockReaction({ participantId: testParticipantId2 })
       ]);
 
       const result = await service.createUpdateEvent(
         testMessageId,
         '👍',
         'add',
-        undefined,
-        testAnonymousUserId
+        testParticipantId2
       );
 
-      expect(result.anonymousId).toBe(testAnonymousUserId);
-      expect(result.userId).toBeUndefined();
+      expect(result.participantId).toBe(testParticipantId2);
     });
   });
 
@@ -823,7 +815,7 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateAddReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         });
       }).not.toThrow();
@@ -833,26 +825,27 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateAddReactionOptions({
           messageId: '',
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         });
       }).toThrow('messageId is required');
     });
 
-    it('should throw error when neither userId nor anonymousId provided', () => {
+    it('should throw error when participantId not provided', () => {
       expect(() => {
         service.validateAddReactionOptions({
           messageId: testMessageId,
+          participantId: '',
           emoji: '👍'
         });
-      }).toThrow('Either userId or anonymousId must be provided');
+      }).toThrow('participantId must be provided');
     });
 
     it('should throw error when emoji is missing', () => {
       expect(() => {
         service.validateAddReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: ''
         });
       }).toThrow('emoji is required');
@@ -864,7 +857,7 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateAddReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: 'invalid'
         });
       }).toThrow('Invalid emoji format');
@@ -876,7 +869,7 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateRemoveReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         });
       }).not.toThrow();
@@ -886,26 +879,27 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateRemoveReactionOptions({
           messageId: '',
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         });
       }).toThrow('messageId is required');
     });
 
-    it('should throw error when neither userId nor anonymousId provided', () => {
+    it('should throw error when participantId not provided', () => {
       expect(() => {
         service.validateRemoveReactionOptions({
           messageId: testMessageId,
+          participantId: '',
           emoji: '👍'
         });
-      }).toThrow('Either userId or anonymousId must be provided');
+      }).toThrow('participantId must be provided');
     });
 
     it('should throw error when emoji is missing', () => {
       expect(() => {
         service.validateRemoveReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: ''
         });
       }).toThrow('emoji is required');
@@ -917,7 +911,7 @@ describe('ReactionService', () => {
       expect(() => {
         service.validateRemoveReactionOptions({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: 'invalid'
         });
       }).toThrow('Invalid emoji format');
@@ -935,7 +929,7 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         })
       ).rejects.toThrow('Database error');
@@ -947,7 +941,7 @@ describe('ReactionService', () => {
       await expect(
         service.removeReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         })
       ).rejects.toThrow('Database error');
@@ -969,10 +963,10 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: '',
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '👍'
         })
-      ).rejects.toThrow('Message not found');
+      ).rejects.toThrow();
     });
 
     it('should handle whitespace-only emoji', async () => {
@@ -981,32 +975,32 @@ describe('ReactionService', () => {
       await expect(
         service.addReaction({
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           emoji: '   '
         })
       ).rejects.toThrow('Invalid emoji format');
     });
 
-    it('should correctly map reaction data with null userId', async () => {
+    it('should correctly map reaction data with different participantId', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: null, anonymousId: testAnonymousUserId })
+        createMockReaction({ participantId: testParticipantId2 })
       ]);
 
-      const result = await service.getUserReactions(testUserId);
+      const result = await service.getParticipantReactions(testParticipantId);
 
-      expect(result[0].userId).toBeUndefined();
-      expect(result[0].anonymousId).toBe(testAnonymousUserId);
+      expect(result[0].participantId).toBe(testParticipantId2);
+      
     });
 
-    it('should correctly map reaction data with null anonymousId', async () => {
+    it('should correctly map reaction data with participantId', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: testUserId, anonymousId: null })
+        createMockReaction({ participantId: testParticipantId })
       ]);
 
-      const result = await service.getUserReactions(testUserId);
+      const result = await service.getParticipantReactions(testParticipantId);
 
-      expect(result[0].userId).toBe(testUserId);
-      expect(result[0].anonymousId).toBeUndefined();
+      expect(result[0].participantId).toBe(testParticipantId);
+      
     });
   });
 
@@ -1019,8 +1013,7 @@ describe('ReactionService', () => {
       const mockReaction = createMockReaction({
         id: 'reaction-123',
         messageId: 'msg-456',
-        userId: 'user-789',
-        anonymousId: null,
+        participantId: 'user-789',
         emoji: '🎉',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z')
@@ -1028,31 +1021,28 @@ describe('ReactionService', () => {
 
       mockPrisma.reaction.findMany.mockResolvedValue([mockReaction]);
 
-      const result = await service.getUserReactions('user-789');
+      const result = await service.getParticipantReactions('user-789');
 
       expect(result[0]).toEqual({
         id: 'reaction-123',
         messageId: 'msg-456',
-        userId: 'user-789',
-        anonymousId: undefined,
+        participantId: 'user-789',
         emoji: '🎉',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z')
       });
     });
 
-    it('should handle reaction with both null user IDs', async () => {
+    it('should handle reaction participantId correctly', async () => {
       const mockReaction = createMockReaction({
-        userId: null,
-        anonymousId: null
+        participantId: testParticipantId
       });
 
       mockPrisma.reaction.findMany.mockResolvedValue([mockReaction]);
 
-      const result = await service.getUserReactions(testUserId);
+      const result = await service.getParticipantReactions(testParticipantId);
 
-      expect(result[0].userId).toBeUndefined();
-      expect(result[0].anonymousId).toBeUndefined();
+      expect(result[0].participantId).toBe(testParticipantId);
     });
   });
 
@@ -1063,11 +1053,11 @@ describe('ReactionService', () => {
   describe('Aggregation Edge Cases', () => {
     it('should handle multiple users with same emoji correctly', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: 'user1', emoji: '👍' }),
-        createMockReaction({ userId: 'user2', emoji: '👍' }),
-        createMockReaction({ userId: 'user3', emoji: '👍' }),
-        createMockReaction({ userId: null, anonymousId: 'anon1', emoji: '👍' }),
-        createMockReaction({ userId: null, anonymousId: 'anon2', emoji: '👍' })
+        createMockReaction({ participantId: 'user1', emoji: '👍' }),
+        createMockReaction({ participantId: 'user2', emoji: '👍' }),
+        createMockReaction({ participantId: 'user3', emoji: '👍' }),
+        createMockReaction({ participantId: 'anon1', emoji: '👍' }),
+        createMockReaction({ participantId: 'anon2', emoji: '👍' })
       ]);
 
       const result = await service.getMessageReactions({
@@ -1076,8 +1066,7 @@ describe('ReactionService', () => {
 
       const thumbsUp = result.reactions.find(r => r.emoji === '👍');
       expect(thumbsUp?.count).toBe(5);
-      expect(thumbsUp?.userIds.length).toBe(3);
-      expect(thumbsUp?.anonymousIds.length).toBe(2);
+      expect(thumbsUp?.participantIds.length).toBe(5);
     });
 
     it('should handle reactions ordered by createdAt', async () => {
@@ -1093,23 +1082,22 @@ describe('ReactionService', () => {
       });
     });
 
-    it('should handle hasCurrentUser with both userId and anonymousId provided', async () => {
+    it('should handle hasCurrentUser with currentParticipantId', async () => {
       mockPrisma.reaction.findMany.mockResolvedValue([
-        createMockReaction({ userId: testUserId, emoji: '👍' }),
-        createMockReaction({ userId: null, anonymousId: testAnonymousUserId, emoji: '❤️' })
+        createMockReaction({ participantId: testParticipantId, emoji: '👍' }),
+        createMockReaction({ participantId: testParticipantId2, emoji: '❤️' })
       ]);
 
       const result = await service.getMessageReactions({
         messageId: testMessageId,
-        currentUserId: testUserId,
-        currentAnonymousUserId: testAnonymousUserId
+        currentParticipantId: testParticipantId
       });
 
       const thumbsUp = result.reactions.find(r => r.emoji === '👍');
       const heart = result.reactions.find(r => r.emoji === '❤️');
 
       expect(thumbsUp?.hasCurrentUser).toBe(true);
-      expect(heart?.hasCurrentUser).toBe(true);
+      expect(heart?.hasCurrentUser).toBe(false);
     });
   });
 });

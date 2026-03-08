@@ -99,11 +99,12 @@ describe('MessagingService', () => {
   const testConversationId = '507f1f77bcf86cd799439012';
   const testMessageId = '507f1f77bcf86cd799439013';
 
+  const testParticipantId = '507f1f77bcf86cd799439014';
+
   const createMockMessage = (overrides: Partial<Message> = {}): any => ({
     id: testMessageId,
     conversationId: testConversationId,
-    senderId: testUserId,
-    anonymousSenderId: null,
+    senderId: testParticipantId,
     content: 'Test message content',
     originalLanguage: 'en',
     messageType: 'text',
@@ -143,11 +144,10 @@ describe('MessagingService', () => {
         findFirst: jest.fn(),
         update: jest.fn()
       },
-      conversationMember: {
-        findFirst: jest.fn()
-      },
-      anonymousParticipant: {
-        findFirst: jest.fn()
+      participant: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([])
       },
       message: {
         create: jest.fn(),
@@ -206,25 +206,25 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
-        id: 'member123',
-        userId: testUserId,
+      mockPrisma.participant.findUnique.mockResolvedValue({
+        id: testParticipantId,
         conversationId: testConversationId,
         isActive: true,
-        canSendMessage: true,
-        canSendFiles: true
+        type: 'user',
+        userId: testUserId
       });
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: {
-          id: testUserId,
-          username: 'testuser',
+          id: testParticipantId,
           displayName: 'Test User',
           avatar: null,
-          role: 'user',
-          isOnline: true
+          role: 'member',
+          isOnline: true,
+          type: 'user',
+          userId: testUserId,
+          language: 'en'
         },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -237,9 +237,7 @@ describe('MessagingService', () => {
     it('should handle a valid message successfully for authenticated user', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token-123'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -251,9 +249,7 @@ describe('MessagingService', () => {
     it('should include metadata in successful response', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token-123'
+        testParticipantId
       );
 
       expect(response.metadata).toBeDefined();
@@ -270,8 +266,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         invalidRequest,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -286,8 +281,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         invalidRequest,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -302,8 +296,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         { ...validRequest, conversationId: 'mshy_non-existent-conv' },
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -320,7 +313,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -334,9 +327,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -359,7 +350,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -369,7 +360,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: { id: testUserId, username: 'testuser' },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -379,18 +369,15 @@ describe('MessagingService', () => {
     it('should create JWT authentication context when jwtToken is provided', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token-123'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
-      // Message should be created with senderId (not anonymousSenderId)
+      // Message should be created with senderId (participantId)
       expect(mockPrisma.message.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             senderId: testUserId,
-            anonymousSenderId: undefined
           })
         })
       );
@@ -400,7 +387,7 @@ describe('MessagingService', () => {
       const sessionToken = 'session-token-abc';
       const anonymousParticipantId = 'anon-participant-123';
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: anonymousParticipantId,
         sessionToken: sessionToken,
         conversationId: testConversationId,
@@ -420,27 +407,22 @@ describe('MessagingService', () => {
       });
 
       mockPrisma.message.create.mockResolvedValue({
-        ...createMockMessage({ anonymousSenderId: anonymousParticipantId, senderId: null }),
-        sender: null,
-        anonymousSender: { id: anonymousParticipantId, username: 'AnonUser' },
+        ...createMockMessage({ senderId: anonymousParticipantId }),
+        sender: { id: anonymousParticipantId, displayName: 'AnonUser', type: 'anonymous' },
         attachments: [],
         replyTo: null
       });
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'AnonUser' },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
       expect(mockPrisma.message.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            senderId: undefined,
-            anonymousSenderId: anonymousParticipantId
+            senderId: anonymousParticipantId
           })
         })
       );
@@ -450,7 +432,7 @@ describe('MessagingService', () => {
       const anonSenderId = 'anon_12345678';
       const anonymousParticipantId = 'anon-participant-456';
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: anonymousParticipantId,
         sessionToken: anonSenderId,
         isActive: true,
@@ -464,17 +446,15 @@ describe('MessagingService', () => {
       });
 
       mockPrisma.message.create.mockResolvedValue({
-        ...createMockMessage({ anonymousSenderId: anonymousParticipantId }),
-        sender: null,
-        anonymousSender: { id: anonymousParticipantId },
+        ...createMockMessage({ senderId: anonymousParticipantId }),
+        sender: { id: anonymousParticipantId, type: 'anonymous' },
         attachments: [],
         replyTo: null
       });
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'Anon' },
-        anonSenderId,
-        false
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -491,8 +471,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -515,7 +494,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -525,7 +504,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ content: '' }),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -533,8 +511,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -555,10 +532,7 @@ describe('MessagingService', () => {
       // Pass sessionToken to make it anonymous
       const response = await service.handleMessage(
         request,
-        'session-token-xyz',
-        false,
-        undefined, // no JWT
-        'session-token-xyz' // session token makes it anonymous
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -580,8 +554,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -607,13 +580,11 @@ describe('MessagingService', () => {
     });
 
     it('should deny access when user is not a member', async () => {
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findUnique.mockResolvedValue(null);
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -621,7 +592,7 @@ describe('MessagingService', () => {
     });
 
     it('should deny access when member cannot send messages', async () => {
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -631,9 +602,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -643,7 +612,7 @@ describe('MessagingService', () => {
     it('should deny anonymous user when share link is inactive', async () => {
       const sessionToken = 'session-123';
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'anon123',
         sessionToken,
         isActive: true,
@@ -657,10 +626,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'Anon' },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -671,7 +637,7 @@ describe('MessagingService', () => {
       const sessionToken = 'session-123';
       const expiredDate = new Date(Date.now() - 86400000); // Yesterday
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'anon123',
         sessionToken,
         isActive: true,
@@ -686,10 +652,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'Anon' },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -699,7 +662,7 @@ describe('MessagingService', () => {
     it('should deny anonymous user when share link max uses reached', async () => {
       const sessionToken = 'session-123';
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'anon123',
         sessionToken,
         isActive: true,
@@ -715,10 +678,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'Anon' },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -728,7 +688,7 @@ describe('MessagingService', () => {
     it('should deny anonymous user when messages not allowed', async () => {
       const sessionToken = 'session-123';
 
-      mockPrisma.anonymousParticipant.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'anon123',
         sessionToken,
         isActive: true,
@@ -742,10 +702,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         { ...validRequest, isAnonymous: true, anonymousDisplayName: 'Anon' },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -766,7 +723,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: { id: testUserId, username: 'testuser' },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -774,9 +730,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -798,7 +752,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -817,16 +771,13 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ content: request.content }),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -844,16 +795,13 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ content: request.content }),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -866,7 +814,7 @@ describe('MessagingService', () => {
 
   describe('handleMessage - Conversation ID Resolution', () => {
     beforeEach(() => {
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -876,7 +824,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -899,9 +846,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       // Should succeed with direct ObjectId lookup
@@ -929,9 +874,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -956,7 +899,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -966,7 +909,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -976,9 +918,7 @@ describe('MessagingService', () => {
     it('should queue message for translation after saving', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -995,9 +935,7 @@ describe('MessagingService', () => {
     it('should include translation status in response metadata', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1013,9 +951,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1053,7 +989,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -1064,9 +1000,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -1082,7 +1016,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -1092,7 +1026,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage(),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -1102,9 +1035,7 @@ describe('MessagingService', () => {
       // Should still succeed - translation errors should not fail the message
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1116,8 +1047,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -1141,7 +1071,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -1151,7 +1081,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ content: validRequest.content }),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: null
       });
@@ -1161,9 +1090,7 @@ describe('MessagingService', () => {
     it('should include delivery status in metadata', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1174,9 +1101,7 @@ describe('MessagingService', () => {
     it('should include context metadata', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1188,9 +1113,7 @@ describe('MessagingService', () => {
     it('should calculate performance metrics', async () => {
       const response = await service.handleMessage(
         validRequest,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1211,7 +1134,7 @@ describe('MessagingService', () => {
         id: testConversationId,
         type: 'private'
       });
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findUnique.mockResolvedValue({
         id: 'member123',
         userId: testUserId,
         isActive: true,
@@ -1231,7 +1154,6 @@ describe('MessagingService', () => {
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ replyToId: parentMessageId }),
         sender: { id: testUserId },
-        anonymousSender: null,
         attachments: [],
         replyTo: {
           id: parentMessageId,
@@ -1242,9 +1164,7 @@ describe('MessagingService', () => {
 
       const response = await service.handleMessage(
         request,
-        testUserId,
-        true,
-        'jwt-token'
+        testParticipantId
       );
 
       expect(response.success).toBe(true);
@@ -1272,7 +1192,7 @@ describe('MessagingService', () => {
       });
 
       // First call for permissions - returns valid participant
-      mockPrisma.anonymousParticipant.findFirst
+      mockPrisma.participant.findFirst
         .mockResolvedValueOnce({
           id: 'anon123',
           sessionToken,
@@ -1288,16 +1208,8 @@ describe('MessagingService', () => {
         .mockResolvedValueOnce(null);
 
       const response = await service.handleMessage(
-        {
-          conversationId: testConversationId,
-          content: 'Test',
-          isAnonymous: true,
-          anonymousDisplayName: 'Anon'
-        },
-        sessionToken,
-        false,
-        undefined,
-        sessionToken
+        { conversationId: testConversationId, content: 'Test message', isAnonymous: true, anonymousDisplayName: 'AnonUser' },
+        testParticipantId
       );
 
       expect(response.success).toBe(false);
@@ -1312,6 +1224,7 @@ describe('MessagingService - Tracking Links Processing', () => {
   let mockTranslationService: any;
 
   const testUserId = '507f1f77bcf86cd799439011';
+  const testParticipantId = '507f1f77bcf86cd799439099';
   const testConversationId = '507f1f77bcf86cd799439012';
   const testMessageId = '507f1f77bcf86cd799439013';
 
@@ -1319,7 +1232,6 @@ describe('MessagingService - Tracking Links Processing', () => {
     id: testMessageId,
     conversationId: testConversationId,
     senderId: testUserId,
-    anonymousSenderId: null,
     content: 'Test message content',
     originalLanguage: 'en',
     messageType: 'text',
@@ -1344,11 +1256,10 @@ describe('MessagingService - Tracking Links Processing', () => {
         findFirst: jest.fn(),
         update: jest.fn()
       },
-      conversationMember: {
-        findFirst: jest.fn()
-      },
-      anonymousParticipant: {
-        findFirst: jest.fn()
+      participant: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([])
       },
       message: {
         create: jest.fn(),
@@ -1387,7 +1298,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       id: testConversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1397,7 +1308,6 @@ describe('MessagingService - Tracking Links Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Check this out: m+xyz789' }),
       sender: { id: testUserId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1405,10 +1315,8 @@ describe('MessagingService - Tracking Links Processing', () => {
 
     const response = await service.handleMessage(
       { conversationId: testConversationId, content },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     // The tracking link service should have been called to find/create
@@ -1426,7 +1334,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       id: testConversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1436,7 +1344,6 @@ describe('MessagingService - Tracking Links Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Visit m+xyz789 now' }),
       sender: { id: testUserId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1444,10 +1351,8 @@ describe('MessagingService - Tracking Links Processing', () => {
 
     const response = await service.handleMessage(
       { conversationId: testConversationId, content },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     expect(mockFindExistingTrackingLink).toHaveBeenCalled();
@@ -1470,7 +1375,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       id: testConversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1481,7 +1386,6 @@ describe('MessagingService - Tracking Links Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Check this: https://example.com/page' }),
       sender: { id: testUserId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1489,10 +1393,8 @@ describe('MessagingService - Tracking Links Processing', () => {
 
     const response = await service.handleMessage(
       { conversationId: testConversationId, content },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     // Should still succeed - tracking errors shouldn't fail message
     expect(response.success).toBe(true);
@@ -1512,7 +1414,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       id: testConversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1522,7 +1424,6 @@ describe('MessagingService - Tracking Links Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Link: m+existing123' }),
       sender: { id: testUserId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1530,10 +1431,8 @@ describe('MessagingService - Tracking Links Processing', () => {
 
     const response = await service.handleMessage(
       { conversationId: testConversationId, content },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     // Should not create new link when one exists
@@ -1548,6 +1447,7 @@ describe('MessagingService - Mention Processing', () => {
   let mockNotificationService: any;
 
   const testUserId = '507f1f77bcf86cd799439011';
+  const testParticipantId = '507f1f77bcf86cd799439099';
   const testConversationId = '507f1f77bcf86cd799439012';
   const testMessageId = '507f1f77bcf86cd799439013';
 
@@ -1555,7 +1455,6 @@ describe('MessagingService - Mention Processing', () => {
     id: testMessageId,
     conversationId: testConversationId,
     senderId: testUserId,
-    anonymousSenderId: null,
     content: 'Test message content',
     originalLanguage: 'en',
     messageType: 'text',
@@ -1587,11 +1486,10 @@ describe('MessagingService - Mention Processing', () => {
         findFirst: jest.fn(),
         update: jest.fn()
       },
-      conversationMember: {
-        findFirst: jest.fn()
-      },
-      anonymousParticipant: {
-        findFirst: jest.fn()
+      participant: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([])
       },
       message: {
         create: jest.fn(),
@@ -1649,7 +1547,7 @@ describe('MessagingService - Mention Processing', () => {
       title: 'Test Conv',
       members: [{ userId: testUserId }]
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1659,7 +1557,6 @@ describe('MessagingService - Mention Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Hey @user1 @user2!' }),
       sender: { id: testUserId, username: 'sender' },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1671,15 +1568,9 @@ describe('MessagingService - Mention Processing', () => {
     });
 
     const response = await service.handleMessage(
-      {
-        conversationId: testConversationId,
-        content: 'Hey @user1 @user2!',
-        mentionedUserIds
-      },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      { conversationId: testConversationId, content: 'Hey @user1 @user2!', mentionedUserIds },
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     expect(mockValidateMentionPermissions).toHaveBeenCalled();
@@ -1701,7 +1592,7 @@ describe('MessagingService - Mention Processing', () => {
       id: testConversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId: testUserId,
       isActive: true,
@@ -1711,21 +1602,15 @@ describe('MessagingService - Mention Processing', () => {
     mockPrisma.message.create.mockResolvedValue({
       ...createMockMessage({ content: 'Hey @nonexistent!' }),
       sender: { id: testUserId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
     mockPrisma.conversation.update.mockResolvedValue({});
 
     const response = await service.handleMessage(
-      {
-        conversationId: testConversationId,
-        content: 'Hey @nonexistent!'
-      },
-      testUserId,
-      true,
-      'jwt-token'
-    );
+      { conversationId: testConversationId, content: 'Hey @nonexistent!' },
+      testParticipantId
+      );
 
     // Should still succeed - mention errors shouldn't fail message
     expect(response.success).toBe(true);
@@ -1736,6 +1621,7 @@ describe('MessagingService - Edge Cases', () => {
   let service: MessagingService;
   let mockPrisma: any;
   let mockTranslationService: any;
+  const testParticipantId = '507f1f77bcf86cd799439099';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1749,11 +1635,10 @@ describe('MessagingService - Edge Cases', () => {
         findFirst: jest.fn(),
         update: jest.fn()
       },
-      conversationMember: {
-        findFirst: jest.fn()
-      },
-      anonymousParticipant: {
-        findFirst: jest.fn()
+      participant: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([])
       },
       message: {
         create: jest.fn(),
@@ -1794,7 +1679,7 @@ describe('MessagingService - Edge Cases', () => {
       id: conversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId,
       isActive: true,
@@ -1810,7 +1695,6 @@ describe('MessagingService - Edge Cases', () => {
       messageType: 'text',
       createdAt: new Date(),
       sender: { id: userId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1818,10 +1702,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: unicodeContent },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     expect(mockPrisma.message.create).toHaveBeenCalledWith(
@@ -1846,7 +1728,7 @@ describe('MessagingService - Edge Cases', () => {
       id: conversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId,
       isActive: true,
@@ -1862,7 +1744,6 @@ describe('MessagingService - Edge Cases', () => {
       messageType: 'text',
       createdAt: new Date(),
       sender: { id: userId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1870,10 +1751,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: contentWithWhitespace },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     const createCall = mockPrisma.message.create.mock.calls[0][0];
@@ -1893,7 +1772,7 @@ describe('MessagingService - Edge Cases', () => {
       id: conversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId,
       isActive: true,
@@ -1909,7 +1788,6 @@ describe('MessagingService - Edge Cases', () => {
       messageType: 'text',
       createdAt: new Date(),
       sender: { id: userId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1917,10 +1795,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: specialContent },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
   });
@@ -1938,7 +1814,7 @@ describe('MessagingService - Edge Cases', () => {
       id: conversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId,
       isActive: true,
@@ -1954,7 +1830,6 @@ describe('MessagingService - Edge Cases', () => {
       messageType: 'text',
       createdAt: new Date(),
       sender: { id: userId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -1962,10 +1837,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: formattedContent },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(true);
     const createCall = mockPrisma.message.create.mock.calls[0][0];
@@ -1986,7 +1859,7 @@ describe('MessagingService - Edge Cases', () => {
       id: conversationId,
       type: 'private'
     });
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findUnique.mockResolvedValue({
       id: 'member123',
       userId,
       isActive: true,
@@ -2002,7 +1875,6 @@ describe('MessagingService - Edge Cases', () => {
       messageType: 'text',
       createdAt: new Date(),
       sender: { id: userId },
-      anonymousSender: null,
       attachments: [],
       replyTo: null
     });
@@ -2010,10 +1882,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: exactLimitContent },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     // Should succeed at exactly 2000 chars
     expect(response.success).toBe(true);
@@ -2026,10 +1896,8 @@ describe('MessagingService - Edge Cases', () => {
 
     const response = await service.handleMessage(
       { conversationId, content: whitespaceOnly },
-      userId,
-      true,
-      'jwt-token'
-    );
+      testParticipantId
+      );
 
     expect(response.success).toBe(false);
     expect(response.error).toContain('empty');

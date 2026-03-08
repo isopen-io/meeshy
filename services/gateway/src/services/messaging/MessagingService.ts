@@ -7,8 +7,7 @@ import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type {
   MessageRequest,
   MessageResponse,
-  MessageResponseMetadata,
-  AuthenticationContext
+  MessageResponseMetadata
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { conversationStatsService } from '../ConversationStatsService';
@@ -35,101 +34,82 @@ export class MessagingService {
   /**
    * Point d'entrée principal pour l'envoi de messages
    * Utilisé par REST et WebSocket endpoints
+   *
+   * @param participantId - The Participant.id of the sender (resolved by auth middleware)
    */
   async handleMessage(
     request: MessageRequest,
-    senderId: string,
-    isAuthenticated: boolean = true,
-    jwtToken?: string,
-    sessionToken?: string
+    participantId: string
   ): Promise<MessageResponse> {
     const startTime = Date.now();
     const requestId = this.generateRequestId();
 
     try {
-      // 1. Création du contexte d'authentification robuste
-      const authContext = this.createAuthenticationContext(senderId, jwtToken, sessionToken, isAuthenticated);
-
-      const enrichedRequest: MessageRequest = {
-        ...request,
-        authContext,
-        isAnonymous: authContext.isAnonymous
-      };
-
-      // 2. Validation de la requête
-      const validationResult = await this.validator.validateRequest(enrichedRequest);
+      // 1. Validation de la requête
+      const validationResult = await this.validator.validateRequest(request);
       if (!validationResult.isValid) {
         return this.createErrorResponse(validationResult.errors[0].message, requestId);
       }
 
-      // 3. Résolution de l'ID de conversation
-      const conversationId = await this.validator.resolveConversationId(enrichedRequest.conversationId);
+      // 2. Résolution de l'ID de conversation
+      const conversationId = await this.validator.resolveConversationId(request.conversationId);
       if (!conversationId) {
         return this.createErrorResponse('Conversation non trouvée', requestId);
       }
 
-      // 4. Vérification des permissions avec contexte d'authentification
-      const permissionResult = await this.validator.checkPermissions(
-        authContext,
-        conversationId,
-        enrichedRequest
-      );
-      if (!permissionResult.canSend) {
+      // 3. Vérification des permissions via Participant
+      const participant = await this.prisma.participant.findUnique({
+        where: { id: participantId },
+        select: { id: true, conversationId: true, isActive: true }
+      });
+
+      if (!participant || participant.conversationId !== conversationId || !participant.isActive) {
         return this.createErrorResponse(
-          permissionResult.reason || 'Permissions insuffisantes pour envoyer des messages',
+          'Permissions insuffisantes pour envoyer des messages',
           requestId
         );
       }
 
-      // 5. Détection de langue — valide/override ce que le client envoie
-      const detectedLanguage = enrichedRequest.content
-        ? await this.validator.detectLanguage(enrichedRequest.content)
+      // 4. Détection de langue
+      const detectedLanguage = request.content
+        ? await this.validator.detectLanguage(request.content)
         : 'fr';
-      const originalLanguage = enrichedRequest.originalLanguage
-        && enrichedRequest.originalLanguage === detectedLanguage
-        ? enrichedRequest.originalLanguage
+      const originalLanguage = request.originalLanguage
+        && request.originalLanguage === detectedLanguage
+        ? request.originalLanguage
         : detectedLanguage;
 
-      // 6. Déterminer les IDs pour la sauvegarde selon le type d'authentification
-      const { actualSenderId, actualAnonymousSenderId } = await this.resolveSenderIds(
-        authContext,
-        senderId,
-        conversationId
-      );
-
-      // 7. Sauvegarde du message en base avec les bons IDs
+      // 5. Sauvegarde du message en base
       const message = await this.processor.saveMessage({
         ...request,
         originalLanguage,
         conversationId,
-        senderId: actualSenderId,
-        anonymousSenderId: actualAnonymousSenderId,
+        senderId: participantId,
         mentionedUserIds: request.mentionedUserIds,
-        // Map E2EE encrypted payload to DB fields if present
         encryptedContent: request.encryptedPayload?.ciphertext,
         encryptionMetadata: request.encryptedPayload ? {
           mode: 'e2ee',
           ...request.encryptedPayload
-        } as any : undefined
+        } as unknown as import('@meeshy/shared/prisma/client').Prisma.InputJsonValue : undefined
       });
 
-      // 8. Mise à jour de la conversation
+      // 6. Mise à jour de la conversation
       await this.updateConversation(conversationId);
 
-      // 9. Marquer comme reçu ET lu pour l'expéditeur
+      // 7. Marquer comme reçu ET lu pour l'expéditeur
       await this.readStatusService.markMessagesAsRead(
-        actualSenderId || actualAnonymousSenderId || senderId,
+        participantId,
         conversationId,
         message.id
       );
 
-      // 10. Queue de traduction (async)
+      // 8. Queue de traduction (async)
       const translationStatus = await this.queueTranslation(message, originalLanguage);
 
-      // 11. Mise à jour des statistiques (async)
+      // 9. Mise à jour des statistiques (async)
       const stats = await this.updateStats(conversationId, originalLanguage);
 
-      // 12. Génération de la réponse unifiée
+      // 10. Génération de la réponse unifiée
       const response = await this.createSuccessResponse(
         message,
         requestId,
@@ -146,72 +126,6 @@ export class MessagingService {
         'Erreur interne lors de l\'envoi du message',
         requestId
       );
-    }
-  }
-
-  /**
-   * Crée le contexte d'authentification basé sur les tokens
-   * JWT Token = utilisateur enregistré
-   * Session Token = utilisateur anonyme
-   */
-  private createAuthenticationContext(
-    senderId: string,
-    jwtToken?: string,
-    sessionToken?: string,
-    isAuthenticated?: boolean
-  ): AuthenticationContext {
-    if (jwtToken) {
-      return {
-        type: 'jwt',
-        userId: senderId,
-        jwtToken: jwtToken,
-        isAnonymous: false
-      };
-    } else if (sessionToken) {
-      return {
-        type: 'session',
-        sessionToken: sessionToken,
-        isAnonymous: true
-      };
-    } else if (isAuthenticated) {
-      // Internal/system call (e.g. agent service) — senderId trusted, no token needed
-      return {
-        type: 'jwt',
-        userId: senderId,
-        isAnonymous: false
-      };
-    } else {
-      throw new Error('Authentication required: no JWT token or session token provided');
-    }
-  }
-
-  /**
-   * Résoudre les IDs de l'expéditeur selon le type d'authentification
-   */
-  private async resolveSenderIds(
-    authContext: AuthenticationContext,
-    senderId: string,
-    conversationId: string
-  ): Promise<{ actualSenderId?: string; actualAnonymousSenderId?: string }> {
-    if (authContext.isAnonymous) {
-      const identifier = authContext.sessionToken || senderId;
-
-      const anonymousParticipant = await this.prisma.anonymousParticipant.findFirst({
-        where: {
-          sessionToken: identifier,
-          conversationId: conversationId,
-          isActive: true
-        },
-        select: { id: true }
-      });
-
-      if (!anonymousParticipant) {
-        throw new Error('Participant anonyme non trouvé pour la sauvegarde');
-      }
-
-      return { actualAnonymousSenderId: anonymousParticipant.id };
-    } else {
-      return { actualSenderId: authContext.userId || senderId };
     }
   }
 
@@ -234,12 +148,11 @@ export class MessagingService {
         id: message.id,
         conversationId: message.conversationId,
         senderId: message.senderId,
-        anonymousSenderId: message.anonymousSenderId,
         content: message.content,
         originalLanguage,
         messageType: message.messageType,
         replyToId: message.replyToId
-      } as any);
+      });
 
       return {
         status: 'pending',
@@ -314,7 +227,7 @@ export class MessagingService {
       debug: {
         requestId,
         serverTime: new Date(),
-        userId: message.senderId || message.anonymousSenderId || '',
+        userId: message.senderId,
         conversationId: message.conversationId,
         messageId: message.id
       }

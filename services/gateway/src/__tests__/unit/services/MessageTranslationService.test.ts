@@ -64,10 +64,7 @@ const createMockPrisma = () => ({
     upsert: jest.fn() as MockFn,
     deleteMany: jest.fn() as MockFn
   },
-  conversationMember: {
-    findMany: jest.fn() as MockFn
-  },
-  anonymousParticipant: {
+  participant: {
     findMany: jest.fn() as MockFn
   },
   userStats: {
@@ -167,8 +164,7 @@ describe('MessageTranslationService', () => {
       });
 
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-789',
         conversationId: 'conv-123',
@@ -202,8 +198,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-new',
         conversationId: 'new-conv-123',
@@ -219,11 +214,11 @@ describe('MessageTranslationService', () => {
       expect(createCall.data.type).toBe('group');
     });
 
-    it('should handle message with anonymous sender', async () => {
+    it('should handle message with participant sender', async () => {
       const messageData: MessageData = {
         conversationId: 'conv-123',
-        anonymousSenderId: 'anon-user-123',
-        content: 'Anonymous message',
+        senderId: 'participant-123',
+        content: 'Participant message',
         originalLanguage: 'fr'
       };
 
@@ -231,17 +226,16 @@ describe('MessageTranslationService', () => {
       mockPrisma.message.create.mockResolvedValue({
         id: 'msg-anon',
         conversationId: 'conv-123',
-        anonymousSenderId: 'anon-user-123',
-        content: 'Anonymous message',
+        senderId: 'participant-123',
+        content: 'Participant message',
         originalLanguage: 'fr'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-anon',
         conversationId: 'conv-123',
-        content: 'Anonymous message',
+        content: 'Participant message',
         originalLanguage: 'fr'
       });
 
@@ -249,8 +243,8 @@ describe('MessageTranslationService', () => {
 
       expect(result.messageId).toBe('msg-anon');
       const createCall = mockPrisma.message.create.mock.calls[0][0];
-      expect(createCall.data.anonymousSenderId).toBe('anon-user-123');
-      expect(createCall.data.senderId).toBeNull();
+      expect(createCall.data.senderId).toBe('participant-123');
+      // senderId is now always required
     });
 
     it('should handle message with replyToId', async () => {
@@ -268,8 +262,7 @@ describe('MessageTranslationService', () => {
         replyToId: 'original-msg-123'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'reply-msg',
         conversationId: 'conv-123',
@@ -294,8 +287,7 @@ describe('MessageTranslationService', () => {
       mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-123' });
       mockPrisma.message.create.mockResolvedValue({ id: 'msg-1' });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({ id: 'msg-1', content: 'Test', originalLanguage: 'en', conversationId: 'conv-123' });
 
       await translationService.handleNewMessage(messageData);
@@ -340,8 +332,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.messageTranslation.deleteMany.mockResolvedValue({ count: 0 });
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
 
       const result = await translationService.handleNewMessage(messageData);
 
@@ -526,8 +517,7 @@ describe('MessageTranslationService', () => {
       mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-123' });
       mockPrisma.message.create.mockResolvedValue({ id: 'msg-1' });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({ id: 'msg-1', content: 'Test', originalLanguage: 'en', conversationId: 'conv-123' });
       mockZmqClient.sendTranslationRequest.mockResolvedValue('task-1');
 
@@ -688,8 +678,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-empty',
         conversationId: 'conv-123',
@@ -718,8 +707,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-special',
         conversationId: 'conv-123',
@@ -748,8 +736,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-unicode',
         conversationId: 'conv-123',
@@ -778,8 +765,7 @@ describe('MessageTranslationService', () => {
         originalLanguage: 'en'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-long-content',
         conversationId: 'conv-123',
@@ -805,8 +791,7 @@ describe('MessageTranslationService', () => {
         conversationId: 'conv-123'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-type',
         conversationId: 'conv-123',
@@ -838,8 +823,7 @@ describe('MessageTranslationService', () => {
         conversationId: 'new-conv'
       });
       mockPrisma.conversation.update.mockResolvedValue({});
-      mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-      mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       mockPrisma.message.findFirst.mockResolvedValue({
         id: 'msg-id-gen',
         conversationId: 'new-conv',
@@ -880,7 +864,7 @@ describe('MessageTranslationService - Types and Interfaces', () => {
       id: 'msg-id',
       conversationId: 'conv-123',
       senderId: 'user-123',
-      anonymousSenderId: 'anon-123',
+
       content: 'Hello',
       originalLanguage: 'en',
       messageType: 'text',
@@ -890,7 +874,7 @@ describe('MessageTranslationService - Types and Interfaces', () => {
 
     expect(fullMessageData.id).toBe('msg-id');
     expect(fullMessageData.senderId).toBe('user-123');
-    expect(fullMessageData.anonymousSenderId).toBe('anon-123');
+
     expect(fullMessageData.messageType).toBe('text');
     expect(fullMessageData.replyToId).toBe('reply-msg-id');
     expect(fullMessageData.targetLanguage).toBe('fr');
@@ -1003,10 +987,9 @@ describe('MessageTranslationService - E2EE Message Handling', () => {
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
-      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
     ]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-normal',
       conversationId: 'conv-normal',
@@ -1040,8 +1023,7 @@ describe('MessageTranslationService - E2EE Message Handling', () => {
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-hybrid',
       conversationId: 'conv-hybrid',
@@ -1088,7 +1070,7 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     });
     mockPrisma.conversation.update.mockResolvedValue({});
     // Multiple users with different languages
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
+    mockPrisma.participant.findMany.mockResolvedValue([
       {
         user: {
           systemLanguage: 'fr',
@@ -1116,7 +1098,6 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
         }
       }
     ]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-langs',
       conversationId: 'conv-langs',
@@ -1149,13 +1130,13 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
-      { user: { systemLanguage: 'fr', userFeature: null } }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: null } }
     ]);
     // Anonymous participants with their own languages
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([
-      { language: 'ar' },
-      { language: 'zh' }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'anonymous', language: 'ar', user: null },
+      { type: 'anonymous', language: 'zh', user: null }
     ]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-anon-langs',
@@ -1189,11 +1170,10 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     });
     mockPrisma.conversation.update.mockResolvedValue({});
     // User also speaks French - should be filtered out
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
-      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
-      { user: { systemLanguage: 'en', userFeature: { autoTranslateEnabled: true } } }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
+      { type: 'user', language: 'en', user: { systemLanguage: 'en', userFeature: { autoTranslateEnabled: true } } }
     ]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-filter',
       conversationId: 'conv-filter',
@@ -1230,11 +1210,10 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     });
     mockPrisma.conversation.update.mockResolvedValue({});
     // All users speak French only
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
-      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
-      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } },
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
     ]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-same-lang',
       conversationId: 'conv-same-lang',
@@ -1268,10 +1247,9 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     });
     mockPrisma.conversation.update.mockResolvedValue({});
     // Should use 'ja' from messageData, not from members
-    mockPrisma.conversationMember.findMany.mockResolvedValue([
-      { user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
+    mockPrisma.participant.findMany.mockResolvedValue([
+      { type: 'user', language: 'fr', user: { systemLanguage: 'fr', userFeature: { autoTranslateEnabled: true } } }
     ]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-specific',
       conversationId: 'conv-specific',
@@ -1306,8 +1284,7 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     });
     mockPrisma.conversation.update.mockResolvedValue({});
     // No members found
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-no-members',
       conversationId: 'conv-no-members',
@@ -1322,8 +1299,8 @@ describe('MessageTranslationService - Language Extraction and Filtering', () => 
     await new Promise(resolve => setTimeout(resolve, 100));
     // Should still work, may not send request if no target languages
     // Implementation falls back to ['en', 'fr'] when extraction fails
-    expect(mockPrisma.conversationMember.findMany).toHaveBeenCalled();
-    expect(mockPrisma.anonymousParticipant.findMany).toHaveBeenCalled();
+    expect(mockPrisma.participant.findMany).toHaveBeenCalled();
+    // participant query covers both user and anonymous types
   });
 });
 
@@ -1544,8 +1521,7 @@ describe('MessageTranslationService - Model Type Selection', () => {
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-model',
       conversationId: 'conv-model',
@@ -1582,8 +1558,7 @@ describe('MessageTranslationService - Model Type Selection', () => {
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-short',
       conversationId: 'conv-short',
@@ -1620,8 +1595,7 @@ describe('MessageTranslationService - Model Type Selection', () => {
       originalLanguage: 'en'
     });
     mockPrisma.conversation.update.mockResolvedValue({});
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({
       id: 'msg-long',
       conversationId: 'conv-long',
@@ -1776,8 +1750,7 @@ describe('MessageTranslationService - Retranslation with Old Translation Cleanup
       originalLanguage: 'en'
     });
     mockPrisma.messageTranslation.deleteMany.mockResolvedValue({ count: 2 });
-    mockPrisma.conversationMember.findMany.mockResolvedValue([]);
-    mockPrisma.anonymousParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
 
     const result = await translationService.handleNewMessage(messageData);
 
