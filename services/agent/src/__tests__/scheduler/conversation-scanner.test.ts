@@ -42,6 +42,23 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
       excludedUserIds: [],
       agentInstructions: null,
       webSearchEnabled: false,
+      minWordsPerMessage: 3,
+      maxWordsPerMessage: 400,
+      generationTemperature: 0.8,
+      qualityGateEnabled: true,
+      qualityGateMinScore: 0.5,
+      weekdayMaxMessages: 10,
+      weekendMaxMessages: 25,
+      weekdayMaxUsers: 4,
+      weekendMaxUsers: 8,
+      burstEnabled: true,
+      burstSize: 4,
+      burstIntervalMinutes: 5,
+      quietIntervalMinutes: 90,
+      inactivityDaysThreshold: 3,
+      prioritizeTaggedUsers: true,
+      prioritizeRepliedUsers: true,
+      reactionBoostFactor: 1.5,
     }),
     getConversationContext: jest.fn().mockResolvedValue({ title: 'Test', description: null }),
     getRecentMessages: jest.fn().mockResolvedValue([]),
@@ -69,6 +86,21 @@ function makeDeliveryQueue() {
   return { enqueue: jest.fn() } as any;
 }
 
+function makeConfigCache() {
+  return { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any;
+}
+
+function makeBudgetManager() {
+  return {
+    canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10, current: 0, max: 10 }),
+    canBurst: jest.fn().mockResolvedValue({ allowed: true, minutesUntilNext: 0 }),
+    canAddUser: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 4 }),
+    recordMessage: jest.fn().mockResolvedValue(undefined),
+    recordBurst: jest.fn().mockResolvedValue(undefined),
+    getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0, isWeekend: false }),
+  } as any;
+}
+
 describe('ConversationScanner — analytics upsert after cycle', () => {
   it('calls persistence.updateAnalytics after graph produces message actions', async () => {
     const pendingMessage = {
@@ -83,7 +115,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       }),
     };
     const persistence = makePersistence();
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -103,7 +135,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       }),
     };
     const persistence = makePersistence();
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -118,7 +150,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       }),
     };
     const persistence = makePersistence();
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -138,7 +170,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       }),
     };
     const persistence = makePersistence();
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -157,7 +189,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       }),
     };
     const persistence = makePersistence();
-    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -169,7 +201,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
   it('skips processing when no controlled users are configured', async () => {
     const graph = { invoke: jest.fn() };
     const persistence = makePersistence({ getControlledUsers: jest.fn().mockResolvedValue([]) });
-    const scanner = new ConversationScanner(graph as any, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph as any, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 
@@ -183,7 +215,7 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
       getRecentMessageCount: jest.fn().mockResolvedValue(8),
       getRecentUniqueAuthors: jest.fn().mockResolvedValue(3),
     });
-    const scanner = new ConversationScanner(graph as any, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis());
+    const scanner = new ConversationScanner(graph as any, persistence, makeStateManager(), makeDeliveryQueue(), makeRedis(), makeConfigCache(), makeBudgetManager());
 
     await scanner.scanConversation('conv-1');
 

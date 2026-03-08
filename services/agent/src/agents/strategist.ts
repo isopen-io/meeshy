@@ -41,6 +41,23 @@ REGLES ANTI-REPETITION:
 - Favorise les reactions aux messages recents plutot que de nouveaux messages generiques
 - Maximum 1 intervention par utilisateur si la conversation est peu active
 
+BUDGET QUOTIDIEN:
+- Il reste {budgetRemaining} messages autorise(s) aujourd'hui pour cette conversation
+- {todayUsersActive} utilisateurs ont deja parle aujourd'hui (max: {maxUsersToday})
+- NE DEPASSE PAS le budget restant ({budgetRemaining} messages max)
+- Favorise les utilisateurs qui n'ont PAS encore parle aujourd'hui
+
+ROTATION UTILISATEURS:
+- Poids 3x pour les utilisateurs qui n'ont pas parle aujourd'hui
+- Les utilisateurs dont les messages ont recu des reactions parlent {reactionBoostFactor}x plus souvent
+- Si un utilisateur est @mentionne dans un message recent: il DOIT intervenir (priorite absolue)
+- Si un message recent est une reponse a un message d'un utilisateur inactif: il DOIT reagir
+
+MODE BURST (si actif):
+- Genere exactement {burstSize} interventions avec des delais courts (30-180s entre chaque)
+- Les interventions doivent former un echange naturel (question/reponse, reactions)
+- Utilise au moins 2 utilisateurs differents dans le burst
+
 IMPORTANT:
 - Analyse semantique pure. Fonctionne en TOUTES langues.
 - Ne reponds PAS si l'activite est deja suffisante (score > 0.7)
@@ -85,15 +102,11 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     })
     .join('\n');
 
-  const participantIds = new Set(recentMessages.map((m) => m.senderId));
   const participantsText = recentMessages
     .filter((m, i, arr) => arr.findIndex((a) => a.senderId === m.senderId) === i)
     .map((m) => `@${m.senderUsername ?? m.senderName} (${m.senderId})`)
     .join(', ');
 
-  const effectiveMaxResponses = reactionsEnabled
-    ? maxResponses
-    : maxResponses;
   const effectiveMaxReactions = reactionsEnabled ? maxReactions : 0;
 
   const historyText = (state.agentHistory ?? [])
@@ -114,8 +127,13 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{conversationDescription}', state.conversationDescription || 'Aucune')
     .replace('{agentInstructions}', instructionsText)
     .replace('{minResponses}', String(minResponses))
-    .replace('{maxResponses}', String(effectiveMaxResponses + effectiveMaxReactions))
-    .replace('{agentHistory}', historyText);
+    .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
+    .replace('{agentHistory}', historyText)
+    .replace(/\{budgetRemaining\}/g, String(state.budgetRemaining))
+    .replace('{todayUsersActive}', String(state.todayUsersActive))
+    .replace('{maxUsersToday}', String(state.maxUsersToday))
+    .replace('{reactionBoostFactor}', String(state.reactionBoostFactor))
+    .replace(/\{burstSize\}/g, String(state.burstSize));
 }
 
 function validateInterventions(interventions: unknown[], controlledUserIds: Set<string>, messageIds: Set<string>, maxMessages: number, maxReactions: number): InterventionDirective[] {
@@ -125,6 +143,7 @@ function validateInterventions(interventions: unknown[], controlledUserIds: Set<
   const userActionCounts = new Map<string, number>();
 
   for (const raw of interventions) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
     const item = raw as Record<string, unknown>;
     const userId = String(item.asUserId ?? '');
 
@@ -178,6 +197,12 @@ export function createStrategistNode(llm: LlmProvider) {
       };
     }
 
+    if (state.budgetRemaining <= 0) {
+      return {
+        interventionPlan: { shouldIntervene: false, reason: 'Daily budget exhausted', interventions: [] } satisfies InterventionPlan,
+      };
+    }
+
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
     const maxReactions = state.maxReactionsPerCycle;
@@ -213,11 +238,13 @@ export function createStrategistNode(llm: LlmProvider) {
       const controlledUserIds = new Set(state.controlledUsers.map((u) => u.userId));
       const messageIds = new Set(state.messages.map((m) => m.id));
 
+      const effectiveMaxMessages = Math.min(maxResponses, state.budgetRemaining);
+
       const validatedInterventions = validateInterventions(
         parsed.interventions ?? [],
         controlledUserIds,
         messageIds,
-        maxResponses,
+        effectiveMaxMessages,
         reactionsEnabled ? maxReactions : 0,
       );
 

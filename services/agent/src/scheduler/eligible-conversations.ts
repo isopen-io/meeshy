@@ -25,6 +25,18 @@ export type EligibleConversation = {
   generationTemperature: number;
   qualityGateEnabled: boolean;
   qualityGateMinScore: number;
+  weekdayMaxMessages: number;
+  weekendMaxMessages: number;
+  weekdayMaxUsers: number;
+  weekendMaxUsers: number;
+  burstEnabled: boolean;
+  burstSize: number;
+  burstIntervalMinutes: number;
+  quietIntervalMinutes: number;
+  inactivityDaysThreshold: number;
+  prioritizeTaggedUsers: boolean;
+  prioritizeRepliedUsers: boolean;
+  reactionBoostFactor: number;
 };
 
 export async function findEligibleConversations(persistence: MongoPersistence): Promise<EligibleConversation[]> {
@@ -55,5 +67,17 @@ export async function findEligibleConversations(persistence: MongoPersistence): 
     generationTemperature: config.generationTemperature,
     qualityGateEnabled: config.qualityGateEnabled,
     qualityGateMinScore: config.qualityGateMinScore,
+    weekdayMaxMessages: config.weekdayMaxMessages,
+    weekendMaxMessages: config.weekendMaxMessages,
+    weekdayMaxUsers: config.weekdayMaxUsers,
+    weekendMaxUsers: config.weekendMaxUsers,
+    burstEnabled: config.burstEnabled,
+    burstSize: config.burstSize,
+    burstIntervalMinutes: config.burstIntervalMinutes,
+    quietIntervalMinutes: config.quietIntervalMinutes,
+    inactivityDaysThreshold: config.inactivityDaysThreshold,
+    prioritizeTaggedUsers: config.prioritizeTaggedUsers,
+    prioritizeRepliedUsers: config.prioritizeRepliedUsers,
+    reactionBoostFactor: config.reactionBoostFactor,
   }));
 }

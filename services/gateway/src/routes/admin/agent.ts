@@ -3,9 +3,20 @@ import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { logError } from '../../utils/logger';
 import { getRedisWrapper } from '../../services/RedisWrapper';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+
+const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+
+const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
+  if (!OBJECT_ID_REGEX.test(id)) {
+    reply.status(400).send({ success: false, message: `${name} invalide` });
+    return false;
+  }
+  return true;
+};
 
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({ success: false, message: 'Authentification requise' });
   }
@@ -43,7 +54,29 @@ const agentConfigSchema = z.object({
   generationTemperature: z.number().min(0).max(2).optional(),
   qualityGateEnabled: z.boolean().optional(),
   qualityGateMinScore: z.number().min(0).max(1).optional(),
-});
+  weekdayMaxMessages: z.number().int().min(1).max(100).optional(),
+  weekendMaxMessages: z.number().int().min(1).max(200).optional(),
+  weekdayMaxUsers: z.number().int().min(1).max(20).optional(),
+  weekendMaxUsers: z.number().int().min(1).max(30).optional(),
+  burstEnabled: z.boolean().optional(),
+  burstSize: z.number().int().min(1).max(10).optional(),
+  burstIntervalMinutes: z.number().int().min(1).max(30).optional(),
+  quietIntervalMinutes: z.number().int().min(10).max(480).optional(),
+  inactivityDaysThreshold: z.number().int().min(1).max(30).optional(),
+  prioritizeTaggedUsers: z.boolean().optional(),
+  prioritizeRepliedUsers: z.boolean().optional(),
+  reactionBoostFactor: z.number().min(0.5).max(5).optional(),
+}).refine((data) => {
+  if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
+    return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
+  }
+  return true;
+}, { message: 'minResponsesPerCycle doit être <= maxResponsesPerCycle' }).refine((data) => {
+  if (data.minWordsPerMessage !== undefined && data.maxWordsPerMessage !== undefined) {
+    return data.minWordsPerMessage <= data.maxWordsPerMessage;
+  }
+  return true;
+}, { message: 'minWordsPerMessage doit être <= maxWordsPerMessage' });
 
 const llmConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic']).optional(),
@@ -121,6 +154,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
       if (!config) {
         return reply.status(404).send({ success: false, message: 'Config non trouvée' });
@@ -138,17 +172,21 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const parsed = agentConfigSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
       }
 
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const config = await fastify.prisma.agentConfig.upsert({
         where: { conversationId },
         create: { conversationId, configuredBy: authContext.registeredUser.id, ...parsed.data },
         update: parsed.data,
       });
+
+      const redis = getRedisWrapper();
+      await redis.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
 
       return reply.send({ success: true, data: config });
     } catch (error) {
@@ -163,6 +201,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       await fastify.prisma.agentConfig.delete({ where: { conversationId } });
       return reply.send({ success: true, message: 'Config supprimée' });
     } catch (error) {
@@ -177,6 +216,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const roles = await fastify.prisma.agentUserRole.findMany({ where: { conversationId } });
       return reply.send({ success: true, data: roles });
     } catch (error) {
@@ -191,6 +231,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+      if (!validateObjectId(userId, 'userId', reply)) return;
       const { archetypeId } = request.body as { archetypeId: string };
 
       const archetype = getArchetype(archetypeId);
@@ -246,6 +288,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+      if (!validateObjectId(userId, 'userId', reply)) return;
       const role = await fastify.prisma.agentUserRole.update({
         where: { userId_conversationId: { userId, conversationId } },
         data: { locked: false, confidence: 0 },
@@ -298,7 +342,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
       }
 
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const existing = await fastify.prisma.agentLlmConfig.findFirst();
 
       let config;
@@ -338,6 +382,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
 
       const [config, roles, summary, analytic] = await fastify.prisma.$transaction([
         fastify.prisma.agentConfig.deleteMany({ where: { conversationId } }),
@@ -387,6 +432,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.params as { userId: string };
+      if (!validateObjectId(userId, 'userId', reply)) return;
 
       const [roles, globalProfile] = await fastify.prisma.$transaction([
         fastify.prisma.agentUserRole.deleteMany({ where: { userId } }),
@@ -482,6 +528,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const summary = await fastify.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
       if (!summary) {
         return reply.status(404).send({ success: false, message: 'Résumé non trouvé' });
@@ -499,6 +546,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const redis = getRedisWrapper();
 
       const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles] = await Promise.all([
@@ -562,6 +610,64 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching live analytics:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  const globalConfigSchema = z.object({
+    systemPrompt: z.string().max(10000).optional(),
+    enabled: z.boolean().optional(),
+    defaultProvider: z.enum(['openai', 'anthropic']).optional(),
+    defaultModel: z.string().min(1).optional(),
+    fallbackProvider: z.string().nullable().optional(),
+    fallbackModel: z.string().nullable().optional(),
+    globalDailyBudgetUsd: z.number().min(0).max(1000).optional(),
+    maxConcurrentCalls: z.number().int().min(1).max(50).optional(),
+  });
+
+  // GET /global-config
+  fastify.get('/global-config', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      let config = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+      if (!config) {
+        config = await fastify.prisma.agentGlobalConfig.create({ data: {} });
+      }
+      return reply.send({ success: true, data: config });
+    } catch (error) {
+      logError(fastify.log, 'Error fetching global agent config:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+    }
+  });
+
+  // PUT /global-config
+  fastify.put('/global-config', {
+    onRequest: [fastify.authenticate, requireAgentAdmin],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const parsed = globalConfigSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+      }
+
+      let existing = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+      let config;
+      if (existing) {
+        config = await fastify.prisma.agentGlobalConfig.update({
+          where: { id: existing.id },
+          data: parsed.data,
+        });
+      } else {
+        config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
+      }
+
+      const redis = getRedisWrapper();
+      await redis.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+
+      return reply.send({ success: true, data: config });
+    } catch (error) {
+      logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
     }
   });

@@ -11,6 +11,8 @@ import { RedisStateManager } from './memory/redis-state';
 import { MongoPersistence } from './memory/mongo-persistence';
 import { ConversationScanner } from './scheduler/conversation-scanner';
 import { DeliveryQueue } from './delivery/delivery-queue';
+import { ConfigCache } from './config/config-cache';
+import { DailyBudgetManager } from './scheduler/daily-budget';
 import type { AgentNewMessage } from './zmq/types';
 import type { MessageEntry } from './graph/state';
 import { configRoutes } from './routes/config';
@@ -54,10 +56,14 @@ async function start() {
   await zmqListener.initialize();
   await zmqPublisher.initialize();
 
+  const configCache = new ConfigCache(redis, persistence);
+  const budgetManager = new DailyBudgetManager(redis);
+  await configCache.startListening();
+
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
   const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence);
-  const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis);
+  const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager);
 
   zmqListener.onEvent(async (event) => {
     if (event.type !== 'agent:new-message') return;
@@ -126,6 +132,7 @@ async function start() {
     server.log.info('Shutting down agent service...');
     scanner.stop();
     deliveryQueue.clearAll();
+    await configCache.stopListening();
     await zmqListener.close();
     await zmqPublisher.close();
     await redis.quit();

@@ -52,10 +52,23 @@ const baseState = {
   conversationDescription: '',
   agentInstructions: '',
   webSearchEnabled: false,
+  minWordsPerMessage: 3,
+  maxWordsPerMessage: 400,
+  generationTemperature: 0.8,
+  qualityGateEnabled: true,
+  qualityGateMinScore: 0.5,
   minResponsesPerCycle: 2,
   maxResponsesPerCycle: 12,
   reactionsEnabled: true,
   maxReactionsPerCycle: 8,
+  budgetRemaining: 10,
+  todayUsersActive: 0,
+  maxUsersToday: 4,
+  burstMode: true,
+  burstSize: 4,
+  prioritizeTaggedUsers: true,
+  prioritizeRepliedUsers: true,
+  reactionBoostFactor: 1.5,
 };
 
 describe('Observer Agent', () => {

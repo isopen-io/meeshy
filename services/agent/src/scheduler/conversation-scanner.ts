@@ -2,6 +2,8 @@ import type Redis from 'ioredis';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
 import type { DeliveryQueue } from '../delivery/delivery-queue';
+import type { ConfigCache } from '../config/config-cache';
+import type { DailyBudgetManager } from './daily-budget';
 import type { PendingMessage } from '../graph/state';
 import { findEligibleConversations, type EligibleConversation } from './eligible-conversations';
 import { detectActivity } from './activity-detector';
@@ -21,6 +23,8 @@ export class ConversationScanner {
     private stateManager: RedisStateManager,
     private deliveryQueue: DeliveryQueue,
     private redis: Redis,
+    private configCache: ConfigCache,
+    private budgetManager: DailyBudgetManager,
   ) {}
 
   start(intervalMs?: number): void {
@@ -71,6 +75,18 @@ export class ConversationScanner {
       generationTemperature: config.generationTemperature,
       qualityGateEnabled: config.qualityGateEnabled,
       qualityGateMinScore: config.qualityGateMinScore,
+      weekdayMaxMessages: config.weekdayMaxMessages,
+      weekendMaxMessages: config.weekendMaxMessages,
+      weekdayMaxUsers: config.weekdayMaxUsers,
+      weekendMaxUsers: config.weekendMaxUsers,
+      burstEnabled: config.burstEnabled,
+      burstSize: config.burstSize,
+      burstIntervalMinutes: config.burstIntervalMinutes,
+      quietIntervalMinutes: config.quietIntervalMinutes,
+      inactivityDaysThreshold: config.inactivityDaysThreshold,
+      prioritizeTaggedUsers: config.prioritizeTaggedUsers,
+      prioritizeRepliedUsers: config.prioritizeRepliedUsers,
+      reactionBoostFactor: config.reactionBoostFactor,
     };
     await this.processConversation(conv);
   }
@@ -153,6 +169,29 @@ export class ConversationScanner {
       return;
     }
 
+    const budgetCheck = await this.budgetManager.canSendMessage(conversationId, {
+      weekdayMaxMessages: conv.weekdayMaxMessages,
+      weekendMaxMessages: conv.weekendMaxMessages,
+    });
+    if (!budgetCheck.allowed) {
+      console.log(`[Scanner] Budget exhausted for conv=${conversationId}: ${budgetCheck.current}/${budgetCheck.max}`);
+      return;
+    }
+
+    if (conv.burstEnabled) {
+      const burstCheck = await this.budgetManager.canBurst(conversationId, {
+        quietIntervalMinutes: conv.quietIntervalMinutes,
+      });
+      if (!burstCheck.allowed) {
+        console.log(`[Scanner] Burst cooldown for conv=${conversationId}: ${burstCheck.minutesUntilNext}min remaining`);
+        return;
+      }
+    }
+
+    const todayStats = await this.budgetManager.getTodayStats(conversationId);
+    const day = new Date().getUTCDay();
+    const maxUsersToday = day === 0 || day === 6 ? conv.weekendMaxUsers : conv.weekdayMaxUsers;
+
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length}`);
 
     const result = await this.graph.invoke({
@@ -181,6 +220,14 @@ export class ConversationScanner {
       maxResponsesPerCycle: conv.maxResponsesPerCycle,
       reactionsEnabled: conv.reactionsEnabled,
       maxReactionsPerCycle: conv.maxReactionsPerCycle,
+      budgetRemaining: budgetCheck.remaining,
+      todayUsersActive: todayStats.usersActive,
+      maxUsersToday,
+      burstMode: conv.burstEnabled,
+      burstSize: conv.burstSize,
+      prioritizeTaggedUsers: conv.prioritizeTaggedUsers,
+      prioritizeRepliedUsers: conv.prioritizeRepliedUsers,
+      reactionBoostFactor: conv.reactionBoostFactor,
     });
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
@@ -192,6 +239,15 @@ export class ConversationScanner {
       console.log(`[Scanner] Enqueued ${pendingActions.length} actions for conv=${conversationId}`);
 
       const messageActions = pendingActions.filter((a): a is PendingMessage => a.type === 'message');
+
+      for (const msg of messageActions) {
+        this.budgetManager.recordMessage(conversationId, msg.asUserId).catch((err) =>
+          console.error(`[Scanner] Budget record error:`, err));
+      }
+      if (conv.burstEnabled && messageActions.length > 0) {
+        this.budgetManager.recordBurst(conversationId).catch((err) =>
+          console.error(`[Scanner] Burst record error:`, err));
+      }
       if (messageActions.length > 0) {
         const wordsSent = messageActions.reduce((sum, m) => sum + (m.content?.split(/\s+/).length ?? 0), 0);
         const controlledUsersList = (result.controlledUsers ?? []) as Array<{ role: { confidence: number } }>;

@@ -60,6 +60,18 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     generationTemperature: 0.8,
     qualityGateEnabled: true,
     qualityGateMinScore: 0.5,
+    weekdayMaxMessages: 10,
+    weekendMaxMessages: 25,
+    weekdayMaxUsers: 4,
+    weekendMaxUsers: 6,
+    burstEnabled: true,
+    burstSize: 4,
+    burstIntervalMinutes: 5,
+    quietIntervalMinutes: 90,
+    inactivityDaysThreshold: 3,
+    prioritizeTaggedUsers: true,
+    prioritizeRepliedUsers: true,
+    reactionBoostFactor: 1.5,
   });
 
   useEffect(() => {
@@ -94,6 +106,18 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         generationTemperature: config.generationTemperature ?? 0.8,
         qualityGateEnabled: config.qualityGateEnabled ?? true,
         qualityGateMinScore: config.qualityGateMinScore ?? 0.5,
+        weekdayMaxMessages: config.weekdayMaxMessages ?? 10,
+        weekendMaxMessages: config.weekendMaxMessages ?? 25,
+        weekdayMaxUsers: config.weekdayMaxUsers ?? 4,
+        weekendMaxUsers: config.weekendMaxUsers ?? 6,
+        burstEnabled: config.burstEnabled ?? true,
+        burstSize: config.burstSize ?? 4,
+        burstIntervalMinutes: config.burstIntervalMinutes ?? 5,
+        quietIntervalMinutes: config.quietIntervalMinutes ?? 90,
+        inactivityDaysThreshold: config.inactivityDaysThreshold ?? 3,
+        prioritizeTaggedUsers: config.prioritizeTaggedUsers ?? true,
+        prioritizeRepliedUsers: config.prioritizeRepliedUsers ?? true,
+        reactionBoostFactor: config.reactionBoostFactor ?? 1.5,
       });
     } else {
       setConversationId('');
@@ -126,6 +150,18 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         generationTemperature: 0.8,
         qualityGateEnabled: true,
         qualityGateMinScore: 0.5,
+        weekdayMaxMessages: 10,
+        weekendMaxMessages: 25,
+        weekdayMaxUsers: 4,
+        weekendMaxUsers: 6,
+        burstEnabled: true,
+        burstSize: 4,
+        burstIntervalMinutes: 5,
+        quietIntervalMinutes: 90,
+        inactivityDaysThreshold: 3,
+        prioritizeTaggedUsers: true,
+        prioritizeRepliedUsers: true,
+        reactionBoostFactor: 1.5,
       });
     }
   }, [config, open]);
@@ -483,6 +519,141 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 </p>
               </div>
             )}
+          </div>
+
+          <Separator />
+
+          {/* Scheduling & Rythme */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Scheduling & Rythme</h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Messages/jour (semaine)</Label>
+                <Input
+                  type="number"
+                  value={form.weekdayMaxMessages ?? 10}
+                  onChange={e => updateField('weekdayMaxMessages', Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))}
+                  min={1}
+                  max={100}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Messages/jour (weekend)</Label>
+                <Input
+                  type="number"
+                  value={form.weekendMaxMessages ?? 25}
+                  onChange={e => updateField('weekendMaxMessages', Math.max(1, Math.min(200, parseInt(e.target.value) || 25)))}
+                  min={1}
+                  max={200}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Utilisateurs/jour (semaine)</Label>
+                <Input
+                  type="number"
+                  value={form.weekdayMaxUsers ?? 4}
+                  onChange={e => updateField('weekdayMaxUsers', Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
+                  min={1}
+                  max={20}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Utilisateurs/jour (weekend)</Label>
+                <Input
+                  type="number"
+                  value={form.weekendMaxUsers ?? 6}
+                  onChange={e => updateField('weekendMaxUsers', Math.max(1, Math.min(30, parseInt(e.target.value) || 6)))}
+                  min={1}
+                  max={30}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Mode burst</Label>
+                <p className="text-xs text-gray-500 mt-1">Groupe les messages en rafales avec des pauses entre elles</p>
+              </div>
+              <Switch checked={form.burstEnabled ?? true} onCheckedChange={v => updateField('burstEnabled', v)} />
+            </div>
+
+            {(form.burstEnabled ?? true) && (
+              <div className="space-y-4 pl-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Taille burst</Label>
+                    <Input
+                      type="number"
+                      value={form.burstSize ?? 4}
+                      onChange={e => updateField('burstSize', Math.max(1, Math.min(10, parseInt(e.target.value) || 4)))}
+                      min={1}
+                      max={10}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Intervalle (min)</Label>
+                    <Input
+                      type="number"
+                      value={form.burstIntervalMinutes ?? 5}
+                      onChange={e => updateField('burstIntervalMinutes', Math.max(1, Math.min(30, parseInt(e.target.value) || 5)))}
+                      min={1}
+                      max={30}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Pause (min)</Label>
+                    <Input
+                      type="number"
+                      value={form.quietIntervalMinutes ?? 90}
+                      onChange={e => updateField('quietIntervalMinutes', Math.max(10, Math.min(480, parseInt(e.target.value) || 90)))}
+                      min={10}
+                      max={480}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Seuil d&apos;inactivité (jours)</Label>
+              <Input
+                type="number"
+                value={form.inactivityDaysThreshold ?? 3}
+                onChange={e => updateField('inactivityDaysThreshold', Math.max(1, Math.min(30, parseInt(e.target.value) || 3)))}
+                min={1}
+                max={30}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label>Prioriser les utilisateurs taggés</Label>
+              <Switch checked={form.prioritizeTaggedUsers ?? true} onCheckedChange={v => updateField('prioritizeTaggedUsers', v)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Prioriser les réponses</Label>
+              <Switch checked={form.prioritizeRepliedUsers ?? true} onCheckedChange={v => updateField('prioritizeRepliedUsers', v)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Boost réactions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400 w-8">0.5x</span>
+                <input
+                  type="range"
+                  min={5}
+                  max={50}
+                  step={1}
+                  value={Math.round((form.reactionBoostFactor ?? 1.5) * 10)}
+                  onChange={e => updateField('reactionBoostFactor', parseInt(e.target.value) / 10)}
+                  className="flex-1"
+                />
+                <span className="text-xs text-gray-400 w-8">5.0x</span>
+              </div>
+            </div>
           </div>
 
           {/* Rôles (only for existing configs) */}

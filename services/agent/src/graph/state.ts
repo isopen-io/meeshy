@@ -203,6 +203,38 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => 8,
   }),
+  budgetRemaining: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 10,
+  }),
+  todayUsersActive: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 0,
+  }),
+  maxUsersToday: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 4,
+  }),
+  burstMode: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  burstSize: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 4,
+  }),
+  prioritizeTaggedUsers: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  prioritizeRepliedUsers: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => true,
+  }),
+  reactionBoostFactor: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 1.5,
+  }),
   agentHistory: Annotation<AgentHistoryEntry[]>({
     reducer: (current, update) => {
       const combined = [...current, ...update];
