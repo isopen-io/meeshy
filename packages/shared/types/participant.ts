@@ -66,6 +66,7 @@ const BaseParticipantSchema = z.object({
   bannedAt: z.coerce.date().optional(),
   nickname: z.string().optional(),
   lastActiveAt: z.coerce.date().optional(),
+  sessionTokenHash: z.string().optional(),
   anonymousSession: AnonymousSessionSchema.optional(),
   user: z.any().optional(),
 })

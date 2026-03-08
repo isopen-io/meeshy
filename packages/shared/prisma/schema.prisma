@@ -467,6 +467,9 @@ model Participant {
   /// Per-conversation display name override
   nickname String?
 
+  /// SHA-256 hash of anonymous session token (denormalized for indexed lookup)
+  sessionTokenHash String?
+
   /// Embedded anonymous session data (only for type="anonymous")
   anonymousSession AnonymousSession?
 
@@ -488,6 +491,7 @@ model Participant {
   @@index([userId])
   @@index([userId, isActive])
   @@index([type])
+  @@index([sessionTokenHash])
 }
 
 /// Message dans une conversation

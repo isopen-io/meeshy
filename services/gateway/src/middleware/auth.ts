@@ -1,85 +1,70 @@
-/**
- * Middleware d'authentification unifié Phase 3.1.1
- * 
- * Centralise l'authentification pour REST et WebSocket
- * - JWT Token = Utilisateurs enregistrés
- * - X-Session-Token = Utilisateurs anonymes
- * - Fournit un contexte complet pour les deux types
- */
-
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { AuthenticationContext, AuthenticationType } from '@meeshy/shared/types';
+import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import jwt from 'jsonwebtoken';
 import { StatusService } from '../services/StatusService';
+import { hashSessionToken } from '../utils/session-token';
 
-// ===== TYPES UNIFIÉS =====
+// ===== TYPES =====
 
-export interface RegisteredUser {
-  id: string;
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  displayName?: string;
-  avatar?: string;
-  role: string;
-  systemLanguage: string;
-  regionalLanguage: string;
-  customDestinationLanguage?: string;
-  isOnline: boolean;
-  lastActiveAt: Date;
+export type RegisteredUser = {
+  readonly id: string;
+  readonly username: string;
+  readonly email: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly displayName?: string;
+  readonly avatar?: string;
+  readonly role: string;
+  readonly systemLanguage: string;
+  readonly regionalLanguage: string;
+  readonly customDestinationLanguage?: string;
+  readonly isOnline: boolean;
+  readonly lastActiveAt: Date;
 }
 
-export interface AnonymousUser {
-  id: string;  // MongoDB ObjectId du AnonymousParticipant
-  sessionToken: string;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  language: string;
-  shareLinkId: string;
-  permissions: {
-    canSendMessages: boolean;
-    canSendFiles: boolean;
-    canSendImages: boolean;
-    canSendVideos: boolean;
-    canSendAudios: boolean;
-    canSendLocations: boolean;
-    canSendLinks: boolean;
-  };
+export type UnifiedAuthContext = {
+  readonly type: ParticipantType;
+  readonly isAuthenticated: boolean;
+  readonly isAnonymous: boolean;
+
+  readonly userId?: string;
+  readonly jwtToken?: string;
+  readonly sessionToken?: string;
+
+  readonly participantId?: string;
+  readonly participant?: unknown;
+
+  readonly displayName: string;
+  readonly userLanguage: string;
+  readonly permissions?: ParticipantPermissions;
+  readonly hasFullAccess: boolean;
+  readonly canSendMessages: boolean;
+
+  /** @deprecated Use userId + type checks instead */
+  readonly registeredUser?: RegisteredUser;
+  /** @deprecated Use participantId + permissions instead */
+  readonly anonymousUser?: AnonymousUserCompat;
+  /** @deprecated Use type checks instead */
+  readonly jwtPayload?: unknown;
 }
 
-export interface UnifiedAuthContext {
-  // Context général
-  type: AuthenticationType;
-  isAuthenticated: boolean;
-  isAnonymous: boolean;
-  
-  // Utilisateur enregistré (si JWT)
-  registeredUser?: RegisteredUser;
-  jwtToken?: string;
-  jwtPayload?: any;
-  
-  // Utilisateur anonyme (si Session)
-  anonymousUser?: AnonymousUser;
-  sessionToken?: string;
-  
-  // Métadonnées communes
-  userLanguage: string;  // Langue principale de l'utilisateur
-  displayName: string;   // Nom d'affichage
-  userId: string;        // ID unifié (user.id ou sessionToken)
-  
-  // Permissions communes
-  canSendMessages: boolean;
-  hasFullAccess: boolean;  // true pour JWT, basé sur permissions pour session
+export type AnonymousUserCompat = {
+  readonly id: string;
+  readonly sessionToken: string;
+  readonly username: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly language: string;
+  readonly shareLinkId: string;
+  readonly permissions: ParticipantPermissions;
 }
 
-export interface UnifiedAuthRequest extends FastifyRequest {
+export type UnifiedAuthRequest = FastifyRequest & {
   authContext: UnifiedAuthContext;
 }
 
-// ===== SERVICE D'AUTHENTIFICATION =====
+// ===== SERVICE =====
 
 export class AuthMiddleware {
   constructor(
@@ -87,90 +72,69 @@ export class AuthMiddleware {
     private statusService?: StatusService
   ) {}
 
-  /**
-   * Crée le contexte d'authentification unifié
-   * Supporte JWT + sessionToken pour "Se souvenir de l'appareil"
-   */
   async createAuthContext(
     authorizationHeader?: string,
     sessionToken?: string
   ): Promise<UnifiedAuthContext> {
-
-    // 1. Extraire le JWT token
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
-    // 2. JWT Token = Utilisateur enregistré (peut aussi avoir un sessionToken pour session trusted)
     if (jwtToken) {
-      return await this.createRegisteredUserContext(jwtToken, sessionToken);
+      return this.createRegisteredUserContext(jwtToken, sessionToken);
     }
 
-    // 3. Session Token seul = Utilisateur anonyme
     if (sessionToken) {
-      return await this.createAnonymousUserContext(sessionToken);
+      return this.createAnonymousUserContext(sessionToken);
     }
 
-    // 4. Aucun token = Non authentifié
     return this.createUnauthenticatedContext();
   }
 
-  /**
-   * Contexte pour utilisateur enregistré (JWT)
-   * Supporte aussi les sessions "trusted" (Se souvenir de l'appareil)
-   */
   private async createRegisteredUserContext(jwtToken: string, sessionToken?: string): Promise<UnifiedAuthContext> {
     try {
-      // Vérifier le JWT
-      let jwtPayload: any;
+      let jwtPayload: Record<string, unknown>;
       let jwtExpired = false;
 
       try {
-        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as any;
+        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
       } catch (error) {
-        // Si le JWT est expiré MAIS qu'on a un sessionToken, on peut vérifier la session trusted
         if (error instanceof jwt.TokenExpiredError && sessionToken) {
-          jwtPayload = jwt.decode(jwtToken) as any;
+          jwtPayload = jwt.decode(jwtToken) as Record<string, unknown>;
           jwtExpired = true;
         } else {
           throw error;
         }
       }
 
-      // Si JWT expiré, vérifier si on a une session trusted valide
+      const jwtUserId = jwtPayload.userId as string;
+
       if (jwtExpired && sessionToken) {
-        const hashedSessionToken = require('crypto').createHash('sha256').update(sessionToken).digest('hex');
+        const hashedSessionToken = hashSessionToken(sessionToken);
         const trustedSession = await this.prisma.userSession.findFirst({
           where: {
             sessionToken: hashedSessionToken,
-            userId: jwtPayload.userId,
+            userId: jwtUserId,
             isValid: true,
             isTrusted: true,
-            expiresAt: {
-              gt: new Date()
-            }
+            expiresAt: { gt: new Date() }
           }
         });
 
         if (!trustedSession) {
-          // Session trusted non trouvée ou expirée, rejeter
           throw new Error('JWT expired and no valid trusted session found');
         }
 
-        // Mettre à jour lastActivityAt de la session trusted (en arrière-plan)
         this.prisma.userSession.update({
           where: { id: trustedSession.id },
           data: { lastActivityAt: new Date() }
         }).catch(err => {
-          console.warn('[UnifiedAuth] Échec mise à jour lastActivityAt session trusted:', err);
+          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
         });
-
-        console.log('[UnifiedAuth] ✅ JWT expiré mais session trusted valide - utilisateur:', jwtPayload.userId, '- session prolongée');
       }
-      
-      // Récupérer l'utilisateur complet
+
       const user = await this.prisma.user.findUnique({
-        where: { id: jwtPayload.userId },
+        where: { id: jwtUserId },
         select: {
           id: true,
           username: true,
@@ -195,170 +159,157 @@ export class AuthMiddleware {
         throw new Error('User not found or inactive');
       }
 
-      // Mettre à jour lastActiveAt à chaque requête API (activité détectable)
-      // Throttling: 5 secondes (léger pour ne pas surcharger la DB)
       if (this.statusService) {
         this.statusService.updateUserLastSeen(user.id);
-        // Si l'utilisateur est offline en DB, le remettre en ligne via REST (throttlé 60s)
         if (!user.isOnline) {
           this.statusService.ensureUserOnline(user.id, false);
         }
       }
 
-      // Si on a un sessionToken (session trusted), mettre à jour son lastActivityAt
       if (sessionToken && !jwtExpired) {
-        const hashedSessionToken = require('crypto').createHash('sha256').update(sessionToken).digest('hex');
+        const hashedSessionToken = hashSessionToken(sessionToken);
         this.prisma.userSession.update({
-          where: {
-            sessionToken: hashedSessionToken
-          },
-          data: {
-            lastActivityAt: new Date()
-          }
+          where: { sessionToken: hashedSessionToken },
+          data: { lastActivityAt: new Date() }
         }).catch(err => {
-          // Non-bloquant, on log juste l'erreur
-          console.warn('[UnifiedAuth] Échec mise à jour lastActivityAt session trusted:', err);
+          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
         });
       }
 
-      // Déterminer la langue principale (priorité: custom > regional > system)
       const userLanguage = user.customDestinationLanguage
         || user.regionalLanguage
         || user.systemLanguage
         || 'en';
 
       return {
-        type: 'jwt',
+        type: 'user',
         isAuthenticated: true,
         isAnonymous: false,
 
-        registeredUser: user as RegisteredUser,
-        jwtToken,
-        jwtPayload,
-        sessionToken: sessionToken || undefined, // Inclure le sessionToken si présent (trusted session)
-
-        userLanguage,
-        displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username,
         userId: user.id,
+        jwtToken,
+        sessionToken: sessionToken || undefined,
 
+        displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username,
+        userLanguage,
+        hasFullAccess: true,
         canSendMessages: true,
-        hasFullAccess: true
+
+        registeredUser: user as RegisteredUser,
+        jwtPayload,
       };
 
     } catch (error) {
-      // Logging maîtrisé selon le type d'erreur JWT
       if (error instanceof jwt.TokenExpiredError) {
-        console.warn('[UnifiedAuth] JWT expiré:', new Date(error.expiredAt).toISOString());
+        console.warn('[UnifiedAuth] JWT expired:', new Date(error.expiredAt).toISOString());
       } else if (error instanceof jwt.JsonWebTokenError) {
-        console.warn('[UnifiedAuth] JWT invalide:', error.message);
+        console.warn('[UnifiedAuth] JWT invalid:', error.message);
       } else {
-        // Erreurs inattendues uniquement
-        console.error('[UnifiedAuth] Erreur JWT inattendue:', error);
+        console.error('[UnifiedAuth] Unexpected JWT error:', error);
       }
       throw new Error('Invalid JWT token');
     }
   }
 
-  /**
-   * Contexte pour utilisateur anonyme (Session Token)
-   */
   private async createAnonymousUserContext(sessionToken: string): Promise<UnifiedAuthContext> {
     try {
-      // Récupérer le participant anonyme via session token
-      const anonymousParticipant = await this.prisma.anonymousParticipant.findUnique({
-        where: { sessionToken },
+      const tokenHash = hashSessionToken(sessionToken);
+
+      const participant = await this.prisma.participant.findFirst({
+        where: {
+          sessionTokenHash: tokenHash,
+          type: 'anonymous',
+          isActive: true,
+        },
         select: {
           id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
+          conversationId: true,
+          type: true,
+          displayName: true,
+          avatar: true,
+          role: true,
           language: true,
-          shareLinkId: true,
+          permissions: true,
           isActive: true,
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          shareLink: {
-            select: {
-              id: true,
-              allowAnonymousMessages: true,
-              allowAnonymousFiles: true,
-              allowAnonymousImages: true
-            }
-          }
+          isOnline: true,
+          lastActiveAt: true,
+          nickname: true,
+          anonymousSession: true,
         }
       });
 
-      if (!anonymousParticipant || !anonymousParticipant.isActive) {
+      if (!participant) {
         throw new Error('Anonymous participant not found or inactive');
       }
 
-      // Mettre à jour lastActiveAt à chaque requête API (activité détectable)
-      // Throttling: 5 secondes (léger pour ne pas surcharger la DB)
       if (this.statusService) {
-        this.statusService.updateAnonymousLastSeen(anonymousParticipant.id);
+        this.statusService.updateAnonymousLastSeen(participant.id);
       }
 
-      // Utiliser les permissions du shareLink et du participant
-      const shareLink = anonymousParticipant.shareLink;
-      
-      const anonymousUser: AnonymousUser = {
-        id: anonymousParticipant.id,
+      const profile = participant.anonymousSession?.profile;
+      const rights = participant.anonymousSession?.rights;
+
+      const resolvedPermissions: ParticipantPermissions = {
+        canSendMessages: rights?.canSendMessages ?? participant.permissions.canSendMessages,
+        canSendFiles: rights?.canSendFiles ?? participant.permissions.canSendFiles,
+        canSendImages: rights?.canSendImages ?? participant.permissions.canSendImages,
+        canSendVideos: rights?.canSendVideos ?? participant.permissions.canSendVideos,
+        canSendAudios: rights?.canSendAudios ?? participant.permissions.canSendAudios,
+        canSendLocations: rights?.canSendLocations ?? participant.permissions.canSendLocations,
+        canSendLinks: rights?.canSendLinks ?? participant.permissions.canSendLinks,
+      };
+
+      const displayName = participant.nickname
+        || (profile?.firstName && profile?.lastName
+          ? `${profile.firstName} ${profile.lastName}`.trim()
+          : profile?.username ?? participant.displayName);
+
+      const anonymousCompat: AnonymousUserCompat = {
+        id: participant.id,
         sessionToken,
-        username: anonymousParticipant.username,
-        firstName: anonymousParticipant.firstName || undefined,
-        lastName: anonymousParticipant.lastName || undefined,
-        language: anonymousParticipant.language,
-        shareLinkId: anonymousParticipant.shareLinkId,
-        permissions: {
-          canSendMessages: anonymousParticipant.canSendMessages && (shareLink?.allowAnonymousMessages ?? true),
-          canSendFiles: anonymousParticipant.canSendFiles && (shareLink?.allowAnonymousFiles ?? false),
-          canSendImages: anonymousParticipant.canSendImages && (shareLink?.allowAnonymousImages ?? true),
-          canSendVideos: false, // Non supporté par défaut
-          canSendAudios: false, // Non supporté par défaut
-          canSendLocations: false, // Non supporté par défaut
-          canSendLinks: false // Non supporté par défaut
-        }
+        username: profile?.username ?? participant.displayName,
+        firstName: profile?.firstName,
+        lastName: profile?.lastName,
+        language: participant.language,
+        shareLinkId: participant.anonymousSession?.shareLinkId ?? '',
+        permissions: resolvedPermissions,
       };
 
       return {
-        type: 'session',
+        type: 'anonymous',
         isAuthenticated: true,
         isAnonymous: true,
-        
-        anonymousUser,
+
         sessionToken,
-        
-        userLanguage: anonymousUser.language,
-        displayName: anonymousUser.firstName && anonymousUser.lastName 
-          ? `${anonymousUser.firstName} ${anonymousUser.lastName}`.trim()
-          : anonymousUser.username,
-        userId: anonymousParticipant.id, // Utiliser l'ID du participant anonyme
-        
-        canSendMessages: anonymousUser.permissions.canSendMessages,
-        hasFullAccess: false
+        participantId: participant.id,
+        participant,
+
+        displayName,
+        userLanguage: participant.language,
+        permissions: resolvedPermissions,
+        hasFullAccess: false,
+        canSendMessages: resolvedPermissions.canSendMessages,
+
+        userId: participant.id,
+        anonymousUser: anonymousCompat,
       };
 
     } catch (error) {
-      // Logging maîtrisé pour les tokens de session
-      console.warn('[UnifiedAuth] Session token invalide ou participant inactif');
+      console.warn('[UnifiedAuth] Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
   }
 
-  /**
-   * Contexte pour requête non authentifiée
-   */
   private createUnauthenticatedContext(): UnifiedAuthContext {
     return {
       type: 'anonymous',
       isAuthenticated: false,
       isAnonymous: true,
-      
-      userLanguage: 'fr', // Langue par défaut
+
+      userLanguage: 'fr',
       displayName: 'Visiteur',
       userId: 'anonymous',
-      
+
       canSendMessages: false,
       hasFullAccess: false
     };
@@ -367,9 +318,6 @@ export class AuthMiddleware {
 
 // ===== MIDDLEWARE FASTIFY =====
 
-/**
- * Créer le middleware d'authentification unifié pour Fastify
- */
 export function createUnifiedAuthMiddleware(
   prisma: PrismaClient,
   options: {
@@ -379,16 +327,14 @@ export function createUnifiedAuthMiddleware(
   } = {}
 ) {
   const authMiddleware = new AuthMiddleware(prisma, options.statusService);
-  
+
   return async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
-      // Créer le contexte d'authentification
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
         request.headers['x-session-token'] as string
       );
 
-      // Vérifier les exigences d'authentification
       if (options.requireAuth && !authContext.isAuthenticated) {
         return reply.status(401).send({
           error: 'Authentication required',
@@ -396,50 +342,46 @@ export function createUnifiedAuthMiddleware(
         });
       }
 
-      if (!options.allowAnonymous && authContext.isAnonymous && authContext.type !== 'jwt') {
+      if (!options.allowAnonymous && authContext.isAnonymous && authContext.type !== 'user') {
         return reply.status(403).send({
           error: 'Registered user required',
           code: 'REGISTERED_USER_REQUIRED'
         });
       }
 
-      // Attacher le contexte à la requête
       (request as UnifiedAuthRequest).authContext = authContext;
-      // Backwards compatibility: some legacy routes expect `request.user` to exist
-      // Provide a minimal `user` object derived from the unified context so older
-      // handlers (that reference `request.user.userId`) continue to work.
+
+      // Legacy compat: dynamic property assignment on typed Fastify request requires `any`
       try {
-        (request as any).user = (request as any).user || {};
+        const req = request as unknown as Record<string, unknown>;
+        req.user = req.user || {};
         if (authContext.isAuthenticated && authContext.userId) {
-          (request as any).user.userId = authContext.userId;
-          (request as any).user.username = authContext.displayName || (authContext.registeredUser && authContext.registeredUser.username);
-          (request as any).user.isAnonymous = !!authContext.isAnonymous;
+          const reqUser = req.user as Record<string, unknown>;
+          reqUser.userId = authContext.userId;
+          reqUser.username = authContext.displayName || (authContext.registeredUser && authContext.registeredUser.username);
+          reqUser.isAnonymous = !!authContext.isAnonymous;
         } else {
-          // Ensure user is at least an object to avoid null deref in legacy code
-          (request as any).user.userId = (request as any).user.userId || null;
+          const reqUser = req.user as Record<string, unknown>;
+          reqUser.userId = reqUser.userId || null;
         }
       } catch (e) {
-        // Non-blocking; if this fails, don't prevent request processing
         console.error('[UnifiedAuth] Failed to attach legacy request.user:', e);
       }
 
-      // Additional backwards compatibility: some routes expect `request.auth`
-      // Provide a minimal `auth` object with userId for preference routes compatibility
       try {
-        (request as any).auth = {
+        const req = request as unknown as Record<string, unknown>;
+        req.auth = {
           userId: authContext.userId,
           isAuthenticated: authContext.isAuthenticated,
           isAnonymous: authContext.isAnonymous
         };
       } catch (e) {
-        // Non-blocking; if this fails, don't prevent request processing
         console.error('[UnifiedAuth] Failed to attach request.auth:', e);
       }
 
     } catch (error) {
-      // Logging maîtrisé - éviter les stack traces complètes
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      console.warn('[UnifiedAuth] Échec authentification:', errorMessage);
+      console.warn('[UnifiedAuth] Auth failure:', errorMessage);
 
       if (options.requireAuth) {
         return reply.status(401).send({
@@ -448,32 +390,22 @@ export function createUnifiedAuthMiddleware(
         });
       }
 
-      // Si l'auth n'est pas requise, continuer avec contexte non authentifié
-      const authMiddleware = new AuthMiddleware(prisma);
-      (request as UnifiedAuthRequest).authContext = await authMiddleware.createAuthContext();
+      const fallbackMiddleware = new AuthMiddleware(prisma);
+      (request as UnifiedAuthRequest).authContext = await fallbackMiddleware.createAuthContext();
     }
   };
 }
 
 // ===== HELPER FUNCTIONS =====
 
-/**
- * Vérifier si l'utilisateur est enregistré
- */
 export function isRegisteredUser(authContext: UnifiedAuthContext): boolean {
-  return authContext.type === 'jwt' && !authContext.isAnonymous;
+  return authContext.type === 'user' && !authContext.isAnonymous;
 }
 
-/**
- * Vérifier si l'utilisateur est anonyme
- */
 export function isAnonymousUser(authContext: UnifiedAuthContext): boolean {
-  return authContext.type === 'session' && authContext.isAnonymous;
+  return authContext.type === 'anonymous' && authContext.isAnonymous && authContext.isAuthenticated;
 }
 
-/**
- * Obtenir les permissions de l'utilisateur
- */
 export function getUserPermissions(authContext: UnifiedAuthContext) {
   if (isRegisteredUser(authContext)) {
     return {
@@ -487,14 +419,21 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
       hasFullAccess: true
     };
   }
-  
+
+  if (authContext.permissions) {
+    return {
+      ...authContext.permissions,
+      hasFullAccess: false
+    };
+  }
+
   if (isAnonymousUser(authContext) && authContext.anonymousUser) {
     return {
       ...authContext.anonymousUser.permissions,
       hasFullAccess: false
     };
   }
-  
+
   return {
     canSendMessages: false,
     canSendFiles: false,
@@ -507,33 +446,30 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
   };
 }
 
-// ===== MIDDLEWARE COMPATIBILITÉ (LEGACY) =====
+// ===== LEGACY COMPATIBILITY =====
 
-/**
- * Middleware d'authentification basique pour compatibilité
- * @deprecated Utiliser createUnifiedAuthMiddleware à la place
- */
+/** @deprecated Use createUnifiedAuthMiddleware */
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   console.warn('[AUTH] authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
-  
+
   try {
     const authHeader = request.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new Error('No authorization header');
     }
-    
+
     const token = authHeader.substring(7);
-    
-    // En mode développement, utiliser le service d'authentification avec les comptes de test
+
     if (process.env.NODE_ENV === 'development') {
       const { AuthService } = await import('../services/AuthTestService');
       const decoded = AuthService.verifyToken(token);
-      
+
       if (decoded) {
         const user = AuthService.getUserById(decoded.userId);
         if (user) {
-          (request as any).user = {
+          const req = request as unknown as Record<string, unknown>;
+          req.user = {
             userId: user.id,
             username: user.username,
             email: user.email,
@@ -544,31 +480,29 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       }
     }
 
-    // En production, utiliser le JWT standard
     await request.jwtVerify();
-    
-    const { userId, email, username } = request.user as any;
+
+    const reqUser = request.user as Record<string, unknown>;
+    const { userId } = reqUser;
     if (!userId) {
       throw new Error('Invalid token payload: missing userId');
     }
-    (request.user as any).id = userId;
-    
+    reqUser.id = userId;
+
   } catch (error) {
     console.error('Authentication failed:', error);
-    reply.code(401).send({ 
+    reply.code(401).send({
       success: false,
-      message: 'Token invalide ou manquant' 
+      message: 'Token invalide ou manquant'
     });
   }
 }
 
-/**
- * Middleware de vérification des rôles
- * @deprecated Utiliser getUserPermissions à la place
- */
+/** @deprecated Use getUserPermissions */
 export function requireRole(allowedRoles: string | string[]) {
-  return async (request: FastifyRequest, reply: FastifyReply) => {
+  return async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Role checking logic placeholder
     } catch (error) {
       reply.code(403).send({ error: 'Insufficient permissions' });
     }
@@ -579,8 +513,8 @@ export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
 export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
-export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
+export async function requireEmailVerification(_request: FastifyRequest, _reply: FastifyReply) {
 }
 
-export async function requireActiveAccount(request: FastifyRequest, reply: FastifyReply) {
+export async function requireActiveAccount(_request: FastifyRequest, _reply: FastifyReply) {
 }
