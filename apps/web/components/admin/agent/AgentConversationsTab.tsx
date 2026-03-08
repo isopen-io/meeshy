@@ -19,7 +19,6 @@ export function AgentConversationsTab() {
   const [hasMore, setHasMore] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<AgentConfigData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newConversationId, setNewConversationId] = useState('');
   const limit = 20;
 
   const fetchConfigs = useCallback(async () => {
@@ -27,9 +26,9 @@ export function AgentConversationsTab() {
     try {
       const response = await agentAdminService.getConfigs(page, limit);
       if (response.success && response.data) {
-        setConfigs(response.data.data ?? response.data as unknown as AgentConfigData[]);
-        setTotal((response.data as any).pagination?.total ?? 0);
-        setHasMore((response.data as any).pagination?.hasMore ?? false);
+        setConfigs(Array.isArray(response.data) ? response.data : []);
+        setTotal(response.pagination?.total ?? 0);
+        setHasMore(response.pagination?.hasMore ?? false);
       }
     } catch {
       toast.error('Erreur lors du chargement des configurations');

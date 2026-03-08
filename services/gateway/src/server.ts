@@ -563,7 +563,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           { name: 'attachments', description: 'File uploads and downloads' },
           { name: 'translation', description: 'Translation services' },
           { name: 'categories', description: 'Conversation categories management' },
-          { name: 'admin', description: 'Admin operations' }
+          { name: 'admin', description: 'Admin operations' },
+          { name: 'admin-agent', description: 'Agent AI admin — configs, roles, archetypes, LLM, resets' }
         ],
         components: {
           securitySchemes: {

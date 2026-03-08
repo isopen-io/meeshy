@@ -1,14 +1,27 @@
 import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 
-export interface AgentStatsData {
+function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
+  if (!response.success || !response.data) return response as ApiResponse<T>;
+  const raw = response.data as Record<string, unknown>;
+  if (typeof raw === 'object' && raw !== null && 'success' in raw && 'data' in raw) {
+    return {
+      ...response,
+      data: raw.data as T,
+      pagination: (raw as { pagination?: ApiResponse<T>['pagination'] }).pagination ?? response.pagination,
+    };
+  }
+  return response as ApiResponse<T>;
+}
+
+export type AgentStatsData = {
   totalConfigs: number;
   activeConfigs: number;
   totalRoles: number;
   totalArchetypes: number;
-}
+};
 
-export interface AgentConfigData {
+export type AgentConfigData = {
   id: string;
   conversationId: string;
   enabled: boolean;
@@ -54,9 +67,9 @@ export interface AgentConfigData {
   reactionBoostFactor: number;
   createdAt: string;
   updatedAt: string;
-}
+};
 
-export interface AgentConfigUpsert {
+export type AgentConfigUpsert = {
   enabled?: boolean;
   autoPickupEnabled?: boolean;
   inactivityThresholdHours?: number;
@@ -97,9 +110,9 @@ export interface AgentConfigUpsert {
   prioritizeTaggedUsers?: boolean;
   prioritizeRepliedUsers?: boolean;
   reactionBoostFactor?: number;
-}
+};
 
-export interface AgentGlobalConfigData {
+export type AgentGlobalConfigData = {
   id: string;
   systemPrompt: string;
   enabled: boolean;
@@ -110,9 +123,9 @@ export interface AgentGlobalConfigData {
   globalDailyBudgetUsd: number;
   maxConcurrentCalls: number;
   updatedAt: string;
-}
+};
 
-export interface AgentGlobalConfigUpsert {
+export type AgentGlobalConfigUpsert = {
   systemPrompt?: string;
   enabled?: boolean;
   defaultProvider?: string;
@@ -121,9 +134,9 @@ export interface AgentGlobalConfigUpsert {
   fallbackModel?: string | null;
   globalDailyBudgetUsd?: number;
   maxConcurrentCalls?: number;
-}
+};
 
-export interface AgentRoleData {
+export type AgentRoleData = {
   id: string;
   userId: string;
   conversationId: string;
@@ -139,14 +152,19 @@ export interface AgentRoleData {
   catchphrases: string[];
   responseTriggers: string[];
   silenceTriggers: string[];
+  relationshipMap: Record<string, unknown>;
+  overrideTone: string | null;
+  overrideVocabularyLevel: string | null;
+  overrideTypicalLength: string | null;
+  overrideEmojiUsage: string | null;
   messagesAnalyzed: number;
   confidence: number;
   locked: boolean;
   createdAt: string;
   updatedAt: string;
-}
+};
 
-export interface ArchetypeData {
+export type ArchetypeData = {
   id: string;
   name: string;
   personaSummary: string;
@@ -159,9 +177,9 @@ export interface ArchetypeData {
   silenceTriggers: string[];
   catchphrases: string[];
   confidence: number;
-}
+};
 
-export interface LlmConfigData {
+export type LlmConfigData = {
   id: string;
   provider: string;
   model: string;
@@ -177,9 +195,9 @@ export interface LlmConfigData {
   configuredBy: string;
   createdAt: string;
   updatedAt: string;
-}
+};
 
-export interface LlmConfigUpdate {
+export type LlmConfigUpdate = {
   provider?: string;
   model?: string;
   apiKeyEncrypted?: string;
@@ -191,116 +209,165 @@ export interface LlmConfigUpdate {
   fallbackProvider?: string | null;
   fallbackModel?: string | null;
   fallbackApiKeyEncrypted?: string | null;
-}
+};
 
-export interface AgentSummaryData {
+export type AgentSummaryData = {
   id: string;
   conversationId: string;
   summary: string;
-  topics: string[];
+  currentTopics: string[];
   overallTone: string;
+  messageCount: number;
   updatedAt: string;
-}
+};
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  pagination: { total: number; page: number; limit: number; hasMore: boolean };
-}
+export type ToneProfileEntry = {
+  userId: string;
+  displayName: string;
+  tone: string;
+  vocabularyLevel: string;
+  messagesAnalyzed: number;
+  confidence: number;
+  locked: boolean;
+};
+
+export type ControlledUserEntry = {
+  userId: string;
+  displayName: string;
+  systemLanguage: string;
+  confidence: number;
+  locked: boolean;
+};
+
+export type AnalyticsData = {
+  messagesSent: number;
+  totalWordsSent: number;
+  avgConfidence: number;
+  lastResponseAt: string | null;
+};
+
+export type SummaryRecordData = {
+  summary: string;
+  currentTopics: string[];
+  overallTone: string;
+  messageCount: number;
+};
+
+export type LiveStateData = {
+  conversationId: string;
+  summary: string;
+  toneProfiles: Record<string, ToneProfileEntry>;
+  cachedMessageCount: number;
+  analytics: AnalyticsData | null;
+  summaryRecord: SummaryRecordData | null;
+  controlledUsers: ControlledUserEntry[];
+};
+
+export type ResetDeletedCounts = {
+  configs?: number;
+  roles?: number;
+  summaries?: number;
+  analytics?: number;
+  globalProfiles?: number;
+  redisKeys?: number;
+  redisProfilesCleaned?: number;
+  cooldownsCleared?: number;
+};
+
+export type ResetResult = {
+  conversationId?: string;
+  userId?: string;
+  deleted: ResetDeletedCounts;
+};
 
 export const agentAdminService = {
   async getStats(): Promise<ApiResponse<AgentStatsData>> {
-    return apiService.get<AgentStatsData>('/admin/agent/stats');
+    const response = await apiService.get('/admin/agent/stats');
+    return unwrapResponse<AgentStatsData>(response);
   },
 
-  async getConfigs(page = 1, limit = 20): Promise<ApiResponse<PaginatedResponse<AgentConfigData>>> {
-    return apiService.get<PaginatedResponse<AgentConfigData>>('/admin/agent/configs', { page, limit });
+  async getConfigs(page = 1, limit = 20): Promise<ApiResponse<AgentConfigData[]>> {
+    const response = await apiService.get('/admin/agent/configs', { page, limit });
+    return unwrapResponse<AgentConfigData[]>(response);
   },
 
   async getConfig(conversationId: string): Promise<ApiResponse<AgentConfigData>> {
-    return apiService.get<AgentConfigData>(`/admin/agent/configs/${conversationId}`);
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}`);
+    return unwrapResponse<AgentConfigData>(response);
   },
 
   async upsertConfig(conversationId: string, data: AgentConfigUpsert): Promise<ApiResponse<AgentConfigData>> {
-    return apiService.put<AgentConfigData>(`/admin/agent/configs/${conversationId}`, data);
+    const response = await apiService.put(`/admin/agent/configs/${conversationId}`, data);
+    return unwrapResponse<AgentConfigData>(response);
   },
 
   async deleteConfig(conversationId: string): Promise<ApiResponse<void>> {
-    return apiService.delete<void>(`/admin/agent/configs/${conversationId}`);
+    const response = await apiService.delete(`/admin/agent/configs/${conversationId}`);
+    return unwrapResponse<void>(response);
   },
 
   async getRoles(conversationId: string): Promise<ApiResponse<AgentRoleData[]>> {
-    return apiService.get<AgentRoleData[]>(`/admin/agent/configs/${conversationId}/roles`);
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}/roles`);
+    return unwrapResponse<AgentRoleData[]>(response);
   },
 
   async assignArchetype(conversationId: string, userId: string, archetypeId: string): Promise<ApiResponse<AgentRoleData>> {
-    return apiService.post<AgentRoleData>(`/admin/agent/roles/${conversationId}/${userId}/assign`, { archetypeId });
+    const response = await apiService.post(`/admin/agent/roles/${conversationId}/${userId}/assign`, { archetypeId });
+    return unwrapResponse<AgentRoleData>(response);
   },
 
   async unlockRole(conversationId: string, userId: string): Promise<ApiResponse<AgentRoleData>> {
-    return apiService.post<AgentRoleData>(`/admin/agent/roles/${conversationId}/${userId}/unlock`, {});
+    const response = await apiService.post(`/admin/agent/roles/${conversationId}/${userId}/unlock`, {});
+    return unwrapResponse<AgentRoleData>(response);
   },
 
   async getArchetypes(): Promise<ApiResponse<ArchetypeData[]>> {
-    return apiService.get<ArchetypeData[]>('/admin/agent/archetypes');
+    const response = await apiService.get('/admin/agent/archetypes');
+    return unwrapResponse<ArchetypeData[]>(response);
   },
 
   async getLlmConfig(): Promise<ApiResponse<LlmConfigData | null>> {
-    return apiService.get<LlmConfigData | null>('/admin/agent/llm');
+    const response = await apiService.get('/admin/agent/llm');
+    return unwrapResponse<LlmConfigData | null>(response);
   },
 
   async updateLlmConfig(data: LlmConfigUpdate): Promise<ApiResponse<LlmConfigData>> {
-    return apiService.put<LlmConfigData>('/admin/agent/llm', data);
+    const response = await apiService.put('/admin/agent/llm', data);
+    return unwrapResponse<LlmConfigData>(response);
   },
 
   async getConversationSummary(conversationId: string): Promise<ApiResponse<AgentSummaryData>> {
-    return apiService.get<AgentSummaryData>(`/admin/agent/configs/${conversationId}/summary`);
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}/summary`);
+    return unwrapResponse<AgentSummaryData>(response);
   },
 
   async getGlobalConfig(): Promise<ApiResponse<AgentGlobalConfigData>> {
-    return apiService.get<AgentGlobalConfigData>('/admin/agent/global-config');
+    const response = await apiService.get('/admin/agent/global-config');
+    return unwrapResponse<AgentGlobalConfigData>(response);
   },
 
   async updateGlobalConfig(data: AgentGlobalConfigUpsert): Promise<ApiResponse<AgentGlobalConfigData>> {
-    return apiService.put<AgentGlobalConfigData>('/admin/agent/global-config', data);
+    const response = await apiService.put('/admin/agent/global-config', data);
+    return unwrapResponse<AgentGlobalConfigData>(response);
   },
 
-  async getLiveState(conversationId: string) {
-    try {
-      const response = await apiService.get(`/admin/agent/configs/${conversationId}/live`);
-      return response;
-    } catch (error) {
-      console.error('Error fetching agent live state:', error);
-      throw error;
-    }
+  async getLiveState(conversationId: string): Promise<ApiResponse<LiveStateData>> {
+    const response = await apiService.get(`/admin/agent/configs/${conversationId}/live`);
+    return unwrapResponse<LiveStateData>(response);
   },
 
-  async resetAll() {
-    try {
-      const response = await apiService.delete('/admin/agent/reset');
-      return response;
-    } catch (error) {
-      console.error('Error resetting agent:', error);
-      throw error;
-    }
+  async resetAll(): Promise<ApiResponse<ResetResult>> {
+    const response = await apiService.delete('/admin/agent/reset');
+    return unwrapResponse<ResetResult>(response);
   },
 
-  async resetConversation(conversationId: string) {
-    try {
-      const response = await apiService.delete(`/admin/agent/reset/conversation/${conversationId}`);
-      return response;
-    } catch (error) {
-      console.error('Error resetting conversation:', error);
-      throw error;
-    }
+  async resetConversation(conversationId: string): Promise<ApiResponse<ResetResult>> {
+    const response = await apiService.delete(`/admin/agent/reset/conversation/${conversationId}`);
+    return unwrapResponse<ResetResult>(response);
   },
 
-  async resetUser(userId: string) {
-    try {
-      const response = await apiService.delete(`/admin/agent/reset/user/${userId}`);
-      return response;
-    } catch (error) {
-      console.error('Error resetting user:', error);
-      throw error;
-    }
+  async resetUser(userId: string): Promise<ApiResponse<ResetResult>> {
+    const response = await apiService.delete(`/admin/agent/reset/user/${userId}`);
+    return unwrapResponse<ResetResult>(response);
   },
 };
