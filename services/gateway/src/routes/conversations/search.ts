@@ -65,7 +65,7 @@ export function registerSearchRoutes(
               OR: [
                 { title: { contains: q, mode: 'insensitive' } },
                 {
-                  members: {
+                  participants: {
                     some: {
                       user: {
                         OR: [
@@ -87,13 +87,13 @@ export function registerSearchRoutes(
                 { type: 'public' },
                 { type: 'global' },
                 // OU conversations dont l'utilisateur est membre
-                { members: { some: { userId, isActive: true } } }
+                { participants: { some: { userId, isActive: true } } }
               ]
             }
           ]
         },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -124,7 +124,7 @@ export function registerSearchRoutes(
         const displayTitle = conversation.title && conversation.title.trim() !== ''
           ? conversation.title
           : generateDefaultConversationTitle(
-              conversation.members.map((m: any) => ({
+              conversation.participants.map((m: any) => ({
                 id: m.userId,
                 displayName: m.user?.displayName,
                 username: m.user?.username,

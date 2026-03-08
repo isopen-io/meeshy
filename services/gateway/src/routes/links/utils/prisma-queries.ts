@@ -1,5 +1,27 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+const senderInclude = {
+  select: {
+    id: true,
+    displayName: true,
+    avatar: true,
+    type: true,
+    language: true,
+    isOnline: true,
+    user: {
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        displayName: true,
+        avatar: true,
+        systemLanguage: true
+      }
+    }
+  }
+};
+
 /**
  * Structure d'inclusion pour récupérer un lien de partage avec toutes ses relations
  */
@@ -12,9 +34,19 @@ export const shareLinkIncludeStructure = {
       description: true,
       type: true,
       createdAt: true,
-      members: {
+      participants: {
         where: { isActive: true },
-        include: {
+        select: {
+          id: true,
+          type: true,
+          displayName: true,
+          avatar: true,
+          language: true,
+          isOnline: true,
+          role: true,
+          joinedAt: true,
+          userId: true,
+          permissions: true,
           user: {
             select: {
               id: true,
@@ -23,24 +55,11 @@ export const shareLinkIncludeStructure = {
               lastName: true,
               displayName: true,
               avatar: true,
-              systemLanguage: true
+              systemLanguage: true,
+              isOnline: true,
+              lastActiveAt: true
             }
           }
-        }
-      },
-      anonymousParticipants: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          language: true,
-          isOnline: true,
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          joinedAt: true
         }
       }
     }
@@ -102,29 +121,10 @@ export async function getConversationMessages(
     take: limit,
     skip: offset,
     include: {
-      sender: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          systemLanguage: true
-        }
-      },
-      anonymousSender: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          language: true
-        }
-      },
+      sender: senderInclude,
       statusEntries: {
         select: {
-          userId: true,
+          participantId: true,
           readAt: true
         }
       }
@@ -150,26 +150,7 @@ export async function getConversationMessagesWithDetails(
     take: limit,
     skip: offset,
     include: {
-      sender: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          systemLanguage: true
-        }
-      },
-      anonymousSender: {
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          language: true
-        }
-      },
+      sender: senderInclude,
       attachments: {
         select: {
           id: true,
@@ -199,25 +180,7 @@ export async function getConversationMessagesWithDetails(
       },
       replyTo: {
         include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          anonymousSender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              language: true
-            }
-          },
+          sender: senderInclude,
           attachments: {
             select: {
               id: true,
@@ -249,8 +212,7 @@ export async function getConversationMessagesWithDetails(
             select: {
               id: true,
               emoji: true,
-              userId: true,
-              anonymousId: true,
+              participantId: true,
               createdAt: true
             }
           }
@@ -258,7 +220,7 @@ export async function getConversationMessagesWithDetails(
       },
       statusEntries: {
         select: {
-          userId: true,
+          participantId: true,
           readAt: true
         }
       },
@@ -266,8 +228,7 @@ export async function getConversationMessagesWithDetails(
         select: {
           id: true,
           emoji: true,
-          userId: true,
-          anonymousId: true,
+          participantId: true,
           createdAt: true
         }
       }

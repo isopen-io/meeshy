@@ -139,7 +139,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         emoji,
         userId: actualUserId,
-        anonymousId: actualAnonymousUserId
+        participantId: authRequest.authContext.participantId
       });
 
       if (!reaction) {
@@ -283,7 +283,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         messageId,
         emoji: decodedEmoji,
         userId: actualUserId,
-        anonymousId: actualAnonymousUserId
+        participantId: authRequest.authContext.participantId
       });
 
       if (!removed) {
@@ -411,8 +411,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: true,
-              anonymousParticipants: true
+              participants: true,
+              participants: true
             }
           }
         }
@@ -427,7 +427,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       // Vérifier les permissions
       if (!isAnonymous) {
-        const isMember = message.conversation.members.some(m => m.userId === userId);
+        const isMember = message.conversation.participants.some(m => m.userId === userId);
         if (!isMember) {
           return reply.status(403).send({
             success: false,
@@ -435,7 +435,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           });
         }
       } else {
-        const isParticipant = message.conversation.anonymousParticipants.some(
+        const isParticipant = message.conversation.participants.some(
           p => p.id === anonymousUserId
         );
         if (!isParticipant) {

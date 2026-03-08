@@ -131,17 +131,20 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             sender: {
               select: {
                 id: true,
-                username: true,
                 displayName: true,
-                avatar: true
-              }
-            },
-            anonymousSender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true
+                avatar: true,
+                type: true,
+                language: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true
+                  }
+                }
               }
             },
             conversation: {
@@ -650,7 +653,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             },
             _count: {
               select: {
-                anonymousParticipants: true
+                participants: true
               }
             }
           },

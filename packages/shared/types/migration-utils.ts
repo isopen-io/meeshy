@@ -201,7 +201,7 @@ export function normalizeMessage(rawMessage: unknown): Message {
   const normalizedMessage: Message = {
     id: String(raw.id),
     conversationId: String(raw.conversationId),
-    senderId: String(raw.senderId || raw.anonymousSenderId || ''),
+    senderId: String(raw.senderId || raw.senderId || ''),
     content: String(raw.content),
     originalLanguage: String(raw.originalLanguage || 'fr'),
     messageType: (raw.messageType as 'text' | 'image' | 'file' | 'audio' | 'video' | 'location' | 'system') || 'text',

@@ -476,7 +476,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
 
-      const member = await fastify.prisma.conversationMember.findFirst({
+      const member = await fastify.prisma.participant.findFirst({
         where: {
           conversationId,
           userId,

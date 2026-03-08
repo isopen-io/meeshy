@@ -137,7 +137,7 @@ export interface AdminMessage {
   id: string;
   conversationId: string;
   userId?: string;
-  anonymousId?: string;
+  participantId?: string;
   originalText: string;
   isFlagged: boolean;
   flaggedReason?: string;

@@ -306,7 +306,7 @@ export async function registerMetadataRoutes(
         const query = request.query as ConversationAttachmentsQuery;
 
         if (authContext.isAuthenticated) {
-          const member = await prisma.conversationMember.findFirst({
+          const member = await prisma.participant.findFirst({
             where: {
               conversationId,
               userId: authContext.userId,
@@ -320,9 +320,9 @@ export async function registerMetadataRoutes(
               error: 'Access denied to this conversation',
             });
           }
-        } else if (authContext.isAnonymous && authContext.anonymousParticipant) {
-          const participant = await prisma.anonymousParticipant.findUnique({
-            where: { id: authContext.anonymousParticipant.id },
+        } else if (authContext.isAnonymous && authContext.participantId) {
+          const participant = await prisma.participant.findUnique({
+            where: { id: authContext.participantId.id },
             select: {
               conversationId: true,
               shareLink: {

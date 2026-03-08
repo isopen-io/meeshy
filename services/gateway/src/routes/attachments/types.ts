@@ -8,7 +8,7 @@ export interface AuthContext {
   userId: string;
   isAuthenticated: boolean;
   isAnonymous: boolean;
-  anonymousParticipant?: {
+  participant?: {
     id: string;
     shareLinkId: string;
     conversationId: string;

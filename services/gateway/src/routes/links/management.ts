@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -93,7 +93,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId, isActive: true }
               }
             }
@@ -109,10 +109,10 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = shareLink.createdBy === userId;
-      const member = shareLink.conversation.members[0];
+      const member = shareLink.conversation.participants[0];
       const isConversationAdmin = member && (
-        member.role === MemberRole.ADMIN ||
-        member.role === MemberRole.CREATOR
+        member.role === 'admin' ||
+        member.role === 'creator'
       );
 
       if (!isCreator && !isConversationAdmin) {
@@ -238,7 +238,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId, isActive: true }
               }
             }
@@ -254,7 +254,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = shareLink.createdBy === userId;
-      const isConversationAdmin = shareLink.conversation.members.some(member =>
+      const isConversationAdmin = shareLink.conversation.participants.some(member =>
         member.role === 'ADMIN' || member.role === 'MODERATOR'
       );
 

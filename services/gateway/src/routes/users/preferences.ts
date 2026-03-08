@@ -76,7 +76,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                           }
                         }
                       },
-                      members: { type: 'array', items: userMinimalSchema }
+                      participants: { type: 'array', items: userMinimalSchema }
                     }
                   }
                 },
@@ -89,7 +89,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                       name: { type: 'string' },
                       description: { type: 'string', nullable: true },
                       isPrivate: { type: 'boolean' },
-                      members: { type: 'array', items: userMinimalSchema },
+                      participants: { type: 'array', items: userMinimalSchema },
                       memberCount: { type: 'number' }
                     }
                   }
@@ -126,13 +126,13 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         totalLinks,
         translationsToday
       ] = await Promise.all([
-        fastify.prisma.conversationMember.count({
+        fastify.prisma.participant.count({
           where: {
             userId,
             isActive: true
           }
         }),
-        fastify.prisma.conversationMember.count({
+        fastify.prisma.participant.count({
           where: {
             userId,
             isActive: true,
@@ -150,7 +150,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         }),
         fastify.prisma.conversation.findMany({
           where: {
-            members: {
+            participants: {
               some: {
                 userId,
                 isActive: true
@@ -178,7 +178,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                 }
               }
             },
-            members: {
+            participants: {
               where: { isActive: true },
               take: 5,
               select: {
@@ -203,7 +203,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         }),
         fastify.prisma.community.findMany({
           where: {
-            members: {
+            participants: {
               some: {
                 userId
               }
@@ -216,9 +216,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             isPrivate: true,
             updatedAt: true,
             _count: {
-              select: { members: true }
+              select: { participants: true }
             },
-            members: {
+            participants: {
               take: 5,
               select: {
                 user: {
@@ -425,7 +425,7 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: { senderId: userId, deletedAt: null },
         }),
-        fastify.prisma.conversationMember.count({
+        fastify.prisma.participant.count({
           where: { userId },
         }),
         fastify.prisma.message.count({

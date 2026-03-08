@@ -239,7 +239,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         // SECURITY: Authorization check - user must share a conversation with target
         // This prevents unauthorized key scraping
         // Find conversations where the requesting user is a member
-        const userConversations = await prisma.conversationMember.findMany({
+        const userConversations = await prisma.participant.findMany({
           where: { userId: requestingUserId, isActive: true },
           select: { conversationId: true }
         });
@@ -247,7 +247,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
 
         // Check if target user is a member of any of those conversations
         const sharedConversation = conversationIds.length > 0
-          ? await prisma.conversationMember.findFirst({
+          ? await prisma.participant.findFirst({
               where: {
                 userId: targetUserId,
                 conversationId: { in: conversationIds },
@@ -416,7 +416,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         const { recipientUserId, conversationId } = bodyResult.data;
 
         // SECURITY: Verify user is a participant in the conversation
-        const isParticipant = await prisma.conversationMember.findFirst({
+        const isParticipant = await prisma.participant.findFirst({
           where: {
             userId,
             conversationId
@@ -437,7 +437,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         }
 
         // SECURITY: Verify recipient is also a participant
-        const recipientIsParticipant = await prisma.conversationMember.findFirst({
+        const recipientIsParticipant = await prisma.participant.findFirst({
           where: {
             userId: recipientUserId,
             conversationId

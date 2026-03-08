@@ -1815,13 +1815,12 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const conversations = await fastify.prisma.conversation.findMany({
         where: {
           communityId: id,
-          // S'assurer que l'utilisateur est membre de la conversation
-          members: {
+          participants: {
             some: { userId: userId }
           }
         },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -1837,7 +1836,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
           _count: {
             select: {
               messages: true,
-              members: true
+              participants: true
             }
           }
         },

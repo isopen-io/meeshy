@@ -638,13 +638,12 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const conversations = await fastify.prisma.conversation.findMany({
         where: {
           communityId: id,
-          // S'assurer que l'utilisateur est membre de la conversation
-          members: {
+          participants: {
             some: { userId: userId }
           }
         },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -660,7 +659,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           _count: {
             select: {
               messages: true,
-              members: true
+              participants: true
             }
           }
         },
@@ -763,7 +762,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         select: {
           id: true,
           communityId: true,
-          members: { select: { userId: true, role: true } }
+          participants: { select: { userId: true, role: true } }
         }
       });
 
@@ -776,7 +775,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         where: { id: conversationId },
         data: { communityId: id },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -790,7 +789,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             }
           },
           _count: {
-            select: { messages: true, members: true }
+            select: { messages: true, participants: true }
           }
         }
       });

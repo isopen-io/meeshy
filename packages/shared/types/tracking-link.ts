@@ -42,7 +42,7 @@ export interface TrackingLinkClick {
   readonly id: string;
   readonly trackingLinkId: string;
   readonly userId?: string; // ID utilisateur connecté
-  readonly anonymousId?: string; // ID participant anonyme
+  readonly participantId?: string; // ID participant anonyme
   readonly ipAddress?: string;
   readonly country?: string;
   readonly city?: string;
@@ -141,7 +141,7 @@ export interface GetTrackingLinkResponse {
 export interface RecordClickRequest {
   readonly token: string;
   readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId?: string;
   readonly ipAddress?: string;
   readonly country?: string;
   readonly city?: string;

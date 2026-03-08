@@ -50,7 +50,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.count({
             where: { senderId: userId, deletedAt: null },
           }),
-          fastify.prisma.conversationMember.count({
+          fastify.prisma.participant.count({
             where: { userId },
           }),
           fastify.prisma.message.count({
@@ -217,7 +217,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           fastify.prisma.message.count({
             where: { senderId: userId, deletedAt: null },
           }),
-          fastify.prisma.conversationMember.count({
+          fastify.prisma.participant.count({
             where: { userId },
           }),
           fastify.prisma.message.count({

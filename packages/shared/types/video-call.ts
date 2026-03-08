@@ -69,7 +69,7 @@ export interface CallParticipant {
   readonly id: string;
   readonly callSessionId: string;
   readonly userId?: string;               // null pour anonymes
-  readonly anonymousId?: string;
+  readonly participantId?: string;
   readonly role: ParticipantRole;
   readonly joinedAt: Date;
   readonly leftAt?: Date;
@@ -223,8 +223,8 @@ export interface ConnectionQualityStats {
  * Base properties for all WebRTC signals
  */
 interface WebRTCSignalBase {
-  readonly from: string;                  // userId ou anonymousId
-  readonly to: string;                    // userId ou anonymousId
+  readonly from: string;                  // userId ou participantId
+  readonly to: string;                    // userId ou participantId
 }
 
 /**
@@ -384,7 +384,6 @@ export interface CallParticipantLeftEvent {
   readonly callId: string;
   readonly participantId: string;         // Database participant ID
   readonly userId?: string;               // User ID (for removing WebRTC connections)
-  readonly anonymousId?: string;          // Anonymous ID (for guest users)
   readonly mode: CallMode;                // Peut changer (SFU→P2P)
 }
 
@@ -402,7 +401,7 @@ export interface CallSignalEvent {
 export interface CallEndedEvent {
   readonly callId: string;
   readonly duration: number;
-  readonly endedBy: string;             // userId ou anonymousId
+  readonly endedBy: string;             // userId ou participantId
 }
 
 /**

@@ -1,12 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 /**
- * Vérifie si un utilisateur peut accéder à une conversation
- * @param prisma - Instance Prisma
- * @param authContext - Contexte d'authentification
- * @param conversationId - ID de la conversation
- * @param conversationIdentifier - Identifiant de la conversation (peut avoir le préfixe mshy_)
- * @returns Promise<boolean>
+ * Vérifie si un utilisateur peut accéder à une conversation via le modèle Participant unifié
  */
 export async function canAccessConversation(
   prisma: PrismaClient,
@@ -14,46 +9,43 @@ export async function canAccessConversation(
   conversationId: string,
   conversationIdentifier: string
 ): Promise<boolean> {
-  // Si l'utilisateur n'est pas authentifié (pas de session token, pas de JWT token), aucun accès
   if (!authContext.isAuthenticated) {
     return false;
   }
 
-  // Cas spécial : conversation globale "meeshy" - vérifier l'appartenance
+  // Cas spécial : conversation globale "meeshy"
   if (conversationIdentifier === "meeshy" || conversationId === "meeshy") {
-    // Pour la conversation meeshy, vérifier que l'utilisateur est membre
     if (authContext.isAnonymous) {
-      // Les utilisateurs anonymes n'ont pas accès à la conversation globale meeshy
       return false;
-    } else {
-      // Vérifier l'appartenance à la conversation meeshy
-      const membership = await prisma.conversationMember.findFirst({
-        where: {
-          conversationId: conversationId,
-          userId: authContext.userId,
-          isActive: true
-        }
-      });
-
-      return !!membership;
     }
-  }
 
-  if (authContext.isAnonymous) {
-    // Utilisateurs anonymes authentifiés : vérifier l'accès via liens d'invitation
-    // Le userId pour les anonymes est l'ID du participant anonyme
-    const anonymousAccess = await prisma.anonymousParticipant.findFirst({
+    const participant = await prisma.participant.findFirst({
       where: {
-        id: authContext.userId,
-        isActive: true,
-        conversationId: conversationId
+        conversationId: conversationId,
+        userId: authContext.userId,
+        isActive: true
       }
     });
-    return !!anonymousAccess;
-  } else {
-    // Vérifier le préfixe mshy_ pour les identifiants de conversation
+
+    return !!participant;
+  }
+
+  // Participant unifié : une seule requête pour tous les types
+  if (authContext.participantId) {
+    const participant = await prisma.participant.findFirst({
+      where: {
+        id: authContext.participantId,
+        conversationId: conversationId,
+        isActive: true,
+        bannedAt: null
+      }
+    });
+    return !!participant;
+  }
+
+  // Fallback: rechercher par userId (registered users)
+  if (!authContext.isAnonymous && authContext.userId) {
     if (conversationIdentifier.startsWith('mshy_')) {
-      // Identifiant avec préfixe mshy_ - résoudre l'ID réel
       const conversation = await prisma.conversation.findFirst({
         where: {
           OR: [
@@ -65,27 +57,27 @@ export async function canAccessConversation(
 
       if (!conversation) {
         return false;
-      } else {
-        // Vérifier l'appartenance à la conversation
-        const membership = await prisma.conversationMember.findFirst({
-          where: {
-            conversationId: conversation.id,
-            userId: authContext.userId,
-            isActive: true
-          }
-        });
-        return !!membership;
       }
-    } else {
-      // Identifiant direct - vérifier l'appartenance à la conversation
-      const membership = await prisma.conversationMember.findFirst({
+
+      const participant = await prisma.participant.findFirst({
         where: {
-          conversationId: conversationId,
+          conversationId: conversation.id,
           userId: authContext.userId,
           isActive: true
         }
       });
-      return !!membership;
+      return !!participant;
     }
+
+    const participant = await prisma.participant.findFirst({
+      where: {
+        conversationId: conversationId,
+        userId: authContext.userId,
+        isActive: true
+      }
+    });
+    return !!participant;
   }
+
+  return false;
 }

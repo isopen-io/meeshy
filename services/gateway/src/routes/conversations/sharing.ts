@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { UserRoleEnum, ErrorCode, MemberRole } from '@meeshy/shared/types';
+import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -133,7 +133,7 @@ export function registerSharingRoutes(
           where: { id: conversationId },
           select: { id: true, type: true, title: true }
         }),
-        prisma.conversationMember.findFirst({
+        prisma.participant.findFirst({
           where: {
             conversationId: conversationId,
             userId: currentUserId,
@@ -343,7 +343,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: currentUserId,
@@ -387,8 +387,17 @@ export function registerSharingRoutes(
         where: { id: conversationId },
         data: updateData,
         include: {
-          members: {
-            include: {
+          participants: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              displayName: true,
+              avatar: true,
+              type: true,
+              role: true,
+              language: true,
+              isOnline: true,
+              lastActiveAt: true,
               user: {
                 select: {
                   id: true,
@@ -505,7 +514,7 @@ export function registerSharingRoutes(
       const userId = authRequest.authContext.userId;
 
       // Vérifier que l'utilisateur est membre de la conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId,
           userId,
@@ -551,7 +560,7 @@ export function registerSharingRoutes(
           },
           _count: {
             select: {
-              anonymousParticipants: true
+              participants: true
             }
           }
         },
@@ -650,7 +659,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier si l'utilisateur est déjà membre de la conversation
-      const existingMember = await prisma.conversationMember.findFirst({
+      const existingMember = await prisma.participant.findFirst({
         where: {
           conversationId: shareLink.conversationId,
           userId: userToken.userId
@@ -667,11 +676,26 @@ export function registerSharingRoutes(
 
       // Ajouter l'utilisateur à la conversation
       console.log('[JOIN_CONVERSATION] Ajout utilisateur', userToken.userId, 'à conversation', shareLink.conversationId);
-      await prisma.conversationMember.create({
+      const joiningUserInfo = await prisma.user.findUnique({
+        where: { id: userToken.userId },
+        select: { displayName: true, username: true }
+      });
+      await prisma.participant.create({
         data: {
           conversationId: shareLink.conversationId,
           userId: userToken.userId,
-          role: MemberRole.MEMBER,
+          type: 'user',
+          displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
+          role: 'member',
+          permissions: {
+            canSendMessages: true,
+            canSendFiles: true,
+            canSendImages: true,
+            canSendVideos: false,
+            canSendAudios: false,
+            canSendLocations: false,
+            canSendLinks: false
+          },
           joinedAt: new Date()
         }
       });
@@ -710,10 +734,10 @@ export function registerSharingRoutes(
             });
 
             // 2. Notifier les admins et créateurs de la conversation
-            const adminsAndCreators = await prisma.conversationMember.findMany({
+            const adminsAndCreators = await prisma.participant.findMany({
               where: {
                 conversationId: shareLink.conversationId,
-                role: { in: ['ADMIN', 'CREATOR'] },
+                role: { in: ['admin', 'creator'] },
                 isActive: true,
                 userId: { not: userToken.userId } // Ne pas notifier l'utilisateur lui-même
               },
@@ -818,9 +842,12 @@ export function registerSharingRoutes(
       const conversation = await fastify.prisma.conversation.findUnique({
         where: { id: conversationId },
         include: {
-          members: {
-            where: { isActive: true },
-            include: {
+          participants: {
+            where: { isActive: true, type: 'user' },
+            select: {
+              id: true,
+              userId: true,
+              role: true,
               user: {
                 select: {
                   id: true,
@@ -841,7 +868,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier que l'inviteur est membre de la conversation
-      const inviterMember = conversation.members.find(m => m.userId === inviterId);
+      const inviterMember = conversation.participants.find(m => m.userId === inviterId);
       if (!inviterMember) {
         return reply.status(403).send({
           success: false,
@@ -851,8 +878,8 @@ export function registerSharingRoutes(
 
       // Vérifier que l'inviteur a les permissions pour inviter
       const canInvite = 
-        inviterMember.role === 'ADMIN' ||
-        inviterMember.role === 'CREATOR' ||
+        inviterMember.role === 'admin' ||
+        inviterMember.role === 'creator' ||
         authContext.registeredUser.role === 'ADMIN' ||
         authContext.registeredUser.role === 'BIGBOSS';
 
@@ -883,7 +910,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier que l'utilisateur n'est pas déjà membre
-      const existingMember = conversation.members.find(m => m.userId === userId);
+      const existingMember = conversation.participants.find(m => m.userId === userId);
       if (existingMember) {
         return reply.status(400).send({
           success: false,
@@ -892,11 +919,22 @@ export function registerSharingRoutes(
       }
 
       // Ajouter l'utilisateur à la conversation
-      const newMember = await fastify.prisma.conversationMember.create({
+      const newMember = await fastify.prisma.participant.create({
         data: {
           conversationId: conversationId,
           userId: userId,
-          role: 'MEMBER',
+          type: 'user',
+          displayName: userToInvite.displayName || userToInvite.username,
+          role: 'member',
+          permissions: {
+            canSendMessages: true,
+            canSendFiles: true,
+            canSendImages: true,
+            canSendVideos: false,
+            canSendAudios: false,
+            canSendLocations: false,
+            canSendLinks: false
+          },
           joinedAt: new Date(),
           isActive: true
         },

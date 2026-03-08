@@ -128,7 +128,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
           id: messageId,
           deletedAt: null,
           conversation: {
-            members: {
+            participants: {
               some: {
                 userId,
                 isActive: true

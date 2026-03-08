@@ -365,10 +365,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
 
       // 7. Verifier que le username n'est pas deja pris dans cette conversation
-      const existingParticipant = await fastify.prisma.anonymousParticipant.findFirst({
+      const existingParticipant = await fastify.prisma.participant.findFirst({
         where: {
           conversationId: shareLink.conversationId,
-          username: username,
+          displayName: username,
+          type: 'anonymous',
           isActive: true
         }
       });
@@ -389,10 +390,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           });
 
           // Puis verifier contre les participants anonymes de cette conversation
-          const existingSuggestedParticipant = await fastify.prisma.anonymousParticipant.findFirst({
+          const existingSuggestedParticipant = await fastify.prisma.participant.findFirst({
             where: {
               conversationId: shareLink.conversationId,
-              username: suggestedUsername,
+              displayName: suggestedUsername,
+              type: 'anonymous',
               isActive: true
             }
           });
@@ -416,24 +418,44 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       // 8. Generer le sessionToken unique
       const sessionToken = generateSessionToken(body.deviceFingerprint);
 
-      // 9. Creer le participant anonyme
-      const anonymousParticipant = await fastify.prisma.anonymousParticipant.create({
+      // 9. Creer le participant anonyme (unified Participant model)
+      const { hashSessionToken } = await import('../utils/session-token');
+      const sessionTokenHash = hashSessionToken(sessionToken);
+
+      const anonymousParticipant = await fastify.prisma.participant.create({
         data: {
           conversationId: shareLink.conversationId,
-          shareLinkId: shareLink.id,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          username: username,
-          email: body.email || null,
-          birthday: body.birthday ? new Date(body.birthday) : null,
-          sessionToken: sessionToken,
-          ipAddress: clientIP,
-          country: country,
+          type: 'anonymous',
+          displayName: username,
           language: body.language,
-          deviceFingerprint: body.deviceFingerprint,
-          canSendMessages: shareLink.allowAnonymousMessages,
-          canSendFiles: shareLink.allowAnonymousFiles,
-          canSendImages: shareLink.allowAnonymousImages
+          sessionTokenHash: sessionTokenHash,
+          role: 'member',
+          permissions: {
+            canSendMessages: shareLink.allowAnonymousMessages,
+            canSendFiles: shareLink.allowAnonymousFiles,
+            canSendImages: shareLink.allowAnonymousImages,
+            canSendVideos: false,
+            canSendAudios: false,
+            canSendLocations: false,
+            canSendLinks: false
+          },
+          anonymousSession: {
+            shareLinkId: shareLink.id,
+            session: {
+              sessionTokenHash: sessionTokenHash,
+              ipAddress: clientIP,
+              country: country,
+              deviceFingerprint: body.deviceFingerprint || null,
+              connectedAt: new Date()
+            },
+            profile: {
+              firstName: body.firstName,
+              lastName: body.lastName,
+              username: username,
+              email: body.email || null,
+              birthday: body.birthday ? new Date(body.birthday) : null
+            }
+          }
         }
       });
 
@@ -454,14 +476,14 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           sessionToken: sessionToken,
           participant: {
             id: anonymousParticipant.id,
-            username: anonymousParticipant.username, // nickname -> username pour l'uniformite
-            firstName: anonymousParticipant.firstName,
-            lastName: anonymousParticipant.lastName,
+            username: anonymousParticipant.displayName,
+            firstName: anonymousParticipant.anonymousSession?.profile?.firstName ?? '',
+            lastName: anonymousParticipant.anonymousSession?.profile?.lastName ?? '',
             language: anonymousParticipant.language,
-            isMeeshyer: false, // Utilisateur anonyme
-            canSendMessages: anonymousParticipant.canSendMessages,
-            canSendFiles: anonymousParticipant.canSendFiles,
-            canSendImages: anonymousParticipant.canSendImages
+            isMeeshyer: false,
+            canSendMessages: anonymousParticipant.permissions?.canSendMessages ?? false,
+            canSendFiles: anonymousParticipant.permissions?.canSendFiles ?? false,
+            canSendImages: anonymousParticipant.permissions?.canSendImages ?? false
           },
           conversation: {
             id: shareLink.conversation.id,
@@ -569,18 +591,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       const body = refreshSessionSchema.parse(request.body);
       const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
-      // Trouver le participant anonyme
-      const participant = await fastify.prisma.anonymousParticipant.findUnique({
-        where: { sessionToken: body.sessionToken },
-        include: {
-          shareLink: {
-            include: {
-              conversation: {
-                select: { id: true, title: true, type: true }
-              }
-            }
-          }
-        }
+      // Trouver le participant anonyme par sessionTokenHash
+      const { hashSessionToken } = await import('../utils/session-token');
+      const tokenHash = hashSessionToken(body.sessionToken);
+
+      const participant = await fastify.prisma.participant.findFirst({
+        where: { sessionTokenHash: tokenHash, type: 'anonymous' }
       });
 
       if (!participant || !participant.isActive) {
@@ -590,23 +606,39 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Verifier que le lien est toujours valide
-      if (!participant.shareLink.isActive) {
+      // Lookup shareLink from anonymousSession
+      const shareLinkId = participant.anonymousSession?.shareLinkId;
+      const shareLink = shareLinkId ? await fastify.prisma.conversationShareLink.findUnique({
+        where: { id: shareLinkId },
+        include: {
+          conversation: {
+            select: { id: true, title: true, type: true }
+          }
+        }
+      }) : null;
+
+      if (!shareLink) {
         return reply.status(410).send({
           success: false,
           message: 'Le lien a ete desactive'
         });
       }
 
-      if (participant.shareLink.expiresAt && participant.shareLink.expiresAt < new Date()) {
+      if (!shareLink.isActive) {
+        return reply.status(410).send({
+          success: false,
+          message: 'Le lien a ete desactive'
+        });
+      }
+
+      if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
         return reply.status(410).send({
           success: false,
           message: 'Le lien a expire'
         });
       }
 
-      // Mettre a jour lastActiveAt
-      await fastify.prisma.anonymousParticipant.update({
+      await fastify.prisma.participant.update({
         where: { id: participant.id },
         data: {
           lastActiveAt: new Date(),
@@ -619,20 +651,20 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         data: {
           participant: {
             id: participant.id,
-            username: participant.username, // nickname -> username pour l'uniformite
-            firstName: participant.firstName,
-            lastName: participant.lastName,
+            username: participant.displayName,
+            firstName: participant.anonymousSession?.profile?.firstName ?? '',
+            lastName: participant.anonymousSession?.profile?.lastName ?? '',
             language: participant.language,
-            isMeeshyer: false, // Utilisateur anonyme
-            canSendMessages: participant.canSendMessages,
-            canSendFiles: participant.canSendFiles,
-            canSendImages: participant.canSendImages
+            isMeeshyer: false,
+            canSendMessages: participant.permissions?.canSendMessages ?? false,
+            canSendFiles: participant.permissions?.canSendFiles ?? false,
+            canSendImages: participant.permissions?.canSendImages ?? false
           },
           conversation: {
-            id: participant.shareLink.conversation.id,
-            title: participant.shareLink.conversation.title,
-            type: participant.shareLink.conversation.type,
-            allowViewHistory: participant.shareLink.allowViewHistory
+            id: shareLink.conversation.id,
+            title: shareLink.conversation.title,
+            type: shareLink.conversation.type,
+            allowViewHistory: shareLink.allowViewHistory
           }
         }
       });
@@ -694,9 +726,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     try {
       const body = refreshSessionSchema.parse(request.body);
 
-      const participant = await fastify.prisma.anonymousParticipant.findUnique({
-        where: { sessionToken: body.sessionToken },
-        include: { shareLink: true }
+      const { hashSessionToken: hashToken } = await import('../utils/session-token');
+      const leaveTokenHash = hashToken(body.sessionToken);
+
+      const participant = await fastify.prisma.participant.findFirst({
+        where: { sessionTokenHash: leaveTokenHash, type: 'anonymous' }
       });
 
       if (!participant) {
@@ -706,8 +740,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Marquer comme inactif et deconnecte
-      await fastify.prisma.anonymousParticipant.update({
+      await fastify.prisma.participant.update({
         where: { id: participant.id },
         data: {
           isActive: false,
@@ -716,13 +749,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Decrementer les compteurs du lien
-      await fastify.prisma.conversationShareLink.update({
-        where: { id: participant.shareLink.id },
-        data: {
-          currentConcurrentUsers: { decrement: 1 }
-        }
-      });
+      const leaveShareLinkId = participant.anonymousSession?.shareLinkId;
+      if (leaveShareLinkId) {
+        await fastify.prisma.conversationShareLink.update({
+          where: { id: leaveShareLinkId },
+          data: {
+            currentConcurrentUsers: { decrement: 1 }
+          }
+        });
+      }
 
       return reply.send({
         success: true,
@@ -925,28 +960,29 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
 
       // Recuperer les statistiques de la conversation
-      const [memberCount, anonymousCount, activeMembers, activeAnonymous] = await Promise.all([
-        // Nombre de membres actifs
-        fastify.prisma.conversationMember.count({
+      const [memberCount, anonymousCount, allActiveParticipants] = await Promise.all([
+        fastify.prisma.participant.count({
           where: {
             conversationId: shareLink.conversation.id,
+            type: 'user',
             isActive: true
           }
         }),
-        // Nombre de participants anonymes actifs
-        fastify.prisma.anonymousParticipant.count({
+        fastify.prisma.participant.count({
           where: {
             conversationId: shareLink.conversation.id,
+            type: 'anonymous',
             isActive: true
           }
         }),
-        // Membres actifs avec leurs langues
-        fastify.prisma.conversationMember.findMany({
+        fastify.prisma.participant.findMany({
           where: {
             conversationId: shareLink.conversation.id,
             isActive: true
           },
           select: {
+            type: true,
+            language: true,
             user: {
               select: {
                 systemLanguage: true,
@@ -955,35 +991,21 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
               }
             }
           }
-        }),
-        // Participants anonymes actifs avec leurs langues
-        fastify.prisma.anonymousParticipant.findMany({
-          where: {
-            conversationId: shareLink.conversation.id,
-            isActive: true
-          },
-          select: {
-            language: true
-          }
         })
       ]);
 
-      // Calculer le total des participants
       const totalParticipants = memberCount + anonymousCount;
 
-      // Collecter toutes les langues uniques des participants
       const languageSet = new Set<string>();
 
-      // Langues des membres (systeme, regionale, custom)
-      activeMembers.forEach(member => {
-        if (member.user.systemLanguage) languageSet.add(member.user.systemLanguage);
-        if (member.user.regionalLanguage) languageSet.add(member.user.regionalLanguage);
-        if (member.user.customDestinationLanguage) languageSet.add(member.user.customDestinationLanguage);
-      });
-
-      // Langues des participants anonymes
-      activeAnonymous.forEach(participant => {
-        if (participant.language) languageSet.add(participant.language);
+      allActiveParticipants.forEach(p => {
+        if (p.type === 'user' && p.user) {
+          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage);
+          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage);
+          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage);
+        } else {
+          if (p.language) languageSet.add(p.language);
+        }
       });
 
       // Convertir en tableau et trier

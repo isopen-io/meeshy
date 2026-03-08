@@ -430,7 +430,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const call = await callService.getCallSession(callId);
 
       // Verify user is initiator or admin/moderator of conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId: call.conversationId,
           userId,
@@ -742,7 +742,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       if (participantId !== userId) {
         // Check if user is moderator
         const call = await callService.getCallSession(callId);
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId: call.conversationId,
             userId,
@@ -899,7 +899,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       // Verify user is member of conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId,
           userId,

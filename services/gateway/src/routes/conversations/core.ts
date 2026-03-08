@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { UserRoleEnum, ErrorCode, MemberRole } from '@meeshy/shared/types';
+import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
@@ -199,7 +199,7 @@ export function registerCoreRoutes(
 
       // Build the where clause with optional filters
       const whereClause: any = {
-        members: {
+        participants: {
           some: {
             userId: userId,
             isActive: true
@@ -215,7 +215,7 @@ export function registerCoreRoutes(
 
       // Add withUserId filter - find conversations where BOTH users are members
       if (withUserId) {
-        whereClause.members = {
+        whereClause.participants = {
           every: {
             OR: [
               { userId: userId, isActive: true },
@@ -225,10 +225,10 @@ export function registerCoreRoutes(
         };
         // Override to use AND with both conditions
         whereClause.AND = [
-          { members: { some: { userId: userId, isActive: true } } },
-          { members: { some: { userId: withUserId, isActive: true } } }
+          { participants: { some: { userId: userId, isActive: true } } },
+          { participants: { some: { userId: withUserId, isActive: true } } }
         ];
-        delete whereClause.members;
+        delete whereClause.participants;
       }
 
       // Cursor-based pagination: filter by lastMessageAt of the cursor conversation
@@ -262,7 +262,7 @@ export function registerCoreRoutes(
           communityId: true,
           memberCount: true,
           isAnnouncementChannel: true,
-          members: {
+          participants: {
             take: 5,
             where: {
               isActive: true
@@ -318,9 +318,17 @@ export function registerCoreRoutes(
               sender: {
                 select: {
                   id: true,
-                  username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  type: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      displayName: true,
+                      avatar: true
+                    }
+                  }
                 }
               },
               attachments: {
@@ -356,7 +364,7 @@ export function registerCoreRoutes(
       // Collect all unique member userIds (optimized: only from returned conversations)
       const allMemberUserIds = new Set<string>();
       for (const conv of conversations) {
-        for (const member of conv.members) {
+        for (const member of (conv as any).participants) {
           allMemberUserIds.add(member.userId);
         }
       }
@@ -407,7 +415,7 @@ export function registerCoreRoutes(
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
         // Filter out orphaned members and merge user data (optimized: use userMap)
-        const membersWithUser = conversation.members
+        const membersWithUser = conversation.participants
           .filter((m: any) => userMap.has(m.userId))
           .slice(0, 5) // Limit to 5 members as originally intended
           .map((m: any) => ({
@@ -431,7 +439,7 @@ export function registerCoreRoutes(
 
         return {
           ...conversation,
-          members: membersWithUser,
+          participants: membersWithUser,
           title: displayTitle,
           lastMessage: conversation.messages[0] || null,
           unreadCount
@@ -549,7 +557,7 @@ export function registerCoreRoutes(
       const conversation = await prisma.conversation.findFirst({
         where: { id: conversationId },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -593,7 +601,7 @@ export function registerCoreRoutes(
       const displayTitle = conversation.title && conversation.title.trim() !== ''
         ? conversation.title
         : generateDefaultConversationTitle(
-            conversation.members.map((m: any) => ({
+            conversation.participants.map((m: any) => ({
               id: m.userId,
               displayName: m.user?.displayName,
               username: m.user?.username,
@@ -713,7 +721,7 @@ export function registerCoreRoutes(
       if (communityId) {
         const community = await prisma.community.findFirst({
           where: { id: communityId },
-          include: { members: true }
+          include: { participants: true }
         });
 
         if (!community) {
@@ -754,6 +762,23 @@ export function registerCoreRoutes(
       const uniqueParticipantIds = [...new Set(participantIds)]
         .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
 
+      const allUserIds = [userId, ...uniqueParticipantIds];
+      const allUsers = await prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, displayName: true, username: true }
+      });
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+      const defaultPermissions = {
+        canSendMessages: true,
+        canSendFiles: true,
+        canSendImages: true,
+        canSendVideos: false,
+        canSendAudios: false,
+        canSendLocations: false,
+        canSendLinks: false
+      };
+
+      const creatorUser = userMap.get(userId);
       const conversation = await prisma.conversation.create({
         data: {
           identifier: finalIdentifier,
@@ -761,23 +786,30 @@ export function registerCoreRoutes(
           title,
           description,
           communityId: communityId || null,
-          members: {
+          participants: {
             create: [
-              // Créateur de la conversation
               {
                 userId,
-                role: MemberRole.CREATOR
+                type: 'user',
+                displayName: creatorUser?.displayName || creatorUser?.username || 'User',
+                role: 'creator',
+                permissions: defaultPermissions
               },
-              // Autres participants (sans doublons et sans le créateur)
-              ...uniqueParticipantIds.map((participantId: string) => ({
-                userId: participantId,
-                role: MemberRole.MEMBER
-              }))
+              ...uniqueParticipantIds.map((participantId: string) => {
+                const pUser = userMap.get(participantId);
+                return {
+                  userId: participantId,
+                  type: 'user',
+                  displayName: pUser?.displayName || pUser?.username || 'User',
+                  role: 'member',
+                  permissions: defaultPermissions
+                };
+              })
             ]
           }
         },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -824,7 +856,7 @@ export function registerCoreRoutes(
       const displayTitle = conversation.title && conversation.title.trim() !== ''
         ? conversation.title
         : generateDefaultConversationTitle(
-            conversation.members.map((m: any) => ({
+            conversation.participants.map((m: any) => ({
               id: m.userId,
               displayName: m.user?.displayName,
               username: m.user?.username,
@@ -919,7 +951,7 @@ export function registerCoreRoutes(
       const userId = authRequest.authContext.userId;
 
       // Vérifier les permissions d'administration
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId: id,
           userId: userId,
@@ -950,7 +982,7 @@ export function registerCoreRoutes(
           description
         },
         include: {
-          members: {
+          participants: {
             include: {
               user: {
                 select: {
@@ -1039,7 +1071,7 @@ export function registerCoreRoutes(
       }
 
       // Vérifier les permissions d'administration
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: userId,

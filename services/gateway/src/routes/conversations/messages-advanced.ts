@@ -158,7 +158,7 @@ export function registerMessagesAdvancedRoutes(
 
       if (!canModify) {
         // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId: conversationId,
             userId: userId,
@@ -229,19 +229,22 @@ export function registerMessagesAdvancedRoutes(
           sender: {
             select: {
               id: true,
-              username: true,
               displayName: true,
               avatar: true,
-              role: true
-            }
-          },
-          anonymousSender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              language: true
+              type: true,
+              role: true,
+              language: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  role: true
+                }
+              }
             }
           },
           replyTo: {
@@ -249,9 +252,18 @@ export function registerMessagesAdvancedRoutes(
               sender: {
                 select: {
                   id: true,
-                  username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  type: true,
+                  language: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      displayName: true,
+                      avatar: true
+                    }
+                  }
                 }
               }
             }
@@ -343,7 +355,7 @@ export function registerMessagesAdvancedRoutes(
                         select: {
                           title: true,
                           type: true,
-                          members: {
+                          participants: {
                             where: { isActive: true },
                             select: { userId: true }
                           }
@@ -574,7 +586,7 @@ export function registerMessagesAdvancedRoutes(
 
       if (!canDelete) {
         // Vérifier si l'utilisateur est modérateur/admin/créateur dans cette conversation
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId: conversationId,
             userId: userId,
@@ -726,7 +738,7 @@ export function registerMessagesAdvancedRoutes(
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: {
                   userId: userId,
                   isActive: true
@@ -755,7 +767,7 @@ export function registerMessagesAdvancedRoutes(
       // Vérifier que l'utilisateur est membre de la conversation
       // Pour la conversation globale "meeshy", l'accès est autorisé
       if (message.conversation.identifier !== "meeshy") {
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId: message.conversationId,
             userId: userId,
@@ -921,8 +933,8 @@ export function registerMessagesAdvancedRoutes(
 
         messageReactions[reaction.emoji].count++;
         messageReactions[reaction.emoji].users.push({
-          userId: reaction.userId || reaction.anonymousId,
-          isAnonymous: !!reaction.anonymousId,
+          participantId: reaction.participantId,
+          isAnonymous: false,
           user: reaction.user || reaction.anonymousUser
         });
       }
@@ -1060,7 +1072,7 @@ export function registerMessagesAdvancedRoutes(
         messageId,
         emoji,
         userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId: authRequest.authContext.participantId
       });
 
       if (!reaction) {
@@ -1216,7 +1228,7 @@ export function registerMessagesAdvancedRoutes(
         messageId,
         emoji,
         userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId: authRequest.authContext.participantId
       });
 
       if (!removed) {
@@ -1343,7 +1355,6 @@ export function registerMessagesAdvancedRoutes(
         select: {
           id: true,
           senderId: true,
-          anonymousSenderId: true,
           deliveredCount: true,
           readCount: true,
           deliveredToAllAt: true,
@@ -1380,7 +1391,7 @@ export function registerMessagesAdvancedRoutes(
       // Formater les statuts
       const statuses = messages.map(message => ({
         messageId: message.id,
-        senderId: message.senderId || message.anonymousSenderId,
+        senderId: message.senderId,
         summary: {
           deliveredCount: message.deliveredCount || 0,
           readCount: message.readCount || 0,
@@ -1388,8 +1399,8 @@ export function registerMessagesAdvancedRoutes(
           readByAllAt: message.readByAllAt
         },
         entries: message.statusEntries.map(entry => ({
-          userId: entry.userId || entry.anonymousId,
-          isAnonymous: !!entry.anonymousId,
+          participantId: entry.participantId,
+          isAnonymous: false,
           deliveredAt: entry.deliveredAt,
           readAt: entry.readAt,
           user: entry.user || entry.anonymousUser

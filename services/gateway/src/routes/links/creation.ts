@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -108,7 +108,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           });
 
           if (globalConversation) {
-            member = await fastify.prisma.conversationMember.findFirst({
+            member = await fastify.prisma.participant.findFirst({
               where: {
                 conversationId: globalConversation.id,
                 userId,
@@ -117,7 +117,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             });
           }
         } else {
-          member = await fastify.prisma.conversationMember.findFirst({
+          member = await fastify.prisma.participant.findFirst({
             where: { conversationId, userId, isActive: true }
           });
         }
@@ -163,8 +163,17 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       } else if (body.newConversation) {
         // Créer une nouvelle conversation avec les données fournies
-        const membersToCreate = [
-          { userId, role: MemberRole.CREATOR }
+        const defaultPerms = {
+          canSendMessages: true, canSendFiles: true, canSendImages: true,
+          canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
+        };
+
+        const creatorInfo = await fastify.prisma.user.findUnique({
+          where: { id: userId },
+          select: { displayName: true, username: true }
+        });
+        const participantsToCreate: any[] = [
+          { userId, type: 'user', displayName: creatorInfo?.displayName || creatorInfo?.username || 'User', role: 'creator', permissions: defaultPerms }
         ];
 
         if (body.newConversation.memberIds && body.newConversation.memberIds.length > 0) {
@@ -172,14 +181,18 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             .filter(id => id && id !== userId && id.trim().length > 0);
 
           for (const memberId of uniqueMemberIds) {
-            const userExists = await fastify.prisma.user.findUnique({
-              where: { id: memberId }
+            const memberUser = await fastify.prisma.user.findUnique({
+              where: { id: memberId },
+              select: { id: true, displayName: true, username: true }
             });
 
-            if (userExists) {
-              membersToCreate.push({
+            if (memberUser) {
+              participantsToCreate.push({
                 userId: memberId,
-                role: MemberRole.MEMBER
+                type: 'user',
+                displayName: memberUser.displayName || memberUser.username || 'User',
+                role: 'member',
+                permissions: defaultPerms
               });
             }
           }
@@ -193,8 +206,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             type: 'public',
             title: body.newConversation.title,
             description: body.newConversation.description || null,
-            members: {
-              create: membersToCreate
+            participants: {
+              create: participantsToCreate
             }
           }
         });
@@ -204,16 +217,26 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         // Créer une nouvelle conversation de type public (legacy)
         const conversationIdentifier = generateConversationIdentifier(body.name || 'Shared Conversation');
 
+        const legacyCreatorInfo = await fastify.prisma.user.findUnique({
+          where: { id: userId },
+          select: { displayName: true, username: true }
+        });
         const conversation = await fastify.prisma.conversation.create({
           data: {
             identifier: conversationIdentifier,
             type: 'public',
             title: body.name || 'Conversation partagée',
             description: body.description,
-            members: {
+            participants: {
               create: [{
                 userId,
-                role: MemberRole.CREATOR
+                type: 'user',
+                displayName: legacyCreatorInfo?.displayName || legacyCreatorInfo?.username || 'User',
+                role: 'creator',
+                permissions: {
+                  canSendMessages: true, canSendFiles: true, canSendImages: true,
+                  canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
+                }
               }]
             }
           }
@@ -273,7 +296,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       // Notifier les admins et le créateur de la création du lien
       try {
-        const admins = await fastify.prisma.conversationMember.findMany({
+        const admins = await fastify.prisma.participant.findMany({
           where: {
             conversationId: conversationId!,
             isActive: true,

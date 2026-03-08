@@ -137,14 +137,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const anonymousParticipant = await fastify.prisma.anonymousParticipant.findFirst({
+      const { hashSessionToken } = await import('../../utils/session-token');
+      const tokenHash = hashSessionToken(sessionToken);
+      const anonymousParticipant = await fastify.prisma.participant.findFirst({
         where: {
-          sessionToken,
-          isActive: true,
-          shareLinkId: shareLink.id
-        },
-        include: {
-          shareLink: {
+          sessionTokenHash: tokenHash,
+          type: 'anonymous',
+          isActive: true
+        }
+      });
+
+      const participantShareLink = anonymousParticipant?.anonymousSession?.shareLinkId
+        ? await fastify.prisma.conversationShareLink.findUnique({
+            where: { id: anonymousParticipant.anonymousSession.shareLinkId },
             select: {
               id: true,
               conversationId: true,
@@ -152,39 +157,38 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
               allowAnonymousMessages: true,
               expiresAt: true
             }
-          }
-        }
-      });
+          })
+        : null;
 
-      if (!anonymousParticipant) {
+      if (!anonymousParticipant || !participantShareLink) {
         return reply.status(401).send({
           success: false,
           message: 'Session invalide ou non autorisée pour ce lien'
         });
       }
 
-      if (!anonymousParticipant.shareLink.isActive) {
+      if (!participantShareLink.isActive) {
         return reply.status(410).send({
           success: false,
           message: 'Ce lien n\'est plus actif'
         });
       }
 
-      if (anonymousParticipant.shareLink.expiresAt && new Date() > anonymousParticipant.shareLink.expiresAt) {
+      if (participantShareLink.expiresAt && new Date() > participantShareLink.expiresAt) {
         return reply.status(410).send({
           success: false,
           message: 'Ce lien a expiré'
         });
       }
 
-      if (!anonymousParticipant.shareLink.allowAnonymousMessages) {
+      if (!participantShareLink.allowAnonymousMessages) {
         return reply.status(403).send({
           success: false,
           message: 'Les messages anonymes ne sont pas autorisés pour ce lien'
         });
       }
 
-      if (!anonymousParticipant.canSendMessages) {
+      if (!anonymousParticipant.permissions.canSendMessages) {
         return reply.status(403).send({
           success: false,
           message: 'Vous n\'êtes pas autorisé à envoyer des messages'
@@ -194,29 +198,38 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Traiter les liens dans le message AVANT la sauvegarde
       const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
         content: body.content,
-        conversationId: anonymousParticipant.shareLink.conversationId,
+        conversationId: participantShareLink.conversationId,
         createdBy: undefined
       });
 
       // Créer le message avec le contenu transformé
       const message = await fastify.prisma.message.create({
         data: {
-          conversationId: anonymousParticipant.shareLink.conversationId,
-          senderId: null,
+          conversationId: participantShareLink.conversationId,
+          senderId: anonymousParticipant.id,
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
-          anonymousSenderId: anonymousParticipant.id,
           deletedAt: null
         },
         include: {
-          anonymousSender: {
+          sender: {
             select: {
               id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              language: true
+              displayName: true,
+              avatar: true,
+              type: true,
+              language: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  displayName: true,
+                  avatar: true
+                }
+              }
             }
           }
         }
@@ -231,7 +244,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Émettre l'événement WebSocket
       const socketManager = (fastify as any).socketManager;
       if (socketManager) {
-        socketManager.emitToConversation(anonymousParticipant.shareLink.conversationId, 'link:message:new', {
+        socketManager.emitToConversation(participantShareLink.conversationId, 'link:message:new', {
           message: {
             id: message.id,
             content: message.content,
@@ -244,8 +257,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: null,
-            anonymousSender: message.anonymousSender
+            sender: message.sender
           }
         });
       }
@@ -266,8 +278,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: null,
-            anonymousSender: message.anonymousSender
+            sender: message.sender
           }
         }
       });
@@ -426,22 +437,30 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         });
       }
 
-      let isMember = false;
+      let participant = null;
 
       if (shareLink.conversation.identifier === "meeshy") {
-        isMember = true;
-      } else {
-        const member = await fastify.prisma.conversationMember.findFirst({
+        participant = await fastify.prisma.participant.findFirst({
           where: {
             conversationId: shareLink.conversationId,
             userId: userId,
             isActive: true
           }
         });
-        isMember = !!member;
+        if (!participant) {
+          participant = { id: userId } as any;
+        }
+      } else {
+        participant = await fastify.prisma.participant.findFirst({
+          where: {
+            conversationId: shareLink.conversationId,
+            userId: userId,
+            isActive: true
+          }
+        });
       }
 
-      if (!isMember) {
+      if (!participant) {
         return reply.status(403).send({
           success: false,
           message: 'Vous n\'êtes pas membre de cette conversation'
@@ -459,23 +478,31 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const message = await fastify.prisma.message.create({
         data: {
           conversationId: shareLink.conversationId,
-          senderId: userId,
+          senderId: participant.id,
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
-          anonymousSenderId: null,
           deletedAt: null
         },
         include: {
           sender: {
             select: {
               id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
               displayName: true,
               avatar: true,
-              systemLanguage: true
+              type: true,
+              language: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  displayName: true,
+                  avatar: true,
+                  systemLanguage: true
+                }
+              }
             }
           }
         }
@@ -503,8 +530,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: message.sender,
-            anonymousSender: null
+            sender: message.sender
           }
         });
       }
@@ -525,8 +551,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: message.sender,
-            anonymousSender: null
+            sender: message.sender
           }
         }
       });

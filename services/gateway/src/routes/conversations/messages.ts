@@ -309,7 +309,6 @@ export function registerMessagesRoutes(
         originalLanguage: true,
         conversationId: true,
         senderId: true,
-        anonymousSenderId: true,
         messageType: true,
         messageSource: true,
 
@@ -363,19 +362,23 @@ export function registerMessagesRoutes(
         sender: {
           select: {
             id: true,
-            username: true,
             displayName: true,
             avatar: true,
-            role: true
-          }
-        },
-        anonymousSender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            language: true
+            type: true,
+            role: true,
+            language: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                systemLanguage: true,
+                role: true
+              }
+            }
           }
         },
         attachments: {
@@ -426,7 +429,7 @@ export function registerMessagesRoutes(
             id: true,
             emoji: true,
             userId: true,
-            anonymousId: true,
+            participantId: true,
             createdAt: true
           },
           orderBy: {
@@ -442,7 +445,7 @@ export function registerMessagesRoutes(
           select: {
             id: true,
             userId: true,
-            anonymousId: true,
+            participantId: true,
             deliveredAt: true,
             receivedAt: true,
             readAt: true,
@@ -465,22 +468,24 @@ export function registerMessagesRoutes(
             originalLanguage: true,
             createdAt: true,
             senderId: true,
-            anonymousSenderId: true,
             validatedMentions: true,
             sender: {
               select: {
                 id: true,
-                username: true,
                 displayName: true,
-                avatar: true
-              }
-            },
-            anonymousSender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true
+                avatar: true,
+                type: true,
+                language: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true
+                  }
+                }
               }
             },
             attachments: {
@@ -577,7 +582,7 @@ export function registerMessagesRoutes(
           where: {
             messageId: { in: messageIds },
             ...(isAnonymousUser
-              ? { anonymousId: userId }
+              ? { participantId: authRequest.authContext.participantId }
               : { userId: userId }
             )
           },
@@ -667,7 +672,7 @@ export function registerMessagesRoutes(
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          anonymousSenderId: message.anonymousSenderId,
+          
 
           // Contenu
           content: message.content,
@@ -724,7 +729,7 @@ export function registerMessagesRoutes(
 
           // Relations obligatoires
           sender: message.sender,
-          anonymousSender: message.anonymousSender,
+          sender: message.sender,
           attachments: cleanAttachmentsForApi(message.attachments),
           _count: message._count
         };
@@ -1105,15 +1110,8 @@ export function registerMessagesRoutes(
       } else {
         // Vérifier les permissions d'écriture spécifiques
         if (authRequest.authContext.isAnonymous) {
-          // Pour les utilisateurs anonymes, vérifier les permissions d'écriture
-          const anonymousParticipant = await prisma.anonymousParticipant.findFirst({
-            where: {
-              id: authRequest.authContext.userId,
-              isActive: true,
-              canSendMessages: true
-            }
-          });
-          canSend = !!anonymousParticipant;
+          // Pour les utilisateurs anonymes, vérifier les permissions via Participant
+          canSend = authRequest.authContext.canSendMessages ?? false;
         } else {
           // Pour les utilisateurs connectés, l'accès implique l'écriture
           canSend = true;
@@ -1506,7 +1504,7 @@ export function registerMessagesRoutes(
                     select: {
                       title: true,
                       type: true,
-                      members: {
+                      participants: {
                         where: { isActive: true },
                         select: { userId: true }
                       }
@@ -1516,7 +1514,7 @@ export function registerMessagesRoutes(
 
                 if (sender && conversationForNotif) {
                   const conversation = conversationForNotif;
-                  const memberIds = conversation.members.map((m: any) => m.userId);
+                  const memberIds = conversation.participants.map((m: any) => m.userId);
 
                   // PERFORMANCE: Créer toutes les notifications de mention en batch
                   const count = await notificationService.createMentionNotificationsBatch(
@@ -1645,7 +1643,7 @@ export function registerMessagesRoutes(
       if (id === "meeshy") {
         canAccess = true; // Conversation globale accessible à tous les utilisateurs connectés
       } else {
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: { conversationId: conversationId, userId, isActive: true }
         });
         canAccess = !!membership;

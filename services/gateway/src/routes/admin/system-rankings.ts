@@ -235,7 +235,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'conversations_joined':
     case 'conversations': {
-      const topConversors = await fastify.prisma.conversationMember.groupBy({
+      const topConversors = await fastify.prisma.participant.groupBy({
         by: ['userId'],
         where: dateWhere(startDate, 'joinedAt'),
         _count: { id: true },
@@ -256,7 +256,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         select: { id: true }
       });
       const convoIds = groupConvos.map(c => c.id);
-      const adminMembers = await fastify.prisma.conversationMember.findMany({
+      const adminMembers = await fastify.prisma.participant.findMany({
         where: { conversationId: { in: convoIds }, role: 'admin' },
         select: { userId: true, conversationId: true },
         orderBy: { joinedAt: 'asc' }
@@ -516,7 +516,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
 
     case 'member_count':
     case 'members': {
-      const topConvos = await fastify.prisma.conversationMember.groupBy({
+      const topConvos = await fastify.prisma.participant.groupBy({
         by: ['conversationId'],
         where: { isActive: true },
         _count: { id: true },
@@ -780,7 +780,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
             select: { id: true, identifier: true, title: true, type: true }
           },
           _count: {
-            select: { anonymousParticipants: true }
+            select: { participants: true }
           }
         },
         orderBy: { currentUses: 'desc' },
