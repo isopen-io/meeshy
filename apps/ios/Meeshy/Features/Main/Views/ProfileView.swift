@@ -89,9 +89,9 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(item: $avatarImageForEditor) { image in
-            ImageEditView(
+            MeeshyImagePreviewView(
                 image: image,
-                initialCropRatio: .square,
+                context: .avatar,
                 onAccept: { edited in
                     avatarImageForEditor = nil
                     uploadAvatar(edited)
@@ -103,9 +103,9 @@ struct ProfileView: View {
             )
         }
         .fullScreenCover(item: $bannerImageForEditor) { image in
-            ImageEditView(
+            MeeshyImagePreviewView(
                 image: image,
-                initialCropRatio: .ratio16x9,
+                context: .banner,
                 onAccept: { edited in
                     bannerImageForEditor = nil
                     uploadBanner(edited)

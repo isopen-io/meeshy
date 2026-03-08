@@ -510,6 +510,8 @@ struct FeedComposerSheet: View {
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
     @State private var editingAttachmentId: String?
+    @State private var videosToPreview: [URL] = []
+    @State private var editingVideoURL: URL?
 
     @State private var pendingAttachments: [MessageAttachment] = []
     @State private var pendingMediaFiles: [String: URL] = [:]
@@ -686,7 +688,7 @@ struct FeedComposerSheet: View {
             },
             set: { editingAttachmentId = $0?.id }
         )) { item in
-            ImageEditView(image: item.image) { editedImage in
+            MeeshyImagePreviewView(image: item.image, context: .post) { editedImage in
                 pendingThumbnails[item.id] = editedImage
                 Task {
                     let result = await MediaCompressor.shared.compressImage(editedImage)
@@ -715,6 +717,29 @@ struct FeedComposerSheet: View {
                 }
             }
             .ignoresSafeArea()
+        }
+        // PhotosPicker videos queue → VideoPreviewView
+        .fullScreenCover(isPresented: Binding(
+            get: { !videosToPreview.isEmpty },
+            set: { if !$0 { videosToPreview.removeAll() } }
+        )) {
+            if let url = videosToPreview.first {
+                MeeshyVideoPreviewView(url: url, context: .post) {
+                    handleCameraVideo(url)
+                    videosToPreview.removeFirst()
+                }
+            }
+        }
+        // Tap pending video → VideoPreviewView
+        .fullScreenCover(isPresented: Binding(
+            get: { editingVideoURL != nil },
+            set: { if !$0 { editingVideoURL = nil } }
+        )) {
+            if let url = editingVideoURL {
+                MeeshyVideoPreviewView(url: url, context: .post) {
+                    editingVideoURL = nil
+                }
+            }
         }
         .onChange(of: selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
@@ -771,6 +796,10 @@ struct FeedComposerSheet: View {
                         .onTapGesture {
                             if attachment.type == .image {
                                 editingAttachmentId = attachment.id
+                            } else if attachment.type == .video {
+                                if let url = pendingMediaFiles[attachment.id] {
+                                    editingVideoURL = url
+                                }
                             }
                         }
 
@@ -853,14 +882,8 @@ struct FeedComposerSheet: View {
                             compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
                             try? FileManager.default.removeItem(at: rawURL)
                         } catch { compressedURL = rawURL }
-                        let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? movieData.count
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(id: attachmentId, fileName: compressedURL.lastPathComponent, originalName: compressedURL.lastPathComponent, mimeType: "video/mp4", fileSize: fileSize, fileUrl: compressedURL.absoluteString, thumbnailColor: "FF6B6B")
-                        let thumb = await generateVideoThumbnail(url: compressedURL)
                         await MainActor.run {
-                            pendingMediaFiles[attachmentId] = compressedURL
-                            if let thumb { pendingThumbnails[attachmentId] = thumb }
-                            pendingAttachments.append(attachment)
+                            videosToPreview.append(compressedURL)
                         }
                     }
                 } else {

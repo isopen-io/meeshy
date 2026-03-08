@@ -21,6 +21,11 @@ public struct MeeshyColors {
     public static let brandPrimary = indigo500
     public static let brandDeep = indigo700
 
+    // MARK: - Brand Hex Strings (for accentColor parameters)
+
+    public static let brandPrimaryHex = "6366F1"
+    public static let brandDeepHex = "4338CA"
+
     // MARK: - Semantic State Colors
 
     public static let success = Color(hex: "34D399")

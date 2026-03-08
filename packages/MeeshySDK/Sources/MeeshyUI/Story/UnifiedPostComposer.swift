@@ -12,7 +12,10 @@ public struct UnifiedPostComposer: View {
     @State private var showStoryComposer = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
+    @State private var selectedVideoURL: URL? = nil
     @State private var isPublishing = false
+    @State private var showImagePreview = false
+    @State private var showVideoPreview = false
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -63,6 +66,25 @@ public struct UnifiedPostComposer: View {
         .onChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
+        .fullScreenCover(isPresented: $showImagePreview) {
+            if let image = selectedImage {
+                MeeshyImagePreviewView(image: image, context: .post) { editedImage in
+                    selectedImage = editedImage
+                    showImagePreview = false
+                } onCancel: {
+                    showImagePreview = false
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showVideoPreview) {
+            if let url = selectedVideoURL {
+                MeeshyVideoPreviewView(url: url, context: .post) {
+                    showVideoPreview = false
+                } onCancel: {
+                    showVideoPreview = false
+                }
+            }
+        }
     }
 
     // MARK: - Type Selector
@@ -95,10 +117,10 @@ public struct UnifiedPostComposer: View {
                     Text(type.displayName)
                         .font(.system(size: 14, weight: isSelected ? .bold : .medium))
                 }
-                .foregroundColor(isSelected ? Color(hex: "FF2E63") : theme.textMuted)
+                .foregroundColor(isSelected ? Color(hex: "6366F1") : theme.textMuted)
 
                 Rectangle()
-                    .fill(isSelected ? Color(hex: "FF2E63") : Color.clear)
+                    .fill(isSelected ? Color(hex: "6366F1") : Color.clear)
                     .frame(height: 2)
                     .cornerRadius(1)
             }
@@ -130,11 +152,13 @@ public struct UnifiedPostComposer: View {
 
             if let image = selectedImage {
                 imagePreview(image)
+            } else if let videoURL = selectedVideoURL {
+                videoPreview(videoURL)
             }
 
             HStack(spacing: 16) {
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Label("Photo", systemImage: "photo")
+                PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
+                    Label("Média", systemImage: "photo.on.rectangle")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -186,6 +210,10 @@ public struct UnifiedPostComposer: View {
                 .frame(height: 200)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 16)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showImagePreview = true
+                }
 
             Button {
                 selectedImage = nil
@@ -216,7 +244,7 @@ public struct UnifiedPostComposer: View {
                             .scaleEffect(moodEmoji == emoji ? 1.2 : 1)
                             .background(
                                 Circle()
-                                    .fill(moodEmoji == emoji ? Color(hex: "FF2E63").opacity(0.2) : Color.clear)
+                                    .fill(moodEmoji == emoji ? Color(hex: "6366F1").opacity(0.2) : Color.clear)
                                     .frame(width: 50, height: 50)
                             )
                     }
@@ -283,7 +311,7 @@ public struct UnifiedPostComposer: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule().fill(canPublish
-                        ? LinearGradient(colors: [Color(hex: "FF2E63"), Color(hex: "E94057")], startPoint: .leading, endPoint: .trailing)
+                        ? LinearGradient(colors: [Color(hex: "6366F1"), Color(hex: "4338CA")], startPoint: .leading, endPoint: .trailing)
                         : LinearGradient(colors: [Color.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
                     )
                 )
@@ -299,14 +327,62 @@ public struct UnifiedPostComposer: View {
         }
     }
 
-    // MARK: - Image Loading
+    // MARK: - Video Preview
+
+    private func videoPreview(_ url: URL) -> some View {
+        ZStack(alignment: .topTrailing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.05))
+                    .frame(height: 200)
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                showVideoPreview = true
+            }
+
+            Button {
+                selectedVideoURL = nil
+                selectedPhotoItem = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white)
+                    .shadow(radius: 4)
+            }
+            .padding(.trailing, 24)
+            .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Media Loading
 
     private func loadImage(from item: PhotosPickerItem?) {
         guard let item else { return }
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
         Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                selectedImage = image
+            if isVideo {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("post_video_\(UUID().uuidString).mp4")
+                    try? data.write(to: tempURL)
+                    await MainActor.run {
+                        selectedImage = nil
+                        selectedVideoURL = tempURL
+                    }
+                }
+            } else {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        selectedVideoURL = nil
+                        selectedImage = image
+                    }
+                }
             }
         }
     }

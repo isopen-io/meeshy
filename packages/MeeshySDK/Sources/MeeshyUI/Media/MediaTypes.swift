@@ -434,6 +434,90 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Crop Ratio
+
+public enum CropRatio: Equatable {
+    case square
+    case ratio4x3
+    case ratio16x9
+    case ratio9x16
+    case free
+
+    public var aspectRatio: Double? {
+        switch self {
+        case .square: return 1.0
+        case .ratio4x3: return 4.0 / 3.0
+        case .ratio16x9: return 16.0 / 9.0
+        case .ratio9x16: return 9.0 / 16.0
+        case .free: return nil
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .square: return "1:1"
+        case .ratio4x3: return "4:3"
+        case .ratio16x9: return "16:9"
+        case .ratio9x16: return "9:16"
+        case .free: return "Libre"
+        }
+    }
+}
+
+// MARK: - Media Preview Context
+
+public enum MediaPreviewContext: Equatable {
+    case story
+    case post
+    case message
+    case avatar
+    case banner
+
+    public var cornerRadius: CGFloat {
+        switch self {
+        case .story: return 0
+        case .post: return 16
+        case .message: return 14
+        case .avatar: return .infinity
+        case .banner: return 0
+        }
+    }
+
+    public var isImmersive: Bool {
+        self == .story
+    }
+
+    public var preferredCropRatio: CropRatio? {
+        switch self {
+        case .story: return .ratio9x16
+        case .post: return nil
+        case .message: return nil
+        case .avatar: return .square
+        case .banner: return .ratio16x9
+        }
+    }
+
+    public var contextLabel: String {
+        switch self {
+        case .story: return "Story"
+        case .post: return "Post"
+        case .message: return "Message"
+        case .avatar: return "Avatar"
+        case .banner: return "Banni\u{00E8}re"
+        }
+    }
+
+    public var contextIcon: String {
+        switch self {
+        case .story: return "bolt.circle.fill"
+        case .post: return "square.text.square.fill"
+        case .message: return "bubble.left.fill"
+        case .avatar: return "person.circle.fill"
+        case .banner: return "rectangle.fill"
+        }
+    }
+}
+
 // MARK: - Format Helpers
 
 public func formatMediaDuration(_ seconds: TimeInterval) -> String {

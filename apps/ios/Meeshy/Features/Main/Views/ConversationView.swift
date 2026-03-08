@@ -52,9 +52,15 @@ struct ConversationScrollState {
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
-    var previewingPendingImage: UIImage? = nil
     var imageToPreview: UIImage? = nil
     var videoToPreview: URL? = nil
+
+    // Media editor queues
+    var photosToEdit: [UIImage] = []
+    var videosToPreview: [URL] = []
+    var editingPendingAttachmentId: String? = nil
+    var videoToEdit: URL? = nil
+    var audioToEdit: URL? = nil
 }
 
 struct ConversationComposerState {

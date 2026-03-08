@@ -20,11 +20,8 @@ extension ConversationView {
             audioRecorder.cancelRecording()
             return
         }
-        let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
-        composerState.pendingAudioURL = url
-        let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
-        composerState.pendingAttachments.append(audioAttachment)
+        scrollState.audioToEdit = url
         HapticFeedback.light()
     }
 
@@ -227,51 +224,15 @@ extension ConversationView {
                             compressedURL = rawURL
                         }
 
-                        let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? movieData.count
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: compressedURL.lastPathComponent,
-                            originalName: compressedURL.lastPathComponent,
-                            mimeType: "video/mp4",
-                            fileSize: fileSize,
-                            fileUrl: compressedURL.absoluteString,
-                            thumbnailColor: "FF6B6B"
-                        )
-
-                        let thumb = await generateVideoThumbnail(url: compressedURL)
-
                         await MainActor.run {
-                            composerState.pendingMediaFiles[attachmentId] = compressedURL
-                            if let thumb { composerState.pendingThumbnails[attachmentId] = thumb }
-                            composerState.pendingAttachments.append(attachment)
+                            scrollState.videosToPreview.append(compressedURL)
                         }
                     }
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImageData(imageData)
-                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: fileName,
-                            originalName: fileName,
-                            mimeType: result.mimeType,
-                            fileSize: result.data.count,
-                            fileUrl: tempURL.absoluteString,
-                            width: Int(uiImage.size.width),
-                            height: Int(uiImage.size.height),
-                            thumbnailColor: accentColor
-                        )
-
                         await MainActor.run {
-                            composerState.pendingMediaFiles[attachmentId] = tempURL
-                            composerState.pendingThumbnails[attachmentId] = uiImage
-                            composerState.pendingAttachments.append(attachment)
+                            scrollState.photosToEdit.append(uiImage)
                         }
                     }
                 }

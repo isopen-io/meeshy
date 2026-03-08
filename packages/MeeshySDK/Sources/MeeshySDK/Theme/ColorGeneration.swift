@@ -292,6 +292,10 @@ public struct DynamicColorGenerator {
         )
     }
 
+    public static func hueShiftedHex(_ hex: String, degrees: Double) -> String {
+        shiftHue(hex: hex, degrees: degrees)
+    }
+
     private static func shiftHue(hex: String, degrees: Double) -> String {
         let rgb = hexToRGB(hex)
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

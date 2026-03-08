@@ -23,8 +23,16 @@ private enum TxState { case idle, loading, done, failed }
 public struct MeeshyAudioEditorView: View {
 
     let url: URL
+    let accentColor: String
     var onConfirm: (URL, [StoryVoiceTranscription], TimeInterval, TimeInterval) -> Void
     var onDismiss: () -> Void
+    var onCancel: (() -> Void)?
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var secondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 60)
+    }
 
     // MARK: - Player
 
@@ -61,11 +69,15 @@ public struct MeeshyAudioEditorView: View {
     // MARK: -
 
     public init(url: URL,
+                accentColor: String = MeeshyColors.brandPrimaryHex,
                 onConfirm: @escaping (URL, [StoryVoiceTranscription], TimeInterval, TimeInterval) -> Void,
-                onDismiss: @escaping () -> Void) {
+                onDismiss: @escaping () -> Void,
+                onCancel: (() -> Void)? = nil) {
         self.url = url
+        self.accentColor = accentColor
         self.onConfirm = onConfirm
         self.onDismiss = onDismiss
+        self.onCancel = onCancel
     }
 
     // MARK: - Body
@@ -109,9 +121,9 @@ public struct MeeshyAudioEditorView: View {
 
     private var background: some View {
         ZStack {
-            Color(hex: "07070E").ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
             LinearGradient(
-                colors: [Color(hex: "FF2E63").opacity(0.05), Color.clear, Color(hex: "08D9D6").opacity(0.04)],
+                colors: [Color(hex: accentColor).opacity(0.05), Color.clear, Color(hex: secondaryColor).opacity(0.04)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ).ignoresSafeArea()
         }
@@ -121,7 +133,7 @@ public struct MeeshyAudioEditorView: View {
 
     private var header: some View {
         HStack {
-            Button { teardown(); onDismiss() } label: {
+            Button { teardown(); onCancel?(); onDismiss() } label: {
                 ZStack {
                     Circle().fill(Color.white.opacity(0.07)).frame(width: 38, height: 38)
                     Image(systemName: "chevron.down")
@@ -169,7 +181,7 @@ public struct MeeshyAudioEditorView: View {
             HStack {
                 Text(formatTime(currentTime))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color(hex: "FF2E63"))
+                    .foregroundColor(Color(hex: accentColor))
                 Spacer()
                 Text(formatTime(totalDuration))
                     .font(.system(size: 11, design: .monospaced))
@@ -198,7 +210,7 @@ public struct MeeshyAudioEditorView: View {
                 let h = max(3, CGFloat(samples[i]) * geo.size.height * 0.9)
                 let color: Color = !inTrim
                     ? Color.white.opacity(0.06)
-                    : (p < progress ? Color(hex: "FF2E63") : Color.white.opacity(0.22))
+                    : (p < progress ? Color(hex: accentColor) : Color.white.opacity(0.22))
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(color)
                     .frame(width: barW, height: h)
@@ -211,8 +223,8 @@ public struct MeeshyAudioEditorView: View {
         let sx = totalDuration > 0 ? CGFloat(trimStart / totalDuration) * geo.size.width : 0
         let ex = totalDuration > 0 ? CGFloat(trimEnd / totalDuration) * geo.size.width : geo.size.width
         return ZStack(alignment: .leading) {
-            Rectangle().fill(Color(hex: "FF2E63").opacity(0.7)).frame(width: 2, height: geo.size.height).offset(x: sx)
-            Rectangle().fill(Color(hex: "08D9D6").opacity(0.7)).frame(width: 2, height: geo.size.height).offset(x: max(0, ex - 2))
+            Rectangle().fill(Color(hex: accentColor).opacity(0.7)).frame(width: 2, height: geo.size.height).offset(x: sx)
+            Rectangle().fill(Color(hex: secondaryColor).opacity(0.7)).frame(width: 2, height: geo.size.height).offset(x: max(0, ex - 2))
         }
     }
 
@@ -263,7 +275,7 @@ public struct MeeshyAudioEditorView: View {
                     // Active region
                     RoundedRectangle(cornerRadius: 2)
                         .fill(LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
+                            colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
                             startPoint: .leading, endPoint: .trailing
                         ))
                         .frame(width: max(0, ex - sx), height: 4)
@@ -272,8 +284,8 @@ public struct MeeshyAudioEditorView: View {
                     // Left handle — 44pt touch target (Apple HIG)
                     ZStack {
                         Color.clear.frame(width: 44, height: 44)
-                        Rectangle().fill(Color(hex: "FF2E63")).frame(width: 3, height: 22)
-                        Circle().fill(Color(hex: "FF2E63")).frame(width: 13, height: 13).offset(y: 12)
+                        Rectangle().fill(Color(hex: accentColor)).frame(width: 3, height: 22)
+                        Circle().fill(Color(hex: accentColor)).frame(width: 13, height: 13).offset(y: 12)
                     }
                     .contentShape(Rectangle())
                     .position(x: sx, y: 9)
@@ -281,8 +293,8 @@ public struct MeeshyAudioEditorView: View {
                     // Right handle — 44pt touch target (Apple HIG)
                     ZStack {
                         Color.clear.frame(width: 44, height: 44)
-                        Rectangle().fill(Color(hex: "08D9D6")).frame(width: 3, height: 22)
-                        Circle().fill(Color(hex: "08D9D6")).frame(width: 13, height: 13).offset(y: 12)
+                        Rectangle().fill(Color(hex: secondaryColor)).frame(width: 3, height: 22)
+                        Circle().fill(Color(hex: secondaryColor)).frame(width: 13, height: 13).offset(y: 12)
                     }
                     .contentShape(Rectangle())
                     .position(x: ex, y: 9)
@@ -312,7 +324,7 @@ public struct MeeshyAudioEditorView: View {
             HStack {
                 Text(formatTime(trimStart))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(hex: "FF2E63").opacity(0.8))
+                    .foregroundColor(Color(hex: accentColor).opacity(0.8))
                 Spacer()
                 Text("\(formatTime(trimEnd - trimStart)) sélectionné")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -320,7 +332,7 @@ public struct MeeshyAudioEditorView: View {
                 Spacer()
                 Text(formatTime(trimEnd))
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(hex: "08D9D6").opacity(0.8))
+                    .foregroundColor(Color(hex: secondaryColor).opacity(0.8))
             }
         }
     }
@@ -341,11 +353,11 @@ public struct MeeshyAudioEditorView: View {
                     ZStack {
                         Circle()
                             .fill(LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "B5179E")],
+                                colors: [Color(hex: accentColor), Color(hex: "4338CA")],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             ))
                             .frame(width: 62, height: 62)
-                            .shadow(color: Color(hex: "FF2E63").opacity(0.45), radius: 14)
+                            .shadow(color: Color(hex: accentColor).opacity(0.45), radius: 14)
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundColor(.white)
@@ -373,13 +385,13 @@ public struct MeeshyAudioEditorView: View {
                     } label: {
                         Text(rateLabel(r))
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(playbackRate == r ? Color(hex: "08D9D6") : .white.opacity(0.32))
+                            .foregroundColor(playbackRate == r ? Color(hex: secondaryColor) : .white.opacity(0.32))
                             .padding(.horizontal, 9).padding(.vertical, 5)
                             .background(
                                 RoundedRectangle(cornerRadius: 7)
-                                    .fill(playbackRate == r ? Color(hex: "08D9D6").opacity(0.1) : Color.clear)
+                                    .fill(playbackRate == r ? Color(hex: secondaryColor).opacity(0.1) : Color.clear)
                                     .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(
-                                        playbackRate == r ? Color(hex: "08D9D6").opacity(0.35) : Color.white.opacity(0.07),
+                                        playbackRate == r ? Color(hex: secondaryColor).opacity(0.35) : Color.white.opacity(0.07),
                                         lineWidth: 1
                                     ))
                             )
@@ -414,7 +426,7 @@ public struct MeeshyAudioEditorView: View {
         HStack(spacing: 6) {
             Image(systemName: "waveform.and.mic")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "08D9D6"))
+                .foregroundColor(Color(hex: secondaryColor))
             Text("Transcription")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
@@ -455,12 +467,12 @@ public struct MeeshyAudioEditorView: View {
                         Text(txState == .idle ? "Transcrire" : "Retranscrire")
                             .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundColor(Color(hex: "08D9D6"))
+                    .foregroundColor(Color(hex: secondaryColor))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(
                         Capsule()
-                            .fill(Color(hex: "08D9D6").opacity(0.07))
-                            .overlay(Capsule().strokeBorder(Color(hex: "08D9D6").opacity(0.2), lineWidth: 1))
+                            .fill(Color(hex: secondaryColor).opacity(0.07))
+                            .overlay(Capsule().strokeBorder(Color(hex: secondaryColor).opacity(0.2), lineWidth: 1))
                     )
                 }
                 .buttonStyle(.plain)
@@ -481,7 +493,7 @@ public struct MeeshyAudioEditorView: View {
 
         case .loading:
             VStack(spacing: 10) {
-                ProgressView().tint(Color(hex: "08D9D6"))
+                ProgressView().tint(Color(hex: secondaryColor))
                 Text("Transcription en cours…")
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.36))
             }
@@ -499,7 +511,7 @@ public struct MeeshyAudioEditorView: View {
         case .failed:
             VStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 20)).foregroundColor(Color(hex: "FF2E63").opacity(0.5))
+                    .font(.system(size: 20)).foregroundColor(Color(hex: accentColor).opacity(0.5))
                 Text("Transcription impossible")
                     .font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
             }
@@ -512,7 +524,7 @@ public struct MeeshyAudioEditorView: View {
         result.foregroundColor = Color.white.opacity(0.7)
         if let cur = segments.first(where: { currentTime >= $0.start && currentTime < $0.end }),
            let range = result.range(of: cur.word) {
-            result[range].foregroundColor = Color(hex: "FF2E63")
+            result[range].foregroundColor = Color(hex: accentColor)
             result[range].font = .system(size: 13, weight: .semibold)
         }
         return result
@@ -538,12 +550,12 @@ public struct MeeshyAudioEditorView: View {
                 .frame(height: 54)
                 .background(
                     LinearGradient(
-                        colors: [Color(hex: "FF2E63"), Color(hex: "08D9D6")],
+                        colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
                         startPoint: .leading, endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: Color(hex: "FF2E63").opacity(0.3), radius: 14)
+                .shadow(color: Color(hex: "6366F1").opacity(0.3), radius: 14)
         }
         .buttonStyle(.plain)
     }

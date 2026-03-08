@@ -85,7 +85,7 @@ extension ConversationView {
             set: { if !$0 { scrollState.imageToPreview = nil } }
         )) {
             if let image = scrollState.imageToPreview {
-                ImageEditView(image: image) { editedImage in
+                MeeshyImagePreviewView(image: image, context: .message, accentColor: accentColor) { editedImage in
                     handleCameraCapture(editedImage)
                 }
             }
@@ -95,7 +95,7 @@ extension ConversationView {
             set: { if !$0 { scrollState.videoToPreview = nil } }
         )) {
             if let url = scrollState.videoToPreview {
-                VideoPreviewView(url: url) {
+                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
                     handleCameraVideo(url)
                 }
             }
@@ -117,14 +117,91 @@ extension ConversationView {
         .onChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
+        // A. PhotosPicker images queue → ImageEditView
         .fullScreenCover(isPresented: Binding(
-            get: { scrollState.previewingPendingImage != nil },
-            set: { if !$0 { scrollState.previewingPendingImage = nil } }
+            get: { !scrollState.photosToEdit.isEmpty },
+            set: { if !$0 { scrollState.photosToEdit.removeAll() } }
         )) {
-            if let image = scrollState.previewingPendingImage {
-                PendingImagePreview(image: image) {
-                    scrollState.previewingPendingImage = nil
+            if let image = scrollState.photosToEdit.first {
+                MeeshyImagePreviewView(image: image, context: .message, accentColor: accentColor) { editedImage in
+                    handleCameraCapture(editedImage)
+                    scrollState.photosToEdit.removeFirst()
                 }
+            }
+        }
+        // B. PhotosPicker videos queue → VideoPreviewView
+        .fullScreenCover(isPresented: Binding(
+            get: { !scrollState.videosToPreview.isEmpty },
+            set: { if !$0 { scrollState.videosToPreview.removeAll() } }
+        )) {
+            if let url = scrollState.videosToPreview.first {
+                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
+                    handleCameraVideo(url)
+                    scrollState.videosToPreview.removeFirst()
+                }
+            }
+        }
+        // C. Tap pending image → ImageEditView
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.editingPendingAttachmentId != nil },
+            set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
+        )) {
+            if let id = scrollState.editingPendingAttachmentId,
+               let thumb = composerState.pendingThumbnails[id] {
+                MeeshyImagePreviewView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
+                    composerState.pendingThumbnails[id] = editedImage
+                    Task {
+                        let result = await MediaCompressor.shared.compressImage(editedImage)
+                        let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try? result.data.write(to: tempURL)
+                        await MainActor.run {
+                            if let oldURL = composerState.pendingMediaFiles[id] {
+                                try? FileManager.default.removeItem(at: oldURL)
+                            }
+                            composerState.pendingMediaFiles[id] = tempURL
+                            if let idx = composerState.pendingAttachments.firstIndex(where: { $0.id == id }) {
+                                composerState.pendingAttachments[idx] = MessageAttachment(
+                                    id: id, fileName: fileName, originalName: fileName,
+                                    mimeType: result.mimeType, fileSize: result.data.count,
+                                    fileUrl: tempURL.absoluteString,
+                                    width: Int(editedImage.size.width),
+                                    height: Int(editedImage.size.height),
+                                    thumbnailColor: accentColor
+                                )
+                            }
+                            scrollState.editingPendingAttachmentId = nil
+                        }
+                    }
+                }
+            }
+        }
+        // D. Tap pending video → VideoPreviewView
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.videoToEdit != nil },
+            set: { if !$0 { scrollState.videoToEdit = nil } }
+        )) {
+            if let url = scrollState.videoToEdit {
+                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
+                    scrollState.videoToEdit = nil
+                }
+            }
+        }
+        // E. Audio → MeeshyAudioEditorView
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.audioToEdit != nil },
+            set: { if !$0 { scrollState.audioToEdit = nil } }
+        )) {
+            if let url = scrollState.audioToEdit {
+                MeeshyAudioPreviewView(url: url, context: .message, accentColor: accentColor, onAccept: { acceptedURL, _, trimStart, trimEnd in
+                    let durationMs = Int((trimEnd - trimStart) * 1000)
+                    composerState.pendingAudioURL = acceptedURL
+                    let audioAttachment = MessageAttachment.audio(durationMs: max(durationMs, 500), color: accentColor)
+                    composerState.pendingAttachments.append(audioAttachment)
+                    scrollState.audioToEdit = nil
+                }, onCancel: {
+                    scrollState.audioToEdit = nil
+                })
             }
         }
     }
@@ -532,20 +609,15 @@ extension ConversationView {
     // MARK: - Attachment Preview Tap Handler
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
-        case .audio:
-            if pendingAudioPlayer.isPlaying {
-                pendingAudioPlayer.stop()
-            } else if let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL {
-                pendingAudioPlayer.playLocalFile(url: url)
-            }
         case .image:
-            if let thumb = composerState.pendingThumbnails[attachment.id] {
-                scrollState.previewingPendingImage = thumb
-            }
+            scrollState.editingPendingAttachmentId = attachment.id
         case .video:
-            if let thumb = composerState.pendingThumbnails[attachment.id] {
-                scrollState.previewingPendingImage = thumb
+            if let url = composerState.pendingMediaFiles[attachment.id] {
+                scrollState.videoToEdit = url
             }
+        case .audio:
+            let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL
+            if let url { scrollState.audioToEdit = url }
         default:
             break
         }
@@ -632,68 +704,3 @@ extension ConversationView {
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, formatRecordingTime, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, addCurrentLocation, handleCameraCapture, sendMessage
 }
 
-// MARK: - Pending Image Preview (fullscreen)
-struct PendingImagePreview: View {
-    let image: UIImage
-    let onDismiss: () -> Void
-
-    @State private var scale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .scaleEffect(scale)
-                .offset(offset)
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            scale = value.magnification
-                        }
-                        .onEnded { _ in
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                if scale < 1 { scale = 1 }
-                                if scale > 4 { scale = 4 }
-                            }
-                        }
-                )
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            offset = value.translation
-                        }
-                        .onEnded { value in
-                            if abs(value.translation.height) > 150 {
-                                onDismiss()
-                            } else {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    offset = .zero
-                                }
-                            }
-                        }
-                )
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(.white.opacity(0.2)))
-                    }
-                    .accessibilityLabel("Fermer l'apercu")
-                    .padding(16)
-                }
-                Spacer()
-            }
-        }
-    }
-}

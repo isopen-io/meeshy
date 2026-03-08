@@ -2,13 +2,15 @@ import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-enum ImageFilter: String, CaseIterable, Identifiable {
+// MARK: - Image Filter
+
+public enum ImageFilter: String, CaseIterable, Identifiable, Sendable {
     case original, vivid, dramatic, mono, noir, sepia
     case warm, cool, fade, chrome, process, instant
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .original: return "Original"
         case .vivid: return "Vivid"
@@ -26,12 +28,14 @@ enum ImageFilter: String, CaseIterable, Identifiable {
     }
 }
 
-enum ImageEffect: String, CaseIterable, Identifiable {
+// MARK: - Image Effect
+
+public enum ImageEffect: String, CaseIterable, Identifiable, Sendable {
     case none, blur, vignette, sharpen, bloom, grain
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .none: return "Aucun"
         case .blur: return "Flou"
@@ -42,7 +46,7 @@ enum ImageEffect: String, CaseIterable, Identifiable {
         }
     }
 
-    var iconName: String {
+    public var iconName: String {
         switch self {
         case .none: return "sparkles"
         case .blur: return "aqi.medium"
@@ -54,19 +58,23 @@ enum ImageEffect: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Image Filter Engine
+
 @MainActor
-final class ImageFilterEngine: ObservableObject {
-    @Published var activeFilter: ImageFilter = .original
-    @Published var brightness: Float = 0
-    @Published var contrast: Float = 1
-    @Published var saturation: Float = 1
-    @Published var sharpness: Float = 0
-    @Published var vignetteIntensity: Float = 0
-    @Published var activeEffect: ImageEffect = .none
+public final class ImageFilterEngine: ObservableObject {
+    @Published public var activeFilter: ImageFilter = .original
+    @Published public var brightness: Float = 0
+    @Published public var contrast: Float = 1
+    @Published public var saturation: Float = 1
+    @Published public var sharpness: Float = 0
+    @Published public var vignetteIntensity: Float = 0
+    @Published public var activeEffect: ImageEffect = .none
 
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
-    func applyEdits(to image: UIImage) -> UIImage {
+    public init() {}
+
+    public func applyEdits(to image: UIImage) -> UIImage {
         guard let cgImage = image.cgImage else { return image }
         var ciImage = CIImage(cgImage: cgImage)
 
@@ -78,7 +86,7 @@ final class ImageFilterEngine: ObservableObject {
         return UIImage(cgImage: outputCG, scale: image.scale, orientation: image.imageOrientation)
     }
 
-    func generateThumbnails(from image: UIImage, size: CGFloat = 68) -> [ImageFilter: UIImage] {
+    public func generateThumbnails(from image: UIImage, size: CGFloat = 68) -> [ImageFilter: UIImage] {
         let thumbSize = CGSize(width: size * UIScreen.main.scale, height: size * UIScreen.main.scale)
         let renderer = UIGraphicsImageRenderer(size: thumbSize)
         let resized = renderer.image { _ in
@@ -98,7 +106,7 @@ final class ImageFilterEngine: ObservableObject {
         return results
     }
 
-    func reset() {
+    public func reset() {
         activeFilter = .original
         brightness = 0
         contrast = 1
