@@ -187,9 +187,11 @@ strip_entitlements() {
     fi
     # Remove final .app, the .xcent derived from entitlements (so Xcode regenerates it from
     # the stripped source), and build.db — keeps all .o intermediates for a fast re-link (~30s vs ~3min)
-    rm -rf "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app" 2>/dev/null || true
-    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
-    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
+    local strip_product="$APP_NAME"
+    [ "$CONFIGURATION" = "Debug" ] && strip_product="$APP_NAME Dev"
+    rm -rf "$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$strip_product.app" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Intermediates.noindex/XCBuildData/build.db" 2>/dev/null || true
     # NOTE: Do NOT delete provisioning profiles — they contain the registered device UDID.
     # Deleting them forces Xcode to re-download, which can fail silently and leave the
     # app unsigned. The .xcent removal above is sufficient to force re-signing.
@@ -212,7 +214,9 @@ do_device_deploy() {
 }
 
 do_device_deploy_only() {
-    local device_app_path="$DERIVED_DATA/Build/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
+    local dev_product="$APP_NAME"
+    [ "$CONFIGURATION" = "Debug" ] && dev_product="$APP_NAME Dev"
+    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$dev_product.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
     local ncpu
@@ -290,7 +294,7 @@ do_device_deploy_only() {
     # "entitlements modified during build" error on the next simulator build.
     log "Cleaning device build artifacts (keeping .o intermediates and build.db)..."
     rm -rf "$device_app_path" 2>/dev/null || true
-    rm -f "$DERIVED_DATA/Build/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
+    rm -f "$DERIVED_DATA/Intermediates.noindex/Meeshy.build/$CONFIGURATION-iphoneos/Meeshy.build/Meeshy.app.xcent" 2>/dev/null || true
     ok "Ready for next deploy"
 }
 
@@ -347,7 +351,10 @@ is_app_running() {
 }
 
 app_path() {
-    echo "$DERIVED_DATA/Build/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
+    # Debug config produces "Meeshy Dev.app", Release produces "Meeshy.app"
+    local product_name="$APP_NAME"
+    [ "$CONFIGURATION" = "Debug" ] && product_name="$APP_NAME Dev"
+    echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
 }
 
 # ─── Build Guard (wait or kill existing builds) ─────────────────────────────
