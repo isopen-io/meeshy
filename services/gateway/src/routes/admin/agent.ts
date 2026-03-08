@@ -3,9 +3,20 @@ import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { logError } from '../../utils/logger';
 import { getRedisWrapper } from '../../services/RedisWrapper';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+
+const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+
+const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
+  if (!OBJECT_ID_REGEX.test(id)) {
+    reply.status(400).send({ success: false, message: `${name} invalide` });
+    return false;
+  }
+  return true;
+};
 
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as any).authContext;
+  const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
     return reply.status(401).send({ success: false, message: 'Authentification requise' });
   }
@@ -55,7 +66,17 @@ const agentConfigSchema = z.object({
   prioritizeTaggedUsers: z.boolean().optional(),
   prioritizeRepliedUsers: z.boolean().optional(),
   reactionBoostFactor: z.number().min(0.5).max(5).optional(),
-});
+}).refine((data) => {
+  if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
+    return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
+  }
+  return true;
+}, { message: 'minResponsesPerCycle doit être <= maxResponsesPerCycle' }).refine((data) => {
+  if (data.minWordsPerMessage !== undefined && data.maxWordsPerMessage !== undefined) {
+    return data.minWordsPerMessage <= data.maxWordsPerMessage;
+  }
+  return true;
+}, { message: 'minWordsPerMessage doit être <= maxWordsPerMessage' });
 
 const llmConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic']).optional(),
@@ -133,6 +154,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
       if (!config) {
         return reply.status(404).send({ success: false, message: 'Config non trouvée' });
@@ -150,12 +172,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const parsed = agentConfigSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
       }
 
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const config = await fastify.prisma.agentConfig.upsert({
         where: { conversationId },
         create: { conversationId, configuredBy: authContext.registeredUser.id, ...parsed.data },
@@ -178,6 +201,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       await fastify.prisma.agentConfig.delete({ where: { conversationId } });
       return reply.send({ success: true, message: 'Config supprimée' });
     } catch (error) {
@@ -192,6 +216,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const roles = await fastify.prisma.agentUserRole.findMany({ where: { conversationId } });
       return reply.send({ success: true, data: roles });
     } catch (error) {
@@ -206,6 +231,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+      if (!validateObjectId(userId, 'userId', reply)) return;
       const { archetypeId } = request.body as { archetypeId: string };
 
       const archetype = getArchetype(archetypeId);
@@ -261,6 +288,8 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
+      if (!validateObjectId(userId, 'userId', reply)) return;
       const role = await fastify.prisma.agentUserRole.update({
         where: { userId_conversationId: { userId, conversationId } },
         data: { locked: false, confidence: 0 },
@@ -313,7 +342,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
       }
 
-      const authContext = (request as any).authContext;
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const existing = await fastify.prisma.agentLlmConfig.findFirst();
 
       let config;
@@ -353,6 +382,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
 
       const [config, roles, summary, analytic] = await fastify.prisma.$transaction([
         fastify.prisma.agentConfig.deleteMany({ where: { conversationId } }),
@@ -402,6 +432,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { userId } = request.params as { userId: string };
+      if (!validateObjectId(userId, 'userId', reply)) return;
 
       const [roles, globalProfile] = await fastify.prisma.$transaction([
         fastify.prisma.agentUserRole.deleteMany({ where: { userId } }),
@@ -497,6 +528,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const summary = await fastify.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
       if (!summary) {
         return reply.status(404).send({ success: false, message: 'Résumé non trouvé' });
@@ -514,6 +546,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
+      if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const redis = getRedisWrapper();
 
       const [profilesRaw, summaryRaw, messagesRaw, analytics, summaryRecord, roles] = await Promise.all([

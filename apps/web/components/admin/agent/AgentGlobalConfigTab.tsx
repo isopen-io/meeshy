@@ -38,6 +38,9 @@ export function AgentGlobalConfigTab() {
           maxConcurrentCalls: res.data.maxConcurrentCalls,
         });
       }
+    }).catch(() => {
+      toast.error('Erreur de chargement de la configuration globale');
+    }).finally(() => {
       setLoading(false);
     });
   }, []);

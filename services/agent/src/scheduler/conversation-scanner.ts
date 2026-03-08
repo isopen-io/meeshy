@@ -189,7 +189,7 @@ export class ConversationScanner {
     }
 
     const todayStats = await this.budgetManager.getTodayStats(conversationId);
-    const day = new Date().getDay();
+    const day = new Date().getUTCDay();
     const maxUsersToday = day === 0 || day === 6 ? conv.weekendMaxUsers : conv.weekdayMaxUsers;
 
     console.log(`[Scanner] Processing conv=${conversationId} activity=${activity.activityScore.toFixed(2)} msgs=${effectiveMessages.length} users=${controlledUsers.length}`);
