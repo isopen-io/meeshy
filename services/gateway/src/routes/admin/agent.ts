@@ -233,7 +233,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const { conversationId, userId } = request.params as { conversationId: string; userId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       if (!validateObjectId(userId, 'userId', reply)) return;
-      const { archetypeId } = request.body as { archetypeId: string };
+      const assignBody = z.object({ archetypeId: z.string().min(1) }).safeParse(request.body);
+      if (!assignBody.success) {
+        return reply.status(400).send({ success: false, message: 'archetypeId requis' });
+      }
+      const { archetypeId } = assignBody.data;
 
       const archetype = getArchetype(archetypeId);
       if (!archetype) {

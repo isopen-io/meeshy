@@ -58,7 +58,7 @@ export function AgentLlmTab() {
       try {
         const response = await agentAdminService.getLlmConfig();
         if (response.success && response.data) {
-          const cfg = (response.data as any).data ?? response.data;
+          const cfg = response.data;
           setConfig(cfg);
           setForm({
             provider: cfg.provider,
@@ -89,7 +89,7 @@ export function AgentLlmTab() {
       }
       const response = await agentAdminService.updateLlmConfig(payload);
       if (response.success && response.data) {
-        setConfig((response.data as any).data ?? response.data);
+        setConfig(response.data ?? null);
         setForm(prev => ({ ...prev, apiKeyEncrypted: '' }));
         toast.success('Configuration LLM mise à jour');
       }

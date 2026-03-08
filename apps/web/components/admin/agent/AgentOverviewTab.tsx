@@ -25,7 +25,7 @@ export function AgentOverviewTab() {
       setLoading(true);
       const response = await agentAdminService.getStats();
       if (response.success && response.data) {
-        setStats((response.data as any).data ?? response.data);
+        setStats(response.data);
         setError(null);
       } else {
         setError('Impossible de charger les statistiques');
@@ -48,10 +48,9 @@ export function AgentOverviewTab() {
     try {
       setResetting(true);
       const response = await agentAdminService.resetAll();
-      if (response.success) {
-        const deleted = (response as Record<string, unknown>).data as Record<string, Record<string, number>> | undefined;
-        const counts = deleted?.deleted;
-        toast.success(`Reset complet : ${counts?.configs ?? 0} configs, ${counts?.roles ?? 0} rôles, ${counts?.analytics ?? 0} analytics, ${counts?.redisKeys ?? 0} clés Redis supprimés`);
+      if (response.success && response.data) {
+        const counts = response.data.deleted;
+        toast.success(`Reset complet : ${counts.configs ?? 0} configs, ${counts.roles ?? 0} rôles, ${counts.analytics ?? 0} analytics, ${counts.redisKeys ?? 0} clés Redis supprimés`);
         fetchStats();
       } else {
         toast.error('Erreur lors du reset');

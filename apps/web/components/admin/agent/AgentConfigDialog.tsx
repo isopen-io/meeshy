@@ -247,7 +247,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 value={form.contextWindowSize}
                 onChange={e => updateField('contextWindowSize', parseInt(e.target.value) || 50)}
                 min={10}
-                max={200}
+                max={250}
               />
             </div>
             <div className="flex items-center justify-between">

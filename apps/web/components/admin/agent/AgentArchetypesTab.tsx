@@ -36,8 +36,7 @@ export function AgentArchetypesTab() {
       try {
         const response = await agentAdminService.getArchetypes();
         if (response.success && response.data) {
-          const archetypesData = (response.data as any).data ?? response.data;
-          setArchetypes(Array.isArray(archetypesData) ? archetypesData : []);
+          setArchetypes(Array.isArray(response.data) ? response.data : []);
         }
       } catch {
         toast.error('Erreur lors du chargement des archétypes');

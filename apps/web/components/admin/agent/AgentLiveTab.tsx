@@ -8,50 +8,11 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Activity, Users, Brain, MessageSquare, Clock, Loader2, Search, Lock } from 'lucide-react';
-import { agentAdminService } from '@/services/agent-admin.service';
-
-type ToneProfileEntry = {
-  userId: string;
-  displayName: string;
-  tone: string;
-  vocabularyLevel: string;
-  messagesAnalyzed: number;
-  confidence: number;
-  locked: boolean;
-};
-
-type ControlledUserEntry = {
-  userId: string;
-  displayName: string;
-  systemLanguage: string;
-  confidence: number;
-  locked: boolean;
-};
-
-type AnalyticsData = {
-  messagesSent: number;
-  totalWordsSent: number;
-  avgConfidence: number;
-  lastResponseAt: string | null;
-};
-
-type SummaryRecordData = {
-  summary: string;
-  currentTopics: string[];
-  overallTone: string;
-  messageCount: number;
-};
-
-type LiveStateData = {
-  conversationId: string;
-  summary: string;
-  toneProfiles: Record<string, ToneProfileEntry>;
-  cachedMessageCount: number;
-  activityScore?: number;
-  analytics: AnalyticsData | null;
-  summaryRecord: SummaryRecordData | null;
-  controlledUsers: ControlledUserEntry[];
-};
+import {
+  agentAdminService,
+  type LiveStateData,
+  type ToneProfileEntry,
+} from '@/services/agent-admin.service';
 
 function truncateId(id: string) {
   if (id.length <= 8) return id;
@@ -98,7 +59,7 @@ function LoadingSkeleton() {
 }
 
 function ActivityCard({ data }: { data: LiveStateData }) {
-  const score = data.activityScore ?? data.analytics?.avgConfidence ?? 0;
+  const score = data.analytics?.avgConfidence ?? 0;
   const hasCooldown = data.controlledUsers.some(u => u.locked);
 
   return (
@@ -380,7 +341,7 @@ export function AgentLiveTab() {
     try {
       const response = await agentAdminService.getLiveState(trimmedId);
       if (response.success && response.data) {
-        setLiveState(response.data as LiveStateData);
+        setLiveState(response.data);
       } else {
         setError('Impossible de charger l\'etat live');
       }
