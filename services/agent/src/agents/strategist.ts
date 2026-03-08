@@ -52,6 +52,16 @@ ROTATION UTILISATEURS:
 - Les utilisateurs dont les messages ont recu des reactions parlent {reactionBoostFactor}x plus souvent
 - Si un utilisateur est @mentionne dans un message recent: il DOIT intervenir (priorite absolue)
 - Si un message recent est une reponse a un message d'un utilisateur inactif: il DOIT reagir
+- INTERDIT de faire intervenir {todayActiveUserNames} s'il reste des utilisateurs qui n'ont PAS encore parle
+- VARIE les utilisateurs: ne choisis PAS toujours le meme. Chaque cycle DOIT utiliser un utilisateur DIFFERENT du precedent
+
+UTILISATEURS AYANT DEJA PARLE AUJOURD'HUI: {todayActiveUserNames}
+
+REGLES ANTI-SALUTATION:
+- Une salutation (bonjour, salut, hello, coucou) n'est acceptable QUE pour la PREMIERE intervention d'une section de journee (matin, apres-midi, soir)
+- Si l'historique montre une salutation dans les 4 dernieres heures: AUCUNE nouvelle salutation
+- Si des utilisateurs agents ont DEJA parle recemment: va droit au sujet, pas de salutation
+- Prefere des messages de CONTENU (reactions au sujet, questions, partage d'experience)
 
 MODE BURST (si actif):
 - Genere exactement {burstSize} interventions avec des delais courts (30-180s entre chaque)
@@ -87,6 +97,15 @@ REPONSE JSON STRICTE (aucun texte autour):
   ]
 }`;
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function buildStrategistPrompt(state: ConversationState, minResponses: number, maxResponses: number, maxReactions: number, reactionsEnabled: boolean): string {
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
   const recentMessages = state.messages.slice(-windowSize);
@@ -95,10 +114,14 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .map((m) => `[${m.senderName} (${m.senderId})]: ${m.content} (id: ${m.id})`)
     .join('\n');
 
-  const inactiveUsersText = state.controlledUsers
+  const shuffledUsers = shuffleArray(state.controlledUsers);
+  const todayActiveSet = new Set(state.todayActiveUserIds ?? []);
+
+  const inactiveUsersText = shuffledUsers
     .map((u) => {
       const p = u.role;
-      return `- ${u.displayName} (id: ${u.userId}): ${p.personaSummary ?? 'aucun profil'}. Ton: ${p.tone}. Sujets: ${p.topicsOfExpertise.join(', ')}. Emojis frequents: ${p.commonEmojis?.join(', ') ?? 'aucun'}. Reactions habituelles: ${p.reactionPatterns?.join(', ') ?? 'aucun'}.`;
+      const spokeToday = todayActiveSet.has(u.userId) ? ' [A DEJA PARLE AUJOURD\'HUI]' : ' [N\'A PAS ENCORE PARLE]';
+      return `- ${u.displayName} (id: ${u.userId})${spokeToday}: ${p.personaSummary ?? 'aucun profil'}. Ton: ${p.tone}. Sujets: ${p.topicsOfExpertise.join(', ')}. Emojis frequents: ${p.commonEmojis?.join(', ') ?? 'aucun'}. Reactions habituelles: ${p.reactionPatterns?.join(', ') ?? 'aucun'}.`;
     })
     .join('\n');
 
@@ -133,7 +156,14 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
     .replace('{todayUsersActive}', String(state.todayUsersActive))
     .replace('{maxUsersToday}', String(state.maxUsersToday))
     .replace('{reactionBoostFactor}', String(state.reactionBoostFactor))
-    .replace(/\{burstSize\}/g, String(state.burstSize));
+    .replace(/\{burstSize\}/g, String(state.burstSize))
+    .replace(/\{todayActiveUserNames\}/g, (() => {
+      const activeSet = new Set(state.todayActiveUserIds ?? []);
+      const activeNames = state.controlledUsers
+        .filter((u) => activeSet.has(u.userId))
+        .map((u) => u.displayName);
+      return activeNames.length > 0 ? activeNames.join(', ') : 'aucun';
+    })());
 }
 
 function validateInterventions(interventions: unknown[], controlledUserIds: Set<string>, messageIds: Set<string>, maxMessages: number, maxReactions: number): InterventionDirective[] {

@@ -6,22 +6,49 @@ const prisma = new PrismaClient();
 
 const agentConfigSchema = z.object({
   conversationId: z.string(),
-  enabled: z.boolean(),
-  manualUserIds: z.array(z.string()).default([]),
-  autoPickupEnabled: z.boolean().default(false),
-  inactivityThresholdHours: z.number().default(72),
-  minHistoricalMessages: z.number().default(0),
-  maxControlledUsers: z.number().default(5),
-  excludedRoles: z.array(z.string()).default([]),
-  excludedUserIds: z.array(z.string()).default([]),
-  triggerOnTimeout: z.boolean().default(true),
-  timeoutSeconds: z.number().default(300),
-  triggerOnUserMessage: z.boolean().default(false),
-  triggerFromUserIds: z.array(z.string()).default([]),
-  triggerOnReplyTo: z.boolean().default(true),
-  agentType: z.string().default('personal'),
-  contextWindowSize: z.number().default(50),
-  useFullHistory: z.boolean().default(false),
+  enabled: z.boolean().optional(),
+  manualUserIds: z.array(z.string()).optional(),
+  autoPickupEnabled: z.boolean().optional(),
+  inactivityThresholdHours: z.number().optional(),
+  minHistoricalMessages: z.number().optional(),
+  maxControlledUsers: z.number().optional(),
+  excludedRoles: z.array(z.string()).optional(),
+  excludedUserIds: z.array(z.string()).optional(),
+  triggerOnTimeout: z.boolean().optional(),
+  timeoutSeconds: z.number().optional(),
+  triggerOnUserMessage: z.boolean().optional(),
+  triggerFromUserIds: z.array(z.string()).optional(),
+  triggerOnReplyTo: z.boolean().optional(),
+  agentType: z.string().optional(),
+  contextWindowSize: z.number().optional(),
+  useFullHistory: z.boolean().optional(),
+  scanIntervalMinutes: z.number().optional(),
+  minResponsesPerCycle: z.number().optional(),
+  maxResponsesPerCycle: z.number().optional(),
+  reactionsEnabled: z.boolean().optional(),
+  maxReactionsPerCycle: z.number().optional(),
+  agentInstructions: z.string().nullable().optional(),
+  webSearchEnabled: z.boolean().optional(),
+  minWordsPerMessage: z.number().optional(),
+  maxWordsPerMessage: z.number().optional(),
+  generationTemperature: z.number().optional(),
+  qualityGateEnabled: z.boolean().optional(),
+  qualityGateMinScore: z.number().optional(),
+  weekdayMaxMessages: z.number().optional(),
+  weekendMaxMessages: z.number().optional(),
+  weekdayMaxUsers: z.number().optional(),
+  weekendMaxUsers: z.number().optional(),
+  burstEnabled: z.boolean().optional(),
+  burstSize: z.number().optional(),
+  burstIntervalMinutes: z.number().optional(),
+  quietIntervalMinutes: z.number().optional(),
+  inactivityDaysThreshold: z.number().optional(),
+  prioritizeTaggedUsers: z.boolean().optional(),
+  prioritizeRepliedUsers: z.boolean().optional(),
+  reactionBoostFactor: z.number().optional(),
+  eligibleConversationTypes: z.array(z.string()).optional(),
+  maxConversationsPerCycle: z.number().optional(),
+  messageFreshnessHours: z.number().optional(),
 });
 
 export async function configRoutes(fastify: FastifyInstance) {
@@ -33,10 +60,14 @@ export async function configRoutes(fastify: FastifyInstance) {
 
   fastify.put('/api/agent/config', async (req) => {
     const body = agentConfigSchema.parse(req.body);
+    const { conversationId, ...fields } = body;
+    const data = Object.fromEntries(
+      Object.entries(fields).filter(([, v]) => v !== undefined),
+    );
     const config = await prisma.agentConfig.upsert({
-      where: { conversationId: body.conversationId },
-      create: { ...body, configuredBy: 'admin' },
-      update: body,
+      where: { conversationId },
+      create: { conversationId, configuredBy: 'admin', ...data },
+      update: data,
     });
     return { success: true, data: config };
   });

@@ -69,6 +69,7 @@ const baseState = {
   prioritizeTaggedUsers: true,
   prioritizeRepliedUsers: true,
   reactionBoostFactor: 1.5,
+  todayActiveUserIds: [],
 };
 
 describe('Observer Agent', () => {

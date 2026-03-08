@@ -101,7 +101,13 @@ export class ConversationScanner {
 
     try {
       this.scanning = true;
-      const eligible = await findEligibleConversations(this.persistence);
+      const globalConfig = await this.configCache.getGlobalConfig();
+      const scanOptions = {
+        eligibleTypes: globalConfig?.eligibleConversationTypes ?? ['group', 'channel', 'public', 'global'],
+        freshnessHours: globalConfig?.messageFreshnessHours ?? 22,
+        maxConversations: globalConfig?.maxConversationsPerCycle ?? 0,
+      };
+      const eligible = await findEligibleConversations(this.persistence, scanOptions);
       console.log(`[Scanner] Found ${eligible.length} eligible conversations`);
 
       for (const conv of eligible) {
@@ -131,11 +137,13 @@ export class ConversationScanner {
       return;
     }
 
-    const [messages, summary, toneProfiles, controlledUsers] = await Promise.all([
+    const [messages, summary, toneProfiles, controlledUsers, agentHistory, todayActiveUserIds] = await Promise.all([
       this.stateManager.getMessages(conversationId),
       this.stateManager.getSummary(conversationId),
       this.stateManager.getToneProfiles(conversationId),
       this.persistence.getControlledUsers(conversationId),
+      this.stateManager.getAgentHistory(conversationId),
+      this.stateManager.getTodayActiveUserIds(conversationId),
     ]);
 
     if (controlledUsers.length === 0) {
@@ -228,10 +236,18 @@ export class ConversationScanner {
       prioritizeTaggedUsers: conv.prioritizeTaggedUsers,
       prioritizeRepliedUsers: conv.prioritizeRepliedUsers,
       reactionBoostFactor: conv.reactionBoostFactor,
+      agentHistory,
+      todayActiveUserIds,
     });
 
     if (result.summary) await this.stateManager.setSummary(conversationId, result.summary as string);
     if (result.toneProfiles) await this.stateManager.setToneProfiles(conversationId, result.toneProfiles as Record<string, any>);
+
+    const updatedHistory = result.agentHistory as Array<{ userId: string; topic: string; contentHash: string; timestamp: number }> | undefined;
+    if (updatedHistory && updatedHistory.length > 0) {
+      const merged = [...agentHistory, ...updatedHistory].slice(-100);
+      await this.stateManager.setAgentHistory(conversationId, merged);
+    }
 
     const pendingActions = (result.pendingActions ?? []) as Array<{ type: string; content?: string }>;
     if (pendingActions.length > 0) {

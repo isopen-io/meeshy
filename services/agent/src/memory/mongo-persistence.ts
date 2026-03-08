@@ -129,29 +129,33 @@ export class MongoPersistence {
     });
   }
 
-  async getEligibleConversations() {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  async getEligibleConversations(options?: {
+    eligibleTypes?: string[];
+    freshnessHours?: number;
+    maxConversations?: number;
+  }) {
+    const types = options?.eligibleTypes ?? ['group', 'channel', 'public', 'global'];
+    const freshnessHours = options?.freshnessHours ?? 22;
+    const maxConversations = options?.maxConversations ?? 0;
 
-    return this.prisma.agentConfig.findMany({
+    const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);
+
+    const conversations = await this.prisma.conversation.findMany({
       where: {
-        enabled: true,
-        conversation: {
-          isActive: true,
-          lastMessageAt: { gte: oneDayAgo },
-        },
+        type: { in: types },
+        isActive: true,
+        lastMessageAt: { gte: freshnessThreshold },
       },
       include: {
-        conversation: {
-          select: {
-            id: true,
-            type: true,
-            title: true,
-            description: true,
-            lastMessageAt: true,
-            memberCount: true,
-          },
-        },
+        agentConfig: true,
       },
+      orderBy: { lastMessageAt: 'desc' },
+      ...(maxConversations > 0 ? { take: maxConversations } : {}),
+    });
+
+    return conversations.filter((conv) => {
+      if (!conv.agentConfig) return true;
+      return conv.agentConfig.enabled !== false;
     });
   }
 

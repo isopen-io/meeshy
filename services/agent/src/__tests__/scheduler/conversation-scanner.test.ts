@@ -75,6 +75,9 @@ function makeStateManager(messages = [makeMessage()]) {
     setSummary: jest.fn().mockResolvedValue(undefined),
     setToneProfiles: jest.fn().mockResolvedValue(undefined),
     setMessages: jest.fn().mockResolvedValue(undefined),
+    getAgentHistory: jest.fn().mockResolvedValue([]),
+    setAgentHistory: jest.fn().mockResolvedValue(undefined),
+    getTodayActiveUserIds: jest.fn().mockResolvedValue([]),
   } as any;
 }
 

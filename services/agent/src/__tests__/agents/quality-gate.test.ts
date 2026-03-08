@@ -35,6 +35,7 @@ function makeState(partial: Partial<ConversationState>): ConversationState {
     prioritizeTaggedUsers: true,
     prioritizeRepliedUsers: true,
     reactionBoostFactor: 1.5,
+    todayActiveUserIds: [],
     agentHistory: [],
     pendingActions: [],
     controlledUsers: [],

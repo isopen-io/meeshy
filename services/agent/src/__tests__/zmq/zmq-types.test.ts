@@ -36,6 +36,41 @@ describe('ZMQ Types', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts mentionedUserIds in agent:new-message', () => {
+    const event = {
+      type: 'agent:new-message',
+      conversationId: '507f1f77bcf86cd799439011',
+      messageId: '507f1f77bcf86cd799439012',
+      senderId: '507f1f77bcf86cd799439013',
+      content: 'Hey @alice check this out',
+      originalLanguage: 'en',
+      mentionedUserIds: ['user-alice-id'],
+      timestamp: Date.now(),
+    };
+    const result = agentNewMessageSchema.safeParse(event);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mentionedUserIds).toEqual(['user-alice-id']);
+    }
+  });
+
+  it('defaults mentionedUserIds to empty array when absent', () => {
+    const event = {
+      type: 'agent:new-message',
+      conversationId: '507f1f77bcf86cd799439011',
+      messageId: '507f1f77bcf86cd799439012',
+      senderId: '507f1f77bcf86cd799439013',
+      content: 'Hello everyone',
+      originalLanguage: 'en',
+      timestamp: Date.now(),
+    };
+    const result = agentNewMessageSchema.safeParse(event);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mentionedUserIds).toEqual([]);
+    }
+  });
+
   it('rejects invalid event type', () => {
     const event = { type: 'unknown', data: 'test' };
     const result = agentEventSchema.safeParse(event);

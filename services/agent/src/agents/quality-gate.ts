@@ -12,6 +12,23 @@ const AI_REVEAL_PATTERNS = [
   /en tant qu['']assistant ia/i,
 ];
 
+const GREETING_PATTERNS = [
+  /^(bonjour|bonsoir|salut|hello|hey|hi|coucou|yo|wesh)\b/i,
+  /^(bon(ne)?\s+(journee|soiree|matinee|nuit|aprem))\b/i,
+  /^(good\s+(morning|afternoon|evening|night))\b/i,
+  /^(comment\s+(ca|ça)\s+va|quoi\s+de\s+neuf|how('?s| is) it going)\b/i,
+];
+
+function isGreeting(text: string): boolean {
+  const trimmed = text.trim();
+  return GREETING_PATTERNS.some((p) => p.test(trimmed));
+}
+
+function hasRecentGreeting(history: AgentHistoryEntry[], windowMinutes: number): boolean {
+  const cutoff = Date.now() - windowMinutes * 60 * 1000;
+  return history.some((h) => h.timestamp > cutoff && GREETING_PATTERNS.some((p) => p.test(h.topic)));
+}
+
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -89,6 +106,11 @@ export function createQualityGateNode(llm: LlmProvider) {
 
       if (pastContents.has(contentKey)) {
         console.warn(`[QualityGate] Content too similar to past agent message, skipping`);
+        continue;
+      }
+
+      if (isGreeting(msg.content) && hasRecentGreeting(state.agentHistory ?? [], 240)) {
+        console.warn(`[QualityGate] Greeting blocked — recent greeting already in history (4h window)`);
         continue;
       }
 

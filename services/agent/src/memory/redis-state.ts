@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import type { MessageEntry, ToneProfile } from '../graph/state';
+import type { MessageEntry, ToneProfile, AgentHistoryEntry } from '../graph/state';
 
 export class RedisStateManager {
   constructor(private redis: Redis) {}
@@ -40,5 +40,21 @@ export class RedisStateManager {
 
   async isOnCooldown(conversationId: string, userId: string): Promise<boolean> {
     return (await this.redis.exists(`agent:cooldown:${conversationId}:${userId}`)) === 1;
+  }
+
+  async getAgentHistory(conversationId: string): Promise<AgentHistoryEntry[]> {
+    const data = await this.redis.get(this.key(conversationId, 'history'));
+    return data ? JSON.parse(data) : [];
+  }
+
+  async setAgentHistory(conversationId: string, history: AgentHistoryEntry[]): Promise<void> {
+    const trimmed = history.slice(-100);
+    await this.redis.set(this.key(conversationId, 'history'), JSON.stringify(trimmed), 'EX', 86400);
+  }
+
+  async getTodayActiveUserIds(conversationId: string): Promise<string[]> {
+    const date = new Date().toISOString().slice(0, 10);
+    const key = `agent:budget:${conversationId}:${date}:users`;
+    return this.redis.smembers(key);
   }
 }

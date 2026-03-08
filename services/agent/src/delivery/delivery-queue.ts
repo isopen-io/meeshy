@@ -3,7 +3,7 @@ import type { AgentResponse, AgentReaction } from '../zmq/types';
 import type { ZmqAgentPublisher } from '../zmq/zmq-publisher';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 
-type DeliveryItem = {
+export type DeliveryItem = {
   action: PendingAction;
   conversationId: string;
   scheduledAt: number;
@@ -113,6 +113,26 @@ export class DeliveryQueue {
     }
     this.queue = [];
     console.log('[DeliveryQueue] All items cleared');
+  }
+
+  getScheduledForUser(conversationId: string, userId: string): DeliveryItem[] {
+    return this.queue.filter(
+      (item) => item.conversationId === conversationId && item.action.asUserId === userId,
+    );
+  }
+
+  rescheduleForUser(conversationId: string, userId: string, additionalDelaySeconds: number): number {
+    const items = this.getScheduledForUser(conversationId, userId);
+    for (const item of items) {
+      clearTimeout(item.timer);
+      const remaining = Math.max(0, item.scheduledAt - Date.now());
+      const newDelay = remaining + additionalDelaySeconds * 1000;
+      item.scheduledAt = Date.now() + newDelay;
+      item.timer = setTimeout(async () => {
+        await this.deliver(item.conversationId, item.action);
+      }, newDelay);
+    }
+    return items.length;
   }
 
   get pendingCount(): number {

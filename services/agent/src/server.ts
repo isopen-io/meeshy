@@ -15,6 +15,8 @@ import { ConfigCache } from './config/config-cache';
 import { DailyBudgetManager } from './scheduler/daily-budget';
 import type { AgentNewMessage } from './zmq/types';
 import type { MessageEntry } from './graph/state';
+import { ReactiveHandler } from './reactive/reactive-handler';
+import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { rolesRoutes } from './routes/roles';
 import { analyticsRoutes } from './routes/analytics';
@@ -63,21 +65,15 @@ async function start() {
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
   const deliveryQueue = new DeliveryQueue(zmqPublisher, persistence);
+  const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager);
 
   zmqListener.onEvent(async (event) => {
     if (event.type !== 'agent:new-message') return;
 
     const msg = event as AgentNewMessage;
-    let config = await persistence.getAgentConfig(msg.conversationId);
 
-    if (!config) {
-      // @ts-ignore - Minimal default config
-      config = { enabled: true, contextWindowSize: 50, useFullHistory: false, agentType: 'animator' };
-    }
-
-    if (!config?.enabled) return;
-
+    // 1. Update sliding window (always)
     const messages = await stateManager.getMessages(msg.conversationId);
     const newEntry: MessageEntry = {
       id: msg.messageId,
@@ -90,13 +86,51 @@ async function start() {
       originalLanguage: msg.originalLanguage,
     };
     messages.push(newEntry);
-    const windowSize = config.useFullHistory ? 250 : (config.contextWindowSize ?? env.AGENT_SLIDING_WINDOW_SIZE);
+    const config = await persistence.getAgentConfig(msg.conversationId);
+    const windowSize = config?.useFullHistory ? 250 : (config?.contextWindowSize ?? env.AGENT_SLIDING_WINDOW_SIZE);
     const window = messages.slice(-windowSize);
     await stateManager.setMessages(msg.conversationId, window);
 
-    scanner.scanConversation(msg.conversationId).catch((err) => {
-      server.log.error(`[Agent] Immediate scan error for conv=${msg.conversationId}:`, err);
+    // 2. Check for interpellation (reactive mode)
+    const controlledUsers = await persistence.getControlledUsers(msg.conversationId);
+    if (controlledUsers.length === 0) return;
+
+    const controlledUserIds = new Set(controlledUsers.map((u) => u.userId));
+
+    // Resolve replyToUserId from sliding window
+    let replyToUserId: string | undefined;
+    if (msg.replyToId) {
+      const repliedMessage = window.find((m) => m.id === msg.replyToId);
+      if (repliedMessage && controlledUserIds.has(repliedMessage.senderId)) {
+        replyToUserId = repliedMessage.senderId;
+      }
+    }
+
+    const controlledUsernames = new Map(
+      controlledUsers.map((u) => [u.displayName.toLowerCase(), u.userId]),
+    );
+
+    const interpellation = detectInterpellation({
+      mentionedUserIds: (msg as any).mentionedUserIds ?? [],
+      replyToUserId,
+      content: msg.content,
+      controlledUserIds,
+      controlledUsernames,
     });
+
+    if (interpellation.detected) {
+      // Route to reactive handler (2 LLM calls)
+      server.log.info(`[Agent] Interpellation detected in conv=${msg.conversationId}: type=${interpellation.type} targets=${interpellation.targetUserIds.join(',')}`);
+      reactiveHandler.handleInterpellation({
+        conversationId: msg.conversationId,
+        triggerMessage: newEntry,
+        mentionedUserIds: (msg as any).mentionedUserIds ?? [],
+        replyToUserId,
+      }).catch((err) => {
+        server.log.error(`[Agent] Reactive handler error for conv=${msg.conversationId}:`, err);
+      });
+    }
+    // If no interpellation: message is stored, periodic scanner will handle it
   });
 
   server.post('/debug/test-event', async (request) => {

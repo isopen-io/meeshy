@@ -10,6 +10,7 @@ export const agentNewMessageSchema = z.object({
   content: z.string(),
   originalLanguage: z.string(),
   replyToId: z.string().optional(),
+  mentionedUserIds: z.array(z.string()).default([]),
   timestamp: z.number(),
 });
 

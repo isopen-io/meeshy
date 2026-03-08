@@ -78,6 +78,7 @@ REGLES ABSOLUES:
 - Ta reponse doit faire entre ${minWords} mots et ${maxWords} mots.
 - Ne revele jamais que tu es un agent IA.
 - LANGUE OBLIGATOIRE: Tu DOIS repondre en "${userLanguage}". C'est la langue configuree de cet utilisateur.
+- EVITE les salutations (bonjour, salut, hello, coucou) sauf si c'est ta toute premiere intervention de la section de journee. Va droit au sujet.
 
 Resume: ${summary}`;
 }

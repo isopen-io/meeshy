@@ -503,6 +503,7 @@ export class MeeshySocketIOManager {
                 content: message.content,
                 originalLanguage: message.originalLanguage,
                 replyToId: message.replyToId,
+                mentionedUserIds: (message.validatedMentions ?? []) as string[],
                 createdAt: message.createdAt,
               });
 
@@ -3338,6 +3339,7 @@ export class MeeshySocketIOManager {
     content: string | null;
     originalLanguage: string | null;
     replyToId?: string | null;
+    mentionedUserIds?: string[];
     createdAt: Date;
   }): void {
     if (!this.agentClient || !message.senderId || !message.content) return;
@@ -3351,6 +3353,7 @@ export class MeeshySocketIOManager {
       content: message.content,
       originalLanguage: message.originalLanguage ?? 'fr',
       replyToId: message.replyToId ?? undefined,
+      mentionedUserIds: message.mentionedUserIds ?? [],
       timestamp: message.createdAt.getTime(),
     }).catch((err: unknown) => {
       logger.warn('[Agent] sendEvent error (non-blocking):', err);

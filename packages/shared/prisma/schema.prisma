@@ -2970,6 +2970,13 @@ model AgentConfig {
   prioritizeRepliedUsers   Boolean  @default(true)
   reactionBoostFactor      Float    @default(1.5)
 
+  /// Conversation types eligible for scanning
+  eligibleConversationTypes String[] @default(["group", "channel", "public", "global"])
+  /// Max conversations per scan cycle (0 = unlimited)
+  maxConversationsPerCycle  Int      @default(0)
+  /// Only scan conversations with messages newer than this (hours)
+  messageFreshnessHours     Int      @default(22)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -3085,6 +3092,12 @@ model AgentGlobalConfig {
   globalDailyBudgetUsd  Float    @default(10.0)
   /// Max concurrent LLM calls
   maxConcurrentCalls    Int      @default(5)
+  /// Conversation types eligible for periodic scan
+  eligibleConversationTypes String[] @default(["group", "channel", "public", "global"])
+  /// Only scan conversations with messages newer than N hours
+  messageFreshnessHours Int      @default(22)
+  /// Max conversations per scan cycle (0 = unlimited)
+  maxConversationsPerCycle Int    @default(0)
 
   updatedAt             DateTime @updatedAt
 }

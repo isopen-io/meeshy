@@ -39,45 +39,51 @@ export type EligibleConversation = {
   reactionBoostFactor: number;
 };
 
-export async function findEligibleConversations(persistence: MongoPersistence): Promise<EligibleConversation[]> {
-  const configs = await persistence.getEligibleConversations();
+export async function findEligibleConversations(
+  persistence: MongoPersistence,
+  options?: { eligibleTypes?: string[]; freshnessHours?: number; maxConversations?: number },
+): Promise<EligibleConversation[]> {
+  const conversations = await persistence.getEligibleConversations(options);
 
-  return configs.map((config) => ({
-    conversationId: config.conversationId,
-    conversationType: config.conversation.type,
-    title: config.conversation.title,
-    description: config.conversation.description,
-    lastMessageAt: config.conversation.lastMessageAt,
-    memberCount: config.conversation.memberCount,
-    scanIntervalMinutes: config.scanIntervalMinutes,
-    minResponsesPerCycle: config.minResponsesPerCycle,
-    maxResponsesPerCycle: config.maxResponsesPerCycle,
-    reactionsEnabled: config.reactionsEnabled,
-    maxReactionsPerCycle: config.maxReactionsPerCycle,
-    contextWindowSize: config.contextWindowSize,
-    useFullHistory: config.useFullHistory,
-    agentType: config.agentType,
-    inactivityThresholdHours: config.inactivityThresholdHours,
-    excludedRoles: config.excludedRoles,
-    excludedUserIds: config.excludedUserIds,
-    agentInstructions: config.agentInstructions ?? null,
-    webSearchEnabled: config.webSearchEnabled,
-    minWordsPerMessage: config.minWordsPerMessage,
-    maxWordsPerMessage: config.maxWordsPerMessage,
-    generationTemperature: config.generationTemperature,
-    qualityGateEnabled: config.qualityGateEnabled,
-    qualityGateMinScore: config.qualityGateMinScore,
-    weekdayMaxMessages: config.weekdayMaxMessages,
-    weekendMaxMessages: config.weekendMaxMessages,
-    weekdayMaxUsers: config.weekdayMaxUsers,
-    weekendMaxUsers: config.weekendMaxUsers,
-    burstEnabled: config.burstEnabled,
-    burstSize: config.burstSize,
-    burstIntervalMinutes: config.burstIntervalMinutes,
-    quietIntervalMinutes: config.quietIntervalMinutes,
-    inactivityDaysThreshold: config.inactivityDaysThreshold,
-    prioritizeTaggedUsers: config.prioritizeTaggedUsers,
-    prioritizeRepliedUsers: config.prioritizeRepliedUsers,
-    reactionBoostFactor: config.reactionBoostFactor,
-  }));
+  return conversations.map((conv) => {
+    const config = conv.agentConfig;
+    return {
+      conversationId: conv.id,
+      conversationType: conv.type,
+      title: conv.title,
+      description: conv.description,
+      lastMessageAt: conv.lastMessageAt,
+      memberCount: conv.memberCount,
+      scanIntervalMinutes: config?.scanIntervalMinutes ?? 3,
+      minResponsesPerCycle: config?.minResponsesPerCycle ?? 2,
+      maxResponsesPerCycle: config?.maxResponsesPerCycle ?? 12,
+      reactionsEnabled: config?.reactionsEnabled ?? true,
+      maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 8,
+      contextWindowSize: config?.contextWindowSize ?? 50,
+      useFullHistory: config?.useFullHistory ?? false,
+      agentType: config?.agentType ?? 'personal',
+      inactivityThresholdHours: config?.inactivityThresholdHours ?? 72,
+      excludedRoles: config?.excludedRoles ?? [],
+      excludedUserIds: config?.excludedUserIds ?? [],
+      agentInstructions: config?.agentInstructions ?? null,
+      webSearchEnabled: config?.webSearchEnabled ?? false,
+      minWordsPerMessage: config?.minWordsPerMessage ?? 3,
+      maxWordsPerMessage: config?.maxWordsPerMessage ?? 400,
+      generationTemperature: config?.generationTemperature ?? 0.8,
+      qualityGateEnabled: config?.qualityGateEnabled ?? true,
+      qualityGateMinScore: config?.qualityGateMinScore ?? 0.5,
+      weekdayMaxMessages: config?.weekdayMaxMessages ?? 10,
+      weekendMaxMessages: config?.weekendMaxMessages ?? 25,
+      weekdayMaxUsers: config?.weekdayMaxUsers ?? 4,
+      weekendMaxUsers: config?.weekendMaxUsers ?? 6,
+      burstEnabled: config?.burstEnabled ?? true,
+      burstSize: config?.burstSize ?? 4,
+      burstIntervalMinutes: config?.burstIntervalMinutes ?? 5,
+      quietIntervalMinutes: config?.quietIntervalMinutes ?? 90,
+      inactivityDaysThreshold: config?.inactivityDaysThreshold ?? 3,
+      prioritizeTaggedUsers: config?.prioritizeTaggedUsers ?? true,
+      prioritizeRepliedUsers: config?.prioritizeRepliedUsers ?? true,
+      reactionBoostFactor: config?.reactionBoostFactor ?? 1.5,
+    };
+  });
 }

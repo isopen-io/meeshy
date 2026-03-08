@@ -145,3 +145,37 @@ describe('DeliveryQueue — mentionedUsernames in AgentResponse', () => {
     expect(queue.pendingCount).toBe(0);
   });
 });
+
+describe('DeliveryQueue — queue introspection and rescheduling', () => {
+  it('getScheduledForUser returns pending items for a user', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 60 })]);
+    expect(queue.getScheduledForUser('conv-1', 'bot-alice')).toHaveLength(1);
+  });
+
+  it('getScheduledForUser returns empty for unknown user', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 60 })]);
+    expect(queue.getScheduledForUser('conv-1', 'bot-bob')).toHaveLength(0);
+  });
+
+  it('getScheduledForUser scopes to conversation', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 60 })]);
+    queue.enqueue('conv-2', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 60 })]);
+    expect(queue.getScheduledForUser('conv-1', 'bot-alice')).toHaveLength(1);
+  });
+
+  it('rescheduleForUser delays existing items and returns count', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    queue.enqueue('conv-1', [makeMessage({ asUserId: 'bot-alice', delaySeconds: 30 })]);
+    const count = queue.rescheduleForUser('conv-1', 'bot-alice', 60);
+    expect(count).toBe(1);
+  });
+
+  it('rescheduleForUser returns 0 when no items match', () => {
+    const queue = new DeliveryQueue(makePublisher(), makePersistence(0));
+    const count = queue.rescheduleForUser('conv-1', 'nobody', 60);
+    expect(count).toBe(0);
+  });
+});
