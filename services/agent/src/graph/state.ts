@@ -37,6 +37,7 @@ export type ToneProfile = {
 export type ControlledUser = {
   userId: string;
   displayName: string;
+  username: string;
   systemLanguage: string;
   source: 'manual' | 'auto_rule';
   role: ToneProfile;

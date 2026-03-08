@@ -6,7 +6,7 @@ import type { ControlledUser, MessageEntry } from '../../graph/state';
 
 function makeControlledUser(userId = 'bot-alice', displayName = 'Alice'): ControlledUser {
   return {
-    userId, displayName, systemLanguage: 'fr', source: 'manual',
+    userId, displayName, username: displayName.toLowerCase(), systemLanguage: 'fr', source: 'manual',
     role: {
       userId, displayName, origin: 'observed',
       personaSummary: 'Friendly dev', tone: 'amical', vocabularyLevel: 'courant',
@@ -65,6 +65,8 @@ describe('Reactive Integration', () => {
           content: '@alice avis sur React?', timestamp: Date.now() },
         mentionedUserIds: ['bot-alice'],
         replyToUserId: undefined,
+        targetUserIds: ['bot-alice'],
+        interpellationType: 'mention',
       });
 
       // Verify 2 LLM calls
@@ -172,6 +174,8 @@ describe('Reactive Integration', () => {
           content: '@alice urgent!', timestamp: Date.now() },
         mentionedUserIds: ['bot-alice'],
         replyToUserId: undefined,
+        targetUserIds: ['bot-alice'],
+        interpellationType: 'mention',
       });
 
       expect(queue.rescheduleForUser).toHaveBeenCalledWith('conv-conflict', 'bot-alice', expect.any(Number));

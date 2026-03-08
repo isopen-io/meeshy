@@ -97,21 +97,33 @@ async function start() {
 
     const controlledUserIds = new Set(controlledUsers.map((u) => u.userId));
 
-    // Resolve replyToUserId from sliding window
+    // Resolve replyToUserId from sliding window, fallback to DB
     let replyToUserId: string | undefined;
     if (msg.replyToId) {
       const repliedMessage = window.find((m) => m.id === msg.replyToId);
       if (repliedMessage && controlledUserIds.has(repliedMessage.senderId)) {
         replyToUserId = repliedMessage.senderId;
+      } else if (!repliedMessage) {
+        try {
+          const dbMsg = await prisma.message.findUnique({
+            where: { id: msg.replyToId },
+            select: { senderId: true },
+          });
+          if (dbMsg?.senderId && controlledUserIds.has(dbMsg.senderId)) {
+            replyToUserId = dbMsg.senderId;
+          }
+        } catch {
+          // Non-blocking: if DB lookup fails, skip reply detection
+        }
       }
     }
 
     const controlledUsernames = new Map(
-      controlledUsers.map((u) => [u.displayName.toLowerCase(), u.userId]),
+      controlledUsers.map((u) => [u.username.toLowerCase(), u.userId]),
     );
 
     const interpellation = detectInterpellation({
-      mentionedUserIds: (msg as any).mentionedUserIds ?? [],
+      mentionedUserIds: msg.mentionedUserIds,
       replyToUserId,
       content: msg.content,
       controlledUserIds,
@@ -124,8 +136,10 @@ async function start() {
       reactiveHandler.handleInterpellation({
         conversationId: msg.conversationId,
         triggerMessage: newEntry,
-        mentionedUserIds: (msg as any).mentionedUserIds ?? [],
+        mentionedUserIds: msg.mentionedUserIds,
         replyToUserId,
+        targetUserIds: interpellation.targetUserIds,
+        interpellationType: interpellation.type,
       }).catch((err) => {
         server.log.error(`[Agent] Reactive handler error for conv=${msg.conversationId}:`, err);
       });

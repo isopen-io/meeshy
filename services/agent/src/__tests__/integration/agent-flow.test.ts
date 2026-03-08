@@ -88,6 +88,7 @@ describe('Agent Flow E2E', () => {
     const controlledUser: ControlledUser = {
       userId: 'bot1',
       displayName: 'CuriousBot',
+      username: 'curiousbot',
       systemLanguage: 'fr',
       source: 'manual',
       role: {
@@ -184,6 +185,7 @@ describe('Agent Flow E2E', () => {
     const controlledUser: ControlledUser = {
       userId: 'bot1',
       displayName: 'Bot',
+      username: 'bot1',
       systemLanguage: 'fr',
       source: 'manual',
       role: {

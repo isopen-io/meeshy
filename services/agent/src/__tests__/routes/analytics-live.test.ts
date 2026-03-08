@@ -5,6 +5,7 @@ function makeControlledUser(overrides: Partial<{ userId: string; displayName: st
   return {
     userId: 'u1',
     displayName: 'Alice',
+    username: 'alice',
     systemLanguage: 'fr',
     source: 'manual' as const,
     role: {

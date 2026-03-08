@@ -72,11 +72,12 @@ export class MongoPersistence {
       where: { id: { in: userIds } },
       select: { id: true, displayName: true, username: true, systemLanguage: true },
     });
-    const userMap = new Map(users.map((u) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, systemLanguage: u.systemLanguage }]));
+    const userMap = new Map(users.map((u) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage }]));
 
     return roles.map((r) => ({
       userId: r.userId,
       displayName: userMap.get(r.userId)?.displayName ?? r.userId,
+      username: userMap.get(r.userId)?.username ?? r.userId,
       systemLanguage: userMap.get(r.userId)?.systemLanguage ?? 'fr',
       source: 'manual' as const,
       role: {

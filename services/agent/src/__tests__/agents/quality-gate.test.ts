@@ -60,6 +60,7 @@ const mockLlm: LlmProvider = {
 const controlledUser: ControlledUser = {
   userId: 'user1',
   displayName: 'Bot1',
+  username: 'bot1',
   systemLanguage: 'fr',
   source: 'manual',
   role: {

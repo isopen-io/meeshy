@@ -1,14 +1,16 @@
 import type { LlmProvider } from '../llm/types';
 import type { PendingMessage, MessageEntry, ControlledUser, AgentHistoryEntry } from '../graph/state';
 import type { DeliveryQueue } from '../delivery/delivery-queue';
-import { detectInterpellation } from './interpellation-detector';
 import { calculateResponseDelay } from './timing-calculator';
+import type { InterpellationType } from './interpellation-detector';
 
 type InterpellationInput = {
   conversationId: string;
   triggerMessage: MessageEntry;
   mentionedUserIds: string[];
   replyToUserId: string | undefined;
+  targetUserIds: string[];
+  interpellationType: InterpellationType;
 };
 
 type TriageResponse = {
@@ -56,28 +58,13 @@ export class ReactiveHandler {
       const controlledUsers = await this.persistence.getControlledUsers(input.conversationId);
       if (controlledUsers.length === 0) return;
 
-      const controlledUserIds = new Set(controlledUsers.map((u) => u.userId));
-      const controlledUsernames = new Map(
-        controlledUsers.map((u) => [u.displayName.toLowerCase(), u.userId]),
-      );
-
-      const interpellation = detectInterpellation({
-        mentionedUserIds: input.mentionedUserIds,
-        replyToUserId: input.replyToUserId,
-        content: input.triggerMessage.content,
-        controlledUserIds,
-        controlledUsernames,
-      });
-
-      if (!interpellation.detected) return;
-
-      const targetUsers = controlledUsers.filter((u) => interpellation.targetUserIds.includes(u.userId));
+      const targetUsers = controlledUsers.filter((u) => input.targetUserIds.includes(u.userId));
       if (targetUsers.length === 0) return;
 
       const messages = await this.stateManager.getMessages(input.conversationId);
       const recentMessages = messages.slice(-30);
 
-      const triageResult = await this.callTriage(input, targetUsers, recentMessages, interpellation.type);
+      const triageResult = await this.callTriage(input, targetUsers, recentMessages, input.interpellationType);
       if (!triageResult.shouldRespond) return;
 
       const genResult = await this.callGeneration(input, targetUsers, recentMessages, triageResult);
@@ -91,7 +78,7 @@ export class ReactiveHandler {
           : 24 * 60 * 60 * 1000;
 
         const delayMs = calculateResponseDelay({
-          interpellationType: interpellation.type,
+          interpellationType: input.interpellationType,
           wordCount: msg.wordCount || msg.content.split(/\s+/).length,
           lastUserMessageAgoMs: lastMessageAgoMs,
           unreadMessageCount: Math.min(recentMessages.length, 10),

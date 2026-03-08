@@ -503,7 +503,7 @@ export class MeeshySocketIOManager {
                 content: message.content,
                 originalLanguage: message.originalLanguage,
                 replyToId: message.replyToId,
-                mentionedUserIds: (message.validatedMentions ?? []) as string[],
+                mentionedUserIds: await this._resolveMentionUserIds(message.validatedMentions ?? []),
                 createdAt: message.createdAt,
               });
 
@@ -3327,6 +3327,19 @@ export class MeeshySocketIOManager {
       logger.info(`[Agent] Reaction sent — conv=${reaction.conversationId} user=${reaction.asUserId} emoji=${reaction.emoji} msg=${reaction.targetMessageId}`);
     } catch (error) {
       logger.error('[Agent] handleAgentReaction error:', error);
+    }
+  }
+
+  private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
+    if (usernames.length === 0) return [];
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
+        select: { id: true },
+      });
+      return users.map((u) => u.id);
+    } catch {
+      return [];
     }
   }
 

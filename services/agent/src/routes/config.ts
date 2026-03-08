@@ -66,7 +66,7 @@ export async function configRoutes(fastify: FastifyInstance) {
     );
     const config = await prisma.agentConfig.upsert({
       where: { conversationId },
-      create: { conversationId, configuredBy: 'admin', ...data },
+      create: { conversationId, ...data },
       update: data,
     });
     return { success: true, data: config };

@@ -11,6 +11,7 @@ function makeControlledUser(confidence = 0.8) {
   return {
     userId: 'bot1',
     displayName: 'Bot',
+    username: 'bot1',
     systemLanguage: 'fr',
     source: 'manual' as const,
     role: {

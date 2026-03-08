@@ -23,6 +23,7 @@ function makeControlledUser(userId = 'bot-alice'): ControlledUser {
   return {
     userId,
     displayName: 'Alice Bot',
+    username: 'alice',
     systemLanguage: 'fr',
     source: 'manual',
     role: {
@@ -88,6 +89,8 @@ describe('ReactiveHandler', () => {
       triggerMessage: makeTriggerMessage(),
       mentionedUserIds: ['bot-alice'],
       replyToUserId: undefined,
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'mention',
     });
 
     expect(llm.chat).toHaveBeenCalledTimes(2);
@@ -108,6 +111,8 @@ describe('ReactiveHandler', () => {
       triggerMessage: makeTriggerMessage({ content: '@alice lol' }),
       mentionedUserIds: ['bot-alice'],
       replyToUserId: undefined,
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'mention',
     });
 
     expect(llm.chat).toHaveBeenCalledTimes(1);
@@ -134,6 +139,8 @@ describe('ReactiveHandler', () => {
       triggerMessage: makeTriggerMessage(),
       mentionedUserIds: ['bot-alice'],
       replyToUserId: undefined,
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'mention',
     });
 
     expect(queue.rescheduleForUser).toHaveBeenCalled();
@@ -154,6 +161,8 @@ describe('ReactiveHandler', () => {
       triggerMessage: makeTriggerMessage(),
       mentionedUserIds: ['bot-alice'],
       replyToUserId: undefined,
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'mention',
     });
 
     expect(queue.enqueue).not.toHaveBeenCalled();
@@ -179,6 +188,8 @@ describe('ReactiveHandler', () => {
       triggerMessage: makeTriggerMessage(),
       mentionedUserIds: ['bot-alice'],
       replyToUserId: undefined,
+      targetUserIds: ['bot-alice'],
+      interpellationType: 'mention',
     });
 
     expect(stateManager.setAgentHistory).toHaveBeenCalledWith('conv1', expect.any(Array));
