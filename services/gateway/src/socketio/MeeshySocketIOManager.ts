@@ -43,6 +43,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
+import { hashSessionToken } from '../utils/session-token';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -52,7 +53,14 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
-  sessionToken?: string; // Pour les utilisateurs anonymes
+  /** For anonymous participants: the participant.id */
+  participantId?: string;
+  /** For registered users: the user.id */
+  userId?: string;
+  /** Display name resolved at connection time */
+  displayName?: string;
+  /** @deprecated kept for backward compat — raw session token */
+  sessionToken?: string;
 }
 
 export interface TranslationNotification {
@@ -344,15 +352,13 @@ export class MeeshySocketIOManager {
                 logger.error('SessionToken manquant pour utilisateur anonyme', userId);
                 anonymousDisplayName = 'Anonymous User';
               } else {
-                const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
-                  where: { sessionToken: userSessionToken },
-                  select: { username: true, firstName: true, lastName: true }
+                const anonymousParticipant = await this.prisma.participant.findFirst({
+                  where: { id: userId, type: 'anonymous' },
+                  select: { displayName: true, nickname: true }
                 });
               
-                if (anonymousUser) {
-                  // Construire le nom d'affichage à partir du prénom/nom ou username
-                  const fullName = `${anonymousUser.firstName || ''} ${anonymousUser.lastName || ''}`.trim();
-                  anonymousDisplayName = fullName || anonymousUser.username || 'Anonymous User';
+                if (anonymousParticipant) {
+                  anonymousDisplayName = anonymousParticipant.nickname || anonymousParticipant.displayName || 'Anonymous User';
                 } else {
                   anonymousDisplayName = 'Anonymous User';
                 }
@@ -385,13 +391,11 @@ export class MeeshySocketIOManager {
           const sessionToken = this.extractSessionToken(socket);
 
 
-          // PHASE 3.1: Utilisation du MessagingService unifié avec contexte d'auth
+          // PHASE 3.1: Utilisation du MessagingService unifié (Participant model)
+          // userId here is participantId for anonymous, or resolved per-conversation for registered
           const response: MessageResponse = await this.messagingService.handleMessage(
             messageRequest,
-            userId,
-            true,
-            jwtToken,
-            sessionToken
+            userId
           );
 
           // Réponse via callback - typage strict SocketIOResponse
@@ -420,19 +424,21 @@ export class MeeshySocketIOManager {
                 sender: {
                   select: {
                     id: true,
-                    username: true,
                     displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                },
-                anonymousSender: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    username: true
+                    avatar: true,
+                    type: true,
+                    nickname: true,
+                    userId: true,
+                    user: {
+                      select: {
+                        id: true,
+                        username: true,
+                        displayName: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true
+                      }
+                    }
                   }
                 },
                 attachments: {
@@ -464,19 +470,21 @@ export class MeeshySocketIOManager {
                     sender: {
                       select: {
                         id: true,
-                        username: true,
                         displayName: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true
-                      }
-                    },
-                    anonymousSender: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        username: true
+                        avatar: true,
+                        type: true,
+                        nickname: true,
+                        userId: true,
+                        user: {
+                          select: {
+                            id: true,
+                            username: true,
+                            displayName: true,
+                            firstName: true,
+                            lastName: true,
+                            avatar: true
+                          }
+                        }
                       }
                     }
                   }
@@ -606,14 +614,13 @@ export class MeeshySocketIOManager {
                 logger.error('SessionToken manquant pour utilisateur anonyme', userId);
                 anonymousDisplayName = 'Anonymous User';
               } else {
-                const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
-                  where: { sessionToken: userSessionToken },
-                  select: { username: true, firstName: true, lastName: true }
+                const anonymousParticipant = await this.prisma.participant.findFirst({
+                  where: { id: userId, type: 'anonymous' },
+                  select: { displayName: true, nickname: true }
                 });
               
-                if (anonymousUser) {
-                  const fullName = `${anonymousUser.firstName || ''} ${anonymousUser.lastName || ''}`.trim();
-                  anonymousDisplayName = fullName || anonymousUser.username || 'Anonymous User';
+                if (anonymousParticipant) {
+                  anonymousDisplayName = anonymousParticipant.nickname || anonymousParticipant.displayName || 'Anonymous User';
                 } else {
                   anonymousDisplayName = 'Anonymous User';
                 }
@@ -643,15 +650,9 @@ export class MeeshySocketIOManager {
           };
 
 
-          const jwtToken = this.extractJWTToken(socket);
-          const sessionToken = this.extractSessionToken(socket);
-
           const response: MessageResponse = await this.messagingService.handleMessage(
-            messageRequest, 
-            userId, 
-            true,
-            jwtToken,
-            sessionToken
+            messageRequest,
+            userId
           );
 
           // Associer les attachments au message
@@ -748,19 +749,21 @@ export class MeeshySocketIOManager {
                 sender: {
                   select: {
                     id: true,
-                    username: true,
                     displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                },
-                anonymousSender: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    username: true
+                    avatar: true,
+                    type: true,
+                    nickname: true,
+                    userId: true,
+                    user: {
+                      select: {
+                        id: true,
+                        username: true,
+                        displayName: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true
+                      }
+                    }
                   }
                 },
                 attachments: {
@@ -796,19 +799,21 @@ export class MeeshySocketIOManager {
                     sender: {
                       select: {
                         id: true,
-                        username: true,
                         displayName: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true
-                      }
-                    },
-                    anonymousSender: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        username: true
+                        avatar: true,
+                        type: true,
+                        nickname: true,
+                        userId: true,
+                        user: {
+                          select: {
+                            id: true,
+                            username: true,
+                            displayName: true,
+                            firstName: true,
+                            lastName: true,
+                            avatar: true
+                          }
+                        }
                       }
                     }
                   }
@@ -1056,33 +1061,36 @@ export class MeeshySocketIOManager {
       }
 
       // Tentative d'authentification avec session token (participant anonyme)
+      // Unified Participant model: lookup by sessionTokenHash
       if (sessionToken && (!sessionType || sessionType === 'anonymous')) {
-        
-        const participant = await this.prisma.anonymousParticipant.findUnique({
-          where: { sessionToken },
-          include: {
-            shareLink: {
-              select: { 
-                id: true,
-                linkId: true,
-                isActive: true,
-                expiresAt: true
-              }
-            }
+        const tokenHash = hashSessionToken(sessionToken);
+
+        const participant = await this.prisma.participant.findFirst({
+          where: {
+            sessionTokenHash: tokenHash,
+            type: 'anonymous',
+            isActive: true
+          },
+          select: {
+            id: true,
+            displayName: true,
+            language: true,
+            conversationId: true,
+            anonymousSession: true
           }
         });
 
-        if (participant && participant.isActive && participant.shareLink.isActive) {
-          // Vérifier l'expiration du lien
-          if (!participant.shareLink.expiresAt || participant.shareLink.expiresAt > new Date()) {
-            
+        if (participant) {
+
             // Créer l'utilisateur Socket.IO anonyme
             const user: SocketUser = {
               id: participant.id,
               socketId: socket.id,
               isAnonymous: true,
               language: participant.language,
-              sessionToken: participant.sessionToken
+              participantId: participant.id,
+              displayName: participant.displayName,
+              sessionToken
             };
 
             // CORRECTION CRITIQUE: Gérer les connexions multiples (même anonyme, plusieurs onglets)
@@ -1096,10 +1104,8 @@ export class MeeshySocketIOManager {
             }
 
             // Enregistrer l'utilisateur anonyme
-            // CORRECTION: Stocker le sessionToken au lieu de user.id pour les anonymes
-            // Cela permet au MessagingService de détecter correctement le type d'authentification
             this.connectedUsers.set(user.id, user);
-            this.socketToUser.set(socket.id, participant.sessionToken); // Utiliser sessionToken au lieu de user.id
+            this.socketToUser.set(socket.id, participant.id);
             this._addUserSocket(user.id, socket.id);
 
             // IMPORTANT: Rejoindre la room personnelle pour les notifications
@@ -1114,7 +1120,7 @@ export class MeeshySocketIOManager {
               logger.error(`[Socket.IO] Failed to join personal room for anonymous user ${user.id}:`, error);
             }
 
-            // CORRECTION: Mettre à jour l'état en ligne dans la base de données pour les anonymes et broadcaster
+            // Update online status via participant
             await this.maintenanceService.updateAnonymousOnlineStatus(user.id, true, true);
 
             // Rejoindre la conversation spécifique du participant anonyme
@@ -1124,17 +1130,15 @@ export class MeeshySocketIOManager {
             } catch {}
 
             // CORRECTION CRITIQUE: Émettre l'événement AUTHENTICATED IMMÉDIATEMENT
-            const authResponse = { 
-              success: true, 
-              user: { id: user.id, language: user.language, isAnonymous: true } 
+            const authResponse = {
+              success: true,
+              user: { id: user.id, language: user.language, isAnonymous: true }
             };
-            
+
             socket.emit(SERVER_EVENTS.AUTHENTICATED, authResponse);
-            
-            
+
+
             return; // Authentification anonyme réussie
-          } else {
-          }
         } else {
         }
       }
@@ -1198,32 +1202,32 @@ export class MeeshySocketIOManager {
         } catch (jwtError) {
           
           // Si ce n'est pas un JWT valide, essayer comme sessionToken anonyme
-          const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
-            where: { sessionToken: data.sessionToken },
-            include: {
-              shareLink: {
-                select: { 
-                  id: true,
-                  linkId: true,
-                  isActive: true,
-                  expiresAt: true
-                }
-              }
+          // Unified Participant model: lookup by sessionTokenHash
+          const tokenHash = hashSessionToken(data.sessionToken);
+          const anonymousParticipant = await this.prisma.participant.findFirst({
+            where: {
+              sessionTokenHash: tokenHash,
+              type: 'anonymous',
+              isActive: true
+            },
+            select: {
+              id: true,
+              displayName: true,
+              language: true,
+              conversationId: true
             }
           });
-          
-          if (anonymousUser && anonymousUser.isActive && anonymousUser.shareLink.isActive) {
-            // Vérifier l'expiration du lien
-            if (!anonymousUser.shareLink.expiresAt || anonymousUser.shareLink.expiresAt > new Date()) {
+
+          if (anonymousParticipant) {
               user = {
-                id: anonymousUser.id,
+                id: anonymousParticipant.id,
                 socketId: socket.id,
                 isAnonymous: true,
-                language: data.language || anonymousUser.language || 'fr',
-                sessionToken: anonymousUser.sessionToken
+                language: data.language || anonymousParticipant.language || 'fr',
+                participantId: anonymousParticipant.id,
+                displayName: anonymousParticipant.displayName,
+                sessionToken: data.sessionToken
               };
-            } else {
-            }
           } else {
           }
         }
@@ -1257,9 +1261,8 @@ export class MeeshySocketIOManager {
         }
 
         // Enregistrer l'utilisateur
-        // CORRECTION: Pour les anonymes, stocker le sessionToken au lieu de user.id
         this.connectedUsers.set(user.id, user);
-        this.socketToUser.set(socket.id, user.isAnonymous ? user.sessionToken! : user.id);
+        this.socketToUser.set(socket.id, user.id);
         
         // Retirer le guard de disconnect (reconnexion)
         this.statusService.markConnected(user.id, user.isAnonymous);
@@ -1294,17 +1297,17 @@ export class MeeshySocketIOManager {
   private async _joinUserConversations(socket: any, userId: string, isAnonymous: boolean) {
     try {
 
-      let conversations: any[] = [];
+      let conversations: { conversationId: string }[] = [];
 
       if (isAnonymous) {
-        // Conversations pour participants anonymes
-        conversations = await this.prisma.anonymousParticipant.findMany({
-          where: { id: userId },
+        // For anonymous: userId is actually participantId
+        conversations = await this.prisma.participant.findMany({
+          where: { id: userId, isActive: true },
           select: { conversationId: true }
         });
       } else {
-        // Conversations pour utilisateurs authentifiés
-        conversations = await this.prisma.conversationMember.findMany({
+        // For registered users: find all participant rows by userId
+        conversations = await this.prisma.participant.findMany({
           where: { userId: userId, isActive: true },
           select: { conversationId: true }
         });
@@ -1350,12 +1353,8 @@ export class MeeshySocketIOManager {
         replyToId: data.replyToId
       };
 
-      // Déterminer le type d'expéditeur
-      if (connectedUser?.isAnonymous) {
-        messageData.anonymousSenderId = userId;
-      } else {
-        messageData.senderId = userId;
-      }
+      // Unified Participant model: senderId is always set (Participant.id)
+      messageData.senderId = userId;
       
       // 1. SAUVEGARDER LE MESSAGE ET LIBÉRER LE CLIENT
       const result = await this.translationService.handleNewMessage(messageData);
@@ -1375,10 +1374,21 @@ export class MeeshySocketIOManager {
           sender: {
             select: {
               id: true,
-              username: true,
               displayName: true,
               avatar: true,
-              role: true
+              type: true,
+              nickname: true,
+              userId: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true
+                }
+              }
             }
           },
           attachments: {
@@ -1402,7 +1412,7 @@ export class MeeshySocketIOManager {
               videoCodec: true,
               pageCount: true,
               lineCount: true,
-              metadata: true, // IMPORTANT: Inclure audioEffectsTimeline
+              metadata: true,
               uploadedBy: true,
               isAnonymous: true,
               createdAt: true
@@ -1419,6 +1429,8 @@ export class MeeshySocketIOManager {
         () => this.getConnectedUsers()
       );
 
+      const participant = saved?.sender;
+      const participantUser = participant?.user;
       const messagePayload = {
         id: saved?.id || result.messageId,
         conversationId: data.conversationId,
@@ -1433,16 +1445,16 @@ export class MeeshySocketIOManager {
         expiresAt: saved?.expiresAt || undefined,
         createdAt: saved?.createdAt || new Date(),
         updatedAt: saved?.updatedAt || new Date(),
-        sender: saved?.sender
+        sender: participant
           ? {
-              id: saved.sender.id,
-              username: saved.sender.username,
-              displayName: (saved.sender as any).displayName || saved.sender.username,
-              avatar: (saved.sender as any).avatar,
-              role: (saved.sender as any).role,
-              // champs additionnels non critiques
-              firstName: '',
-              lastName: '',
+              id: participant.id,
+              username: participantUser?.username || participant.displayName || participant.nickname || 'Unknown',
+              displayName: participant.displayName || participantUser?.displayName || participant.nickname || 'Unknown',
+              avatar: participantUser?.avatar || participant.avatar,
+              firstName: participantUser?.firstName || '',
+              lastName: participantUser?.lastName || '',
+              type: participant.type,
+              userId: participant.userId,
               email: '',
               isOnline: false,
               lastActiveAt: new Date(),
@@ -1463,29 +1475,13 @@ export class MeeshySocketIOManager {
         }
       } as any;
 
-      // Support pour anonymousSender si présent
-      if (saved?.anonymousSenderId) {
-        (messagePayload as any).anonymousSenderId = saved.anonymousSenderId;
-        // Inclure l'objet anonymousSender complet si disponible
-        if ((saved as any).anonymousSender) {
-          (messagePayload as any).anonymousSender = {
-            id: (saved as any).anonymousSender.id,
-            username: (saved as any).anonymousSender.username,
-            firstName: (saved as any).anonymousSender.firstName,
-            lastName: (saved as any).anonymousSender.lastName,
-            language: (saved as any).anonymousSender.language
-          };
-        }
-      }
-
       this.io.to(ROOMS.conversation(data.conversationId)).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       // S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
       socket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       
       
       // 4. ENVOYER LES NOTIFICATIONS DE MESSAGE
-      const senderId = saved?.senderId || saved?.anonymousSenderId;
-      const isAnonymousSender = !!saved?.anonymousSenderId;
+      const senderId = saved?.senderId;
       if (senderId) {
         // Envoyer les notifications en asynchrone pour ne pas bloquer
         // Note: Les notifications sont gérées directement dans routes/notifications.ts
@@ -1999,11 +1995,15 @@ export class MeeshySocketIOManager {
         this.statusService.markDisconnected(userId, isAnonymous);
 
         // IMPORTANT: Automatically leave any active video/audio calls
+        // userId here may be a registered user's ID or an anonymous participant's ID
+        // For registered users, find their participant records; for anonymous, userId IS participantId
         try {
           const activeParticipations = await this.prisma.callParticipant.findMany({
             where: {
-              userId,
-              leftAt: null // Still in call
+              leftAt: null,
+              participant: isAnonymous
+                ? { id: userId }
+                : { userId }
             },
             include: {
               callSession: true
@@ -2014,7 +2014,6 @@ export class MeeshySocketIOManager {
 
             for (const participation of activeParticipations) {
               try {
-                // Use CallService to properly leave the call
                 await this.callService.leaveCall({
                   callId: participation.callSessionId,
                   userId
@@ -2063,20 +2062,20 @@ export class MeeshySocketIOManager {
 
       // Récupérer les informations de l'utilisateur pour le broadcast
       if (isAnonymous) {
-        const participant = await this.prisma.anonymousParticipant.findUnique({
+        // userId is participantId for anonymous
+        const participant = await this.prisma.participant.findUnique({
           where: { id: userId },
           select: {
             id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
+            displayName: true,
+            nickname: true,
             lastActiveAt: true,
             conversationId: true
           }
         });
 
         if (participant) {
-          const displayName = `${participant.firstName} ${participant.lastName}`.trim() || participant.username;
+          const displayName = participant.nickname || participant.displayName;
 
           // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
           const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
@@ -2099,12 +2098,7 @@ export class MeeshySocketIOManager {
             displayName: true,
             firstName: true,
             lastName: true,
-            lastActiveAt: true,
-            conversations: {
-              select: {
-                conversationId: true
-              }
-            }
+            lastActiveAt: true
           }
         });
 
@@ -2114,8 +2108,14 @@ export class MeeshySocketIOManager {
           // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
           const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
 
+          // Find all conversations this user participates in
+          const participantRows = await this.prisma.participant.findMany({
+            where: { userId: user.id, isActive: true },
+            select: { conversationId: true }
+          });
+
           // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
-          const rooms = user.conversations.map(c => ROOMS.conversation(c.conversationId));
+          const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
           if (rooms.length > 0) {
             this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
@@ -2171,25 +2171,23 @@ export class MeeshySocketIOManager {
 
       // FIXED: Gérer les utilisateurs anonymes
       if (connectedUser.isAnonymous) {
-        // Récupérer depuis AnonymousParticipant
-        const dbAnonymousUser = await (this.prisma as any).anonymousParticipant.findUnique({
+        // Récupérer depuis Participant
+        const dbParticipant = await this.prisma.participant.findUnique({
           where: { id: userId },
           select: {
             id: true,
-            username: true,
-            firstName: true,
-            lastName: true
+            displayName: true,
+            nickname: true
           }
         });
 
-        if (!dbAnonymousUser) {
-          logger.warn(`⚠️ Utilisateur anonyme non trouvé userId=${userId}`);
+        if (!dbParticipant) {
+          logger.warn(`⚠️ Participant anonyme non trouvé userId=${userId}`);
           return;
         }
 
         // Construire le nom d'affichage pour anonyme
-        displayName = `${dbAnonymousUser.firstName || ''} ${dbAnonymousUser.lastName || ''}`.trim() ||
-                      dbAnonymousUser.username;
+        displayName = dbParticipant.nickname || dbParticipant.displayName;
       } else {
         // Récupérer depuis User
         const dbUser = await this.prisma.user.findUnique({
@@ -2266,25 +2264,23 @@ export class MeeshySocketIOManager {
 
       // FIXED: Gérer les utilisateurs anonymes
       if (connectedUser.isAnonymous) {
-        // Récupérer depuis AnonymousParticipant
-        const dbAnonymousUser = await (this.prisma as any).anonymousParticipant.findUnique({
+        // Récupérer depuis Participant
+        const dbParticipant = await this.prisma.participant.findUnique({
           where: { id: userId },
           select: {
             id: true,
-            username: true,
-            firstName: true,
-            lastName: true
+            displayName: true,
+            nickname: true
           }
         });
 
-        if (!dbAnonymousUser) {
-          logger.warn(`⚠️ Utilisateur anonyme non trouvé userId=${userId}`);
+        if (!dbParticipant) {
+          logger.warn(`⚠️ Participant anonyme non trouvé userId=${userId}`);
           return;
         }
 
         // Construire le nom d'affichage pour anonyme
-        displayName = `${dbAnonymousUser.firstName || ''} ${dbAnonymousUser.lastName || ''}`.trim() ||
-                      dbAnonymousUser.username;
+        displayName = dbParticipant.nickname || dbParticipant.displayName;
       } else {
         // Récupérer depuis User
         const dbUser = await this.prisma.user.findUnique({
@@ -2440,52 +2436,42 @@ export class MeeshySocketIOManager {
         validatedMentions: (message as any).validatedMentions || [],
         // CORRECTION CRITIQUE: Inclure les traductions dans le payload
         translations: messageTranslations,
-        sender: message.sender ? {
-          id: message.sender.id,
-          username: message.sender.username,
-          firstName: (message.sender as any).firstName || '',
-          lastName: (message.sender as any).lastName || '',
-          email: (message.sender as any).email || '',
-          displayName: (message.sender as any).displayName || message.sender.username,
-          avatar: (message.sender as any).avatar,
-          role: (message.sender as any).role || 'USER',
-          isOnline: false,
-          lastActiveAt: new Date(),
-          systemLanguage: (message.sender as any).systemLanguage || 'fr',
-          regionalLanguage: (message.sender as any).regionalLanguage || 'fr',
-          autoTranslateEnabled: (message.sender as any).autoTranslateEnabled ?? true,
-          translateToSystemLanguage: (message.sender as any).translateToSystemLanguage ?? true,
-          translateToRegionalLanguage: (message.sender as any).translateToRegionalLanguage ?? false,
-          useCustomDestination: (message.sender as any).useCustomDestination ?? false,
-          isActive: (message.sender as any).isActive ?? true,
-          createdAt: (message.sender as any).createdAt || new Date(),
-          updatedAt: (message.sender as any).updatedAt || new Date()
-        } : undefined,
+        // Unified Participant sender
+        sender: message.sender ? (() => {
+          const s = message.sender as any;
+          const u = s.user;
+          return {
+            id: s.id,
+            displayName: s.nickname || s.displayName,
+            avatar: s.avatar || u?.avatar,
+            type: s.type,
+            userId: s.userId,
+            username: u?.username,
+            firstName: u?.firstName || '',
+            lastName: u?.lastName || '',
+          };
+        })() : undefined,
         // CORRECTION: Inclure les attachments dans le payload avec metadata brut
         attachments: (message as any).attachments || [],
         // CORRECTION: Inclure l'objet replyTo complet ET replyToId
         replyToId: message.replyToId || undefined,
         replyTo: (message as any).replyTo ? {
           id: (message as any).replyTo.id,
-          conversationId: normalizedId,  // ← FIX: Utiliser l'ObjectId normalisé cohérent
+          conversationId: normalizedId,
           senderId: (message as any).replyTo.senderId || undefined,
-          anonymousSenderId: (message as any).replyTo.anonymousSenderId || undefined,
           content: (message as any).replyTo.content,
           originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
           messageType: (message as any).replyTo.messageType || 'text',
           createdAt: (message as any).replyTo.createdAt || new Date(),
           sender: (message as any).replyTo.sender ? {
             id: (message as any).replyTo.sender.id,
-            username: (message as any).replyTo.sender.username,
-            firstName: (message as any).replyTo.sender.firstName || '',
-            lastName: (message as any).replyTo.sender.lastName || '',
-            displayName: (message as any).replyTo.sender.displayName || (message as any).replyTo.sender.username,
-          } : undefined,
-          anonymousSender: (message as any).replyTo.anonymousSender ? {
-            id: (message as any).replyTo.anonymousSender.id,
-            username: (message as any).replyTo.anonymousSender.username,
-            firstName: (message as any).replyTo.anonymousSender.firstName,
-            lastName: (message as any).replyTo.anonymousSender.lastName,
+            displayName: (message as any).replyTo.sender.nickname || (message as any).replyTo.sender.displayName,
+            avatar: (message as any).replyTo.sender.avatar,
+            type: (message as any).replyTo.sender.type,
+            userId: (message as any).replyTo.sender.userId,
+            username: (message as any).replyTo.sender.user?.username,
+            firstName: (message as any).replyTo.sender.user?.firstName || '',
+            lastName: (message as any).replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
         meta: {
@@ -2514,21 +2500,6 @@ export class MeeshySocketIOManager {
         });
       }
 
-      // Support pour anonymousSender si présent
-      if (message.anonymousSenderId) {
-        (messagePayload as any).anonymousSenderId = message.anonymousSenderId;
-        // Inclure l'objet anonymousSender complet si disponible
-        if ((message as any).anonymousSender) {
-          (messagePayload as any).anonymousSender = {
-            id: (message as any).anonymousSender.id,
-            username: (message as any).anonymousSender.username,
-            firstName: (message as any).anonymousSender.firstName,
-            lastName: (message as any).anonymousSender.lastName,
-            language: (message as any).anonymousSender.language
-          };
-        }
-      }
-
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
       const room = ROOMS.conversation(normalizedId);
       // 1. Broadcast vers tous les clients de la conversation
@@ -2542,30 +2513,31 @@ export class MeeshySocketIOManager {
 
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
-      // 3. Mettre à jour le unreadCount pour tous les membres (sauf l'expéditeur)
+      // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
       // Cela permet d'incrémenter le badge en temps réel pour les conversations non ouvertes
       try {
-        const senderId = message.senderId || message.anonymousSenderId;
+        const senderId = message.senderId;
         if (senderId) {
-          // Récupérer tous les membres de la conversation
-          const members = await this.prisma.conversationMember.findMany({
+          // Récupérer tous les participants de la conversation (Participant model)
+          const participants = await this.prisma.participant.findMany({
             where: {
               conversationId: normalizedId,
               isActive: true,
-              userId: { not: senderId } // Exclure l'expéditeur
+              id: { not: senderId }
             },
-            select: { userId: true }
+            select: { id: true, userId: true }
           });
 
-          // Calculer le unreadCount pour chaque membre et émettre l'événement
+          // Calculer le unreadCount pour chaque participant et émettre l'événement
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
-          for (const member of members) {
-            const unreadCount = await readStatusService.getUnreadCount(member.userId, normalizedId);
+          for (const participant of participants) {
+            const roomTarget = participant.userId || participant.id;
+            const unreadCount = await readStatusService.getUnreadCount(roomTarget, normalizedId);
 
             // Émettre vers le socket personnel de l'utilisateur
-            this.io.to(ROOMS.user(member.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount
             });
@@ -2576,7 +2548,6 @@ export class MeeshySocketIOManager {
       }
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation
-      const isAnonymousSender = !!message.anonymousSenderId;
       if (message.senderId) {
         // Note: Les notifications sont gérées directement dans routes/notifications.ts
       }
@@ -2674,19 +2645,18 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
 
-      // Ajouter la réaction
+      // Ajouter la réaction (Participant model: participantId only)
       const reaction = await reactionService.addReaction({
         messageId: data.messageId,
         emoji: data.emoji,
-        userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       });
 
       if (!reaction) {
@@ -2703,8 +2673,7 @@ export class MeeshySocketIOManager {
         data.messageId,
         data.emoji,
         'add',
-        !isAnonymous ? userId : undefined,
-        isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       );
 
       // Envoyer la réponse au client
@@ -2721,7 +2690,6 @@ export class MeeshySocketIOManager {
           conversationId: true,
           content: true,
           senderId: true,
-          anonymousSenderId: true,
           conversation: {
             select: {
               title: true
@@ -2791,18 +2759,17 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
 
-      // Supprimer la réaction
+      // Supprimer la réaction (Participant model: participantId only)
       const removed = await reactionService.removeReaction({
         messageId: data.messageId,
         emoji: data.emoji,
-        userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       });
 
       if (!removed) {
@@ -2819,8 +2786,7 @@ export class MeeshySocketIOManager {
         data.messageId,
         data.emoji,
         'remove',
-        !isAnonymous ? userId : undefined,
-        isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       );
 
       // Envoyer la réponse au client
@@ -2877,18 +2843,17 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
 
-      // Récupérer les réactions avec agrégation
+      // Récupérer les réactions avec agrégation (Participant model)
       const reactionSync = await reactionService.getMessageReactions({
         messageId,
-        currentUserId: !isAnonymous ? userId : undefined,
-        currentAnonymousUserId: isAnonymous && sessionToken ? sessionToken : undefined
+        currentParticipantId: participantId
       });
 
 
@@ -3024,31 +2989,47 @@ export class MeeshySocketIOManager {
         }
       }
 
-      // Récupérer les utilisateurs mentionnés dans le message
+      // Récupérer les participants mentionnés dans le message
       // Ils recevront une notification de mention spécifique, pas une notification de message générique
+      // We collect userId (for registered users) to match against notification recipients
       const mentionedUserIds = new Set<string>();
       if (message.id) {
         try {
           const mentions = await this.prisma.mention.findMany({
             where: { messageId: message.id },
-            select: { mentionedUserId: true }
+            select: {
+              mentionedParticipantId: true,
+              mentionedParticipant: {
+                select: { userId: true }
+              }
+            }
           });
-          mentions.forEach(m => mentionedUserIds.add(m.mentionedUserId));
+          mentions.forEach(m => {
+            if (m.mentionedParticipant?.userId) {
+              mentionedUserIds.add(m.mentionedParticipant.userId);
+            }
+            mentionedUserIds.add(m.mentionedParticipantId);
+          });
           logger.info(`📢 [NOTIFICATIONS] ${mentionedUserIds.size} utilisateur(s) mentionné(s) - ils ne recevront QUE la notification de mention`);
         } catch (err) {
           logger.error('❌ [NOTIFICATIONS] Erreur lors de la récupération des mentions', err);
         }
       }
 
-      // Récupérer les membres de la conversation
-      const conversationMembers = await this.prisma.conversationMember.findMany({
+      // Récupérer les participants de la conversation (Participant model)
+      // Only fetch participants with userId (registered users) for notifications
+      const conversationMembers = await this.prisma.participant.findMany({
         where: {
           conversationId: message.conversationId,
-          userId: {
-            not: message.senderId // Exclure l'expéditeur des notifications
-          }
+          isActive: true,
+          id: {
+            not: message.senderId // Exclure l'expéditeur (senderId = participant.id)
+          },
+          userId: { not: null }
         },
-        include: {
+        select: {
+          id: true,
+          userId: true,
           user: {
             select: {
               id: true,
@@ -3066,16 +3047,13 @@ export class MeeshySocketIOManager {
       let senderLastName: string | undefined;
 
       if (message.sender) {
-        senderUsername = message.sender.username || 'Unknown';
-        senderAvatar = message.sender.avatar || undefined;
-        senderDisplayName = message.sender.displayName || undefined;
-        senderFirstName = message.sender.firstName || undefined;
-        senderLastName = message.sender.lastName || undefined;
-      } else if (message.anonymousSender) {
-        const fullName = `${message.anonymousSender.firstName || ''} ${message.anonymousSender.lastName || ''}`.trim();
-        senderUsername = message.anonymousSender.username || 'Anonymous';
-        senderFirstName = message.anonymousSender.firstName || undefined;
-        senderLastName = message.anonymousSender.lastName || undefined;
+        const participant = message.sender;
+        const user = participant.user;
+        senderUsername = user?.username || participant.displayName || participant.nickname || 'Unknown';
+        senderAvatar = user?.avatar || participant.avatar || undefined;
+        senderDisplayName = participant.displayName || user?.displayName || undefined;
+        senderFirstName = user?.firstName || undefined;
+        senderLastName = user?.lastName || undefined;
       }
 
       // Si c'est une réponse, créer une notification de réponse pour l'auteur du message original
@@ -3102,17 +3080,28 @@ export class MeeshySocketIOManager {
 
       // Filtrer les destinataires (exclure mentionnés et auteur du message original)
       const recipients = conversationMembers.filter(member => {
-        if (mentionedUserIds.has(member.userId)) return false;
-        if (originalMessageAuthorId && member.userId === originalMessageAuthorId) return false;
+        const memberUserId = member.userId!;
+        if (mentionedUserIds.has(memberUserId)) return false;
+        if (originalMessageAuthorId && memberUserId === originalMessageAuthorId) return false;
         return true;
       });
 
       logger.info(`📢 [NOTIFICATIONS] Génération de ${recipients.length} notification(s) pour le message ${message.id} dans la conversation ${message.conversationId} (${conversationMembers.length} membres, ${mentionedUserIds.size} mentionné(s), sender exclu)`);
 
+      // Resolve the sender's userId for notification purposes
+      let senderUserIdForNotif = '';
+      if (message.senderId) {
+        const senderPart = await this.prisma.participant.findUnique({
+          where: { id: message.senderId },
+          select: { userId: true }
+        });
+        senderUserIdForNotif = senderPart?.userId || message.senderId;
+      }
+
       for (const member of recipients) {
         await this.notificationService.createMessageNotification({
-          recipientUserId: member.userId,
-          senderId: message.senderId || '',
+          recipientUserId: member.userId!,
+          senderId: senderUserIdForNotif,
           messageId: message.id,
           conversationId: message.conversationId,
           messagePreview: message.content,
@@ -3235,8 +3224,7 @@ export class MeeshySocketIOManager {
 
       const result = await this.messagingService.handleMessage(
         messageRequest,
-        response.asUserId,
-        true,
+        response.asUserId
       );
 
       if (!result.success || !result.data) {
@@ -3263,21 +3251,23 @@ export class MeeshySocketIOManager {
     conversationId: string
   ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
     try {
-      const members = await this.prisma.conversationMember.findMany({
-        where: { conversationId, isActive: true },
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true, userId: { not: null } },
         select: {
+          userId: true,
+          displayName: true,
           user: {
             select: { id: true, username: true, displayName: true }
           }
         }
       });
 
-      return members
-        .filter((m): m is typeof m & { user: NonNullable<typeof m.user> } => m.user !== null)
-        .map((m) => ({
-          userId: m.user.id,
-          username: m.user.username,
-          displayName: m.user.displayName ?? m.user.username,
+      return participants
+        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
+        .map((p) => ({
+          userId: p.user.id,
+          username: p.user.username,
+          displayName: p.user.displayName ?? p.user.username,
         }));
     } catch {
       return [];
@@ -3298,7 +3288,7 @@ export class MeeshySocketIOManager {
       const result = await reactionService.addReaction({
         messageId: reaction.targetMessageId,
         emoji: reaction.emoji,
-        userId: reaction.asUserId,
+        participantId: reaction.asUserId,
       });
 
       if (!result) {
@@ -3310,8 +3300,7 @@ export class MeeshySocketIOManager {
         reaction.targetMessageId,
         reaction.emoji,
         'add',
-        reaction.asUserId,
-        undefined,
+        reaction.asUserId
       );
 
       const message = await this.prisma.message.findUnique({

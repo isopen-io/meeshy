@@ -1,11 +1,15 @@
 /**
  * Authentication Handler
  * Gère l'authentification des sockets (JWT et session tokens)
+ *
+ * Unified Participant model: anonymous users are looked up via
+ * prisma.participant with sessionTokenHash, not prisma.anonymousParticipant.
  */
 
 import type { Socket } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
+import { hashSessionToken } from '../../utils/session-token';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
@@ -100,7 +104,8 @@ export class AuthHandler {
           id: user.id,
           socketId: socket.id,
           isAnonymous: false,
-          language: language || user.systemLanguage || 'en'
+          language: language || user.systemLanguage || 'en',
+          userId: user.id
         };
 
         this._registerUser(user.id, socketUser, socket);
@@ -141,7 +146,8 @@ export class AuthHandler {
       id: user.id,
       socketId: socket.id,
       isAnonymous: false,
-      language: user.systemLanguage || 'en'
+      language: user.systemLanguage || 'en',
+      userId: user.id
     };
 
     this._registerUser(user.id, socketUser, socket);
@@ -151,39 +157,52 @@ export class AuthHandler {
   }
 
   /**
-   * Authentification utilisateur anonyme
+   * Authentification utilisateur anonyme via Participant model
+   * Looks up participant by sessionTokenHash
    */
   private async _authenticateAnonymousUser(
     socket: Socket,
     sessionToken: string,
     language?: string
   ): Promise<void> {
-    const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
-      where: { sessionToken },
-      select: { id: true, sessionToken: true }
+    const tokenHash = hashSessionToken(sessionToken);
+
+    const participant = await this.prisma.participant.findFirst({
+      where: {
+        sessionTokenHash: tokenHash,
+        type: 'anonymous',
+        isActive: true
+      },
+      select: {
+        id: true,
+        displayName: true,
+        language: true,
+        conversationId: true
+      }
     });
 
-    if (!anonymousUser) {
+    if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       return;
     }
 
     const socketUser: SocketUser = {
-      id: anonymousUser.id,
+      id: participant.id,
       socketId: socket.id,
       isAnonymous: true,
-      language: language || 'en',
-      sessionToken: anonymousUser.sessionToken
+      language: language || participant.language || 'en',
+      participantId: participant.id,
+      displayName: participant.displayName,
+      sessionToken
     };
 
-    this._registerUser(sessionToken, socketUser, socket);
+    this._registerUser(participant.id, socketUser, socket);
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
-      userId: anonymousUser.id,
-      isAnonymous: true,
-      sessionToken: anonymousUser.sessionToken
+      userId: participant.id,
+      isAnonymous: true
     });
 
-    await this.statusService.updateLastSeen(anonymousUser.id, true);
+    await this.statusService.updateLastSeen(participant.id, true);
   }
 
   /**

@@ -1,15 +1,34 @@
 /**
  * Socket.IO Helper Utilities
  * Fonctions utilitaires réutilisables pour les handlers Socket.IO
+ *
+ * Unified Participant model: Every connected socket maps to a participantId.
+ * For registered users the participantId is resolved per conversation.
+ * For anonymous users the participantId IS their identity (looked up by sessionTokenHash).
  */
 
 import type { Socket } from 'socket.io';
 
+/**
+ * Represents a connected socket's identity.
+ *
+ * - Registered users: `userId` is set, `participantId` is null at connection time
+ *   and resolved per-conversation when needed.
+ * - Anonymous users: `participantId` is set at connection time (from Participant table),
+ *   `userId` is null.
+ */
 export interface SocketUser {
   id: string;
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /** For anonymous participants: the participant.id */
+  participantId?: string;
+  /** For registered users: the user.id */
+  userId?: string;
+  /** Display name resolved at connection time */
+  displayName?: string;
+  /** @deprecated kept for backward compat during migration — raw session token */
   sessionToken?: string;
 }
 
@@ -50,10 +69,7 @@ export function getConnectedUser(
   const user = connectedUsers.get(userIdOrToken);
   if (!user) return null;
 
-  // Si l'utilisateur est anonyme, le realUserId est le sessionToken
-  const realUserId = user.isAnonymous && user.sessionToken ? user.sessionToken : userIdOrToken;
-
-  return { user, realUserId };
+  return { user, realUserId: user.id };
 }
 
 /**
@@ -84,7 +100,17 @@ export async function normalizeConversationId(
 }
 
 /**
- * Construit le nom d'affichage pour un utilisateur anonyme
+ * Construit le nom d'affichage pour un participant
+ */
+export function buildParticipantDisplayName(
+  participant: { displayName: string; nickname?: string | null } | null
+): string {
+  if (!participant) return 'Anonymous User';
+  return participant.nickname || participant.displayName || 'Anonymous User';
+}
+
+/**
+ * @deprecated Use buildParticipantDisplayName instead
  */
 export function buildAnonymousDisplayName(
   anonymousUser: { username: string | null; firstName: string | null; lastName: string | null } | null

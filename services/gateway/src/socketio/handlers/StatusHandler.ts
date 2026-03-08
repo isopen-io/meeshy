@@ -1,6 +1,9 @@
 /**
  * Status Handler
  * Gère les événements de statut utilisateur (typing indicators)
+ *
+ * Unified Participant model: display names are resolved from Participant
+ * for anonymous users, from User for registered users.
  */
 
 import type { Socket } from 'socket.io';
@@ -135,29 +138,28 @@ export class StatusHandler {
   }
 
   /**
-   * Récupère le nom d'affichage d'un utilisateur
+   * Récupère le nom d'affichage d'un utilisateur.
+   * For anonymous users, resolve from Participant table.
+   * For registered users, resolve from User table.
    */
   private async _getDisplayName(userId: string, isAnonymous: boolean): Promise<string | null> {
     if (isAnonymous) {
-      const dbAnonymousUser = await this.prisma.anonymousParticipant.findUnique({
+      // userId is actually a participantId for anonymous users
+      const participant = await this.prisma.participant.findUnique({
         where: { id: userId },
         select: {
           id: true,
-          username: true,
-          firstName: true,
-          lastName: true
+          displayName: true,
+          nickname: true
         }
       });
 
-      if (!dbAnonymousUser) {
-        console.warn('⚠️ [TYPING] Utilisateur anonyme non trouvé:', userId);
+      if (!participant) {
+        console.warn('⚠️ [TYPING] Participant anonyme non trouvé:', userId);
         return null;
       }
 
-      return (
-        `${dbAnonymousUser.firstName || ''} ${dbAnonymousUser.lastName || ''}`.trim() ||
-        dbAnonymousUser.username
-      );
+      return participant.nickname || participant.displayName;
     } else {
       const dbUser = await this.prisma.user.findUnique({
         where: { id: userId },

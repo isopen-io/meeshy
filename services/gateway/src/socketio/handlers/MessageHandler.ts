@@ -1,6 +1,9 @@
 /**
  * Message Handler
  * Gère l'envoi et le broadcast des messages
+ *
+ * Unified Participant model: messages use senderId pointing to Participant.
+ * No more anonymousSenderId / anonymousSender dual path.
  */
 
 import * as path from 'path';
@@ -17,7 +20,6 @@ import {
   extractJWTToken,
   extractSessionToken,
   normalizeConversationId,
-  buildAnonymousDisplayName,
   type SocketUser
 } from '../utils/socket-helpers';
 import type {
@@ -78,7 +80,7 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
-      encryptedPayload?: any; // EncryptedPayload type from shared types
+      encryptedPayload?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -89,44 +91,54 @@ export class MessageHandler {
         return;
       }
 
-      const { userId, isAnonymous, user } = userContext;
+      const { participantId, userId, isAnonymous } = userContext;
 
       // Validation longueur du message
       const validation = validateMessageLength(data.content);
       if (!validation.isValid && !data.encryptedPayload) {
-        // En E2EE pur, content peut être vide
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
 
       // Vérifier si l'expéditeur est bloqué par un membre de la conversation (DM uniquement)
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: data.conversationId },
-        select: { type: true, members: { select: { userId: true } } }
-      });
-      if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
-        const otherMemberIds = conversation.members
-          .map(m => m.userId)
-          .filter(id => id !== userId);
-        if (otherMemberIds.length > 0) {
-          const blockers = await this.prisma.user.findMany({
-            where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
-            select: { id: true }
-          });
-          if (blockers.length > 0) {
-            this._sendError(callback, 'You are blocked by this user', socket);
-            return;
+      // For registered users, check via userId; for anonymous, skip block check
+      if (!isAnonymous && userId) {
+        const conversation = await this.prisma.conversation.findUnique({
+          where: { id: data.conversationId },
+          select: {
+            type: true,
+            participants: {
+              where: { isActive: true },
+              select: { userId: true }
+            }
+          }
+        });
+        if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
+          const otherMemberIds = conversation.participants
+            .map(p => p.userId)
+            .filter((id): id is string => id !== null && id !== userId);
+          if (otherMemberIds.length > 0) {
+            const blockers = await this.prisma.user.findMany({
+              where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
+              select: { id: true }
+            });
+            if (blockers.length > 0) {
+              this._sendError(callback, 'You are blocked by this user', socket);
+              return;
+            }
           }
         }
       }
 
       // Mettre à jour l'activité
-      this.statusService.updateLastSeen(userId, isAnonymous);
+      this.statusService.updateLastSeen(userId || participantId, isAnonymous);
 
-      // Récupérer le nom d'affichage pour les anonymes
-      const anonymousDisplayName = isAnonymous
-        ? await this._getAnonymousDisplayName(user?.sessionToken)
-        : undefined;
+      // Resolve participantId for this conversation
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      if (!resolvedParticipantId) {
+        this._sendError(callback, 'Not a participant in this conversation', socket);
+        return;
+      }
 
       // Créer la requête de message
       const messageRequest: MessageRequest = {
@@ -139,7 +151,6 @@ export class MessageHandler {
         forwardedFromConversationId: data.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload,
         isAnonymous,
-        anonymousDisplayName,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -147,16 +158,10 @@ export class MessageHandler {
         }
       };
 
-      // Envoyer via MessagingService
-      const jwtToken = extractJWTToken(socket);
-      const sessionToken = extractSessionToken(socket);
-
+      // Envoyer via MessagingService (simplified: participantId only)
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
-        userId,
-        true,
-        jwtToken,
-        sessionToken
+        resolvedParticipantId
       );
 
       // Répondre au client
@@ -167,16 +172,16 @@ export class MessageHandler {
         try {
           // Vérifier que l'utilisateur a accès à la conversation source
           if (data.forwardedFromConversationId) {
-            const isMember = await this.prisma.conversationMember.findFirst({
+            const isMember = await this.prisma.participant.findFirst({
               where: {
                 conversationId: data.forwardedFromConversationId,
-                userId,
+                ...(userId ? { userId } : { id: participantId }),
                 isActive: true
               },
               select: { id: true }
             });
             if (!isMember) {
-              console.warn(`[MESSAGE_SEND] Forward denied: user ${userId} not member of source conversation ${data.forwardedFromConversationId}`);
+              console.warn(`[MESSAGE_SEND] Forward denied: participant ${resolvedParticipantId} not member of source conversation ${data.forwardedFromConversationId}`);
               return;
             }
           }
@@ -215,7 +220,7 @@ export class MessageHandler {
                     videoCodec: att.videoCodec,
                     pageCount: att.pageCount,
                     lineCount: att.lineCount,
-                    uploadedBy: userId,
+                    uploadedBy: resolvedParticipantId,
                     isAnonymous: false,
                     transcription: att.transcription ?? undefined,
                     translations: att.translations ?? undefined,
@@ -252,11 +257,10 @@ export class MessageHandler {
         const message = await this._fetchMessageForBroadcast(response.data.id);
         if (message) {
           // Invalider le cache AVANT de broadcaster pour éviter les race conditions
-          // où un client rafraîchit et obtient des données stale
           await invalidateConversationCacheAsync(message.conversationId, this.prisma);
 
           await this.broadcastNewMessage(message, message.conversationId, socket);
-          await this._createMessageNotifications(message, userId);
+          await this._createMessageNotifications(message, resolvedParticipantId);
         }
       }
 
@@ -291,7 +295,7 @@ export class MessageHandler {
         return;
       }
 
-      const { userId, isAnonymous, user } = userContext;
+      const { participantId, userId, isAnonymous } = userContext;
 
       // Validation
       if (data.content && data.content.trim()) {
@@ -302,21 +306,24 @@ export class MessageHandler {
         }
       }
 
+      // Resolve participantId for this conversation
+      const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, data.conversationId, isAnonymous);
+      if (!resolvedParticipantId) {
+        this._sendError(callback, 'Not a participant in this conversation', socket);
+        return;
+      }
+
       // Vérifier les attachments
       const { AttachmentService } = await import('../../services/AttachmentService');
       const attachmentService = new AttachmentService(this.prisma);
 
       for (const attachmentId of data.attachmentIds) {
         const attachment = await attachmentService.getAttachment(attachmentId);
-        if (!attachment || attachment.uploadedBy !== userId) {
+        if (!attachment || attachment.uploadedBy !== (userId || participantId)) {
           this._sendError(callback, `Attachment ${attachmentId} invalid`, socket);
           return;
         }
       }
-
-      const anonymousDisplayName = isAnonymous
-        ? await this._getAnonymousDisplayName(user?.sessionToken)
-        : undefined;
 
       const messageRequest: MessageRequest = {
         conversationId: data.conversationId,
@@ -327,7 +334,6 @@ export class MessageHandler {
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         isAnonymous,
-        anonymousDisplayName,
         attachments: data.attachmentIds.map((id) => ({ id } as never)),
         metadata: {
           source: 'websocket',
@@ -336,15 +342,9 @@ export class MessageHandler {
         }
       };
 
-      const jwtToken = extractJWTToken(socket);
-      const sessionToken = extractSessionToken(socket);
-
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
-        userId,
-        true,
-        jwtToken,
-        sessionToken
+        resolvedParticipantId
       );
 
       if (response.success && response.data?.id) {
@@ -392,7 +392,7 @@ export class MessageHandler {
         )
       ]);
 
-      const messagePayload: any = this._buildMessagePayload(
+      const messagePayload: unknown = this._buildMessagePayload(
         message,
         normalizedId,
         translations.status === 'fulfilled' ? translations.value : [],
@@ -406,7 +406,7 @@ export class MessageHandler {
             where: { id: message.forwardedFromId },
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
-              sender: { select: { id: true, username: true, displayName: true, avatar: true } },
+              sender: { select: { id: true, displayName: true, avatar: true, type: true } },
               attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
             }
           }),
@@ -417,8 +417,8 @@ export class MessageHandler {
               })
             : Promise.resolve(null)
         ]);
-        if (originalMsg) messagePayload.forwardedFrom = originalMsg;
-        if (originalConv) messagePayload.forwardedFromConversation = originalConv;
+        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = originalMsg;
+        if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
 
       const room = ROOMS.conversation(normalizedId);
@@ -439,7 +439,8 @@ export class MessageHandler {
    * Récupère le contexte utilisateur depuis le socket
    */
   private _getUserContext(socket: Socket): {
-    userId: string;
+    participantId: string;
+    userId?: string;
     isAnonymous: boolean;
     user?: SocketUser;
   } | null {
@@ -449,42 +450,97 @@ export class MessageHandler {
     const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
     if (!userResult) return null;
 
+    const socketUser = userResult.user;
     return {
-      userId: userResult.realUserId,
-      isAnonymous: userResult.user.isAnonymous,
-      user: userResult.user
+      participantId: socketUser.participantId || socketUser.id,
+      userId: socketUser.userId,
+      isAnonymous: socketUser.isAnonymous,
+      user: socketUser
     };
   }
 
   /**
-   * Récupère le nom d'affichage pour un utilisateur anonyme
+   * Resolve participant ID for a given conversation.
+   * For anonymous users, their socket id IS the participantId.
+   * For registered users, look up their Participant row for this conversation.
    */
-  private async _getAnonymousDisplayName(sessionToken?: string): Promise<string> {
-    if (!sessionToken) return 'Anonymous User';
-
-    try {
-      const anonymousUser = await this.prisma.anonymousParticipant.findUnique({
-        where: { sessionToken },
-        select: { username: true, firstName: true, lastName: true }
-      });
-
-      return buildAnonymousDisplayName(anonymousUser);
-    } catch {
-      return 'Anonymous User';
+  private async _resolveParticipantId(
+    userId: string | undefined,
+    fallbackParticipantId: string,
+    conversationId: string,
+    isAnonymous: boolean
+  ): Promise<string | null> {
+    if (isAnonymous) {
+      return fallbackParticipantId;
     }
+
+    if (!userId) return null;
+
+    const participant = await this.prisma.participant.findFirst({
+      where: {
+        conversationId,
+        userId,
+        isActive: true
+      },
+      select: { id: true }
+    });
+
+    return participant?.id || null;
   }
 
   /**
    * Récupère un message complet pour le broadcast
+   * Unified Participant: sender is a Participant, no anonymousSender
    */
   private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
     return this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
-        sender: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true } },
-        anonymousSender: { select: { id: true, firstName: true, lastName: true, username: true } },
+        sender: {
+          select: {
+            id: true,
+            displayName: true,
+            avatar: true,
+            type: true,
+            nickname: true,
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                avatar: true
+              }
+            }
+          }
+        },
         attachments: true,
-        replyTo: { include: { sender: true, anonymousSender: true } }
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                displayName: true,
+                avatar: true,
+                type: true,
+                nickname: true,
+                userId: true,
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }) as Promise<Message | null>;
   }
@@ -512,6 +568,7 @@ export class MessageHandler {
 
   /**
    * Construit le payload de message pour broadcast
+   * Unified Participant: senderId is Participant.id, sender is Participant object
    */
   private _buildMessagePayload(
     message: Message,
@@ -519,11 +576,14 @@ export class MessageHandler {
     translations: unknown[],
     stats: unknown
   ): unknown {
+    // Build a backward-compatible sender object from Participant
+    const senderParticipant = (message as unknown as Record<string, unknown>).sender as Record<string, unknown> | undefined;
+    const senderUser = senderParticipant?.user as Record<string, unknown> | undefined;
+
     return {
       id: message.id,
       conversationId,
-      senderId: message.senderId || undefined,
-      anonymousSenderId: message.anonymousSenderId || undefined,
+      senderId: message.senderId,
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',
@@ -535,8 +595,18 @@ export class MessageHandler {
       createdAt: message.createdAt,
       validatedMentions: (message as never)['validatedMentions'] || [],
       translations,
-      sender: message.sender,
-      anonymousSender: (message as never)['anonymousSender'],
+      // Unified sender from Participant
+      sender: senderParticipant ? {
+        id: senderParticipant.id,
+        displayName: senderParticipant.nickname || senderParticipant.displayName,
+        avatar: senderParticipant.avatar || senderUser?.avatar,
+        type: senderParticipant.type,
+        userId: senderParticipant.userId,
+        // Backward compat: flatten user fields
+        username: senderUser?.username,
+        firstName: senderUser?.firstName,
+        lastName: senderUser?.lastName,
+      } : undefined,
       attachments: (message as never)['attachments'] || [],
       replyToId: message.replyToId,
       replyTo: (message as never)['replyTo'],
@@ -546,7 +616,6 @@ export class MessageHandler {
       encryptionMode: message.encryptionMode,
       encryptedContent: message.encryptedContent,
       encryptionMetadata: message.encryptionMetadata,
-      // Pass the fully structured encryptedPayload for Signal/E2EE modes
       encryptedPayload: message.isEncrypted && message.encryptionMode === 'e2ee' && message.encryptedContent ? {
         ciphertext: message.encryptedContent,
         ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
@@ -556,24 +625,32 @@ export class MessageHandler {
   }
 
   /**
-   * Met à jour les unread counts pour tous les membres
+   * Met à jour les unread counts pour tous les participants
+   * Uses Participant model instead of ConversationMember
    */
   private async _updateUnreadCounts(message: Message, conversationId: string): Promise<void> {
     try {
-      const senderId = message.senderId || message.anonymousSenderId;
+      const senderId = message.senderId;
       if (!senderId) return;
 
-      const members = await this.prisma.conversationMember.findMany({
-        where: { conversationId, isActive: true, userId: { not: senderId } },
-        select: { userId: true }
+      // Get all active participants except the sender
+      const participants = await this.prisma.participant.findMany({
+        where: {
+          conversationId,
+          isActive: true,
+          id: { not: senderId }
+        },
+        select: { id: true, userId: true }
       });
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(this.prisma);
 
-      await Promise.all(members.map(async (member) => {
-        const unreadCount = await readStatusService.getUnreadCount(member.userId, conversationId);
-        this.io.to(ROOMS.user(member.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+      await Promise.all(participants.map(async (participant) => {
+        // Use userId for registered users (for their personal room), participantId for anonymous
+        const roomTarget = participant.userId || participant.id;
+        const unreadCount = await readStatusService.getUnreadCount(roomTarget, conversationId);
+        this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
@@ -585,29 +662,39 @@ export class MessageHandler {
 
   /**
    * Créer des notifications pour un message
+   * Uses Participant model instead of ConversationMember
    */
-  private async _createMessageNotifications(message: Message, senderId: string): Promise<void> {
+  private async _createMessageNotifications(message: Message, senderParticipantId: string): Promise<void> {
     try {
       const conversationId = message.conversationId;
       const messageId = message.id;
       const messagePreview = message.content.substring(0, 100);
 
-      // Récupérer tous les membres de la conversation sauf l'expéditeur
-      const members = await this.prisma.conversationMember.findMany({
+      // Récupérer tous les participants de la conversation sauf l'expéditeur
+      // Only notify registered users (they have userId)
+      const participants = await this.prisma.participant.findMany({
         where: {
           conversationId,
           isActive: true,
-          userId: { not: senderId }
+          id: { not: senderParticipantId },
+          userId: { not: null }
         },
         select: { userId: true }
       });
 
-      console.log(`[NOTIFICATIONS] Génération de ${members.length} notification(s) pour le message ${messageId} dans la conversation ${conversationId}`);
+      console.log(`[NOTIFICATIONS] Génération de ${participants.length} notification(s) pour le message ${messageId} dans la conversation ${conversationId}`);
 
-      await Promise.all(members.map(member =>
+      // Resolve sender's userId for notification
+      const senderParticipant = await this.prisma.participant.findUnique({
+        where: { id: senderParticipantId },
+        select: { userId: true }
+      });
+      const senderUserId = senderParticipant?.userId || senderParticipantId;
+
+      await Promise.all(participants.map(participant =>
         this.notificationService.createMessageNotification({
-          recipientUserId: member.userId,
-          senderId,
+          recipientUserId: participant.userId!,
+          senderId: senderUserId,
           messageId,
           conversationId,
           messagePreview,
@@ -649,9 +736,9 @@ export class MessageHandler {
       if (audioAttachments.length === 0) return;
 
       for (const audioAtt of audioAttachments) {
-        let mobileTranscription: any = undefined;
+        let mobileTranscription: unknown = undefined;
         if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
-          const metadata = audioAtt.metadata as any;
+          const metadata = audioAtt.metadata as Record<string, unknown>;
           if (metadata.transcription) {
             mobileTranscription = metadata.transcription;
           }
