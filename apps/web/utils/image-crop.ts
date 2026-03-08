@@ -133,7 +133,7 @@ export async function getCroppedImg(
       const url = URL.createObjectURL(blob);
 
       resolve({ file, url });
-    }, 'image/jpeg', 0.95); // Qualité de 95%
+    }, 'image/jpeg', 0.80);
   });
 }
 

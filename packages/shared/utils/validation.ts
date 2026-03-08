@@ -243,10 +243,9 @@ export const updateAvatarSchema = z.object({
   avatar: z.string().refine(
     (data) => {
       return data.startsWith('http://') ||
-             data.startsWith('https://') ||
-             data.startsWith('data:image/');
+             data.startsWith('https://');
     },
-    'Format avatar invalide. Doit être une URL ou une image base64'
+    'Format avatar invalide. Doit être une URL HTTP(S)'
   )
 }).strict();
 
@@ -257,10 +256,9 @@ export const updateBannerSchema = z.object({
   banner: z.string().refine(
     (data) => {
       return data.startsWith('http://') ||
-             data.startsWith('https://') ||
-             data.startsWith('data:image/');
+             data.startsWith('https://');
     },
-    'Format bannière invalide. Doit être une URL ou une image base64'
+    'Format bannière invalide. Doit être une URL HTTP(S)'
   )
 }).strict();
 
