@@ -278,8 +278,7 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
 public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public let id: String
     public let conversationId: String
-    public var senderId: String?
-    public var anonymousSenderId: String?
+    public var senderId: String
     public var content: String
     public var originalLanguage: String = "fr"
     public var messageType: MessageType = .text
@@ -333,8 +332,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case user, system, ads, app, agent, authority
     }
 
-    public init(id: String = UUID().uuidString, conversationId: String, senderId: String? = nil,
-                anonymousSenderId: String? = nil, content: String, originalLanguage: String = "fr",
+    public init(id: String = UUID().uuidString, conversationId: String, senderId: String = "",
+                content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
                 isEdited: Bool = false, editedAt: Date? = nil, isDeleted: Bool = false, deletedAt: Date? = nil,
                 replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
@@ -349,7 +348,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
-        self.anonymousSenderId = anonymousSenderId; self.content = content
+        self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
         self.isEdited = isEdited; self.editedAt = editedAt; self.isDeleted = isDeleted; self.deletedAt = deletedAt
         self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
@@ -584,17 +583,19 @@ public struct ForwardReference: Codable, Sendable {
 public struct MeeshyReaction: Identifiable, Codable, Sendable {
     public let id: String
     public let messageId: String
-    public var userId: String?
-    public var anonymousId: String?
+    public var participantId: String?
     public let emoji: String
     public let createdAt: Date
     public var updatedAt: Date
 
-    public init(id: String = UUID().uuidString, messageId: String, userId: String? = nil,
-                anonymousId: String? = nil, emoji: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
-        self.id = id; self.messageId = messageId; self.userId = userId
-        self.anonymousId = anonymousId; self.emoji = emoji; self.createdAt = createdAt; self.updatedAt = updatedAt
+    public init(id: String = UUID().uuidString, messageId: String, participantId: String? = nil,
+                emoji: String, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id; self.messageId = messageId; self.participantId = participantId
+        self.emoji = emoji; self.createdAt = createdAt; self.updatedAt = updatedAt
     }
+
+    @available(*, deprecated, renamed: "participantId")
+    public var userId: String? { participantId }
 }
 
 // MARK: - Reaction Summary

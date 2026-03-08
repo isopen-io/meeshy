@@ -13,7 +13,7 @@ extension ConversationView {
     func messageRow(index: Int, msg: Message) -> some View {
         let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
         let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
-        let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId ?? "")
+        let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId)
         let lastReceivedIdx = viewModel.messages.indices.last(where: { !viewModel.messages[$0].isMe })
         let isLastReceived = !msg.isMe && index == lastReceivedIdx
 
@@ -52,7 +52,7 @@ extension ConversationView {
                     preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                     showAvatar: !isDirect && isLastInGroup,
                     presenceState: bubblePresence,
-                    senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId ?? "")?.moodEmoji,
+                    senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId)?.moodEmoji,
                     onAddReaction: { messageId in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             overlayState.emojiOnlyMode = true

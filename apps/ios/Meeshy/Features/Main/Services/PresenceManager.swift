@@ -68,12 +68,14 @@ final class PresenceManager: ObservableObject {
     // Seed initial presence from conversations API response
     func seed(from conversations: [APIConversation], currentUserId: String) {
         for conv in conversations {
-            guard let members = conv.members else { continue }
-            for member in members where member.userId != currentUserId {
-                guard let user = member.user, let isOnline = user.isOnline else { continue }
-                presenceMap[member.userId] = UserPresence(
+            guard let participants = conv.participants else { continue }
+            for participant in participants where participant.userId != currentUserId {
+                guard let userId = participant.userId else { continue }
+                let isOnline = participant.isOnline ?? participant.user?.isOnline ?? false
+                let lastActive = participant.lastActiveAt ?? participant.user?.lastActiveAt
+                presenceMap[userId] = UserPresence(
                     isOnline: isOnline,
-                    lastActiveAt: user.lastActiveAt
+                    lastActiveAt: lastActive
                 )
             }
         }

@@ -350,8 +350,8 @@ private struct AudioFullscreenPage: View {
                     mode: .custom(34),
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL,
-                    moodEmoji: message.senderId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                    onMoodTap: message.senderId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+                    moodEmoji: message.senderId.isEmpty ? nil : statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
+                    onMoodTap: message.senderId.isEmpty ? nil : statusViewModel.moodTapHandler(for: message.senderId)
                 )
             }
 

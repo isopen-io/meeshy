@@ -52,7 +52,7 @@ extension APIMessage {
                 height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl,
                 duration: apiAtt.duration,
-                uploadedBy: senderId ?? "",
+                uploadedBy: senderId,
                 latitude: apiAtt.latitude,
                 longitude: apiAtt.longitude,
                 thumbnailColor: DynamicColorGenerator.colorForName(sender?.username ?? "?")
@@ -67,7 +67,7 @@ extension APIMessage {
                 return (0..<count).map { index in
                     Reaction(
                         messageId: id,
-                        userId: (meReacted && index == 0) ? currentUserId : nil,
+                        participantId: (meReacted && index == 0) ? currentUserId : nil,
                         emoji: emoji
                     )
                 }
@@ -144,7 +144,6 @@ extension APIMessage {
             id: id,
             conversationId: conversationId,
             senderId: senderId,
-            anonymousSenderId: anonymousSenderId,
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr",
             messageType: msgType,

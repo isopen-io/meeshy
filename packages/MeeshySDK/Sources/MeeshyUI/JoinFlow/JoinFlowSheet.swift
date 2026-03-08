@@ -147,7 +147,7 @@ public struct JoinFlowSheet: View {
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {
-                Text("Vous avez rejoint \(result.conversation.title ?? "la conversation") en tant que \(result.participant.firstName)")
+                Text("Vous avez rejoint \(result.conversation.title ?? "la conversation") en tant que \(result.participant.displayName)")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)

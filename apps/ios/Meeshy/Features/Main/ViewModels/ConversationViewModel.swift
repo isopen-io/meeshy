@@ -291,7 +291,7 @@ class ConversationViewModel: ObservableObject {
             guard let username = msg.senderUsername, !seen.contains(username) else { continue }
             seen.insert(username)
             candidates.append(MentionCandidate(
-                id: msg.senderId ?? username,
+                id: msg.senderId.isEmpty ? username : msg.senderId,
                 username: username,
                 displayName: msg.senderName ?? username,
                 avatarURL: msg.senderAvatarURL
@@ -360,7 +360,8 @@ class ConversationViewModel: ObservableObject {
         if let cached = _topActiveMembers { return cached }
         var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
         for msg in messages where !msg.isMe {
-            guard let id = msg.senderId else { continue }
+            let id = msg.senderId
+            guard !id.isEmpty else { continue }
             if var existing = counts[id] {
                 existing.count += 1
                 counts[id] = existing
@@ -561,7 +562,8 @@ class ConversationViewModel: ObservableObject {
         await withTaskGroup(of: (Int, String?).self) { group in
             for i in 0..<msgs.count {
                 let msg = msgs[i]
-                if msg.isEncrypted, let senderId = msg.senderId, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
+                if msg.isEncrypted, !msg.senderId.isEmpty, !msg.content.isEmpty, let data = Data(base64Encoded: msg.content) {
+                    let senderId = msg.senderId
                     group.addTask {
                         do {
                             let decrypted = try await SessionManager.shared.decryptMessage(data, from: senderId)
@@ -796,18 +798,18 @@ class ConversationViewModel: ObservableObject {
         guard let idx = messageIndex(for: messageId) else { return }
 
         let userId = currentUserId
-        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.userId == userId }
+        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == userId }
 
         if alreadyReacted {
             // Optimistic remove
-            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.userId == userId }
+            messages[idx].reactions.removeAll { $0.emoji == emoji && $0.participantId == userId }
             // API call
             Task {
                 try? await reactionService.remove(messageId: messageId, emoji: emoji)
             }
         } else {
             // Optimistic add
-            let reaction = Reaction(messageId: messageId, userId: userId, emoji: emoji)
+            let reaction = Reaction(messageId: messageId, participantId: userId, emoji: emoji)
             messages[idx].reactions.append(reaction)
             // API call
             Task {

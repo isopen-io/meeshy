@@ -41,11 +41,8 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     }
 }
 
-public struct APIConversationMember: Decodable, Sendable {
-    public let userId: String
-    public let role: String?
-    public let user: APIConversationUser?
-}
+@available(*, deprecated, renamed: "APIParticipant")
+public typealias APIConversationMember = APIParticipant
 
 public struct APIConversationPreferences: Decodable, Sendable {
     public let isPinned: Bool?
@@ -70,7 +67,7 @@ public struct APIConversation: Decodable, Sendable {
     public let memberCount: Int?
     public let isAnnouncementChannel: Bool?
     public let lastMessageAt: Date?
-    public let members: [APIConversationMember]?
+    public let participants: [APIParticipant]?
     public let lastMessage: APIConversationLastMessage?
     public let recentMessages: [APIConversationLastMessage]?
     public let userPreferences: [APIConversationPreferences]?
@@ -82,8 +79,8 @@ public struct APIConversation: Decodable, Sendable {
 
 extension APIConversation {
     public func toConversation(currentUserId: String) -> MeeshyConversation {
-        let otherMember = members?.first { $0.userId != currentUserId }
-        let otherUser = otherMember?.user
+        let otherParticipant = participants?.first { $0.userId != currentUserId }
+        let otherUser = otherParticipant?.user
 
         let convType: MeeshyConversation.ConversationType = {
             switch type.lowercased() {
@@ -104,8 +101,8 @@ extension APIConversation {
             return "Conversation"
         }()
 
-        let participantAvatar: String? = otherUser?.resolvedAvatar
-        let currentRole = members?.first(where: { $0.userId == currentUserId })?.role
+        let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
+        let currentRole = participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
         let tags: [MeeshyConversationTag] = (prefs?.tags ?? []).enumerated().map { index, tagName in
@@ -148,7 +145,7 @@ extension APIConversation {
             description: description, avatar: convType != .direct ? avatar : nil,
             banner: banner, communityId: communityId,
             isActive: isActive ?? true,
-            memberCount: memberCount ?? members?.count ?? 2,
+            memberCount: memberCount ?? participants?.count ?? 2,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
@@ -165,7 +162,7 @@ extension APIConversation {
             isPinned: prefs?.isPinned ?? false,
             sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,
-            participantUserId: otherMember?.userId,
+            participantUserId: otherParticipant?.userId,
             participantAvatarURL: participantAvatar,
             currentUserRole: currentRole,
             reaction: prefs?.reaction

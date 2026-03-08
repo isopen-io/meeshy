@@ -218,10 +218,10 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     let exists = delegate.messages[idx].reactions.contains {
-                        $0.emoji == event.emoji && $0.userId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.userId
                     }
                     if !exists {
-                        let reaction = Reaction(messageId: event.messageId, userId: event.userId, emoji: event.emoji)
+                        let reaction = Reaction(messageId: event.messageId, participantId: event.userId, emoji: event.emoji)
                         delegate.messages[idx].reactions.append(reaction)
                     }
                 }
@@ -235,7 +235,7 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     delegate.messages[idx].reactions.removeAll {
-                        $0.emoji == event.emoji && $0.userId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.userId
                     }
                 }
             }

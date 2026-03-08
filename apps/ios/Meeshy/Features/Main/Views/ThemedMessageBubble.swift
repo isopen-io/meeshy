@@ -136,7 +136,7 @@ struct ThemedMessageBubble: View {
         var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
         var emojiOrder: [String] = []
         for reaction in message.reactions {
-            let isMe = reaction.userId == currentUserId
+            let isMe = reaction.participantId == currentUserId
             if var existing = emojiCounts[reaction.emoji] {
                 existing.count += 1
                 existing.includesMe = existing.includesMe || isMe

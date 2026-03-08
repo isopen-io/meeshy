@@ -370,12 +370,12 @@ final class ConversationViewModelTests: XCTestCase {
         let reactions = sut.messages.first?.reactions ?? []
         XCTAssertEqual(reactions.count, 1)
         XCTAssertEqual(reactions.first?.emoji, "thumbsup")
-        XCTAssertEqual(reactions.first?.userId, testUserId)
+        XCTAssertEqual(reactions.first?.participantId, testUserId)
     }
 
     func test_toggleReaction_removesExistingReaction() {
         let sut = makeSUT()
-        let existingReaction = Reaction(messageId: "msg-react", userId: testUserId, emoji: "thumbsup")
+        let existingReaction = Reaction(messageId: "msg-react", participantId: testUserId, emoji: "thumbsup")
         sut.messages = [makeMessage(id: "msg-react", content: "Unreact me", reactions: [existingReaction])]
 
         sut.toggleReaction(messageId: "msg-react", emoji: "thumbsup")

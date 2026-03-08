@@ -26,7 +26,7 @@ final class MockConversationService: ConversationServiceProviding {
     var deleteResult: Result<Void, Error> = .success(())
     var markReadResult: Result<Void, Error> = .success(())
     var markUnreadResult: Result<Void, Error> = .success(())
-    var getParticipantsResult: Result<[APIConversationMember], Error> = .success(
+    var getParticipantsResult: Result<[APIParticipant], Error> = .success(
         JSONStub.decode("[]")
     )
     var deleteForMeResult: Result<Void, Error> = .success(())
@@ -123,7 +123,7 @@ final class MockConversationService: ConversationServiceProviding {
         try await MainActor.run { try markUnreadResult.get() }
     }
 
-    nonisolated func getParticipants(conversationId: String, limit: Int) async throws -> [APIConversationMember] {
+    nonisolated func getParticipants(conversationId: String, limit: Int) async throws -> [APIParticipant] {
         await MainActor.run {
             getParticipantsCallCount += 1
             lastGetParticipantsConversationId = conversationId

@@ -85,22 +85,10 @@ public struct AnonymousJoinRequest: Encodable {
 
 public struct AnonymousJoinResponse: Decodable {
     public let sessionToken: String
-    public let participant: AnonymousParticipant
+    public let participant: APIParticipant
     public let conversation: JoinedConversation
     public let linkId: String
     public let id: String
-}
-
-public struct AnonymousParticipant: Decodable {
-    public let id: String
-    public let username: String
-    public let firstName: String
-    public let lastName: String
-    public let language: String
-    public let isMeeshyer: Bool
-    public let canSendMessages: Bool
-    public let canSendFiles: Bool
-    public let canSendImages: Bool
 }
 
 public struct JoinedConversation: Decodable {

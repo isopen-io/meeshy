@@ -23,15 +23,20 @@ final class ConversationServiceTests: XCTestCase {
             id: id, type: "direct", identifier: "test-conv", title: "Test",
             description: nil, avatar: nil, banner: nil, communityId: nil,
             isActive: true, memberCount: 2, isAnnouncementChannel: false,
-            lastMessageAt: nil, members: nil, lastMessage: nil,
+            lastMessageAt: nil, participants: nil, lastMessage: nil,
             recentMessages: nil, userPreferences: nil, unreadCount: 0,
             updatedAt: nil, encryptionMode: nil, createdAt: Date()
         )
     }
 
-    private func makeMember(userId: String = "user1") -> APIConversationMember {
-        APIConversationMember(
-            userId: userId, role: "MEMBER",
+    private func makeParticipant(userId: String = "user1") -> APIParticipant {
+        APIParticipant(
+            id: "p-\(userId)", conversationId: "conv123", type: .user,
+            userId: userId, displayName: "Test User", avatar: nil,
+            role: "MEMBER", language: "fr",
+            permissions: ParticipantPermissions.defaultUser,
+            isActive: true, isOnline: true, joinedAt: Date(),
+            leftAt: nil, bannedAt: nil, nickname: nil, lastActiveAt: nil,
             user: APIConversationUser(
                 id: userId, username: "testuser", displayName: "Test User",
                 firstName: nil, lastName: nil, avatar: nil, avatarUrl: nil,
@@ -138,9 +143,9 @@ final class ConversationServiceTests: XCTestCase {
 
     // MARK: - getParticipants
 
-    func testGetParticipantsReturnsMemberList() async throws {
-        let member = makeMember()
-        let response = APIResponse(success: true, data: [member], error: nil)
+    func testGetParticipantsReturnsParticipantList() async throws {
+        let participant = makeParticipant()
+        let response = APIResponse(success: true, data: [participant], error: nil)
         mock.stub("/conversations/conv1/participants", result: response)
 
         let result = try await service.getParticipants(conversationId: "conv1")

@@ -292,14 +292,14 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         XCTAssertEqual(delegate.messages[0].reactions.count, 1)
         XCTAssertEqual(delegate.messages[0].reactions[0].emoji, "thumbsup")
-        XCTAssertEqual(delegate.messages[0].reactions[0].userId, otherUserId)
+        XCTAssertEqual(delegate.messages[0].reactions[0].participantId, otherUserId)
     }
 
     func test_reactionAdded_deduplicatesSameEmojiSameUser() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
         var msg = makeMessage(id: "msg1")
-        msg.reactions = [Reaction(messageId: "msg1", userId: otherUserId, emoji: "thumbsup")]
+        msg.reactions = [Reaction(messageId: "msg1", participantId: otherUserId, emoji: "thumbsup")]
         delegate.messages = [msg]
         delegate.invalidateIndex()
 
@@ -318,8 +318,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         _ = sut
         var msg = makeMessage(id: "msg1")
         msg.reactions = [
-            Reaction(messageId: "msg1", userId: otherUserId, emoji: "thumbsup"),
-            Reaction(messageId: "msg1", userId: currentUserId, emoji: "heart")
+            Reaction(messageId: "msg1", participantId: otherUserId, emoji: "thumbsup"),
+            Reaction(messageId: "msg1", participantId: currentUserId, emoji: "heart")
         ]
         delegate.messages = [msg]
         delegate.invalidateIndex()
