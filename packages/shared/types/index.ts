@@ -6,6 +6,25 @@
  */
 
 // ===== NOUVEAUX TYPES UNIFIÉS =====
+// Export des types unifiés - Participant (unified model)
+// Note: ParticipantPermissions re-exported explicitly to avoid conflict with conversation.ts legacy type
+export {
+  ParticipantTypeEnum,
+  type ParticipantType,
+  ParticipantPermissionsSchema,
+  type ParticipantPermissions as UnifiedParticipantPermissions,
+  AnonymousSessionDetailsSchema,
+  AnonymousProfileSchema,
+  type AnonymousProfile,
+  AnonymousRightsOverrideSchema,
+  AnonymousSessionSchema,
+  type AnonymousSession,
+  ParticipantSchema,
+  type Participant,
+  DEFAULT_USER_PERMISSIONS,
+  DEFAULT_ANONYMOUS_PERMISSIONS,
+} from './participant.js';
+
 // Export des types unifiés Phase 1
 export * from './conversation.js';
 export * from './user.js';
