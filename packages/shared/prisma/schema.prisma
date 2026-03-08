@@ -25,6 +25,58 @@ enum UserRole {
   AGENT      // Utilisateur géré par une IA (SAV, FAQ, etc.)
 }
 
+// ============================================
+// COMPOSITE TYPES (Embedded Documents)
+// ============================================
+
+/// Default permissions for a conversation participant
+type ParticipantPermissions {
+  canSendMessages  Boolean @default(true)
+  canSendFiles     Boolean @default(false)
+  canSendImages    Boolean @default(true)
+  canSendVideos    Boolean @default(false)
+  canSendAudios    Boolean @default(false)
+  canSendLocations Boolean @default(false)
+  canSendLinks     Boolean @default(false)
+}
+
+/// Session details for an anonymous participant
+type AnonymousSessionDetails {
+  sessionTokenHash  String
+  ipAddress         String?
+  country           String?
+  deviceFingerprint String?
+  connectedAt       DateTime
+}
+
+/// Profile info captured for an anonymous participant
+type AnonymousProfile {
+  firstName String
+  lastName  String
+  username  String
+  email     String?
+  birthday  DateTime?
+}
+
+/// Per-anonymous-session permission overrides (null = inherit from ParticipantPermissions)
+type AnonymousRightsOverride {
+  canSendMessages  Boolean?
+  canSendFiles     Boolean?
+  canSendImages    Boolean?
+  canSendVideos    Boolean?
+  canSendAudios    Boolean?
+  canSendLocations Boolean?
+  canSendLinks     Boolean?
+}
+
+/// Embedded anonymous session data on a Participant
+type AnonymousSession {
+  shareLinkId String
+  session     AnonymousSessionDetails
+  profile     AnonymousProfile
+  rights      AnonymousRightsOverride?
+}
+
 /// Utilisateur enregistré de la plateforme
 model User {
   id                        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -236,6 +288,9 @@ model User {
 
   // Agent global profile (1:1)
   agentGlobalProfile AgentGlobalProfile?
+
+  // Unified participant model (replaces conversations + anonymousParticipants)
+  participations Participant[]
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -316,6 +371,9 @@ model Conversation {
   // Agent service
   agentConfig     AgentConfig?
   agentAnalytic   AgentAnalytic?
+
+  // Unified participant model (replaces members + anonymousParticipants)
+  participants Participant[]
 
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
@@ -467,6 +525,49 @@ model AnonymousParticipant {
 
   // Call participation
   callParticipations CallParticipant[] @relation("AnonymousCallParticipants")
+}
+
+/// Unified participant in a conversation (registered user, anonymous, or bot)
+model Participant {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String  @db.ObjectId
+  /// "user" | "anonymous" | "bot"
+  type           String
+
+  /// FK to User (null for anonymous/bot participants)
+  userId String? @db.ObjectId
+
+  displayName String
+  avatar      String?
+
+  /// admin, moderator, member
+  role        String                   @default("member")
+  permissions ParticipantPermissions
+
+  /// ISO 639-1 language code
+  language String @default("en")
+
+  isActive     Boolean   @default(true)
+  isOnline     Boolean   @default(false)
+  lastActiveAt DateTime  @default(now())
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+  bannedAt     DateTime?
+
+  /// Per-conversation display name override
+  nickname String?
+
+  /// Embedded anonymous session data (only for type="anonymous")
+  anonymousSession AnonymousSession?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId], name: "unique_conversation_user")
+  @@index([conversationId])
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([type])
 }
 
 /// Message dans une conversation
