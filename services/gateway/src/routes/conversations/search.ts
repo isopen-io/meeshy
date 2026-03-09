@@ -56,41 +56,43 @@ export function registerSearchRoutes(
         return reply.send({ success: true, data: [] });
       }
 
-      // Rechercher dans TOUTES les conversations publiques/globales + celles dont l'utilisateur est membre
+      // Step 1: Find matching user IDs by name search
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { firstName: { contains: q, mode: 'insensitive' } },
+            { lastName: { contains: q, mode: 'insensitive' } },
+            { username: { contains: q, mode: 'insensitive' } },
+            { displayName: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+        take: 100,
+      });
+      const matchingUserIds = matchingUsers.map(u => u.id);
+
+      // Step 2: Find conversations matching by participant userId OR by title
+      const participantMatchFilter = matchingUserIds.length > 0
+        ? [
+            { title: { contains: q, mode: 'insensitive' as const } },
+            { participants: { some: { userId: { in: matchingUserIds }, isActive: true } } },
+          ]
+        : [{ title: { contains: q, mode: 'insensitive' as const } }];
+
       const conversations = await prisma.conversation.findMany({
         where: {
           isActive: true,
           AND: [
+            { OR: participantMatchFilter },
             {
               OR: [
-                { title: { contains: q, mode: 'insensitive' } },
-                {
-                  participants: {
-                    some: {
-                      user: {
-                        OR: [
-                          { firstName: { contains: q, mode: 'insensitive' } },
-                          { lastName: { contains: q, mode: 'insensitive' } },
-                          { username: { contains: q, mode: 'insensitive' } },
-                          { displayName: { contains: q, mode: 'insensitive' } }
-                        ],
-                        isActive: true
-                      }
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              OR: [
-                // Conversations publiques ou globales (accessibles à tous)
                 { type: 'public' },
                 { type: 'global' },
-                // OU conversations dont l'utilisateur est membre
-                { participants: { some: { userId, isActive: true } } }
-              ]
-            }
-          ]
+                { participants: { some: { userId, isActive: true } } },
+              ],
+            },
+          ],
         },
         include: {
           participants: {
@@ -102,22 +104,28 @@ export function registerSearchRoutes(
                   displayName: true,
                   avatar: true,
                   isOnline: true,
-                  lastActiveAt: true
-                }
-              }
+                  lastActiveAt: true,
+                },
+              },
             },
-            take: 10 // Limiter le nombre de membres retournés pour les performances
+            take: 10,
           },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+          messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
         orderBy: { lastMessageAt: 'desc' },
-        take: 50 // Limiter le nombre de résultats
+        take: 50,
       });
 
-      // Compute unread counts for all matched conversations
+      // Compute unread counts: resolve participantIds from conversations
       const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
-      const unreadCountMap = await readStatusService.getUnreadCountsForConversations([userId], conversationIds);
+      const userParticipantIds = conversations
+        .flatMap(c => c.participants)
+        .filter((p: any) => p.userId === userId)
+        .map((p: any) => p.id);
+      const unreadCountMap = userParticipantIds.length > 0
+        ? await readStatusService.getUnreadCountsForConversations(userParticipantIds, conversationIds)
+        : new Map<string, number>();
 
       // Transformer les conversations pour garantir qu'un titre existe toujours
       const conversationsWithTitle = conversations.map((conversation) => {
