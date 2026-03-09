@@ -4,6 +4,7 @@ import Foundation
 final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     var baseURL: String = "https://mock.api"
     var authToken: String?
+    var anonymousSessionToken: String?
 
     // MARK: - Recording
 
@@ -33,6 +34,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         stubs.removeAll()
         errorToThrow = nil
         authToken = nil
+        anonymousSessionToken = nil
     }
 
     // MARK: - APIClientProviding

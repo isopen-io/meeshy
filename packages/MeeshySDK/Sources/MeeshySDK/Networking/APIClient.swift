@@ -68,6 +68,7 @@ public enum APIError: Error, LocalizedError {
 public protocol APIClientProviding: Sendable {
     var baseURL: String { get }
     var authToken: String? { get set }
+    var anonymousSessionToken: String? { get set }
     func request<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T
     func paginatedRequest<T: Decodable>(endpoint: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
     func offsetPaginatedRequest<T: Decodable>(endpoint: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
@@ -121,6 +122,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     private let decoder: JSONDecoder
 
     public var authToken: String?
+    public var anonymousSessionToken: String?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -172,6 +174,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
         if let token = authToken {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else if let token = anonymousSessionToken {
+            urlRequest.setValue(token, forHTTPHeaderField: "X-Session-Token")
         }
 
         if let body {
