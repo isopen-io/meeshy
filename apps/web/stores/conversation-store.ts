@@ -16,6 +16,7 @@ interface ConversationState {
   hasMoreMessages: Map<string, boolean>;
   translatingMessages: Map<string, Set<string>>;
   typingUsers: Map<string, Set<string>>;
+  readStatusSummaries: Record<string, { totalMembers: number; deliveredCount: number; readCount: number }>;
 }
 
 interface ConversationActions {
@@ -39,6 +40,9 @@ interface ConversationActions {
   requestTranslation: (messageId: string, targetLanguage: string, sourceLanguage?: string) => Promise<void>;
   addTranslation: (messageId: string, translation: MessageTranslation) => void;
   
+  // Read status
+  updateReadStatusSummary: (conversationId: string, summary: { totalMembers: number; deliveredCount: number; readCount: number }) => void;
+
   // Real-time features
   sendMessage: (content: string) => Promise<void>;
   setTyping: (conversationId: string, isTyping: boolean) => void;
@@ -78,6 +82,7 @@ const initialState: ConversationState = {
   hasMoreMessages: new Map(),
   translatingMessages: new Map(),
   typingUsers: new Map(),
+  readStatusSummaries: {},
 };
 
 export const useConversationStore = create<ConversationStore>()(
@@ -374,6 +379,13 @@ export const useConversationStore = create<ConversationStore>()(
         }
       },
 
+      // Read Status Actions
+      updateReadStatusSummary: (conversationId: string, summary: { totalMembers: number; deliveredCount: number; readCount: number }) => {
+        set((state) => ({
+          readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
+        }));
+      },
+
       // Real-time Actions
       sendMessage: async (content: string) => {
         const { currentConversation } = get();
@@ -426,8 +438,10 @@ export const useConversationMessages = (conversationId: string) =>
   useConversationStore((state) => state.messages.get(conversationId) || []);
 export const useConversationLoading = (conversationId: string) => 
   useConversationStore((state) => state.isLoadingMessages.get(conversationId) || false);
-export const useTypingUsers = (conversationId: string) => 
+export const useTypingUsers = (conversationId: string) =>
   useConversationStore((state) => state.typingUsers.get(conversationId) || new Set());
+export const useReadStatusSummary = (conversationId: string) =>
+  useConversationStore((state) => state.readStatusSummaries[conversationId]);
 
 // Use useShallow to prevent infinite loops when selecting multiple actions
 export const useConversationActions = () => useConversationStore(

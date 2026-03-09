@@ -83,8 +83,18 @@ export class PresenceService {
     });
 
     // Read status
-    socket.on(SERVER_EVENTS.READ_STATUS_UPDATED, (data: { conversationId: string; userId: string; type: 'read' | 'received'; updatedAt: Date }) => {
+    socket.on(SERVER_EVENTS.READ_STATUS_UPDATED, (data: {
+      conversationId: string;
+      participantId: string;
+      type: 'read' | 'received';
+      updatedAt: Date;
+      summary: { totalMembers: number; deliveredCount: number; readCount: number };
+    }) => {
       this.readStatusListeners.forEach(listener => listener(data));
+
+      // Update conversation store with summary
+      const { useConversationStore } = require('@/stores/conversation-store');
+      useConversationStore.getState().updateReadStatusSummary(data.conversationId, data.summary);
     });
   }
 

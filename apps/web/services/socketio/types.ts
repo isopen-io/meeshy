@@ -44,7 +44,7 @@ export type ConversationStatsListener = (data: { conversationId: string; stats: 
 export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: any[]; updatedAt: Date }) => void;
 export type ReactionListener = (data: any) => void;
 export type ConversationJoinedListener = (data: { conversationId: string; userId: string }) => void;
-export type ReadStatusListener = (data: { conversationId: string; userId: string; type: 'read' | 'received'; updatedAt: Date }) => void;
+export type ReadStatusListener = (data: { conversationId: string; participantId: string; type: 'read' | 'received'; updatedAt: Date; summary: { totalMembers: number; deliveredCount: number; readCount: number } }) => void;
 
 /**
  * Unsubscribe function type
