@@ -159,8 +159,8 @@ export class ConversationScanner {
         .map((m) => ({
           id: m.id,
           senderId: m.senderId!,
-          senderName: m.sender?.displayName ?? m.sender?.username ?? m.senderId!,
-          senderUsername: m.sender?.username ?? m.senderId!,
+          senderName: m.sender?.displayName ?? m.sender?.user?.username ?? m.senderId!,
+          senderUsername: m.sender?.user?.username ?? m.senderId!,
           content: m.content ?? '',
           timestamp: m.createdAt.getTime(),
           replyToId: m.replyToId ?? undefined,

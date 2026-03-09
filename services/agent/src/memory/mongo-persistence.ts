@@ -109,9 +109,9 @@ export class MongoPersistence {
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
     return this.prisma.user.findMany({
       where: {
-        conversations: { some: { conversationId } },
+        participations: { some: { conversationId } },
         lastActiveAt: { lt: threshold },
-        role: { notIn: excludedRoles as any[] },
+        role: { notIn: excludedRoles as unknown as any[] },
         id: { notIn: excludedUserIds },
       },
       select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true },
@@ -244,7 +244,7 @@ export class MongoPersistence {
       },
       include: {
         sender: {
-          select: { id: true, displayName: true, username: true },
+          select: { id: true, displayName: true, user: { select: { username: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },
