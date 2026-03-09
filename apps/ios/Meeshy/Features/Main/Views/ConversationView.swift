@@ -111,6 +111,7 @@ struct ConversationHeaderState {
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
+    var anonymousSession: AnonymousSessionContext? = nil
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -216,14 +217,16 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
+        self.anonymousSession = anonymousSession
         _viewModel = StateObject(wrappedValue: ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
-            participantUserId: conversation?.participantUserId
+            participantUserId: conversation?.participantUserId,
+            anonymousSession: anonymousSession
         ))
     }
 
@@ -752,10 +755,14 @@ struct ConversationView: View {
 
     // MARK: - Floating Header Section (extracted to help type-checker)
 
+    private var isAnonymous: Bool { anonymousSession != nil }
+
     @ViewBuilder
     private var floatingHeaderSection: some View {
         VStack {
-            if isTyping {
+            if isAnonymous {
+                anonymousHeaderBar
+            } else if isTyping {
                 HStack(spacing: 8) {
                     ThemedBackButton(color: accentColor) { HapticFeedback.light(); dismiss() }
                     Spacer()
@@ -786,6 +793,30 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+    }
+
+    @ViewBuilder
+    private var anonymousHeaderBar: some View {
+        HStack {
+            Text(conversation?.name ?? "Conversation")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            Spacer()
+            Button {
+                HapticFeedback.light()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+            }
+            .accessibilityLabel("Fermer la conversation")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
 
     @ViewBuilder
