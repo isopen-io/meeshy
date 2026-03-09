@@ -171,7 +171,7 @@ const mockCurrentUser: User = {
 const mockModeratorUser: User = {
   ...mockCurrentUser,
   id: 'mod-1',
-  role: UserRoleEnum.MODO,
+  role: UserRoleEnum.MODERATOR,
 } as User;
 
 const mockConversation: Conversation = {

@@ -12,7 +12,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { conversationsService } from '@/services/conversations.service';
 import { useUserStore } from '@/stores/user-store';
-import type { ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
+import type { ThreadMember } from '@meeshy/shared/types';
+import { MemberRole } from '@meeshy/shared/types';
 
 interface UseParticipantsOptions {
   /**
@@ -72,7 +73,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
         conversationId: convId,
         userId: user.id,
         user,
-        role: user.role as UserRoleEnum,
+        role: ((user as any).conversationRole || MemberRole.MEMBER) as any,
         joinedAt: new Date(),
         isActive: true,
         isAnonymous: false,
@@ -103,7 +104,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
           keepOriginalMessages: true,
           translationQuality: 'medium',
         },
-        role: 'MEMBER' as UserRoleEnum,
+        role: MemberRole.MEMBER as any,
         joinedAt: new Date(),
         isActive: true,
         isAnonymous: true,
