@@ -803,7 +803,9 @@ export const conversationParticipantSchema = {
   description: 'Participant in a conversation with full user information',
   properties: {
     id: { type: 'string', description: 'User ID' },
-    userId: { type: 'string', description: 'User ID (duplicate for backward compatibility)' },
+    participantId: { type: 'string', nullable: true, description: 'Participant ID (unified model)' },
+    userId: { type: 'string', nullable: true, description: 'User ID (null for anonymous participants)' },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'], description: 'Participant type (unified model)' },
     username: { type: 'string', description: 'Username' },
     firstName: { type: 'string', nullable: true, description: 'First name' },
     lastName: { type: 'string', nullable: true, description: 'Last name' },
