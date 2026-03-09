@@ -4,4 +4,4 @@
  */
 
 export { useI18n } from './use-i18n';
-export type { UseI18nReturn } from './use-i18n';
+export type { UseI18nReturn, TFunction } from './use-i18n';

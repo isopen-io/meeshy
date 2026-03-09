@@ -28,9 +28,9 @@ export type {
   NotificationPriority,
   NotificationFilters,
   NotificationCounts,
-  NotificationPreferences,
+  NotificationPreference,
   NotificationPaginatedResponse,
-  NotificationStats,
+  NotificationPaginationOptions,
 } from '@/types/notification';
 
 export type { UserStats, UpdateUserDto } from './users.service';

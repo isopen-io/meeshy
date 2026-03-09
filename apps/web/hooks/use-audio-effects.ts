@@ -74,7 +74,7 @@ export interface UseAudioEffectsOptions {
 export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEffectsOptions) {
   // Tone.js nodes
   const inputNodeRef = useRef<Tone.UserMedia | null>(null);
-  const outputNodeRef = useRef<Tone.Destination | null>(null);
+  const outputNodeRef = useRef<ReturnType<typeof Tone.getDestination> | null>(null);
   const mediaStreamDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
 
   // Effect processors

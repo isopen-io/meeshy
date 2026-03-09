@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { apiService, TIMEOUT_VOICE_PROFILE } from '@/services/api.service';
-import type { VoiceProfileDetails, VoiceCloningConsentRequest } from '@meeshy/shared/types/voice-api';
+import type { VoiceProfileDetails, VoiceProfileConsentRequest } from '@meeshy/shared/types/voice-api';
 import { toast } from 'sonner';
 
 interface UseVoiceProfileManagementReturn {
@@ -107,7 +107,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const grantVoiceCloningConsent = useCallback(async () => {
     try {
-      const payload: VoiceCloningConsentRequest = { enabled: true };
+      const payload: VoiceProfileConsentRequest = { enabled: true };
       const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(true);
@@ -122,7 +122,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const revokeVoiceCloningConsent = useCallback(async () => {
     try {
-      const payload: VoiceCloningConsentRequest = { enabled: false };
+      const payload: VoiceProfileConsentRequest = { enabled: false };
       const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(false);
