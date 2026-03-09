@@ -20,6 +20,7 @@ class ConversationListViewModel: ObservableObject {
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    @Published var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
@@ -632,6 +633,23 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Message Prefetch
+
+    func loadPreviewMessages(for conversationId: String) async {
+        guard previewMessages[conversationId] == nil else { return }
+        let cached = await LocalStore.shared.loadMessages(for: conversationId)
+        if !cached.isEmpty {
+            previewMessages[conversationId] = Array(cached.suffix(5))
+            return
+        }
+        do {
+            let response = try await messageService.list(
+                conversationId: conversationId, offset: 0, limit: 5, includeReplies: false
+            )
+            let userId = currentUserId
+            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            previewMessages[conversationId] = msgs
+        } catch { }
+    }
 
     private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
         let toFetch = Array(apiConversations.prefix(20))

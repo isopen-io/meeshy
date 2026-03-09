@@ -256,7 +256,13 @@ struct ConversationListView: View {
             .contextMenu {
                 conversationContextMenu(for: conversation)
             } preview: {
-                ConversationPreviewView(conversation: conversation)
+                ConversationPreviewView(
+                    conversation: conversation,
+                    cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? []
+                )
+            }
+            .task {
+                await conversationViewModel.loadPreviewMessages(for: conversation.id)
             }
         }
     }
