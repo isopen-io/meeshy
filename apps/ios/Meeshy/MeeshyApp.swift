@@ -13,6 +13,7 @@ struct MeeshyApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = true
     @State private var hasCheckedSession = false
+    @State private var activeGuestSession: GuestSession?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -44,7 +45,25 @@ struct MeeshyApp: App {
                     }
                 }
                 .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && !showSplash },
+                    get: { activeGuestSession != nil && !authManager.isAuthenticated },
+                    set: { if !$0 { activeGuestSession = nil } }
+                )) {
+                    if let guestSession = activeGuestSession {
+                        GuestConversationContainer(
+                            session: guestSession,
+                            onSessionCreated: { ctx in
+                                AnonymousSessionStore.save(ctx)
+                                activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
+                            },
+                            onDismiss: {
+                                AnonymousSessionStore.delete(linkId: guestSession.identifier)
+                                activeGuestSession = nil
+                            }
+                        )
+                    }
+                }
+                .fullScreenCover(isPresented: .init(
+                    get: { shouldShowOnboarding && !showSplash && activeGuestSession == nil },
                     set: { _ in }
                 )) {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
@@ -86,6 +105,8 @@ struct MeeshyApp: App {
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
                         await requestPushPermissionIfNeeded()
+                    } else {
+                        handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
@@ -95,6 +116,7 @@ struct MeeshyApp: App {
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuth in
                     if isAuth {
+                        activeGuestSession = nil
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
@@ -105,6 +127,9 @@ struct MeeshyApp: App {
                 .onReceive(pushManager.$pendingNotificationPayload) { payload in
                     guard let payload else { return }
                     handlePushNavigation(payload: payload)
+                }
+                .onChange(of: deepLinkRouter.pendingDeepLink) { _, link in
+                    handleGuestDeepLink(link)
                 }
             }
         }
@@ -170,6 +195,23 @@ struct MeeshyApp: App {
                 }
                 pushManager.clearPendingNotification()
             }
+        }
+    }
+
+    // MARK: - Guest Deep Link (handles join/chat links when not authenticated)
+
+    private func handleGuestDeepLink(_ link: DeepLink?) {
+        guard let link else { return }
+        guard !authManager.isAuthenticated else { return }
+        switch link {
+        case .joinLink(let id):
+            activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
+            let _ = deepLinkRouter.consumePendingDeepLink()
+        case .chatLink(let id):
+            activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
+            let _ = deepLinkRouter.consumePendingDeepLink()
+        default:
+            break
         }
     }
 
