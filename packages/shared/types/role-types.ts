@@ -188,7 +188,7 @@ export function getEffectiveRoleLevel(
  */
 export function hasModeratorPrivileges(effectiveRole: string): boolean {
   const level = UNIFIED_ROLE_LEVELS[effectiveRole.toUpperCase()] || 0;
-  return level >= UNIFIED_ROLE_LEVELS.MODERATOR;
+  return level >= (UNIFIED_ROLE_LEVELS.MODERATOR ?? 60);
 }
 
 // ============================================================================
