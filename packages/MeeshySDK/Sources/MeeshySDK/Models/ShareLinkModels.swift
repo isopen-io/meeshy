@@ -94,15 +94,16 @@ public struct AnonymousJoinResponse: Decodable {
 public struct AnonymousParticipant: Decodable, Sendable {
     public let id: String
     public let username: String
+    public let displayName: String
     public let firstName: String
     public let lastName: String
+    public let avatar: String?
+    public let banner: String?
     public let language: String
     public let isMeeshyer: Bool
     public let canSendMessages: Bool
     public let canSendFiles: Bool
     public let canSendImages: Bool
-
-    public var displayName: String { username }
 }
 
 public struct JoinedConversation: Decodable {
