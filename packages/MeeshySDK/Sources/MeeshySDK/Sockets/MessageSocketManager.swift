@@ -306,6 +306,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    private var heartbeatTimer: Timer?
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -374,6 +375,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     public func disconnect() {
+        stopHeartbeat()
         joinedConversations.removeAll()
         activeConversationId = nil
         socket?.disconnect()
@@ -383,6 +385,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         connectionState = .disconnected
         reconnectAttempt = 0
         hadPreviousConnection = false
+    }
+
+    // MARK: - Heartbeat
+
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.socket?.emit("heartbeat")
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
 
     // MARK: - Room Management
@@ -458,6 +474,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 self.connectionState = .connected
             }
 
+            self.startHeartbeat()
+
             // Re-join all tracked conversations
             // Priority: active conversation first for fastest UX
             if let activeId = self.activeConversationId, self.joinedConversations.contains(activeId) {
@@ -477,6 +495,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             guard let self else { return }
+            self.stopHeartbeat()
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
