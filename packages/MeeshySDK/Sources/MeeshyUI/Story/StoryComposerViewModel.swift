@@ -295,6 +295,7 @@ final class StoryComposerViewModel {
         effects.textObjects = texts
         currentEffects = effects
         selectedElementId = obj.id
+        bringToFront(id: obj.id)
         activeTool = .text
         return obj
     }
@@ -319,6 +320,7 @@ final class StoryComposerViewModel {
         effects.mediaObjects = medias
         currentEffects = effects
         selectedElementId = obj.id
+        bringToFront(id: obj.id)
         return obj
     }
 
@@ -340,6 +342,7 @@ final class StoryComposerViewModel {
         effects.audioPlayerObjects = audios
         currentEffects = effects
         selectedElementId = obj.id
+        bringToFront(id: obj.id)
         return obj
     }
 

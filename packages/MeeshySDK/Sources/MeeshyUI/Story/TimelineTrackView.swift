@@ -60,6 +60,7 @@ struct TimelineTrack: Identifiable {
     var fadeOut: Float?
     var waveformSamples: [Float]?
     var videoURL: URL?
+    var image: UIImage?
     /// Intrinsic media duration (audio/video file length). Nil = no constraint.
     var mediaDuration: Float?
 }
@@ -74,6 +75,7 @@ struct TimelineTrackBar: View {
     var onSelect: () -> Void
     var onChanged: (TimelineTrack) -> Void
     var onDetailTap: () -> Void
+    var onEditTap: (() -> Void)?
 
     @Environment(\.theme) private var theme
     @State private var videoFrames: [UIImage] = []
@@ -120,6 +122,11 @@ struct TimelineTrackBar: View {
                     y: isSelected ? 2 : 0
                 )
                 .overlay(dragHandles(barWidth: barWidth))
+                .overlay(alignment: .topTrailing) {
+                    if isSelected, onEditTap != nil {
+                        editButton
+                    }
+                }
                 .offset(x: barStartX)
                 .gesture(centerDragGesture)
                 .onTapGesture { onSelect() }
@@ -146,7 +153,30 @@ struct TimelineTrackBar: View {
                 videoFrameStrip(barWidth: barWidth)
             }
 
-            if track.type == .fgImage || track.type == .bgImage || track.type == .drawing {
+            if track.type == .fgImage || track.type == .bgImage {
+                if let img = track.image {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: barWidth, height: trackHeight)
+                        .clipped()
+                        .opacity(0.6)
+                } else {
+                    HStack(spacing: 3) {
+                        Image(systemName: track.type.icon)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(theme.textMuted)
+                        Text(track.name)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(theme.textPrimary)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, handleWidth + 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            if track.type == .drawing {
                 HStack(spacing: 3) {
                     Image(systemName: track.type.icon)
                         .font(.system(size: 8, weight: .medium))
@@ -164,7 +194,7 @@ struct TimelineTrackBar: View {
                let samples = track.waveformSamples, !samples.isEmpty {
                 ZStack {
                     track.type.color.opacity(0.15)
-                    waveformView(samples: samples)
+                    AudioSpectrogramView(samples: samples, barColor: track.type.color)
                 }
             }
 
@@ -204,25 +234,24 @@ struct TimelineTrackBar: View {
         .opacity(0.7)
     }
 
-    // MARK: - Waveform View
+    // MARK: - Edit Button
 
-    private func waveformView(samples: [Float]) -> some View {
-        Canvas { context, size in
-            let count = samples.count
-            guard count > 0 else { return }
-            let stepW = size.width / CGFloat(count)
-            let midY = size.height / 2
-
-            var path = Path()
-            for (i, sample) in samples.enumerated() {
-                let x = CGFloat(i) * stepW + stepW / 2
-                let amp = CGFloat(sample) * midY * 0.8
-                path.move(to: CGPoint(x: x, y: midY - amp))
-                path.addLine(to: CGPoint(x: x, y: midY + amp))
-            }
-            context.stroke(path, with: .color(theme.textSecondary), lineWidth: 1.5)
+    private var editButton: some View {
+        Button {
+            onEditTap?()
+        } label: {
+            Image(systemName: "pencil.circle.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(MeeshyColors.brandPrimary)
+                .background(
+                    Circle()
+                        .fill(theme.backgroundPrimary)
+                        .frame(width: 18, height: 18)
+                )
         }
-        .allowsHitTesting(false)
+        .buttonStyle(.plain)
+        .padding(4)
+        .transition(.scale.combined(with: .opacity))
     }
 
     // MARK: - Fade Overlays

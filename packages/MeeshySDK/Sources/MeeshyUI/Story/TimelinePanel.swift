@@ -7,10 +7,12 @@ struct TimelinePanel: View {
     @State private var tracks: [TimelineTrack] = []
     @State private var engine = TimelinePlaybackEngine()
     @State private var detailTrackId: String?
-    private var zoomScale: CGFloat { viewModel.timelineZoomScale }
     @State private var mediaDurationCache: [String: Float] = [:]
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var showMediaEditor: String?
     @Environment(\.theme) private var theme
+
+    private var zoomScale: CGFloat { viewModel.timelineZoomScale }
 
     private let labelWidth: CGFloat = 72
     private let trackHeight: CGFloat = 44
@@ -39,7 +41,15 @@ struct TimelinePanel: View {
         VStack(spacing: 0) {
             transportBar
             Divider().overlay(MeeshyColors.indigo900.opacity(0.3))
-            timelineContent
+
+            if viewModel.timelineAdvanced {
+                advancedTimelineContent
+            } else {
+                SimpleTimelineView(
+                    viewModel: viewModel,
+                    onEditTap: { id in showMediaEditor = id }
+                )
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -54,26 +64,126 @@ struct TimelinePanel: View {
             buildTracks()
             configureEngine()
         }
-        .onChange(of: viewModel.currentSlideIndex) { buildTracks() }
-        .onChange(of: trackFingerprint) { buildTracks() }
+        .onChange(of: viewModel.currentSlideIndex) { buildTracks(); configureEngine() }
+        .onChange(of: trackFingerprint) { buildTracks(); configureEngine() }
         .onDisappear {
             engine.stop()
             viewModel.isTimelinePlaying = false
             viewModel.timelinePlaybackTime = 0
         }
+        .sheet(item: Binding(
+            get: { showMediaEditor.map { MediaEditorTarget(id: $0) } },
+            set: { showMediaEditor = $0?.id }
+        )) { target in
+            mediaEditorSheet(for: target.id)
+        }
     }
+
+    // MARK: - Engine Configuration
 
     private func configureEngine() {
         engine.configure(duration: slideDuration)
+        engine.configureMedia(buildMediaElements())
         engine.onTimeUpdate = { time in
             viewModel.timelinePlaybackTime = time
             scrollProxy?.scrollTo("playhead", anchor: .center)
         }
         engine.onPlaybackEnd = {
             viewModel.isTimelinePlaying = false
-            engine.seek(to: 0)
-            viewModel.timelinePlaybackTime = 0
         }
+    }
+
+    private func buildMediaElements() -> [TimelinePlaybackEngine.MediaElement] {
+        var elements: [TimelinePlaybackEngine.MediaElement] = []
+        let effects = viewModel.currentEffects
+
+        for media in effects.mediaObjects ?? [] {
+            let url: URL?
+            let mediaType: TimelinePlaybackEngine.MediaElement.MediaType
+            if media.mediaType == "video" {
+                url = viewModel.loadedVideoURLs[media.id]
+                mediaType = .video
+            } else {
+                url = nil
+                mediaType = .image
+            }
+            elements.append(TimelinePlaybackEngine.MediaElement(
+                id: media.id, type: mediaType, url: url,
+                startTime: media.startTime ?? 0,
+                duration: media.duration ?? slideDuration,
+                volume: media.volume
+            ))
+        }
+
+        for audio in effects.audioPlayerObjects ?? [] {
+            elements.append(TimelinePlaybackEngine.MediaElement(
+                id: audio.id, type: .audio,
+                url: viewModel.loadedAudioURLs[audio.id],
+                startTime: audio.startTime ?? 0,
+                duration: audio.duration ?? slideDuration,
+                volume: audio.volume
+            ))
+        }
+
+        return elements
+    }
+
+    // MARK: - Media Editor Sheet
+
+    private struct MediaEditorTarget: Identifiable {
+        let id: String
+    }
+
+    @ViewBuilder
+    private func mediaEditorSheet(for elementId: String) -> some View {
+        let effects = viewModel.currentEffects
+
+        if let media = effects.mediaObjects?.first(where: { $0.id == elementId }) {
+            if media.mediaType == "image", let img = viewModel.loadedImages[elementId] {
+                MeeshyImageEditorView(
+                    image: img,
+                    initialCropRatio: nil,
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    onAccept: { edited in
+                        viewModel.loadedImages[elementId] = edited
+                        showMediaEditor = nil
+                    },
+                    onCancel: { showMediaEditor = nil }
+                )
+            } else if media.mediaType == "video", let url = viewModel.loadedVideoURLs[elementId] {
+                MeeshyVideoPreviewView(
+                    url: url,
+                    context: .story,
+                    onAccept: { showMediaEditor = nil },
+                    onCancel: { showMediaEditor = nil }
+                )
+            } else {
+                emptyEditorPlaceholder
+            }
+        } else if effects.audioPlayerObjects?.contains(where: { $0.id == elementId }) == true,
+                  let url = viewModel.loadedAudioURLs[elementId] {
+            MeeshyAudioEditorView(
+                url: url,
+                onConfirm: { _, _, _, _ in showMediaEditor = nil },
+                onDismiss: { showMediaEditor = nil },
+                onCancel: { showMediaEditor = nil }
+            )
+        } else {
+            emptyEditorPlaceholder
+        }
+    }
+
+    private var emptyEditorPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 24))
+                .foregroundStyle(theme.textMuted)
+            Text("Media non disponible")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.backgroundPrimary)
     }
 
     // MARK: - Transport Bar
@@ -92,6 +202,7 @@ struct TimelinePanel: View {
 
             Button {
                 engine.configure(duration: slideDuration)
+                engine.configureMedia(buildMediaElements())
                 engine.toggle()
                 viewModel.isTimelinePlaying = engine.isPlaying
             } label: {
@@ -104,13 +215,13 @@ struct TimelinePanel: View {
             }
 
             HStack(spacing: 2) {
-                Text(formatTime(viewModel.timelinePlaybackTime))
+                Text(formatTimePrecise(viewModel.timelinePlaybackTime))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(theme.textPrimary)
                 Text("/")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(theme.textMuted)
-                Text(formatTime(slideDuration))
+                Text(formatTimePrecise(slideDuration))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(theme.textSecondary)
             }
@@ -118,7 +229,7 @@ struct TimelinePanel: View {
             Spacer()
 
             if zoomScale != 1.0 {
-                Text("\(Int(zoomScale * 100))%")
+                Text(zoomLabel)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(MeeshyColors.indigo400)
                     .padding(.horizontal, 6)
@@ -145,9 +256,9 @@ struct TimelinePanel: View {
         .background(.ultraThinMaterial.opacity(0.5))
     }
 
-    // MARK: - Timeline Content (single HScroll)
+    // MARK: - Advanced Timeline Content
 
-    private var timelineContent: some View {
+    private var advancedTimelineContent: some View {
         let grouped = groupedTracks
 
         return ScrollView(.vertical, showsIndicators: false) {
@@ -184,8 +295,11 @@ struct TimelinePanel: View {
         .gesture(
             MagnificationGesture()
                 .onChanged { value in
-                    viewModel.timelineZoomScale = max(0.5, min(4.0, value))
+                    let logValue = log2(value)
+                    let newScale = pow(2, logValue) * zoomScale
+                    viewModel.timelineZoomScale = max(0.01, min(100.0, newScale))
                 }
+                .onEnded { _ in }
         )
     }
 
@@ -228,7 +342,7 @@ struct TimelinePanel: View {
         return h
     }
 
-    // MARK: - Label Column (fixed, outside scroll)
+    // MARK: - Label Column
 
     private func labelColumn(grouped: [TrackGroup]) -> some View {
         VStack(spacing: 0) {
@@ -263,26 +377,46 @@ struct TimelinePanel: View {
         .padding(.leading, 6)
     }
 
-    // MARK: - Ruler Row
+    // MARK: - Ruler Row (Adaptive)
 
     private var rulerRow: some View {
         ZStack(alignment: .leading) {
-            timeTickMarks
+            adaptiveTickMarks
         }
         .frame(width: totalTimelineWidth, height: rulerHeight)
     }
 
-    private var timeTickMarks: some View {
+    private var rulerConfig: (minor: Float, major: Float, format: (Float) -> String) {
+        let pps = pixelsPerSecond
+        if pps > 1000 {
+            return (0.01, 0.1, formatMs)
+        } else if pps > 200 {
+            return (0.1, 0.5, formatMs)
+        } else if pps > 50 {
+            return (0.5, 2, formatSecondsShort)
+        } else if pps > 10 {
+            return (1, 5, formatSecondsShort)
+        } else if pps > 2 {
+            return (5, 15, formatMinSec)
+        } else {
+            return (10, 30, formatMinSec)
+        }
+    }
+
+    private var adaptiveTickMarks: some View {
         let tickColor = theme.textSecondary
+        let config = rulerConfig
+
         return Canvas { context, size in
-            let totalSec = max(1, slideDuration)
+            let totalSec = max(0.01, slideDuration)
             let pps = pixelsPerSecond
-            let tickInterval: Float = zoomScale > 2 ? 0.5 : (zoomScale > 1 ? 1 : 2)
             var t: Float = 0
+
             while t <= totalSec {
                 let x = CGFloat(t) * pps
-                let isMajor = t.truncatingRemainder(dividingBy: max(1, tickInterval * 2)) < 0.01
+                let isMajor = config.minor > 0 && t.truncatingRemainder(dividingBy: config.major) < config.minor * 0.1
                 let h: CGFloat = isMajor ? 12 : 6
+
                 context.stroke(
                     Path { p in
                         p.move(to: CGPoint(x: x, y: size.height - h))
@@ -291,21 +425,22 @@ struct TimelinePanel: View {
                     with: .color(tickColor.opacity(isMajor ? 0.7 : 0.3)),
                     lineWidth: 1
                 )
+
                 if isMajor {
                     context.draw(
-                        Text(formatTimeShort(t))
+                        Text(config.format(t))
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundStyle(tickColor.opacity(0.7)),
                         at: CGPoint(x: x, y: 6)
                     )
                 }
-                t += tickInterval
+                t += config.minor
             }
         }
         .allowsHitTesting(false)
     }
 
-    // MARK: - Track Rows (inside scroll)
+    // MARK: - Track Rows
 
     private func trackRows(grouped: [TrackGroup]) -> some View {
         VStack(spacing: 0) {
@@ -348,7 +483,8 @@ struct TimelinePanel: View {
                 )
                 syncTrackToModel(updated)
             },
-            onDetailTap: { detailTrackId = t.id }
+            onDetailTap: { detailTrackId = t.id },
+            onEditTap: isEditableTrack(t) ? { showMediaEditor = t.id } : nil
         )
         .frame(width: totalTimelineWidth, height: trackHeight)
         .popover(isPresented: Binding(
@@ -368,20 +504,29 @@ struct TimelinePanel: View {
         }
     }
 
-    // MARK: - Grid Lines (Canvas behind tracks)
+    private func isEditableTrack(_ track: TimelineTrack) -> Bool {
+        switch track.type {
+        case .fgImage, .bgImage, .fgVideo, .bgVideo, .fgAudio, .bgAudio: return true
+        case .text, .drawing: return false
+        }
+    }
+
+    // MARK: - Grid Lines
 
     private func gridLines(grouped: [TrackGroup]) -> some View {
         let areaHeight = totalTrackAreaHeight(grouped: grouped)
         let gridColor = theme.textMuted
+        let config = rulerConfig
 
         return Canvas { context, size in
-            let totalSec = max(1, slideDuration)
+            let totalSec = max(0.01, slideDuration)
             let pps = pixelsPerSecond
-            let tickInterval: Float = zoomScale > 2 ? 0.5 : (zoomScale > 1 ? 1 : 2)
             var t: Float = 0
+
             while t <= totalSec {
                 let x = CGFloat(t) * pps
-                let isMajor = t.truncatingRemainder(dividingBy: max(1, tickInterval * 2)) < 0.01
+                let isMajor = config.minor > 0 && t.truncatingRemainder(dividingBy: config.major) < config.minor * 0.1
+
                 context.stroke(
                     Path { p in
                         p.move(to: CGPoint(x: x, y: 0))
@@ -390,14 +535,14 @@ struct TimelinePanel: View {
                     with: .color(gridColor.opacity(isMajor ? 0.15 : 0.07)),
                     lineWidth: 0.5
                 )
-                t += tickInterval
+                t += config.minor
             }
         }
         .frame(width: totalTimelineWidth, height: rulerHeight + areaHeight)
         .allowsHitTesting(false)
     }
 
-    // MARK: - Playhead (spans ruler + all tracks)
+    // MARK: - Playhead
 
     private func playheadOverlay(grouped: [TrackGroup]) -> some View {
         let x = CGFloat(viewModel.timelinePlaybackTime) * pixelsPerSecond
@@ -485,7 +630,6 @@ struct TimelinePanel: View {
         var result: [TimelineTrack] = []
         let effects = viewModel.currentEffects
 
-        // FOND: Main background image (selectedImage — not a media object)
         if viewModel.hasBackgroundImage {
             result.append(TimelineTrack(
                 id: "bg-image-main", name: "Image Fond", type: .bgImage,
@@ -495,7 +639,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FOND: Background video
         if let bgVid = effects.mediaObjects?.first(where: {
             $0.placement == "background" && $0.mediaType == "video"
         }) {
@@ -510,7 +653,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FOND: Background images (media objects)
         for bgImg in effects.mediaObjects?.filter({
             $0.placement == "background" && $0.mediaType == "image"
         }) ?? [] {
@@ -518,11 +660,11 @@ struct TimelinePanel: View {
                 id: bgImg.id, name: "Image BG", type: .bgImage,
                 startTime: bgImg.startTime ?? 0, duration: bgImg.duration,
                 volume: nil, loop: false,
-                fadeIn: bgImg.fadeIn, fadeOut: bgImg.fadeOut
+                fadeIn: bgImg.fadeIn, fadeOut: bgImg.fadeOut,
+                image: viewModel.loadedImages[bgImg.id]
             ))
         }
 
-        // FOND: Drawing layer
         if viewModel.drawingData != nil {
             result.append(TimelineTrack(
                 id: "drawing", name: "Dessin", type: .drawing,
@@ -532,7 +674,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FOND: Background audio (library)
         if effects.backgroundAudioId != nil {
             result.append(TimelineTrack(
                 id: "bg-audio", name: "Audio BG", type: .bgAudio,
@@ -543,7 +684,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FOND: Background audio (custom recordings)
         for bgAudio in effects.audioPlayerObjects?.filter({ $0.placement == "background" }) ?? [] {
             let bgAudURL = viewModel.loadedAudioURLs[bgAudio.id]
             result.append(TimelineTrack(
@@ -556,7 +696,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // CONTENU: Foreground images
         for img in effects.mediaObjects?.filter({
             $0.placement == "foreground" && $0.mediaType == "image"
         }) ?? [] {
@@ -564,11 +703,11 @@ struct TimelinePanel: View {
                 id: img.id, name: "Image", type: .fgImage,
                 startTime: img.startTime ?? 0, duration: img.duration,
                 volume: nil, loop: false,
-                fadeIn: img.fadeIn, fadeOut: img.fadeOut
+                fadeIn: img.fadeIn, fadeOut: img.fadeOut,
+                image: viewModel.loadedImages[img.id]
             ))
         }
 
-        // FRONT: Foreground videos
         for vid in effects.mediaObjects?.filter({
             $0.placement == "foreground" && $0.mediaType == "video"
         }) ?? [] {
@@ -583,7 +722,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // FRONT: Foreground audio
         for aud in effects.audioPlayerObjects?.filter({ $0.placement == "foreground" }) ?? [] {
             let audURL = viewModel.loadedAudioURLs[aud.id]
             result.append(TimelineTrack(
@@ -596,7 +734,6 @@ struct TimelinePanel: View {
             ))
         }
 
-        // TEXTE
         for text in effects.textObjects ?? [] {
             let label = String(text.content.prefix(10)) + (text.content.count > 10 ? "..." : "")
             result.append(TimelineTrack(
@@ -658,21 +795,51 @@ struct TimelinePanel: View {
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Zoom Label
 
-    private func formatTime(_ sec: Float) -> String {
-        let m = Int(sec) / 60
-        let s = Int(sec) % 60
-        let ms = Int((sec - Float(Int(sec))) * 10)
-        return String(format: "%d:%02d.%d", m, s, ms)
+    private var zoomLabel: String {
+        if zoomScale >= 10 {
+            return "\(Int(zoomScale * 100))%"
+        } else if zoomScale >= 1 {
+            return String(format: "%.0f%%", zoomScale * 100)
+        } else if zoomScale >= 0.1 {
+            return String(format: "%.0f%%", zoomScale * 100)
+        } else {
+            return String(format: "%.1f%%", zoomScale * 100)
+        }
     }
 
-    private func formatTimeShort(_ sec: Float) -> String {
-        if sec < 60 { return String(format: "%.0fs", sec) }
+    // MARK: - Time Formatting
+
+    private func formatTimePrecise(_ sec: Float) -> String {
+        let m = Int(sec) / 60
+        let s = Int(sec) % 60
+        let ms = Int((sec - Float(Int(sec))) * 1000)
+        return String(format: "%d:%02d.%03d", m, s, ms)
+    }
+
+    private func formatMs(_ sec: Float) -> String {
+        let ms = Int(sec * 1000)
+        if ms < 1000 {
+            return "\(ms)ms"
+        }
+        return String(format: "%.1fs", sec)
+    }
+
+    private func formatSecondsShort(_ sec: Float) -> String {
+        if sec < 60 { return String(format: "%.1fs", sec) }
         return String(format: "%d:%02d", Int(sec) / 60, Int(sec) % 60)
     }
 
-    /// Returns cached intrinsic duration; starts async load if not yet cached.
+    private func formatMinSec(_ sec: Float) -> String {
+        let m = Int(sec) / 60
+        let s = Int(sec) % 60
+        if m > 0 { return "\(m):\(String(format: "%02d", s))" }
+        return "\(s)s"
+    }
+
+    // MARK: - Helpers
+
     private func intrinsicDuration(url: URL?) -> Float? {
         guard let url else { return nil }
         let key = url.lastPathComponent

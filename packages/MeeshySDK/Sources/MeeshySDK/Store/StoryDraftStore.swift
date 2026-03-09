@@ -1,5 +1,8 @@
 import Foundation
 import GRDB
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Story Draft Store (GRDB / SQLite)
 
@@ -10,15 +13,27 @@ public final class StoryDraftStore: @unchecked Sendable {
     public static let shared = StoryDraftStore()
 
     private let db: DatabaseQueue
+    private let mediaDir: URL
 
     private init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let path = dir.appendingPathComponent("meeshy_story_draft.db").path
+        mediaDir = dir.appendingPathComponent("meeshy_draft_media")
         do {
             db = try DatabaseQueue(path: path)
             try createSchema()
         } catch {
             fatalError("[StoryDraftStore] Impossible d'ouvrir la base SQLite: \(error)")
+        }
+    }
+
+    init(dbPath: String, mediaDirectory: URL) {
+        mediaDir = mediaDirectory
+        do {
+            db = try DatabaseQueue(path: dbPath)
+            try createSchema()
+        } catch {
+            fatalError("[StoryDraftStore] Impossible d'ouvrir la base SQLite test: \(error)")
         }
     }
 
@@ -37,7 +52,22 @@ public final class StoryDraftStore: @unchecked Sendable {
                 t.column("key", .text).primaryKey()
                 t.column("value", .text).notNull()
             }
+            try db.create(table: "story_draft_media", ifNotExists: true) { t in
+                t.column("element_id", .text).primaryKey()
+                t.column("media_type", .text).notNull()
+                t.column("file_name", .text).notNull()
+            }
         }
+    }
+
+    // MARK: - Media Directory
+
+    private func ensureMediaDir() {
+        try? FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+    }
+
+    private func clearMediaDir() {
+        try? FileManager.default.removeItem(at: mediaDir)
     }
 
     // MARK: - Upsert
@@ -74,6 +104,112 @@ public final class StoryDraftStore: @unchecked Sendable {
             print("[StoryDraftStore] Erreur save: \(error)")
         }
     }
+
+    // MARK: - Save Media
+
+    #if canImport(UIKit)
+    public func saveMedia(
+        images: [String: UIImage],
+        videoURLs: [String: URL],
+        audioURLs: [String: URL]
+    ) {
+        ensureMediaDir()
+        let fm = FileManager.default
+
+        do {
+            try db.write { db in
+                try db.execute(sql: "DELETE FROM story_draft_media")
+            }
+        } catch {
+            print("[StoryDraftStore] Erreur clearing media table: \(error)")
+            return
+        }
+
+        var entries: [(String, String, String)] = []
+
+        for (id, image) in images {
+            let fileName = "\(id).jpg"
+            let dest = mediaDir.appendingPathComponent(fileName)
+            if let data = image.jpegData(compressionQuality: 0.85) {
+                try? data.write(to: dest)
+                entries.append((id, "image", fileName))
+            }
+        }
+
+        for (id, url) in videoURLs {
+            let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
+            let fileName = "\(id).\(ext)"
+            let dest = mediaDir.appendingPathComponent(fileName)
+            try? fm.removeItem(at: dest)
+            try? fm.copyItem(at: url, to: dest)
+            entries.append((id, "video", fileName))
+        }
+
+        for (id, url) in audioURLs {
+            let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+            let fileName = "\(id).\(ext)"
+            let dest = mediaDir.appendingPathComponent(fileName)
+            try? fm.removeItem(at: dest)
+            try? fm.copyItem(at: url, to: dest)
+            entries.append((id, "audio", fileName))
+        }
+
+        do {
+            try db.write { db in
+                for (elementId, mediaType, fileName) in entries {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_media (element_id, media_type, file_name) VALUES (?, ?, ?)",
+                        arguments: [elementId, mediaType, fileName]
+                    )
+                }
+            }
+        } catch {
+            print("[StoryDraftStore] Erreur saveMedia: \(error)")
+        }
+    }
+    #endif
+
+    // MARK: - Load Media
+
+    #if canImport(UIKit)
+    public func loadMedia() -> (images: [String: UIImage], videoURLs: [String: URL], audioURLs: [String: URL]) {
+        var images: [String: UIImage] = [:]
+        var videoURLs: [String: URL] = [:]
+        var audioURLs: [String: URL] = [:]
+
+        do {
+            let rows = try db.read { db in
+                try Row.fetchAll(db, sql: "SELECT * FROM story_draft_media")
+            }
+            for row in rows {
+                let elementId: String = row["element_id"]
+                let mediaType: String = row["media_type"]
+                let fileName: String = row["file_name"]
+                let fileURL = mediaDir.appendingPathComponent(fileName)
+
+                guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+
+                switch mediaType {
+                case "image":
+                    if let data = try? Data(contentsOf: fileURL),
+                       let image = UIImage(data: data) {
+                        images[elementId] = image
+                    }
+                case "video":
+                    videoURLs[elementId] = fileURL
+                case "audio":
+                    audioURLs[elementId] = fileURL
+                default:
+                    break
+                }
+            }
+        } catch {
+            print("[StoryDraftStore] Erreur loadMedia: \(error)")
+        }
+
+        return (images, videoURLs, audioURLs)
+    }
+    #endif
 
     // MARK: - Load
 
@@ -112,10 +248,12 @@ public final class StoryDraftStore: @unchecked Sendable {
     // MARK: - Clear
 
     public func clear() {
+        clearMediaDir()
         do {
             try db.write { db in
                 try db.execute(sql: "DELETE FROM story_draft_slide")
                 try db.execute(sql: "DELETE FROM story_draft_meta")
+                try db.execute(sql: "DELETE FROM story_draft_media")
             }
         } catch {
             print("[StoryDraftStore] Erreur clear: \(error)")

@@ -147,7 +147,7 @@ final class UserModelsTests: XCTestCase {
         XCTAssertEqual(conversation.identifier, "conv-abc")
         XCTAssertNil(conversation.title)
         XCTAssertEqual(conversation.memberCount, 2)
-        XCTAssertEqual(conversation.members?.count, 2)
+        XCTAssertEqual(conversation.participants?.count, 2)
         XCTAssertEqual(conversation.unreadCount, 3)
         XCTAssertNotNil(conversation.lastMessage)
         XCTAssertEqual(conversation.lastMessage?.content, "Hey!")
@@ -201,7 +201,7 @@ final class UserModelsTests: XCTestCase {
             "title": "Team Chat",
             "memberCount": 5,
             "unreadCount": 0,
-            "members": [],
+            "participants": [],
             "createdAt": "2026-01-15T10:30:00.000Z"
         }
         """.data(using: .utf8)!
@@ -229,15 +229,21 @@ final class UserModelsTests: XCTestCase {
             "isActive": true,
             "memberCount": 2,
             "lastMessageAt": "2026-01-15T10:30:00.000Z",
-            "members": [
+            "participants": [
                 {
-                    "userId": "me",
-                    "role": "member",
+                    "id": "p1", "conversationId": "conv1", "type": "user",
+                    "userId": "me", "displayName": "Me", "role": "member",
+                    "language": "en", "isActive": true,
+                    "permissions": {"canSendMessages":true,"canSendFiles":true,"canSendImages":true,"canSendVideos":true,"canSendAudios":true,"canSendLocations":true,"canSendLinks":true},
+                    "joinedAt": "2026-01-15T10:30:00.000Z",
                     "user": {"id":"me","username":"myuser","displayName":"Me"}
                 },
                 {
-                    "userId": "other",
-                    "role": "member",
+                    "id": "p2", "conversationId": "conv1", "type": "user",
+                    "userId": "other", "displayName": "Bob", "role": "member",
+                    "language": "en", "isActive": true,
+                    "permissions": {"canSendMessages":true,"canSendFiles":true,"canSendImages":true,"canSendVideos":true,"canSendAudios":true,"canSendLocations":true,"canSendLinks":true},
+                    "joinedAt": "2026-01-15T10:30:00.000Z",
                     "user": {"id":"other","username":"bob","displayName":"Bob"}
                 }
             ],
