@@ -180,7 +180,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           conversationId,
           userId: userId,
           isActive: true
-        }
+        },
+        select: { id: true }
       });
 
       if (!membership) {
@@ -190,8 +191,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         });
       }
 
-      // Marquer comme lu
-      await readStatusService.markMessagesAsRead(userId, conversationId);
+      // Marquer comme lu (participantId, pas userId)
+      await readStatusService.markMessagesAsRead(membership.id, conversationId);
 
       // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
@@ -202,15 +203,17 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
         try {
+          const summary = await readStatusService.getLatestMessageSummary(conversationId);
           const socketIOHandler = fastify.socketIOHandler;
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
             const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
-              userId,
+              participantId: membership.id,
               type: 'read',
-              updatedAt: new Date()
+              updatedAt: new Date(),
+              summary
             });
           }
         } catch (socketError) {
@@ -254,7 +257,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           conversationId,
           userId: userId,
           isActive: true
-        }
+        },
+        select: { id: true }
       });
 
       if (!membership) {
@@ -264,8 +268,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         });
       }
 
-      // Marquer comme reçu
-      await readStatusService.markMessagesAsReceived(userId, conversationId);
+      // Marquer comme reçu (participantId, pas userId)
+      await readStatusService.markMessagesAsReceived(membership.id, conversationId);
 
       // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
       // Note: Les "received" (delivery receipts) suivent aussi la préférence showReadReceipts
@@ -277,15 +281,17 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
         try {
+          const summary = await readStatusService.getLatestMessageSummary(conversationId);
           const socketIOHandler = fastify.socketIOHandler;
           const socketIOManager = socketIOHandler.getManager();
           if (socketIOManager) {
             const room = ROOMS.conversation(conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
-              userId,
+              participantId: membership.id,
               type: 'received',
-              updatedAt: new Date()
+              updatedAt: new Date(),
+              summary
             });
           }
         } catch (socketError) {
