@@ -352,14 +352,16 @@ class MeeshySocketIOService {
       const replyToSender = replyToMsg.sender;
 
       // Construire le sender pour replyTo
+      // replyToSender can be flat (Socket.IO) or Participant with nested .user (REST)
       let replyToFinalSender;
+      const replyNestedUser = replyToSender?.user as Record<string, unknown> | undefined;
       if (replyToSender) {
         replyToFinalSender = {
           id: String(replyToSender.id || 'unknown'),
-          username: String((replyToSender as any).username || 'Unknown'),
-          displayName: String(replyToSender.displayName || (replyToSender as any).username || 'Unknown'),
-          firstName: String((replyToSender as any).firstName || ''),
-          lastName: String((replyToSender as any).lastName || ''),
+          username: String((replyToSender as any).username || replyNestedUser?.username || ''),
+          displayName: String(replyToSender.displayName || replyToSender.nickname || replyNestedUser?.displayName || (replyToSender as any).username || replyNestedUser?.username || ''),
+          firstName: String((replyToSender as any).firstName || replyNestedUser?.firstName || ''),
+          lastName: String((replyToSender as any).lastName || replyNestedUser?.lastName || ''),
           email: String((replyToSender as any).email || ''),
           phoneNumber: '',
           role: 'USER' as const,
@@ -379,8 +381,8 @@ class MeeshySocketIOService {
       } else {
         replyToFinalSender = {
           id: String(replyToMsg.senderId || 'unknown'),
-          username: 'Unknown',
-          displayName: 'Utilisateur Inconnu',
+          username: '',
+          displayName: '',
           firstName: '',
           lastName: '',
           email: '',
@@ -420,10 +422,10 @@ class MeeshySocketIOService {
     // Définir le sender par défaut
     const defaultSender = {
       id: socketMessage.senderId || 'unknown',
-      username: 'Utilisateur inconnu',
+      username: '',
       firstName: '',
       lastName: '',
-      displayName: 'Utilisateur inconnu',
+      displayName: '',
       email: '',
       phoneNumber: '',
       role: 'USER' as const,

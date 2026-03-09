@@ -139,7 +139,7 @@ export class TransformersService {
   private createDefaultUser(id: string): User {
     return {
       id,
-      username: 'Unknown User',
+      username: '',
       firstName: '',
       lastName: '',
       displayName: 'Utilisateur Inconnu',
@@ -168,52 +168,42 @@ export class TransformersService {
    */
   private transformSender(sender: any, _unused: any, defaultId: string): User {
     if (sender) {
-      const {
-        id = defaultId,
-        username = 'Unknown',
-        firstName = '',
-        lastName = '',
-        displayName = username || 'Unknown',
-        email = 'unknown@example.com',
-        phoneNumber = '',
-        role = 'USER',
-        systemLanguage = 'fr',
-        regionalLanguage = 'fr',
-        autoTranslateEnabled = false,
-        translateToSystemLanguage = false,
-        translateToRegionalLanguage = false,
-        useCustomDestination = false,
-        isOnline = false,
-        avatar,
-        createdAt = Date.now(),
-        lastActiveAt = Date.now(),
-        isActive = true,
-        updatedAt = Date.now(),
-      } = sender;
+      // sender can be a flat User object (Socket.IO) or a Participant with nested .user (REST API)
+      const nestedUser = sender.user as Record<string, unknown> | undefined;
+
+      const id = sender.id || defaultId;
+      const username = sender.username || nestedUser?.username;
+      const firstName = sender.firstName || nestedUser?.firstName || '';
+      const lastName = sender.lastName || nestedUser?.lastName || '';
+      const displayName = sender.nickname || sender.displayName || nestedUser?.displayName || username || '';
+      const avatar = sender.avatar || nestedUser?.avatar;
+      const role = sender.role || nestedUser?.role || 'USER';
+      const systemLanguage = sender.systemLanguage || nestedUser?.systemLanguage || 'fr';
+      const regionalLanguage = sender.regionalLanguage || nestedUser?.regionalLanguage || 'fr';
 
       return {
         id: String(id),
-        username: String(username),
+        username: username ? String(username) : '',
         firstName: String(firstName),
         lastName: String(lastName),
         displayName: String(displayName),
-        email: String(email),
-        phoneNumber: String(phoneNumber),
+        email: String(sender.email || ''),
+        phoneNumber: String(sender.phoneNumber || ''),
         role: String(role),
         permissions: this.DEFAULT_PERMISSIONS,
         systemLanguage: String(systemLanguage),
         regionalLanguage: String(regionalLanguage),
         customDestinationLanguage: undefined,
-        autoTranslateEnabled: Boolean(autoTranslateEnabled),
-        translateToSystemLanguage: Boolean(translateToSystemLanguage),
-        translateToRegionalLanguage: Boolean(translateToRegionalLanguage),
-        useCustomDestination: Boolean(useCustomDestination),
-        isOnline: Boolean(isOnline),
+        autoTranslateEnabled: Boolean(sender.autoTranslateEnabled),
+        translateToSystemLanguage: Boolean(sender.translateToSystemLanguage),
+        translateToRegionalLanguage: Boolean(sender.translateToRegionalLanguage),
+        useCustomDestination: Boolean(sender.useCustomDestination),
+        isOnline: Boolean(sender.isOnline),
         avatar: avatar as string | undefined,
-        createdAt: new Date(createdAt),
-        lastActiveAt: new Date(lastActiveAt),
-        isActive: Boolean(isActive),
-        updatedAt: new Date(updatedAt),
+        createdAt: new Date(sender.createdAt || Date.now()),
+        lastActiveAt: new Date(sender.lastActiveAt || Date.now()),
+        isActive: Boolean(sender.isActive ?? true),
+        updatedAt: new Date(sender.updatedAt || Date.now()),
       };
     }
 
