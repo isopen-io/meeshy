@@ -145,7 +145,7 @@ export function ConversationSettingsModal({
     id: '',
     username: '',
     email: '',
-    role: 'MEMBER' as any,
+    role: 'MEMBER',
     systemLanguage: 'en'
   };
 

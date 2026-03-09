@@ -184,7 +184,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     // Rôle effectif : max(rôle global, rôle conversation)
     const currentParticipant = participants.find(p => p.userId === currentUser.id);
     const conversationRole = currentParticipant?.role || '';
-    const globalRole = (currentUser.role as string) || 'USER';
+    const globalRole = currentUser.role || 'USER';
     const PRIVILEGE_LEVELS: Record<string, number> = {
       BIGBOSS: 100, ADMIN: 80, CREATOR: 70, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10, MEMBER: 10,
     };

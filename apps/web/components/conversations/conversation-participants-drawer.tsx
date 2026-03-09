@@ -482,7 +482,7 @@ export function ConversationParticipantsDrawer({
           {/* Actions admin */}
           {isAdmin && !isCurrentUser && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              {(participant.role as string) !== MemberRole.CREATOR && getUpgradeRole(participant.role) && (
+              {participant.role !== MemberRole.CREATOR && getUpgradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"
@@ -502,7 +502,7 @@ export function ConversationParticipantsDrawer({
                   </Button>
                 </motion.div>
               )}
-              {(participant.role as string) !== MemberRole.CREATOR && getDowngradeRole(participant.role) && (
+              {participant.role !== MemberRole.CREATOR && getDowngradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"

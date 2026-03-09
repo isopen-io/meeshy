@@ -99,7 +99,7 @@ Le composant `ConversationHeader` expose exactement la même API que l'original 
 interface ConversationHeaderProps {
   conversation: Conversation;
   currentUser: User;
-  conversationParticipants: ThreadMember[];
+  conversationParticipants: Participant[];
   typingUsers: Array<...>;
   isMobile: boolean;
   onBackToList: () => void;

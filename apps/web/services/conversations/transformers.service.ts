@@ -199,7 +199,7 @@ export class TransformersService {
         displayName: String(displayName),
         email: String(email),
         phoneNumber: String(phoneNumber),
-        role: role as any,
+        role: String(role),
         permissions: this.DEFAULT_PERMISSIONS,
         systemLanguage: String(systemLanguage),
         regionalLanguage: String(regionalLanguage),
