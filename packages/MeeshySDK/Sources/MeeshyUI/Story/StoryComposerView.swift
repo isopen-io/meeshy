@@ -75,6 +75,12 @@ public struct StoryComposerView: View {
     @State private var fgPhotoItem: PhotosPickerItem?
     @State private var fgVideoItem: PhotosPickerItem?
 
+    // MARK: - Media editor (image/video edit before adding)
+
+    @State private var pendingBgImage: UIImage?
+    @State private var pendingFgImage: UIImage?
+    @State private var pendingFgVideoURL: URL?
+
     // MARK: - Audio pickers
 
     @State private var showAudioDocumentPicker = false
@@ -297,6 +303,56 @@ public struct StoryComposerView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .fullScreenCover(item: Binding(
+            get: { pendingBgImage.map { PendingImageWrapper(image: $0) } },
+            set: { if $0 == nil { pendingBgImage = nil } }
+        )) { wrapper in
+            MeeshyImageEditorView(
+                image: wrapper.image,
+                initialCropRatio: .ratio9x16,
+                onAccept: { edited in
+                    selectedImage = edited
+                    viewModel.hasBackgroundImage = true
+                    viewModel.setImage(edited, for: viewModel.currentSlide.id)
+                    pendingBgImage = nil
+                },
+                onCancel: { pendingBgImage = nil }
+            )
+        }
+        .fullScreenCover(item: Binding(
+            get: { pendingFgImage.map { PendingImageWrapper(image: $0) } },
+            set: { if $0 == nil { pendingFgImage = nil } }
+        )) { wrapper in
+            MeeshyImagePreviewView(
+                image: wrapper.image,
+                context: .story,
+                onAccept: { edited in
+                    if let obj = viewModel.addMediaObject(type: "image") {
+                        viewModel.loadedImages[obj.id] = edited
+                    }
+                    pendingFgImage = nil
+                },
+                onCancel: { pendingFgImage = nil }
+            )
+        }
+        .fullScreenCover(item: Binding(
+            get: { pendingFgVideoURL.map { PendingVideoWrapper(url: $0) } },
+            set: { if $0 == nil { pendingFgVideoURL = nil } }
+        )) { wrapper in
+            MeeshyVideoPreviewView(
+                url: wrapper.url,
+                context: .story,
+                onAccept: {
+                    let thumbnail = Self.generateVideoThumbnail(url: wrapper.url)
+                    if let obj = viewModel.addMediaObject(type: "video") {
+                        viewModel.loadedVideoURLs[obj.id] = wrapper.url
+                        if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                    }
+                    pendingFgVideoURL = nil
+                },
+                onCancel: { pendingFgVideoURL = nil }
+            )
         }
         .alert("Erreur de publication", isPresented: $showPublishError) {
             Button("Reessayer") { resumePublish(.retry) }
@@ -1008,37 +1064,30 @@ public struct StoryComposerView: View {
             defer { isLoadingMedia = false }
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else { return }
-            selectedImage = image
-            viewModel.hasBackgroundImage = true
-            viewModel.setImage(image, for: viewModel.currentSlide.id)
+            await MainActor.run {
+                pendingBgImage = image
+                bgPhotoItem = nil
+            }
         }
     }
 
     private func addForegroundMedia(from item: PhotosPickerItem?, type: String) {
         guard let item else { return }
+        isLoadingMedia = true
         Task {
-            let objectId = UUID().uuidString
+            defer { Task { @MainActor in isLoadingMedia = false } }
             if type == "video" {
                 guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                let objectId = UUID().uuidString
                 let ext = item.supportedContentTypes
                     .first { $0.conforms(to: .audiovisualContent) }?
                     .preferredFilenameExtension ?? "mp4"
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(objectId + "." + ext)
                 do {
                     try data.write(to: tempURL)
-                    let thumbnail = Self.generateVideoThumbnail(url: tempURL)
                     await MainActor.run {
-                        viewModel.loadedVideoURLs[objectId] = tempURL
-                        if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-                        if let obj = viewModel.addMediaObject(type: "video") {
-                            viewModel.loadedVideoURLs[obj.id] = tempURL
-                            if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
-                            // Remap if id differs from objectId
-                            if obj.id != objectId {
-                                viewModel.loadedVideoURLs.removeValue(forKey: objectId)
-                                viewModel.loadedImages.removeValue(forKey: objectId)
-                            }
-                        }
+                        pendingFgVideoURL = tempURL
+                        fgVideoItem = nil
                     }
                 } catch {
                     print("[StoryComposer] Video write error: \(error)")
@@ -1047,14 +1096,9 @@ public struct StoryComposerView: View {
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let image = UIImage(data: data) else { return }
                 await MainActor.run {
-                    if let obj = viewModel.addMediaObject(type: "image") {
-                        viewModel.loadedImages[obj.id] = image
-                    }
+                    pendingFgImage = image
+                    fgPhotoItem = nil
                 }
-            }
-            await MainActor.run {
-                fgPhotoItem = nil
-                fgVideoItem = nil
             }
         }
     }
@@ -1250,6 +1294,18 @@ public struct StoryComposerView: View {
 // MARK: - Audio Editor Item Wrapper
 
 private struct AudioEditorItemWrapper: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+// MARK: - Pending Media Wrappers
+
+private struct PendingImageWrapper: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+private struct PendingVideoWrapper: Identifiable {
     let id = UUID()
     let url: URL
 }
