@@ -89,7 +89,7 @@ const createMockPrisma = () => {
       findUnique: jest.fn() as MockFn,
       findFirst: jest.fn() as MockFn
     },
-    conversationMember: {
+    participant: {
       findFirst: jest.fn() as MockFn
     },
     callSession: {
@@ -122,11 +122,13 @@ interface MockConversation {
   identifier: string;
   type: string;
   members?: Array<{ userId: string }>;
+  participants?: Array<{ id: string; userId: string }>;
 }
 
 interface MockCallParticipant {
   id: string;
   callSessionId: string;
+  participantId: string;
   userId: string;
   role: ParticipantRole;
   joinedAt: Date;
@@ -134,6 +136,7 @@ interface MockCallParticipant {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   user?: MockUser;
+  participant?: { user: MockUser };
 }
 
 interface MockCallSession {
@@ -186,6 +189,7 @@ const createMockCallSession = (overrides: Partial<MockCallSession> = {}): MockCa
 const createMockParticipant = (overrides: Partial<MockCallParticipant> = {}): MockCallParticipant => ({
   id: 'participant-123',
   callSessionId: 'call-123',
+  participantId: 'participant-123',
   userId: 'user-123',
   role: ParticipantRole.initiator,
   joinedAt: new Date(),
@@ -213,6 +217,7 @@ describe('CallService', () => {
     const validInitiateData = {
       conversationId: 'conv-123',
       initiatorId: 'user-123',
+      participantId: 'participant-123',
       type: 'video' as const,
       settings: {
         audioEnabled: true,
@@ -229,7 +234,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-123',
         conversationId: 'conv-123',
         userId: 'user-123',
@@ -266,7 +271,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-123',
         conversationId: 'conv-123',
         userId: 'user-123',
@@ -319,7 +324,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-123',
         conversationId: 'conv-123',
         userId: 'user-123',
@@ -336,7 +341,7 @@ describe('CallService', () => {
 
     it('should throw error when user is not a conversation member', async () => {
       mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
 
       await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not a participant in this conversation'
@@ -350,7 +355,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-123',
         conversationId: 'conv-123',
         userId: 'user-123',
@@ -376,7 +381,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-123',
         conversationId: 'conv-123',
         userId: 'user-123',
@@ -404,6 +409,7 @@ describe('CallService', () => {
     const validJoinData = {
       callId: 'call-123',
       userId: 'user-456',
+      participantId: 'participant-456',
       settings: {
         audioEnabled: true,
         videoEnabled: true
@@ -432,7 +438,7 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(existingCall);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-456',
         conversationId: 'conv-123',
         userId: 'user-456',
@@ -470,7 +476,7 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValue(
         createMockCallSession({ conversation: createMockConversation() })
       );
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
 
       await expect(callService.joinCall(validJoinData)).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not a participant in this conversation'
@@ -490,7 +496,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(callWithUser);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-456',
         conversationId: 'conv-123',
         userId: 'user-456',
@@ -514,7 +520,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(callWith2Participants);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-456',
         conversationId: 'conv-123',
         userId: 'user-456',
@@ -541,7 +547,7 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(initiatedCall);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-456',
         conversationId: 'conv-123',
         userId: 'user-456',
@@ -569,7 +575,7 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(existingCall);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
+      mockPrisma.participant.findFirst.mockResolvedValue({
         id: 'member-456',
         conversationId: 'conv-123',
         userId: 'user-456',
@@ -596,7 +602,8 @@ describe('CallService', () => {
   describe('leaveCall', () => {
     const validLeaveData = {
       callId: 'call-123',
-      userId: 'user-123'
+      userId: 'user-123',
+      participantId: 'participant-123'
     };
 
     it('should successfully leave call', async () => {
@@ -752,7 +759,7 @@ describe('CallService', () => {
     it('should authorize access for call participant', async () => {
       const mockCall = createMockCallSession({
         participants: [
-          createMockParticipant({ userId: 'user-123', user: createMockUser() })
+          createMockParticipant({ participantId: 'participant-123', userId: 'user-123', user: createMockUser() })
         ],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -760,7 +767,7 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
 
-      const result = await callService.getCallSession('call-123', 'user-123');
+      const result = await callService.getCallSession('call-123', 'participant-123');
 
       expect(result).toBeDefined();
     });
@@ -773,14 +780,14 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue({
-        id: 'member-456',
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'participant-456',
         conversationId: 'conv-123',
         userId: 'user-456',
         isActive: true
       });
 
-      const result = await callService.getCallSession('call-123', 'user-456');
+      const result = await callService.getCallSession('call-123', 'participant-456');
 
       expect(result).toBeDefined();
     });
@@ -793,9 +800,9 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
-      mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
 
-      await expect(callService.getCallSession('call-123', 'unauthorized-user')).rejects.toThrow(
+      await expect(callService.getCallSession('call-123', 'unauthorized-participant')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You do not have access to this call'
       );
     });
@@ -823,14 +830,14 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockResolvedValue(undefined);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
 
-      const result = await callService.endCall('call-123', 'user-123');
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
 
       expect(result.status).toBe(CallStatus.ended);
     });
 
     it('should throw error for anonymous users (CVE-004)', async () => {
       await expect(
-        callService.endCall('call-123', 'anon-123', true)
+        callService.endCall('call-123', 'anon-123', 'participant-anon', true)
       ).rejects.toThrow(
         'PERMISSION_DENIED: Anonymous users cannot end calls. Use leave instead.'
       );
@@ -839,7 +846,7 @@ describe('CallService', () => {
     it('should throw error when call not found', async () => {
       mockPrisma.callSession.findUnique.mockResolvedValue(null);
 
-      await expect(callService.endCall('invalid-call', 'user-123')).rejects.toThrow(
+      await expect(callService.endCall('invalid-call', 'user-123', 'participant-123')).rejects.toThrow(
         'CALL_NOT_FOUND: Call session not found'
       );
     });
@@ -854,7 +861,7 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(endedCall);
 
-      const result = await callService.endCall('call-123', 'user-123');
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
 
       expect(result.status).toBe(CallStatus.ended);
     });
@@ -862,18 +869,20 @@ describe('CallService', () => {
     it('should throw error when user not in call', async () => {
       const mockCall = createMockCallSession({
         status: CallStatus.active,
-        participants: [createMockParticipant({ userId: 'other-user' })]
+        participants: [createMockParticipant({ participantId: 'other-participant', userId: 'other-user' })]
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
 
-      await expect(callService.endCall('call-123', 'user-123')).rejects.toThrow(
+      await expect(callService.endCall('call-123', 'user-123', 'participant-123')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not in this call'
       );
     });
 
     it('should throw error when non-initiator tries to end call (CVE-004)', async () => {
       const participantRole = createMockParticipant({
+        id: 'p2',
+        participantId: 'participant-456',
         userId: 'user-456',
         role: ParticipantRole.participant
       });
@@ -887,7 +896,7 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
 
-      await expect(callService.endCall('call-123', 'user-456')).rejects.toThrow(
+      await expect(callService.endCall('call-123', 'user-456', 'participant-456')).rejects.toThrow(
         'PERMISSION_DENIED: Only the call initiator can end the call'
       );
     });
@@ -1096,13 +1105,13 @@ describe('CallService', () => {
   describe('getUnrespondedParticipants', () => {
     it('should return users who have not joined the call', async () => {
       const callSession = createMockCallSession({
-        participants: [createMockParticipant({ userId: 'user-123' })],
+        participants: [createMockParticipant({ participantId: 'p-123', userId: 'user-123' })],
         conversation: {
           ...createMockConversation(),
-          members: [
-            { userId: 'user-123' },
-            { userId: 'user-456' },
-            { userId: 'user-789' }
+          participants: [
+            { id: 'p-123', userId: 'user-123' },
+            { id: 'p-456', userId: 'user-456' },
+            { id: 'p-789', userId: 'user-789' }
           ]
         }
       });
@@ -1127,12 +1136,12 @@ describe('CallService', () => {
     it('should exclude initiator from unresponded list', async () => {
       const callSession = createMockCallSession({
         initiatorId: 'user-123',
-        participants: [createMockParticipant({ userId: 'user-123' })],
+        participants: [createMockParticipant({ participantId: 'p-123', userId: 'user-123' })],
         conversation: {
           ...createMockConversation(),
-          members: [
-            { userId: 'user-123' },
-            { userId: 'user-456' }
+          participants: [
+            { id: 'p-123', userId: 'user-123' },
+            { id: 'p-456', userId: 'user-456' }
           ]
         }
       });
@@ -1149,14 +1158,14 @@ describe('CallService', () => {
       const callSession = createMockCallSession({
         initiatorId: 'user-123',
         participants: [
-          createMockParticipant({ userId: 'user-123' }),
-          createMockParticipant({ id: 'participant-456', userId: 'user-456' })
+          createMockParticipant({ participantId: 'p-123', userId: 'user-123' }),
+          createMockParticipant({ id: 'cp-456', participantId: 'p-456', userId: 'user-456' })
         ],
         conversation: {
           ...createMockConversation(),
-          members: [
-            { userId: 'user-123' },
-            { userId: 'user-456' }
+          participants: [
+            { id: 'p-123', userId: 'user-123' },
+            { id: 'p-456', userId: 'user-456' }
           ]
         }
       });
@@ -1188,7 +1197,7 @@ describe('CallService - Edge Cases', () => {
     });
 
     mockPrisma.callSession.findUnique.mockResolvedValue(existingCall);
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findFirst.mockResolvedValue({
       id: 'member-456',
       conversationId: 'conv-123',
       userId: 'user-456',
@@ -1199,21 +1208,21 @@ describe('CallService - Edge Cases', () => {
     mockPrisma.$transaction.mockRejectedValue(new Error('Unique constraint violation'));
 
     await expect(
-      callService.joinCall({ callId: 'call-123', userId: 'user-456' })
+      callService.joinCall({ callId: 'call-123', userId: 'user-456', participantId: 'participant-456' })
     ).rejects.toThrow();
   });
 
   it('should handle null userId in participants', async () => {
     const callSession = createMockCallSession({
       participants: [
-        createMockParticipant({ userId: 'user-123' }),
-        { ...createMockParticipant({ id: 'participant-anon' }), userId: null as any }
+        createMockParticipant({ participantId: 'p-123', userId: 'user-123' }),
+        { ...createMockParticipant({ id: 'participant-anon', participantId: 'p-anon' }), userId: null as any }
       ],
       conversation: {
         ...createMockConversation(),
-        members: [
-          { userId: 'user-123' },
-          { userId: 'user-456' }
+        participants: [
+          { id: 'p-123', userId: 'user-123' },
+          { id: 'p-456', userId: 'user-456' }
         ]
       }
     });
@@ -1228,7 +1237,7 @@ describe('CallService - Edge Cases', () => {
 
   it('should calculate duration correctly on call end', async () => {
     const startTime = new Date(Date.now() - 60000); // 1 minute ago
-    const participant = createMockParticipant({ role: ParticipantRole.initiator });
+    const participant = createMockParticipant({ participantId: 'participant-123', role: ParticipantRole.initiator });
     const mockCall = createMockCallSession({
       status: CallStatus.active,
       startedAt: startTime,
@@ -1258,7 +1267,7 @@ describe('CallService - Edge Cases', () => {
       conversation: createMockConversation()
     });
 
-    await callService.endCall('call-123', 'user-123');
+    await callService.endCall('call-123', 'user-123', 'participant-123');
   });
 });
 
@@ -1279,6 +1288,7 @@ describe('CallService - Error Code Verification', () => {
       callService.initiateCall({
         conversationId: 'invalid',
         initiatorId: 'user-123',
+        participantId: 'participant-123',
         type: 'video'
       })
     ).rejects.toThrow(/CONVERSATION_NOT_FOUND/);
@@ -1293,6 +1303,7 @@ describe('CallService - Error Code Verification', () => {
       callService.initiateCall({
         conversationId: 'conv-123',
         initiatorId: 'user-123',
+        participantId: 'participant-123',
         type: 'video'
       })
     ).rejects.toThrow(/VIDEO_CALLS_NOT_SUPPORTED/);
@@ -1300,12 +1311,13 @@ describe('CallService - Error Code Verification', () => {
 
   it('should use NOT_A_PARTICIPANT error code', async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
-    mockPrisma.conversationMember.findFirst.mockResolvedValue(null);
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
 
     await expect(
       callService.initiateCall({
         conversationId: 'conv-123',
         initiatorId: 'user-123',
+        participantId: 'participant-123',
         type: 'video'
       })
     ).rejects.toThrow(/NOT_A_PARTICIPANT/);
@@ -1313,7 +1325,7 @@ describe('CallService - Error Code Verification', () => {
 
   it('should use CALL_ALREADY_ACTIVE error code', async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findFirst.mockResolvedValue({
       id: 'member-123',
       conversationId: 'conv-123',
       userId: 'user-123',
@@ -1330,6 +1342,7 @@ describe('CallService - Error Code Verification', () => {
       callService.initiateCall({
         conversationId: 'conv-123',
         initiatorId: 'user-123',
+        participantId: 'participant-123',
         type: 'video'
       })
     ).rejects.toThrow(/CALL_ALREADY_ACTIVE/);
@@ -1339,7 +1352,7 @@ describe('CallService - Error Code Verification', () => {
     mockPrisma.callSession.findUnique.mockResolvedValue(null);
 
     await expect(
-      callService.joinCall({ callId: 'invalid', userId: 'user-123' })
+      callService.joinCall({ callId: 'invalid', userId: 'user-123', participantId: 'participant-123' })
     ).rejects.toThrow(/CALL_NOT_FOUND/);
   });
 
@@ -1349,7 +1362,7 @@ describe('CallService - Error Code Verification', () => {
     );
 
     await expect(
-      callService.joinCall({ callId: 'call-123', userId: 'user-123' })
+      callService.joinCall({ callId: 'call-123', userId: 'user-123', participantId: 'participant-123' })
     ).rejects.toThrow(/CALL_ENDED/);
   });
 
@@ -1364,7 +1377,7 @@ describe('CallService - Error Code Verification', () => {
         conversation: createMockConversation()
       })
     );
-    mockPrisma.conversationMember.findFirst.mockResolvedValue({
+    mockPrisma.participant.findFirst.mockResolvedValue({
       id: 'member-789',
       conversationId: 'conv-123',
       userId: 'user-789',
@@ -1372,13 +1385,13 @@ describe('CallService - Error Code Verification', () => {
     });
 
     await expect(
-      callService.joinCall({ callId: 'call-123', userId: 'user-789' })
+      callService.joinCall({ callId: 'call-123', userId: 'user-789', participantId: 'participant-789' })
     ).rejects.toThrow(/MAX_PARTICIPANTS_REACHED/);
   });
 
   it('should use PERMISSION_DENIED error code for anonymous end call', async () => {
     await expect(
-      callService.endCall('call-123', 'anon-123', true)
+      callService.endCall('call-123', 'anon-123', 'participant-anon', true)
     ).rejects.toThrow(/PERMISSION_DENIED/);
   });
 
@@ -1390,6 +1403,7 @@ describe('CallService - Error Code Verification', () => {
           createMockParticipant({ role: ParticipantRole.initiator }),
           createMockParticipant({
             id: 'p2',
+            participantId: 'participant-456',
             userId: 'user-456',
             role: ParticipantRole.participant
           })
@@ -1398,7 +1412,7 @@ describe('CallService - Error Code Verification', () => {
     );
 
     await expect(
-      callService.endCall('call-123', 'user-456')
+      callService.endCall('call-123', 'user-456', 'participant-456')
     ).rejects.toThrow(/PERMISSION_DENIED/);
   });
 });

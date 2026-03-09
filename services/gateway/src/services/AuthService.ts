@@ -626,7 +626,7 @@ export class AuthService {
 
         if (globalConversation) {
           // Vérifier si l'utilisateur n'est pas déjà membre
-          const existingMember = await this.prisma.conversationMember.findFirst({
+          const existingMember = await this.prisma.participant.findFirst({
             where: {
               conversationId: globalConversation.id,
               userId: user.id
@@ -634,18 +634,22 @@ export class AuthService {
           });
 
           if (!existingMember) {
-            await this.prisma.conversationMember.create({
+            await this.prisma.participant.create({
               data: {
                 conversationId: globalConversation.id,
                 userId: user.id,
+                type: 'user',
+                displayName: user.displayName || user.username,
                 role: 'MEMBER',
-                canSendMessage: true,
-                canSendFiles: true,
-                canSendImages: true,
-                canSendVideos: true,
-                canSendAudios: true,
-                canSendLocations: true,
-                canSendLinks: true,
+                permissions: {
+                  canSendMessages: true,
+                  canSendFiles: true,
+                  canSendImages: true,
+                  canSendVideos: true,
+                  canSendAudios: true,
+                  canSendLocations: true,
+                  canSendLinks: true
+                },
                 joinedAt: new Date(),
                 isActive: true
               }

@@ -168,8 +168,9 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
 
     return conversations.map((conv): ConversationItemData => {
       // Determine language code from participants
-      const otherParticipant = conv.members?.find(m => m.id !== currentUser?.id);
-      const languageCode = otherParticipant?.systemLanguage || 'fr';
+      const otherParticipant = conv.participants?.find((m: any) => m.userId !== currentUser?.id);
+      const otherUser = (otherParticipant as any)?.user;
+      const languageCode = otherUser?.systemLanguage || otherParticipant?.language || 'fr';
 
       // Get last message info
       const lastMessage = conv.lastMessage;
@@ -192,14 +193,14 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
 
       return {
         id: conv.id,
-        name: conv.title || otherParticipant?.displayName || otherParticipant?.username || 'Conversation',
+        name: conv.title || otherParticipant?.displayName || otherUser?.displayName || otherUser?.username || 'Conversation',
         languageCode: conv.isGroup ? 'multi' : languageCode,
-        isOnline: otherParticipant?.isOnline || false,
+        isOnline: otherParticipant?.isOnline ?? otherUser?.isOnline ?? false,
         isPinned: false, // TODO: Add pinning support
         isImportant: false,
         isMuted: false,
-        isGroup: conv.isGroup || (conv.members?.length || 0) > 2,
-        participantCount: conv.members?.length,
+        isGroup: conv.isGroup || (conv.participants?.length || 0) > 2,
+        participantCount: conv.participants?.length,
         tags: [],
         unreadCount: conv.unreadCount || 0,
         lastMessage: lastMessageData,

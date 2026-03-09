@@ -8,7 +8,7 @@ import { getUserDisplayName } from '@/utils/user-display-name';
 import { formatRelativeDate } from '@/utils/date-format';
 import { cn } from '@/lib/utils';
 import { AttachmentPreviewReply } from '@/components/attachments/AttachmentPreviewReply';
-import type { MessageSender, AnonymousSender } from './types';
+import type { MessageSender } from './types';
 
 interface MessageReplyPreviewProps {
   replyTo: {
@@ -16,7 +16,6 @@ interface MessageReplyPreviewProps {
     content: string;
     createdAt: Date | string;
     sender?: MessageSender;
-    anonymousSender?: AnonymousSender;
     attachments?: any[];
   };
   replyToContent: string | null;
@@ -32,10 +31,10 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
   onNavigateToMessage,
   t,
 }: MessageReplyPreviewProps) {
-  const replyUsername = replyTo.anonymousSender?.username || replyTo.sender?.username;
-  const replyUser = replyTo.anonymousSender || replyTo.sender;
+  const replyUsername = replyTo.sender?.username;
+  const replyUser = replyTo.sender;
   const replyDisplayName = getUserDisplayName(replyUser, t('unknownUser'));
-  const isReplyAnonymous = !!replyTo.anonymousSender;
+  const isReplyAnonymous = false;
 
   return (
     <motion.div

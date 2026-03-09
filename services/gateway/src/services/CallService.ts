@@ -6,6 +6,8 @@
  * - Participant joining/leaving
  * - Call state management
  * - Validation (DIRECT/GROUP conversations only)
+ *
+ * Unified Participant model: all calls use participantId
  */
 
 import { PrismaClient, CallMode, CallStatus, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
@@ -18,12 +20,16 @@ type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
   include: {
     participants: {
       include: {
-        user: {
-          select: {
-            id: true;
-            username: true;
-            displayName: true;
-            avatar: true;
+        participant: {
+          include: {
+            user: {
+              select: {
+                id: true;
+                username: true;
+                displayName: true;
+                avatar: true;
+              };
+            };
           };
         };
       };
@@ -46,9 +52,44 @@ type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
   };
 }>;
 
+const callSessionInclude = {
+  participants: {
+    include: {
+      participant: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true
+            }
+          }
+        }
+      }
+    }
+  },
+  initiator: {
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      avatar: true
+    }
+  },
+  conversation: {
+    select: {
+      id: true,
+      identifier: true,
+      type: true
+    }
+  }
+} as const;
+
 interface InitiateCallData {
   conversationId: string;
   initiatorId: string;
+  participantId: string;
   type: 'video' | 'audio';
   settings?: {
     audioEnabled?: boolean;
@@ -60,6 +101,7 @@ interface InitiateCallData {
 interface JoinCallData {
   callId: string;
   userId: string;
+  participantId: string;
   isAnonymous?: boolean;
   settings?: {
     audioEnabled?: boolean;
@@ -70,6 +112,7 @@ interface JoinCallData {
 interface LeaveCallData {
   callId: string;
   userId: string;
+  participantId: string;
 }
 
 export class CallService {
@@ -87,7 +130,7 @@ export class CallService {
    * - Returns CallSession with participants
    */
   async initiateCall(data: InitiateCallData): Promise<CallSessionWithParticipants> {
-    const { conversationId, initiatorId, type, settings } = data;
+    const { conversationId, initiatorId, participantId, type, settings } = data;
 
     logger.info('📞 Initiating call', { conversationId, initiatorId, type });
 
@@ -113,11 +156,11 @@ export class CallService {
       );
     }
 
-    // Check if user is member of conversation
-    const membership = await this.prisma.conversationMember.findFirst({
+    // Check if user is participant of conversation
+    const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId,
-        userId: initiatorId,
+        id: participantId,
         isActive: true
       }
     });
@@ -164,7 +207,7 @@ export class CallService {
             endedAt: now,
             duration,
             metadata: {
-              ...(activeCall.metadata as any),
+              ...(activeCall.metadata as Record<string, unknown>),
               endReason: 'zombie_cleanup'
             }
           }
@@ -198,7 +241,7 @@ export class CallService {
       await tx.callParticipant.create({
         data: {
           callSessionId: session.id,
-          userId: initiatorId,
+          participantId,
           role: ParticipantRole.initiator,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
@@ -231,7 +274,7 @@ export class CallService {
     callSession: CallSessionWithParticipants;
     iceServers: RTCIceServer[]
   }> {
-    const { callId, userId, settings } = data;
+    const { callId, userId, participantId, settings } = data;
 
     logger.info('📞 User joining call', { callId, userId });
 
@@ -252,11 +295,11 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
     }
 
-    // Check if user is member of conversation
-    const membership = await this.prisma.conversationMember.findFirst({
+    // Check if user is participant of conversation
+    const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId: call.conversationId,
-        userId,
+        id: participantId,
         isActive: true
       }
     });
@@ -271,7 +314,7 @@ export class CallService {
 
     // Check if user is already in the call
     const existingParticipant = call.participants.find(
-      (p) => p.userId === userId && !p.leftAt
+      (p) => p.participantId === participantId && !p.leftAt
     );
 
     if (existingParticipant) {
@@ -303,7 +346,7 @@ export class CallService {
       await tx.callParticipant.create({
         data: {
           callSessionId: callId,
-          userId,
+          participantId,
           role: ParticipantRole.participant,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: settings?.videoEnabled ?? true
@@ -342,20 +385,20 @@ export class CallService {
    * - Returns updated CallSession
    */
   async leaveCall(data: LeaveCallData): Promise<CallSessionWithParticipants> {
-    const { callId, userId } = data;
+    const { callId, userId, participantId } = data;
 
     logger.info('📞 User leaving call', { callId, userId });
 
-    // Find the participant
-    const participant = await this.prisma.callParticipant.findFirst({
+    // Find the call participant
+    const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
-        userId,
+        participantId,
         leftAt: null
       }
     });
 
-    if (!participant) {
+    if (!callParticipant) {
       logger.error('❌ Participant not found or already left', { callId, userId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: You are not in this call`);
     }
@@ -374,14 +417,14 @@ export class CallService {
     const leftAt = new Date();
 
     // Check if this is the last active participant
-    const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== participant.id);
+    const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
     const isLastParticipant = activeParticipants.length === 0;
 
     // Update in transaction
     await this.prisma.$transaction(async (tx) => {
       // Update participant left time
       await tx.callParticipant.update({
-        where: { id: participant.id },
+        where: { id: callParticipant.id },
         data: { leftAt }
       });
 
@@ -414,40 +457,12 @@ export class CallService {
    * CVE-003: Added authorization check - requestingUserId parameter
    *
    * @param callId - Call session ID
-   * @param requestingUserId - Optional user ID requesting access (for authorization check)
+   * @param requestingParticipantId - Optional participant ID requesting access (for authorization check)
    */
-  async getCallSession(callId: string, requestingUserId?: string): Promise<CallSessionWithParticipants> {
+  async getCallSession(callId: string, requestingParticipantId?: string): Promise<CallSessionWithParticipants> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        initiator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatar: true
-          }
-        },
-        conversation: {
-          select: {
-            id: true,
-            identifier: true,
-            type: true
-          }
-        }
-      }
+      include: callSessionInclude
     });
 
     if (!call) {
@@ -455,17 +470,17 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    // CVE-003: Authorization check if requestingUserId provided
-    if (requestingUserId) {
+    // CVE-003: Authorization check if requestingParticipantId provided
+    if (requestingParticipantId) {
       // Check if user is a participant in the call
-      const isParticipant = call.participants.some((p) => p.userId === requestingUserId);
+      const isCallParticipant = call.participants.some((p) => p.participantId === requestingParticipantId);
 
       // If not a participant, check if they're a member of the conversation
-      if (!isParticipant) {
-        const isMember = await this.prisma.conversationMember.findFirst({
+      if (!isCallParticipant) {
+        const isMember = await this.prisma.participant.findFirst({
           where: {
             conversationId: call.conversationId,
-            userId: requestingUserId,
+            id: requestingParticipantId,
             isActive: true
           }
         });
@@ -473,7 +488,7 @@ export class CallService {
         if (!isMember) {
           logger.warn('❌ Unauthorized call access attempt', {
             callId,
-            userId: requestingUserId,
+            participantId: requestingParticipantId,
             conversationId: call.conversationId
           });
           throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call`);
@@ -490,9 +505,10 @@ export class CallService {
    *
    * @param callId - Call session ID
    * @param endedBy - User ID attempting to end the call
+   * @param participantId - Participant ID of the user ending the call
    * @param isAnonymous - Whether the user is anonymous (anonymous users CANNOT end calls)
    */
-  async endCall(callId: string, endedBy: string, isAnonymous?: boolean): Promise<CallSessionWithParticipants> {
+  async endCall(callId: string, endedBy: string, participantId: string, isAnonymous?: boolean): Promise<CallSessionWithParticipants> {
     logger.info('📞 Ending call', { callId, endedBy, isAnonymous });
 
     // CVE-004: Anonymous users cannot end calls for everyone
@@ -519,7 +535,7 @@ export class CallService {
     }
 
     // CVE-004: Verify user has permission to end the call (initiator or moderator role)
-    const userParticipant = call.participants.find(p => p.userId === endedBy && !p.leftAt);
+    const userParticipant = call.participants.find(p => p.participantId === participantId && !p.leftAt);
 
     if (!userParticipant) {
       logger.error('❌ User not in call', { callId, endedBy });
@@ -559,7 +575,7 @@ export class CallService {
           endedAt,
           duration,
           metadata: {
-            ...(call.metadata as any),
+            ...(call.metadata as Record<string, unknown>),
             endedBy
           }
         }
@@ -580,35 +596,7 @@ export class CallService {
         conversationId,
         status: { in: [CallStatus.initiated, CallStatus.ringing, CallStatus.active] }
       },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        initiator: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatar: true
-          }
-        },
-        conversation: {
-          select: {
-            id: true,
-            identifier: true,
-            type: true
-          }
-        }
-      }
+      include: callSessionInclude
     });
 
     return call;
@@ -619,34 +607,34 @@ export class CallService {
    */
   async updateParticipantMedia(
     callId: string,
-    userId: string,
+    participantId: string,
     mediaType: 'audio' | 'video',
     enabled: boolean
   ): Promise<CallSessionWithParticipants> {
     logger.info('📞 Updating participant media state', {
       callId,
-      userId,
+      participantId,
       mediaType,
       enabled
     });
 
-    // Find the participant
-    const participant = await this.prisma.callParticipant.findFirst({
+    // Find the call participant
+    const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
-        userId,
+        participantId,
         leftAt: null
       }
     });
 
-    if (!participant) {
-      logger.error('❌ Participant not found or already left', { callId, userId });
+    if (!callParticipant) {
+      logger.error('❌ Participant not found or already left', { callId, participantId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: You are not in this call`);
     }
 
     // Update media state
     await this.prisma.callParticipant.update({
-      where: { id: participant.id },
+      where: { id: callParticipant.id },
       data:
         mediaType === 'audio'
           ? { isAudioEnabled: enabled }
@@ -655,7 +643,7 @@ export class CallService {
 
     logger.info('✅ Participant media state updated', {
       callId,
-      userId,
+      participantId,
       mediaType,
       enabled
     });
@@ -694,7 +682,7 @@ export class CallService {
         endedAt: now,
         duration,
         metadata: {
-          ...(callSession.metadata as any),
+          ...(callSession.metadata as Record<string, unknown>),
           endReason: 'missed'
         }
       }
@@ -735,7 +723,7 @@ export class CallService {
         endedAt: now,
         duration,
         metadata: {
-          ...(callSession.metadata as any),
+          ...(callSession.metadata as Record<string, unknown>),
           endReason: 'rejected'
         }
       }
@@ -756,11 +744,12 @@ export class CallService {
         participants: true,
         conversation: {
           include: {
-            members: {
+            participants: {
               where: {
                 isActive: true
               },
               select: {
+                id: true,
                 userId: true
               }
             }
@@ -774,14 +763,16 @@ export class CallService {
     }
 
     // Récupérer les IDs des participants qui ont déjà rejoint l'appel
-    const joinedUserIds = callSession.participants.map(p => p.userId).filter(Boolean) as string[];
+    const joinedParticipantIds = callSession.participants.map(p => p.participantId);
 
     // Récupérer tous les membres de la conversation
-    const conversationMemberIds = callSession.conversation.members.map(m => m.userId);
+    const conversationParticipantIds = callSession.conversation.participants.map(m => m.userId).filter(Boolean) as string[];
 
     // Exclure l'initiateur et ceux qui ont rejoint
-    const unrespondedUserIds = conversationMemberIds.filter(
-      userId => userId !== callSession.initiatorId && !joinedUserIds.includes(userId)
+    const unrespondedUserIds = conversationParticipantIds.filter(
+      userId => userId !== callSession.initiatorId && !callSession.conversation.participants
+        .filter(p => joinedParticipantIds.includes(p.id))
+        .some(p => p.userId === userId)
     );
 
     return unrespondedUserIds;

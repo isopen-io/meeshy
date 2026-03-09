@@ -6,13 +6,12 @@ import { Ghost } from 'lucide-react';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { formatRelativeDate } from '@/utils/date-format';
 import { cn } from '@/lib/utils';
-import type { MessageSender, AnonymousSender } from './types';
+import type { MessageSender } from './types';
 
 interface MessageNameDateProps {
   message: {
     createdAt: Date | string;
     sender?: MessageSender;
-    anonymousSender?: AnonymousSender;
   };
   isOwnMessage: boolean;
   t: (key: string) => string;
@@ -23,10 +22,10 @@ export const MessageNameDate = memo(function MessageNameDate({
   isOwnMessage,
   t,
 }: MessageNameDateProps) {
-  const user = message.anonymousSender || message.sender;
-  const username = message.anonymousSender?.username || message.sender?.username;
+  const user = message.sender;
+  const username = message.sender?.username;
   const displayName = getUserDisplayName(user, t('anonymous'));
-  const isAnonymous = !!message.anonymousSender;
+  const isAnonymous = false;
 
   return (
     <div className={cn(

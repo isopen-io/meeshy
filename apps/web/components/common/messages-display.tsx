@@ -340,9 +340,9 @@ export function MessagesDisplay({
 
         const prevMsg = index > 0 ? displayMessages[index - 1] : null;
         const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
-        const senderId = message.anonymousSender?.id || message.sender?.id;
-        const prevSenderId = prevMsg ? (prevMsg.anonymousSender?.id || prevMsg.sender?.id) : null;
-        const nextSenderId = nextMsg ? (nextMsg.anonymousSender?.id || nextMsg.sender?.id) : null;
+        const senderId = message.sender?.id;
+        const prevSenderId = prevMsg ? prevMsg.sender?.id : null;
+        const nextSenderId = nextMsg ? nextMsg.sender?.id : null;
         const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
         const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
 

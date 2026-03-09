@@ -124,7 +124,7 @@ export class MessagingService {
         ciphertext: encryptedContent,
         metadata: encryptionMetadata
       };
-      const senderId = socketMessage.senderId || (socketMessage as any).anonymousSenderId;
+      const senderId = socketMessage.senderId;
       const decryptedContent = await this.encryptionHandlers.decrypt(encryptedPayload, senderId);
 
       return {

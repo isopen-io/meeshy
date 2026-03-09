@@ -430,7 +430,7 @@ export default function V2ChatsPage() {
               </svg>
             </div>
           ) : (
-            <LanguageOrb code={currentConversation?.members?.[0]?.user?.systemLanguage || 'fr'} size="md" pulse={false} />
+            <LanguageOrb code={currentConversation?.participants?.[0]?.user?.systemLanguage || 'fr'} size="md" pulse={false} />
           )}
 
           <div>
@@ -439,7 +439,7 @@ export default function V2ChatsPage() {
               {currentTypingUsers.length > 0
                 ? 'Quelqu\'un ecrit...'
                 : currentConversation?.type === 'group'
-                ? `${currentConversation.members?.length || 0} participants`
+                ? `${currentConversation.participants?.length || 0} participants`
                 : 'En ligne'}
             </span>
           </div>

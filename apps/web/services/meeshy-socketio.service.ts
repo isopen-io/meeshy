@@ -350,9 +350,8 @@ class MeeshySocketIOService {
     if ((socketMessage as any).replyTo) {
       const replyToMsg = (socketMessage as any).replyTo;
       const replyToSender = replyToMsg.sender;
-      const replyToAnonymousSender = replyToMsg.anonymousSender;
 
-      // Construire le sender pour replyTo (gérer utilisateurs authentifiés ET anonymes)
+      // Construire le sender pour replyTo
       let replyToFinalSender;
       if (replyToSender) {
         replyToFinalSender = {
@@ -364,8 +363,8 @@ class MeeshySocketIOService {
           email: String(replyToSender.email || ''),
           phoneNumber: '',
           role: 'USER' as const,
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
+          systemLanguage: String(replyToSender.systemLanguage || replyToSender.language || 'fr'),
+          regionalLanguage: String(replyToSender.regionalLanguage || replyToSender.language || 'fr'),
           autoTranslateEnabled: true,
           translateToSystemLanguage: true,
           translateToRegionalLanguage: false,
@@ -377,35 +376,9 @@ class MeeshySocketIOService {
           isActive: true,
           updatedAt: new Date()
         };
-      } else if (replyToAnonymousSender) {
-        const displayName = `${String(replyToAnonymousSender.firstName || '')} ${String(replyToAnonymousSender.lastName || '')}`.trim() ||
-                           String(replyToAnonymousSender.username) ||
-                           'Utilisateur anonyme';
-        replyToFinalSender = {
-          id: String(replyToAnonymousSender.id || 'unknown'),
-          username: String(replyToAnonymousSender.username || 'Anonymous'),
-          displayName: displayName,
-          firstName: String(replyToAnonymousSender.firstName || ''),
-          lastName: String(replyToAnonymousSender.lastName || ''),
-          email: '',
-          phoneNumber: '',
-          role: 'USER' as const,
-          systemLanguage: String(replyToAnonymousSender.language || 'fr'),
-          regionalLanguage: String(replyToAnonymousSender.language || 'fr'),
-          autoTranslateEnabled: false,
-          translateToSystemLanguage: false,
-          translateToRegionalLanguage: false,
-          useCustomDestination: false,
-          isOnline: false,
-          avatar: undefined,
-          createdAt: new Date(),
-          lastActiveAt: new Date(),
-          isActive: true,
-          updatedAt: new Date()
-        };
       } else {
         replyToFinalSender = {
-          id: String(replyToMsg.senderId || replyToMsg.anonymousSenderId || 'unknown'),
+          id: String(replyToMsg.senderId || 'unknown'),
           username: 'Unknown',
           displayName: 'Utilisateur Inconnu',
           firstName: '',
@@ -431,7 +404,7 @@ class MeeshySocketIOService {
       replyTo = {
         id: String(replyToMsg.id),
         content: String(replyToMsg.content),
-        senderId: String(replyToMsg.senderId || replyToMsg.anonymousSenderId || ''),
+        senderId: String(replyToMsg.senderId || ''),
         conversationId: String(replyToMsg.conversationId),
         originalLanguage: String(replyToMsg.originalLanguage || 'fr'),
         messageType: String(replyToMsg.messageType || 'text') as any,
@@ -447,7 +420,7 @@ class MeeshySocketIOService {
 
     // Définir le sender par défaut
     const defaultSender = {
-      id: socketMessage.senderId || (socketMessage as any).anonymousSenderId || 'unknown',
+      id: socketMessage.senderId || 'unknown',
       username: 'Utilisateur inconnu',
       firstName: '',
       lastName: '',
@@ -470,41 +443,8 @@ class MeeshySocketIOService {
       updatedAt: new Date()
     };
 
-    // Construire l'objet sender
-    let sender;
-    if (socketMessage.sender) {
-      sender = socketMessage.sender;
-    } else if ((socketMessage as any).anonymousSender) {
-      const anonymousSender = (socketMessage as any).anonymousSender;
-      const displayName = `${anonymousSender.firstName || ''} ${anonymousSender.lastName || ''}`.trim() ||
-                         anonymousSender.username ||
-                         'Utilisateur anonyme';
-      sender = {
-        id: anonymousSender.id || defaultSender.id,
-        username: anonymousSender.username || 'Anonymous',
-        firstName: anonymousSender.firstName || '',
-        lastName: anonymousSender.lastName || '',
-        displayName: displayName,
-        email: '',
-        phoneNumber: '',
-        role: 'USER' as const,
-        systemLanguage: anonymousSender.language || 'fr',
-        regionalLanguage: anonymousSender.language || 'fr',
-        customDestinationLanguage: undefined,
-        autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
-        isOnline: false,
-        avatar: undefined,
-        createdAt: new Date(),
-        lastActiveAt: new Date(),
-        isActive: true,
-        updatedAt: new Date()
-      };
-    } else {
-      sender = defaultSender;
-    }
+    // Construire l'objet sender (unified: sender always present from backend)
+    const sender = socketMessage.sender || defaultSender;
 
     // Transformer les attachments si présents
     console.log('🔍 [convertSocketMessage] Raw attachments:', {
@@ -535,7 +475,7 @@ class MeeshySocketIOService {
             videoCodec: att.videoCodec ? String(att.videoCodec) : undefined,
             pageCount: att.pageCount ? Number(att.pageCount) : undefined,
             lineCount: att.lineCount ? Number(att.lineCount) : undefined,
-            uploadedBy: String(att.uploadedBy || socketMessage.senderId || (socketMessage as any).anonymousSenderId || ''),
+            uploadedBy: String(att.uploadedBy || socketMessage.senderId || ''),
             isAnonymous: Boolean(att.isAnonymous),
             createdAt: String(att.createdAt || new Date().toISOString()),
             metadata: att.metadata || undefined,
@@ -546,7 +486,7 @@ class MeeshySocketIOService {
     return {
       id: socketMessage.id,
       conversationId: socketMessage.conversationId,
-      senderId: socketMessage.senderId || (socketMessage as any).anonymousSenderId || '',
+      senderId: socketMessage.senderId || '',
       content: socketMessage.content,
       originalContent: (socketMessage as any).originalContent || socketMessage.content,
       originalLanguage: socketMessage.originalLanguage || 'fr',

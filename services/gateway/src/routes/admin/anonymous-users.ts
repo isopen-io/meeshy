@@ -34,14 +34,11 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;
       const { offsetNum, limitNum } = validatePagination(offset, limit);
 
-      const where: any = {};
+      const where: any = { type: 'anonymous' };
 
       if (search) {
         where.OR = [
-          { username: { contains: search, mode: 'insensitive' } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } }
+          { displayName: { contains: search, mode: 'insensitive' } }
         ];
       }
 
@@ -52,39 +49,27 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
       }
 
       const [anonymousUsers, totalCount] = await Promise.all([
-        fastify.prisma.anonymousParticipant.findMany({
+        fastify.prisma.participant.findMany({
           where,
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            username: true,
-            email: true,
-            sessionToken: true,
-            ipAddress: true,
-            country: true,
+            displayName: true,
+            avatar: true,
             language: true,
             isActive: true,
             isOnline: true,
             lastActiveAt: true,
             joinedAt: true,
             leftAt: true,
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true,
-            shareLink: {
+            permissions: true,
+            anonymousSession: true,
+            sessionTokenHash: true,
+            conversationId: true,
+            conversation: {
               select: {
                 id: true,
-                linkId: true,
                 identifier: true,
-                name: true,
-                conversation: {
-                  select: {
-                    id: true,
-                    identifier: true,
-                    title: true
-                  }
-                }
+                title: true
               }
             },
             _count: {
@@ -97,7 +82,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
           skip: offsetNum,
           take: limitNum
         }),
-        fastify.prisma.anonymousParticipant.count({ where })
+        fastify.prisma.participant.count({ where })
       ]);
 
       return reply.send({

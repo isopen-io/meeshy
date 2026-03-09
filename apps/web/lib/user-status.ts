@@ -8,7 +8,7 @@
  */
 
 import type { SocketIOUser as User } from '@meeshy/shared/types';
-import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { Participant } from '@meeshy/shared/types/participant';
 
 export type UserStatus = 'online' | 'away' | 'offline';
 
@@ -17,7 +17,7 @@ export type UserStatus = 'online' | 'away' | 'offline';
  * 5-30 min  → ORANGE (away)
  * > 30 min  → GRIS  (offline)
  */
-export function getUserStatus(user: User | AnonymousParticipant | null | undefined): UserStatus {
+export function getUserStatus(user: User | Participant | null | undefined): UserStatus {
   if (!user) return 'offline';
 
   const lastActiveAt = user.lastActiveAt ? new Date(user.lastActiveAt) : null;

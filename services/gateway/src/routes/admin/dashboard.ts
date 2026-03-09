@@ -53,9 +53,9 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
         activeAnonymousUsers,
         inactiveAnonymousUsers
       ] = await Promise.all([
-        fastify.prisma.anonymousParticipant.count(),
-        fastify.prisma.anonymousParticipant.count({ where: { isActive: true } }),
-        fastify.prisma.anonymousParticipant.count({ where: { isActive: false } })
+        fastify.prisma.participant.count({ where: { type: 'anonymous' } }),
+        fastify.prisma.participant.count({ where: { type: 'anonymous', isActive: true } }),
+        fastify.prisma.participant.count({ where: { type: 'anonymous', isActive: false } })
       ]);
 
       // 3. Statistiques des messages
@@ -102,8 +102,8 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: { createdAt: { gte: last24Hours }, deletedAt: null }
         }),
-        fastify.prisma.anonymousParticipant.count({
-          where: { joinedAt: { gte: last24Hours } }
+        fastify.prisma.participant.count({
+          where: { type: 'anonymous', joinedAt: { gte: last24Hours } }
         })
       ]);
 

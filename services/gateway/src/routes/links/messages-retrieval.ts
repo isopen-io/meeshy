@@ -114,7 +114,7 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
       let hasAccess = false;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
-        const member = await fastify.prisma.conversationMember.findFirst({
+        const member = await fastify.prisma.participant.findFirst({
           where: {
             conversationId: shareLink.conversationId,
             userId: hybridRequest.user.id,

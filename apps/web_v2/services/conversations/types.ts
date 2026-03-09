@@ -135,7 +135,6 @@ export interface BackendMessageData {
   id: unknown;
   content: unknown;
   senderId?: unknown;
-  anonymousSenderId?: unknown;
   conversationId: unknown;
   originalLanguage?: unknown;
   messageType?: unknown;
@@ -156,7 +155,6 @@ export interface BackendMessageData {
   createdAt: unknown;
   updatedAt: unknown;
   sender?: unknown;
-  anonymousSender?: unknown;
   translations?: unknown[];
   replyTo?: unknown;
   attachments?: unknown[];
@@ -180,7 +178,7 @@ export interface BackendConversationData {
   lastMessageAt?: unknown;
   createdAt: unknown;
   updatedAt: unknown;
-  members?: unknown[];
+  participants?: unknown[];
   lastMessage?: unknown;
   unreadCount?: unknown;
 }

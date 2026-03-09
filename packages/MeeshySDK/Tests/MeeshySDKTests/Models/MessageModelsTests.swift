@@ -236,13 +236,12 @@ final class MessageModelsTests: XCTestCase {
         let reaction = MeeshyReaction(messageId: "m1", emoji: "heart")
         XCTAssertEqual(reaction.messageId, "m1")
         XCTAssertEqual(reaction.emoji, "heart")
-        XCTAssertNil(reaction.userId)
-        XCTAssertNil(reaction.anonymousId)
+        XCTAssertNil(reaction.participantId)
     }
 
-    func testReactionInitWithUserId() {
-        let reaction = MeeshyReaction(messageId: "m2", userId: "u1", emoji: "thumbsup")
-        XCTAssertEqual(reaction.userId, "u1")
+    func testReactionInitWithParticipantId() {
+        let reaction = MeeshyReaction(messageId: "m2", participantId: "u1", emoji: "thumbsup")
+        XCTAssertEqual(reaction.participantId, "u1")
         XCTAssertEqual(reaction.emoji, "thumbsup")
     }
 

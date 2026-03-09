@@ -127,18 +127,18 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
       const device = detectDevice(userAgent);
 
       let userId: string | undefined;
-      let anonymousId: string | undefined;
+      let participantId: string | undefined;
 
       if (isRegisteredUser(request.authContext)) {
         userId = request.authContext.registeredUser!.id;
-      } else if (request.authContext.type === 'session' && request.authContext.anonymousUser) {
-        anonymousId = request.authContext.anonymousUser.id;
+      } else if (request.authContext.type === 'anonymous' && request.authContext.anonymousUser) {
+        participantId = request.authContext.participantId;
       }
 
       await trackingLinkService.recordClick({
         token,
         userId,
-        anonymousId,
+        participantId,
         ipAddress,
         userAgent,
         browser,
@@ -268,18 +268,18 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
       const userAgent = body.userAgent || request.headers['user-agent'] as string;
 
       let userId: string | undefined;
-      let anonymousId: string | undefined;
+      let participantId: string | undefined;
 
       if (isRegisteredUser(request.authContext)) {
         userId = request.authContext.registeredUser!.id;
-      } else if (request.authContext.type === 'session' && request.authContext.anonymousUser) {
-        anonymousId = request.authContext.anonymousUser.id;
+      } else if (request.authContext.type === 'anonymous' && request.authContext.anonymousUser) {
+        participantId = request.authContext.participantId;
       }
 
       const result = await trackingLinkService.recordClick({
         token,
         userId,
-        anonymousId,
+        participantId,
         ipAddress,
         userAgent,
         browser: body.browser || detectBrowser(userAgent),

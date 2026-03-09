@@ -133,11 +133,6 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
               type: true,
               description: true
             }
-          },
-          anonymousParticipants: {
-            select: {
-              id: true
-            }
           }
         },
         orderBy: {
@@ -162,9 +157,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
           avatar: authContext.registeredUser.avatar
         },
         stats: {
-          totalParticipants: link.anonymousParticipants.length,
+          totalParticipants: link.currentUses ?? 0,
           memberCount: 0,
-          anonymousCount: link.anonymousParticipants.length,
+          anonymousCount: link.currentUses ?? 0,
           languageCount: link.allowedLanguages?.length || 0,
           spokenLanguages: link.allowedLanguages || []
         }
@@ -267,7 +262,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId, isActive: true }
               }
             }
@@ -283,7 +278,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.members.some(member =>
+      const isConversationAdmin = link.conversation.participants.some(member =>
         member.role === 'ADMIN' || member.role === 'MODERATOR'
       );
 
@@ -415,7 +410,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId, isActive: true }
               }
             }
@@ -431,7 +426,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.members.some(member =>
+      const isConversationAdmin = link.conversation.participants.some(member =>
         member.role === 'ADMIN' || member.role === 'MODERATOR'
       );
 
@@ -554,7 +549,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId, isActive: true }
               }
             }
@@ -570,7 +565,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      const isConversationAdmin = link.conversation.members.some(member =>
+      const isConversationAdmin = link.conversation.participants.some(member =>
         member.role === 'ADMIN' || member.role === 'MODERATOR'
       );
 

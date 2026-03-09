@@ -321,7 +321,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
           include: {
             conversation: {
               include: {
-                members: true
+                participants: true
               }
             }
           }
@@ -347,7 +347,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // Vérifier l'accès (optionnel, selon vos besoins)
         const userId = (request as any).user?.id;
         if (userId) {
-          const hasAccess = existingMessage.conversation.members.some((member: any) => member.userId === userId);
+          const hasAccess = existingMessage.conversation.participants.some((member: any) => member.userId === userId);
           if (!hasAccess) {
             return reply.status(403).send({
               success: false,

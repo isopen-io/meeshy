@@ -560,7 +560,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         const existingConversation = await fastify.prisma.conversation.findFirst({
           where: {
             type: 'direct',
-            members: {
+            participants: {
               every: {
                 userId: {
                   in: [friendRequest.senderId, friendRequest.receiverId]
@@ -574,14 +574,22 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           // Generer un identifier unique pour la conversation directe
           const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
 
+          const [senderUser, receiverUser] = await Promise.all([
+            fastify.prisma.user.findUnique({ where: { id: friendRequest.senderId }, select: { displayName: true, username: true } }),
+            fastify.prisma.user.findUnique({ where: { id: friendRequest.receiverId }, select: { displayName: true, username: true } })
+          ]);
+          const defaultPerms = {
+            canSendMessages: true, canSendFiles: true, canSendImages: true,
+            canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
+          };
           const conversation = await fastify.prisma.conversation.create({
             data: {
               identifier,
               type: 'direct',
-              members: {
+              participants: {
                 create: [
-                  { userId: friendRequest.senderId, role: 'member' },
-                  { userId: friendRequest.receiverId, role: 'member' }
+                  { userId: friendRequest.senderId, type: 'user', displayName: senderUser?.displayName || senderUser?.username || 'User', role: 'member', permissions: defaultPerms },
+                  { userId: friendRequest.receiverId, type: 'user', displayName: receiverUser?.displayName || receiverUser?.username || 'User', role: 'member', permissions: defaultPerms }
                 ]
               }
             }

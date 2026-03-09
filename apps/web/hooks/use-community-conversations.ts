@@ -29,18 +29,16 @@ export function useCommunityConversations() {
         // Mapper les conversations pour corriger les incohérences de format
         const mappedConversations = rawConversations.map((conv: any) => ({
           ...conv,
-          participants: conv.members || [],
+          participants: conv.participants || [],
           isPrivate: selectedGroupIsPrivate || false,
-          members: conv.members || []
         }));
 
         setCommunityConversations(mappedConversations || []);
       } else if (Array.isArray(response.data)) {
         const mappedConversations = response.data.map((conv: any) => ({
           ...conv,
-          participants: conv.members || [],
+          participants: conv.participants || [],
           isPrivate: selectedGroupIsPrivate || false,
-          members: conv.members || []
         }));
         setCommunityConversations(mappedConversations);
       } else {

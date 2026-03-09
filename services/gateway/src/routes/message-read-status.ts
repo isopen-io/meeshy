@@ -49,7 +49,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           conversationId: true,
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true }
               }
@@ -66,7 +66,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
-      if (!message.conversation.members.length) {
+      if (!message.conversation.participants.length) {
         return reply.status(403).send({
           success: false,
           error: 'Accès non autorisé à ce message'
@@ -111,7 +111,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       const userId = authRequest.authContext.userId;
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId,
           userId: userId,
@@ -175,7 +175,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       const userId = authRequest.authContext.userId;
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId,
           userId: userId,
@@ -249,7 +249,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       const userId = authRequest.authContext.userId;
 
       // Vérifier l'accès à la conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId,
           userId: userId,

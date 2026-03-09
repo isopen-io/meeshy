@@ -1,32 +1,47 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
 
 /**
+ * Extracts sender info from unified Participant model
+ */
+function extractSenderInfo(sender: any) {
+  if (!sender) return { id: 'unknown', username: 'unknown', isMeeshyer: false };
+
+  if (sender.type === 'user' && sender.user) {
+    return {
+      id: sender.user.id,
+      username: sender.user.username,
+      firstName: sender.user.firstName,
+      lastName: sender.user.lastName,
+      displayName: sender.user.displayName,
+      avatar: sender.user.avatar,
+      isMeeshyer: true
+    };
+  }
+
+  return {
+    id: sender.id,
+    username: sender.displayName,
+    firstName: sender.displayName,
+    lastName: '',
+    displayName: sender.displayName,
+    avatar: sender.avatar,
+    isMeeshyer: false
+  };
+}
+
+/**
  * Formate un message avec sender unifié pour l'affichage
  */
 export function formatMessageWithUnifiedSender(message: any) {
+  const senderInfo = extractSenderInfo(message.sender);
+
   return {
     id: message.id,
     content: message.content,
     originalLanguage: message.originalLanguage || 'fr',
     createdAt: message.createdAt,
     status: message.status || [],
-    sender: message.sender ? {
-      id: message.sender.id,
-      username: message.sender.username,
-      firstName: message.sender.firstName,
-      lastName: message.sender.lastName,
-      displayName: message.sender.displayName,
-      avatar: message.sender.avatar,
-      isMeeshyer: true
-    } : {
-      id: message.anonymousSender!.id,
-      username: message.anonymousSender!.username,
-      firstName: message.anonymousSender!.firstName,
-      lastName: message.anonymousSender!.lastName,
-      displayName: undefined,
-      avatar: undefined,
-      isMeeshyer: false
-    },
+    sender: senderInfo,
     translations: transformTranslationsToArray(
       message.id,
       message.translations as Record<string, any>
@@ -35,9 +50,12 @@ export function formatMessageWithUnifiedSender(message: any) {
 }
 
 /**
- * Formate un message avec sender et anonymousSender séparés
+ * Formate un message avec sender et anonymousSender séparés (backward compat)
  */
 export function formatMessageWithSeparateSenders(message: any) {
+  const senderInfo = extractSenderInfo(message.sender);
+  const isAnonymous = message.sender?.type === 'anonymous';
+
   return {
     id: message.id,
     content: message.content,
@@ -51,21 +69,21 @@ export function formatMessageWithSeparateSenders(message: any) {
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
     statusEntries: message.statusEntries || [],
-    sender: message.sender ? {
-      id: message.sender.id,
-      username: message.sender.username,
-      firstName: message.sender.firstName,
-      lastName: message.sender.lastName,
-      displayName: message.sender.displayName,
-      avatar: message.sender.avatar,
-      systemLanguage: message.sender.systemLanguage
+    sender: !isAnonymous ? {
+      id: senderInfo.id,
+      username: senderInfo.username,
+      firstName: senderInfo.firstName,
+      lastName: senderInfo.lastName,
+      displayName: senderInfo.displayName,
+      avatar: senderInfo.avatar,
+      systemLanguage: message.sender?.user?.systemLanguage
     } : null,
-    anonymousSender: message.anonymousSender ? {
-      id: message.anonymousSender.id,
-      username: message.anonymousSender.username,
-      firstName: message.anonymousSender.firstName,
-      lastName: message.anonymousSender.lastName,
-      language: message.anonymousSender.language
+    anonymousSender: isAnonymous ? {
+      id: senderInfo.id,
+      username: senderInfo.username,
+      firstName: senderInfo.firstName,
+      lastName: senderInfo.lastName,
+      language: message.sender?.language
     } : null,
     attachments: message.attachments || [],
     replyTo: message.replyTo ? formatReplyToMessage(message.replyTo) : null,
@@ -81,26 +99,29 @@ export function formatMessageWithSeparateSenders(message: any) {
  * Formate le message répondu (replyTo)
  */
 function formatReplyToMessage(replyTo: any) {
+  const senderInfo = extractSenderInfo(replyTo.sender);
+  const isAnonymous = replyTo.sender?.type === 'anonymous';
+
   return {
     id: replyTo.id,
     content: replyTo.content,
     originalLanguage: replyTo.originalLanguage || 'fr',
     messageType: replyTo.messageType,
     createdAt: replyTo.createdAt,
-    sender: replyTo.sender ? {
-      id: replyTo.sender.id,
-      username: replyTo.sender.username,
-      firstName: replyTo.sender.firstName,
-      lastName: replyTo.sender.lastName,
-      displayName: replyTo.sender.displayName,
-      avatar: replyTo.sender.avatar
+    sender: !isAnonymous ? {
+      id: senderInfo.id,
+      username: senderInfo.username,
+      firstName: senderInfo.firstName,
+      lastName: senderInfo.lastName,
+      displayName: senderInfo.displayName,
+      avatar: senderInfo.avatar
     } : null,
-    anonymousSender: replyTo.anonymousSender ? {
-      id: replyTo.anonymousSender.id,
-      username: replyTo.anonymousSender.username,
-      firstName: replyTo.anonymousSender.firstName,
-      lastName: replyTo.anonymousSender.lastName,
-      language: replyTo.anonymousSender.language
+    anonymousSender: isAnonymous ? {
+      id: senderInfo.id,
+      username: senderInfo.username,
+      firstName: senderInfo.firstName,
+      lastName: senderInfo.lastName,
+      language: replyTo.sender?.language
     } : null
   };
 }

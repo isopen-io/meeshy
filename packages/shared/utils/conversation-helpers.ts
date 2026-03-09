@@ -76,6 +76,29 @@ export function generateConversationIdentifier(title?: string): string {
 }
 
 /**
+ * Résout la langue préférée d'un participant unifié (user, anonymous, bot)
+ * Applique le Prisme Linguistique : custom > regional > system > fallback language
+ */
+type LanguageResolvable = {
+  type: string
+  language: string
+  user?: {
+    customDestinationLanguage?: string | null
+    regionalLanguage?: string | null
+    systemLanguage: string
+  } | null
+}
+
+export function resolveParticipantLanguage(participant: LanguageResolvable): string {
+  if (participant.type === 'user' && participant.user) {
+    if (participant.user.customDestinationLanguage) return participant.user.customDestinationLanguage
+    if (participant.user.regionalLanguage) return participant.user.regionalLanguage
+    return participant.user.systemLanguage
+  }
+  return participant.language
+}
+
+/**
  * Vérifie si un identifiant est un ObjectID MongoDB valide
  */
 export function isValidMongoId(id: string): boolean {

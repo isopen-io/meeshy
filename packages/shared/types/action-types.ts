@@ -42,7 +42,7 @@ export interface ReactionEvent {
   messageId: string;
   emoji: string;
   userId?: string;
-  anonymousId?: string;
+  participantId?: string;
   timestamp: Date;
 }
 

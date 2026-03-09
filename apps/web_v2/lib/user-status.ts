@@ -3,7 +3,7 @@
  */
 
 import type { SocketIOUser as User } from '@meeshy/shared/types';
-import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { Participant } from '@meeshy/shared/types/participant';
 
 export type UserStatus = 'online' | 'away' | 'offline';
 
@@ -13,7 +13,7 @@ export type UserStatus = 'online' | 'away' | 'offline';
  * - away (orange): inactif depuis 5-30 minutes
  * - offline (gris): hors ligne depuis plus de 30 minutes
  */
-export function getUserStatus(user: User | AnonymousParticipant | null | undefined): UserStatus {
+export function getUserStatus(user: User | Participant | null | undefined): UserStatus {
   if (!user) return 'offline';
 
   // Si l'utilisateur a une propriété isOnline explicite et elle est false, retourner offline

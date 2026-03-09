@@ -59,7 +59,7 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -67,8 +67,7 @@ export class ReactionHandler {
       const reaction = await reactionService.addReaction({
         messageId: data.messageId,
         emoji: data.emoji,
-        userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       });
 
       if (!reaction) {
@@ -84,8 +83,7 @@ export class ReactionHandler {
         data.messageId,
         data.emoji,
         'add',
-        !isAnonymous ? userId : undefined,
-        isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -141,7 +139,7 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -149,8 +147,7 @@ export class ReactionHandler {
       const removed = await reactionService.removeReaction({
         messageId: data.messageId,
         emoji: data.emoji,
-        userId: !isAnonymous ? userId : undefined,
-        anonymousId: isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       });
 
       if (!removed) {
@@ -166,8 +163,7 @@ export class ReactionHandler {
         data.messageId,
         data.emoji,
         'remove',
-        !isAnonymous ? userId : undefined,
-        isAnonymous && sessionToken ? sessionToken : undefined
+        participantId
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -220,15 +216,14 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const sessionToken = user?.sessionToken;
+      const participantId = user?.participantId || userId;
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
 
       const reactionSync = await reactionService.getMessageReactions({
         messageId,
-        currentUserId: !isAnonymous ? userId : undefined,
-        currentAnonymousUserId: isAnonymous && sessionToken ? sessionToken : undefined
+        currentParticipantId: participantId
       });
 
       const successResponse: SocketIOResponse<unknown> = {

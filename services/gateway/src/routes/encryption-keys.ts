@@ -83,7 +83,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
             id: true,
             encryptionMode: true,
             encryptionEnabledAt: true,
-            members: {
+            participants: {
               where: { isActive: true },
               select: {
                 userId: true,
@@ -106,7 +106,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
         }
 
         // Check if user is a member
-        const isMember = conversation.members.some(m => m.userId === userId);
+        const isMember = conversation.participants.some(m => m.userId === userId);
         if (!isMember) {
           return reply.status(403).send({
             success: false,
@@ -161,7 +161,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
         });
 
         // Get other participants' public keys
-        const otherMemberIds = conversation.members
+        const otherMemberIds = conversation.participants
           .map(m => m.userId)
           .filter(id => id !== userId);
 
@@ -242,7 +242,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
             id: true,
             encryptionMode: true,
             encryptionEnabledAt: true,
-            members: {
+            participants: {
               where: { isActive: true, userId },
               select: { userId: true }
             }
@@ -257,7 +257,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
         }
 
         // Check if user is a member
-        if (conversation.members.length === 0) {
+        if (conversation.participants.length === 0) {
           return reply.status(403).send({
             success: false,
             error: 'Not a member of this conversation'
@@ -390,7 +390,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
             id: true,
             encryptionMode: true,
             encryptionEnabledAt: true,
-            members: {
+            participants: {
               where: { isActive: true, userId },
               select: { userId: true }
             }
@@ -405,7 +405,7 @@ export default async function encryptionKeysRoutes(fastify: FastifyInstance) {
         }
 
         // Check if user is a member
-        if (conversation.members.length === 0) {
+        if (conversation.participants.length === 0) {
           return reply.status(403).send({
             success: false,
             error: 'Not a member of this conversation'

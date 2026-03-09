@@ -1,27 +1,27 @@
 /**
- * Types unifiés pour les conversations Meeshy
- * Harmonisation Gateway ↔ Frontend
+ * Types unifies pour les conversations Meeshy
+ * Harmonisation Gateway <-> Frontend
  */
 
 import type { SocketIOUser as User, MessageType } from './socketio-events.js';
-import type { AnonymousParticipant } from './anonymous.js';
+import type { Participant } from './participant.js';
 import type { Attachment } from './attachment.js';
 
 /**
- * Import du type UserRole depuis user.ts (éviter la duplication)
+ * Import du type UserRole depuis user.ts (eviter la duplication)
  * @see user.ts UserRole type
  */
 import type { UserRole } from './user.js';
 
 /**
- * Import du type MemberRoleType depuis role-types.ts (type unifié pour conversations et communautés)
+ * Import du type MemberRoleType depuis role-types.ts (type unifie pour conversations et communautes)
  * @see role-types.ts MemberRole enum
  */
 import type { MemberRoleType } from './role-types.js';
 import { isMemberAdmin as isMemberAdminRole, isMemberModerator as isMemberModeratorRole } from './role-types.js';
 
 /**
- * Langue parlée avec statistiques
+ * Langue parlee avec statistiques
  */
 export interface LanguageUsageStats {
   readonly language: string;
@@ -43,8 +43,8 @@ export interface LanguagePair {
  */
 export interface TranslationStatsData {
   readonly totalTranslations: number;
-  readonly cacheHitRate: number;             // % traductions depuis cache
-  readonly averageTranslationTime: number;   // En ms
+  readonly cacheHitRate: number;
+  readonly averageTranslationTime: number;
   readonly topLanguagePairs: readonly LanguagePair[];
 }
 
@@ -54,10 +54,10 @@ export interface TranslationStatsData {
 export interface ConversationStats {
   readonly totalMessages: number;
   readonly totalParticipants: number;
-  readonly activeParticipants: number;          // Participants actifs dernières 24h
+  readonly activeParticipants: number;
   readonly messagesLast24h: number;
   readonly messagesLast7days: number;
-  readonly averageResponseTime: number;         // En minutes
+  readonly averageResponseTime: number;
   readonly topLanguages: readonly LanguageUsageStats[];
   readonly translationStats: TranslationStatsData;
   readonly lastActivity: Date;
@@ -65,19 +65,17 @@ export interface ConversationStats {
 }
 
 /**
- * Types d'identifiants supportés pour une conversation
- * - id: ObjectId MongoDB (TOUJOURS pour API/WebSocket)
- * - identifier: Human-readable (OPTIONNEL pour URLs)
+ * Types d'identifiants supportes pour une conversation
  */
 export interface ConversationIdentifiers {
-  readonly id: string;           // ObjectId MongoDB - TOUJOURS pour API/WebSocket
-  readonly identifier?: string;  // Human-readable - OPTIONNEL pour URLs
+  readonly id: string;
+  readonly identifier?: string;
 }
 
 // ===== MESSAGE TYPES CONSOLIDATED =====
 
 /**
- * Modèle de traduction
+ * Modele de traduction
  */
 export type TranslationModel = 'basic' | 'medium' | 'premium';
 
@@ -107,7 +105,8 @@ export interface MessageTranslation {
 }
 
 /**
- * Informations d'un expéditeur anonyme
+ * Informations d'un expediteur anonyme
+ * @deprecated Use Participant with type='anonymous' instead
  */
 export interface AnonymousSenderInfo {
   readonly id: string;
@@ -131,48 +130,43 @@ export type { EncryptionMode };
 /**
  * MESSAGE - Type principal pour toutes les communications
  * Aligned with schema.prisma Message model
- * Utilisé par :
- * - Gateway (API, WebSocket, Socket.IO)
- * - Frontend (affichage, état)
- * - Translator (traitement)
  */
 export interface Message {
   // ===== IDENTIFIANTS =====
   readonly id: string;
   readonly conversationId: string;
-  readonly senderId?: string;           // ID utilisateur authentifié
-  readonly anonymousSenderId?: string;  // ID utilisateur anonyme
+  readonly senderId: string;
 
   // ===== CONTENU =====
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
-  readonly messageSource: MessageSource;  // user, system, ads, app, agent, authority
+  readonly messageSource: MessageSource;
 
-  // ===== ÉTAT DU MESSAGE =====
+  // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
   readonly isDeleted: boolean;
   readonly deletedAt?: Date;
 
-  // ===== RÉPONSE & FORWARDING =====
+  // ===== REPONSE & FORWARDING =====
   readonly replyToId?: string;
   readonly replyTo?: Message;
-  readonly forwardedFromId?: string;              // Original message ID if forwarded
-  readonly forwardedFromConversationId?: string;  // Original conversation ID
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
 
   // ===== EXPIRATION =====
-  readonly expiresAt?: Date;  // Self-destructing messages
+  readonly expiresAt?: Date;
 
   // ===== VIEW-ONCE & BLUR =====
-  readonly isViewOnce: boolean;        // View-once message (disappears after view)
-  readonly maxViewOnceCount?: number;  // Max unique viewers allowed
-  readonly viewOnceCount: number;      // Number of unique viewers (denormalized)
-  readonly isBlurred: boolean;         // Content blurred until tap to reveal
+  readonly isViewOnce: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly viewOnceCount: number;
+  readonly isBlurred: boolean;
 
   // ===== PINNING =====
-  readonly pinnedAt?: Date;   // Date when message was pinned (null = not pinned)
-  readonly pinnedBy?: string; // User ID who pinned the message
+  readonly pinnedAt?: Date;
+  readonly pinnedBy?: string;
 
   // ===== DELIVERY STATUS (denormalized) =====
   readonly deliveredToAllAt?: Date;
@@ -182,24 +176,24 @@ export interface Message {
   readonly readCount: number;
 
   // ===== REACTION SUMMARY (denormalized) =====
-  readonly reactionSummary?: Record<string, number>; // { "❤️": 5, "👍": 3 }
+  readonly reactionSummary?: Record<string, number>;
   readonly reactionCount: number;
 
   // ===== E2EE / ENCRYPTION =====
-  readonly encryptedContent?: string;       // Base64 encoded ciphertext
-  readonly encryptionMode?: EncryptionMode; // 'server', 'e2ee', 'hybrid', null
-  readonly encryptionMetadata?: Record<string, unknown>;  // IV, auth tag, key version
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionMode;
+  readonly encryptionMetadata?: Record<string, unknown>;
   readonly isEncrypted: boolean;
 
-  // ===== MÉTADONNÉES =====
+  // ===== METADONNEES =====
   readonly createdAt: Date;
   readonly updatedAt?: Date;
 
   // ===== MENTIONS =====
   readonly validatedMentions?: readonly string[];
 
-  // ===== EXPÉDITEUR =====
-  readonly sender?: User | AnonymousParticipant;
+  // ===== EXPEDITEUR =====
+  readonly sender?: Participant;
 
   // ===== TRADUCTIONS =====
   readonly translations: readonly MessageTranslation[];
@@ -207,22 +201,21 @@ export interface Message {
   // ===== ATTACHMENTS =====
   readonly attachments?: readonly Attachment[];
 
-  // ===== COMPATIBILITÉ =====
-  readonly timestamp: Date;  // Alias pour createdAt
+  // ===== COMPATIBILITE =====
+  readonly timestamp: Date;
 
   // ===== PARTICIPANT ANONYME =====
+  /** @deprecated Use sender (Participant) instead */
   readonly anonymousSender?: AnonymousSenderInfo;
 }
 
 /**
  * Statut de traduction UI
- * Note: 'translating' est un alias UI de 'in_progress' du ProcessStatus canonique
- * @see status-types.ts UITranslationStatus pour le type canonique avec fonction de conversion
  */
 export type UITranslationStatus = 'pending' | 'translating' | 'completed' | 'failed';
 
 /**
- * État de traduction dans l'interface utilisateur
+ * Etat de traduction dans l'interface utilisateur
  */
 export interface UITranslationState {
   readonly language: string;
@@ -239,29 +232,21 @@ export interface UITranslationState {
  * Statut de lecture pour un message
  */
 export interface MessageReadStatus {
-  readonly userId: string;
+  readonly participantId: string;
   readonly readAt: Date;
 }
 
 /**
- * MESSAGE AVEC TRADUCTIONS - Message enrichi avec traductions et états UI
- * Utilisé par le Frontend pour l'affichage et la gestion des traductions
+ * MESSAGE AVEC TRADUCTIONS - Message enrichi avec traductions et etats UI
  */
 export interface MessageWithTranslations extends Message {
-  // ===== TRADUCTIONS UI =====
   readonly uiTranslations: readonly UITranslationState[];
   readonly translatingLanguages: Set<string>;
   readonly currentDisplayLanguage: string;
   readonly showingOriginal: boolean;
   readonly originalContent: string;
-
-  // ===== ÉTAT DE LECTURE =====
   readonly readStatus?: readonly MessageReadStatus[];
-
-  // ===== MÉTADONNÉES SUPPLÉMENTAIRES =====
   readonly location?: string;
-
-  // ===== PERMISSIONS UI =====
   readonly canEdit: boolean;
   readonly canDelete: boolean;
   readonly canTranslate: boolean;
@@ -279,7 +264,7 @@ export type ConversationType = 'direct' | 'group' | 'public' | 'global' | 'broad
 export type ConversationStatus = 'active' | 'archived' | 'deleted';
 
 /**
- * Visibilité de conversation
+ * Visibilite de conversation
  */
 export type ConversationVisibility = 'public' | 'private' | 'restricted';
 
@@ -289,15 +274,15 @@ export type ConversationVisibility = 'public' | 'private' | 'restricted';
 export type ConversationLinkType = 'invite' | 'share' | 'embed';
 
 /**
- * Rôle minimum requis pour envoyer des messages dans une conversation
- * Aligned with schema.prisma Conversation.defaultWriteRole
+ * Role minimum requis pour envoyer des messages dans une conversation
  */
 export type ConversationWriteRole = 'everyone' | 'member' | 'moderator' | 'admin' | 'creator';
 
 /**
- * Permissions d'un participant
+ * Permissions administratives d'un participant dans une conversation
+ * (invite, remove, edit, moderate capabilities)
  */
-export interface ParticipantPermissions {
+export interface ConversationAdminPermissions {
   readonly canInvite: boolean;
   readonly canRemove: boolean;
   readonly canEdit: boolean;
@@ -306,19 +291,12 @@ export interface ParticipantPermissions {
 }
 
 /**
- * Participant d'une conversation
+ * @deprecated Use ConversationAdminPermissions for admin perms, or ParticipantPermissions from participant.ts for send perms
  */
-export interface ConversationParticipantInfo {
-  readonly userId: string;
-  readonly role: UserRole;
-  readonly joinedAt: Date;
-  readonly isActive: boolean;
-  readonly permissions?: ParticipantPermissions;
-  readonly user?: any; // Enrichi par le frontend avec les données user depuis members
-}
+export type LegacyParticipantPermissions = ConversationAdminPermissions;
 
 /**
- * Paramètres d'une conversation
+ * Parametres d'une conversation
  */
 export interface ConversationSettings {
   readonly allowAnonymous: boolean;
@@ -346,43 +324,39 @@ export interface ConversationLink {
 }
 
 /**
- * Conversation unifiée
+ * Conversation unifiee
  * Aligned with schema.prisma Conversation model
- * Contient TOUS les champs utilisés dans Gateway et Frontend pour compatibilité totale
  */
 export interface Conversation {
   // ===== IDENTIFIANTS =====
   readonly id: string;
   readonly identifier?: string;
 
-  // ===== MÉTADONNÉES =====
+  // ===== METADONNEES =====
   readonly title?: string;
   readonly description?: string;
   readonly type: ConversationType;
   readonly status: ConversationStatus;
   readonly visibility: ConversationVisibility;
-  readonly image?: string;   // URL de l'image de la conversation
-  readonly avatar?: string;  // URL de l'avatar
-  readonly banner?: string;  // URL du banner/cover image
+  readonly image?: string;
+  readonly avatar?: string;
+  readonly banner?: string;
 
   // ===== COMMUNITY =====
   readonly communityId?: string;
   readonly isActive: boolean;
   readonly isArchived?: boolean;
-  readonly memberCount: number;  // Denormalized for performance
+  readonly memberCount: number;
 
   // ===== LEGACY COMPATIBILITY =====
-  readonly isGroup?: boolean;    // Derived from type === 'group'
-  readonly isPrivate?: boolean;  // Derived from visibility === 'private'
+  readonly isGroup?: boolean;
+  readonly isPrivate?: boolean;
 
-  // ===== PARTICIPANTS =====
-  readonly participants: readonly ConversationParticipantInfo[];
-
-  // ===== MEMBERS (ConversationMember avec user data) =====
-  readonly members?: readonly ConversationMember[];
+  // ===== PARTICIPANTS (unified) =====
+  readonly participants: readonly Participant[];
 
   // ===== USER PREFERENCES =====
-  readonly userPreferences?: any; // UserConversationPreference from DB
+  readonly userPreferences?: unknown;
 
   // ===== MESSAGES =====
   readonly lastMessage?: Message;
@@ -391,19 +365,16 @@ export interface Conversation {
   readonly unreadCount?: number;
 
   // ===== E2EE / ENCRYPTION =====
-  readonly encryptionMode?: EncryptionMode;       // null, 'server', 'e2ee'
-  readonly encryptionProtocol?: string;           // 'aes-256-gcm', 'signal_v3'
+  readonly encryptionMode?: EncryptionMode;
+  readonly encryptionProtocol?: string;
   readonly encryptionEnabledAt?: Date;
-  readonly encryptionEnabledBy?: string;          // User ID who enabled
-  readonly serverEncryptionKeyId?: string;        // For server-side encryption
-  readonly autoTranslateEnabled?: boolean;        // Auto-translation (disabled for E2EE)
+  readonly encryptionEnabledBy?: string;
+  readonly serverEncryptionKeyId?: string;
+  readonly autoTranslateEnabled?: boolean;
 
   // ===== WRITE PERMISSIONS =====
-  /** Minimum role required to send messages: everyone, member, moderator, admin, creator */
   readonly defaultWriteRole?: ConversationWriteRole;
-  /** Announcement-only mode (only creator/admins can write, overrides defaultWriteRole) */
   readonly isAnnouncementChannel?: boolean;
-  /** Slow mode - minimum seconds between messages per user (0 = disabled) */
   readonly slowModeSeconds?: number;
 
   // ===== STATISTIQUES =====
@@ -420,13 +391,13 @@ export interface Conversation {
   readonly updatedAt: Date;
   readonly lastActivityAt?: Date;
 
-  // ===== CRÉATEUR =====
+  // ===== CREATEUR =====
   readonly createdBy?: string;
   readonly createdByUser?: User;
 }
 
 /**
- * Membre d'une conversation (ThreadMember)
+ * @deprecated Use Participant instead
  */
 export interface ThreadMember {
   readonly id: string;
@@ -437,7 +408,7 @@ export interface ThreadMember {
   readonly joinedAt: Date;
   readonly isActive: boolean;
   readonly isAnonymous: boolean;
-  readonly permissions?: ParticipantPermissions;
+  readonly permissions?: ConversationAdminPermissions;
 }
 
 /**
@@ -452,7 +423,7 @@ export interface TranslationItem {
 }
 
 /**
- * Données de traduction reçues via Socket.IO
+ * Donnees de traduction recues via Socket.IO
  */
 export interface TranslationData {
   readonly messageId: string;
@@ -486,12 +457,10 @@ export interface ConversationShareLink {
   readonly isActive: boolean;
   readonly createdBy: string;
   readonly createdAt: Date;
-  // Permissions anonymes
   readonly allowAnonymousMessages?: boolean;
   readonly allowAnonymousFiles?: boolean;
   readonly allowAnonymousImages?: boolean;
   readonly allowViewHistory?: boolean;
-  // Exigences pour rejoindre
   readonly requireAccount?: boolean;
   readonly requireNickname?: boolean;
   readonly requireEmail?: boolean;
@@ -501,32 +470,42 @@ export interface ConversationShareLink {
 // ===== CONVERSATION PARTICIPANT =====
 
 /**
- * Participant de conversation (alias)
+ * @deprecated Use Participant from participant.ts instead
+ */
+export interface ConversationParticipantInfo {
+  readonly userId: string;
+  readonly role: UserRole;
+  readonly joinedAt: Date;
+  readonly isActive: boolean;
+  readonly permissions?: ConversationAdminPermissions;
+  readonly user?: unknown;
+}
+
+/**
+ * @deprecated Use Participant from participant.ts instead
  */
 export interface ConversationParticipant {
   readonly userId: string;
   readonly role: UserRole;
   readonly joinedAt: Date;
   readonly isActive: boolean;
-  readonly permissions?: ParticipantPermissions;
+  readonly permissions?: ConversationAdminPermissions;
 }
 
 // ===== TYPE ALIASES FOR COMPATIBILITY =====
 export type BubbleStreamMessage = MessageWithTranslations;
 
 // ===== STATUS ENTRY TYPES =====
-// Aligned with schema.prisma MessageStatusEntry and AttachmentStatusEntry
 
 /**
- * Per-user message delivery/read status
+ * Per-participant message delivery/read status
  * Aligned with schema.prisma MessageStatusEntry
  */
 export interface MessageStatusEntry {
   readonly id: string;
   readonly messageId: string;
   readonly conversationId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
 
   // Delivery timestamps
   readonly deliveredAt?: Date;
@@ -547,25 +526,24 @@ export interface MessageStatusEntry {
 }
 
 /**
- * Per-user attachment consumption status
+ * Per-participant attachment consumption status
  * Aligned with schema.prisma AttachmentStatusEntry
  */
 export interface AttachmentStatusEntry {
   readonly id: string;
   readonly attachmentId: string;
   readonly conversationId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
 
   // Delivery & consumption timestamps
   readonly deliveredAt?: Date;
   readonly viewedAt?: Date;
   readonly downloadedAt?: Date;
-  readonly listenedAt?: Date;      // Audio
-  readonly watchedAt?: Date;       // Video
+  readonly listenedAt?: Date;
+  readonly watchedAt?: Date;
 
   // Consumption metrics
-  readonly playbackPosition?: number;     // ms for audio/video
+  readonly playbackPosition?: number;
   readonly playbackCompleted: boolean;
   readonly downloadCount: number;
 
@@ -594,8 +572,7 @@ export interface AttachmentStatusEntry {
 export interface ConversationReadCursor {
   readonly id: string;
   readonly conversationId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
 
   readonly lastReadMessageId?: string;
   readonly lastReadAt?: Date;
@@ -612,8 +589,7 @@ export interface ConversationReadCursor {
 export interface AttachmentReaction {
   readonly id: string;
   readonly attachmentId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
   readonly emoji: string;
   readonly createdAt: Date;
 }
@@ -621,46 +597,27 @@ export interface AttachmentReaction {
 // ===== CONVERSATION SHARE =====
 
 /**
- * Partage d'une conversation vers une communauté
+ * Partage d'une conversation vers une communaute
  * Aligned with schema.prisma ConversationShare
  */
 export interface ConversationShare {
   readonly id: string;
-
-  /** ID de la conversation partagée */
   readonly conversationId: string;
-
-  /** ID de la communauté cible */
   readonly communityId: string;
-
-  /** ID de l'utilisateur qui a partagé */
   readonly sharedBy: string;
-
-  /** Titre optionnel du partage */
   readonly title?: string;
-
-  /** Description optionnelle */
   readonly description?: string;
-
-  /** Si le partage est épinglé/mis en avant */
   readonly isPinned: boolean;
-
-  /** Ordre d'affichage si épinglé */
   readonly pinOrder?: number;
-
-  /** Si le partage est actif */
   readonly isActive: boolean;
-
   readonly createdAt: Date;
   readonly updatedAt: Date;
-
-  /** Relations populées */
   readonly conversation?: Conversation;
   readonly sharer?: User;
 }
 
 /**
- * DTO pour créer un partage de conversation
+ * DTO pour creer un partage de conversation
  */
 export interface CreateConversationShareDTO {
   readonly conversationId: string;
@@ -671,7 +628,7 @@ export interface CreateConversationShareDTO {
 }
 
 /**
- * DTO pour mettre à jour un partage
+ * DTO pour mettre a jour un partage
  */
 export interface UpdateConversationShareDTO {
   readonly title?: string;
@@ -681,24 +638,17 @@ export interface UpdateConversationShareDTO {
   readonly isActive?: boolean;
 }
 
-// ===== CONVERSATION MEMBER =====
+// ===== CONVERSATION MEMBER (DEPRECATED) =====
 
 /**
- * Membre d'une conversation
- * Aligned with schema.prisma ConversationMember
+ * @deprecated Use Participant from participant.ts instead
  */
 export interface ConversationMember {
   readonly id: string;
   readonly conversationId: string;
   readonly userId: string;
-
-  /** Rôle: creator, admin, moderator, member */
   readonly role: MemberRoleType | string;
-
-  /** Surnom personnalisé dans la conversation */
   readonly nickname?: string;
-
-  /** Permissions granulaires */
   readonly canSendMessage: boolean;
   readonly canSendFiles: boolean;
   readonly canSendImages: boolean;
@@ -706,75 +656,78 @@ export interface ConversationMember {
   readonly canSendAudios: boolean;
   readonly canSendLocations: boolean;
   readonly canSendLinks: boolean;
-
   readonly joinedAt: Date;
   readonly leftAt?: Date;
   readonly isActive: boolean;
-
-  /** Relations populées */
   readonly user?: User;
   readonly conversation?: Conversation;
 }
 
 /**
- * Alias pour compatibilité avec ThreadMember existant
+ * @deprecated Use Participant from participant.ts instead
  */
 export type ConversationMemberCompat = ConversationMember;
 
 /**
- * DTO pour ajouter un membre à une conversation
+ * DTO pour ajouter un participant a une conversation
  */
-export interface AddConversationMemberDTO {
-  readonly userId: string;
+export interface AddParticipantDTO {
+  readonly userId?: string;
+  readonly type?: 'user' | 'anonymous' | 'bot';
   readonly role?: MemberRoleType;
   readonly nickname?: string;
+  readonly displayName?: string;
+  readonly language?: string;
 }
 
 /**
- * DTO pour mettre à jour un membre
+ * @deprecated Use AddParticipantDTO instead
  */
-export interface UpdateConversationMemberDTO {
+export type AddConversationMemberDTO = AddParticipantDTO;
+
+/**
+ * DTO pour mettre a jour un participant
+ */
+export interface UpdateParticipantDTO {
   readonly role?: MemberRoleType;
   readonly nickname?: string;
-  readonly canSendMessage?: boolean;
-  readonly canSendFiles?: boolean;
-  readonly canSendImages?: boolean;
-  readonly canSendVideos?: boolean;
-  readonly canSendAudios?: boolean;
-  readonly canSendLocations?: boolean;
-  readonly canSendLinks?: boolean;
+  readonly permissions?: {
+    readonly canSendMessages?: boolean;
+    readonly canSendFiles?: boolean;
+    readonly canSendImages?: boolean;
+    readonly canSendVideos?: boolean;
+    readonly canSendAudios?: boolean;
+    readonly canSendLocations?: boolean;
+    readonly canSendLinks?: boolean;
+  };
   readonly isActive?: boolean;
 }
+
+/**
+ * @deprecated Use UpdateParticipantDTO instead
+ */
+export type UpdateConversationMemberDTO = UpdateParticipantDTO;
 
 // ===== CONVERSATION PREFERENCE =====
 
 /**
- * Préférence de conversation (clé/valeur)
+ * Preference de conversation (cle/valeur)
  * Aligned with schema.prisma ConversationPreference
  */
 export interface ConversationPreference {
   readonly id: string;
   readonly conversationId: string;
   readonly userId: string;
-
-  /** Clé de la préférence */
   readonly key: string;
-
-  /** Valeur de la préférence */
   readonly value: string;
-
-  /** Type de valeur (string, number, boolean, json) */
   readonly valueType: 'string' | 'number' | 'boolean' | 'json';
-
-  /** Description optionnelle */
   readonly description?: string;
-
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
 
 /**
- * DTO pour créer une préférence
+ * DTO pour creer une preference
  */
 export interface CreateConversationPreferenceDTO {
   readonly conversationId: string;
@@ -785,7 +738,7 @@ export interface CreateConversationPreferenceDTO {
 }
 
 /**
- * DTO pour mettre à jour une préférence
+ * DTO pour mettre a jour une preference
  */
 export interface UpdateConversationPreferenceDTO {
   readonly value?: string;
@@ -794,7 +747,7 @@ export interface UpdateConversationPreferenceDTO {
 }
 
 /**
- * Collection de préférences d'un utilisateur pour une conversation
+ * Collection de preferences d'un utilisateur pour une conversation
  */
 export interface UserConversationPreferencesMap {
   readonly conversationId: string;
@@ -805,24 +758,21 @@ export interface UserConversationPreferencesMap {
 // ===== TYPE GUARDS =====
 
 /**
- * Vérifie si un membre (conversation ou communauté) est un admin
- * Utilise la fonction centralisée de role-types.ts
+ * Verifie si un membre est un admin
  */
 export function isMemberAdmin(member: { role: MemberRoleType | string }): boolean {
   return isMemberAdminRole(member.role as string);
 }
 
 /**
- * Vérifie si un membre (conversation ou communauté) est un modérateur ou plus
- * Utilise la fonction centralisée de role-types.ts
+ * Verifie si un membre est un moderateur ou plus
  */
 export function isMemberModerator(member: { role: MemberRoleType | string }): boolean {
   return isMemberModeratorRole(member.role as MemberRoleType);
 }
 
 /**
- * Vérifie si un membre (conversation ou communauté) est un créateur
- * Utilise la fonction centralisée de role-types.ts
+ * Verifie si un membre est un createur
  */
 export function isMemberCreator(member: { role: MemberRoleType | string }): boolean {
   const normalized = typeof member.role === 'string' ? member.role.toLowerCase() : member.role;
@@ -830,7 +780,14 @@ export function isMemberCreator(member: { role: MemberRoleType | string }): bool
 }
 
 /**
- * Vérifie si un membre peut envoyer des messages
+ * Verifie si un participant peut envoyer des messages
+ */
+export function canParticipantSendMessage(participant: Participant): boolean {
+  return participant.isActive && participant.permissions.canSendMessages;
+}
+
+/**
+ * @deprecated Use canParticipantSendMessage instead
  */
 export function canMemberSendMessage(member: ConversationMember): boolean {
   return member.isActive && member.canSendMessage;

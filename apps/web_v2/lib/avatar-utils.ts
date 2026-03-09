@@ -45,35 +45,13 @@ export function getUserInitials(user: User | null | undefined): string {
 
 /**
  * Génère les initiales pour un message (utilisateur ou anonyme)
- * @param message - L'objet message avec sender ou anonymousSender
+ * @param message - L'objet message avec sender
  * @returns Les initiales en majuscules
  */
 export function getMessageInitials(message: any): string {
   // Utilisateur normal
   if (message.sender) {
     return getUserInitials(message.sender);
-  }
-
-  // Utilisateur anonyme
-  if (message.anonymousSender) {
-    const firstName = message.anonymousSender.firstName || '';
-    const lastName = message.anonymousSender.lastName || '';
-    
-    if (firstName && lastName) {
-      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-    }
-    
-    if (firstName) {
-      return firstName.charAt(0).toUpperCase();
-    }
-    
-    if (lastName) {
-      return lastName.charAt(0).toUpperCase();
-    }
-    
-    if (message.anonymousSender.username) {
-      return message.anonymousSender.username.charAt(0).toUpperCase();
-    }
   }
 
   // Fallback

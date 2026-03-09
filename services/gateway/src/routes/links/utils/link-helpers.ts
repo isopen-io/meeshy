@@ -15,7 +15,7 @@ export function createLegacyHybridRequest(request: UnifiedAuthRequest): any {
       user: authContext.registeredUser,
       anonymousParticipant: null
     };
-  } else if (authContext.type === 'session' && authContext.anonymousUser) {
+  } else if ((authContext.type === 'anonymous') && authContext.anonymousUser) {
     return {
       isAuthenticated: true,
       isAnonymous: true,

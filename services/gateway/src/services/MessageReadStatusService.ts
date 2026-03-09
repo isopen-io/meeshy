@@ -78,28 +78,25 @@ export class MessageReadStatusService {
    * Utilise le cache unreadCount du curseur pour performance
    */
   async getUnreadCount(
-    userId: string,
+    participantId: string,
     conversationId: string
   ): Promise<number> {
     try {
-      // Récupérer le curseur de l'utilisateur
       const cursor = await this.prisma.conversationReadCursor.findUnique({
         where: {
-          conversation_user_cursor: { userId, conversationId },
+          conversation_participant_cursor: { participantId, conversationId },
         },
       });
 
-      // Si curseur existe avec unreadCount, utiliser le cache
       if (cursor) {
         return cursor.unreadCount;
       }
 
-      // Sinon, compter tous les messages (sauf ceux de l'utilisateur)
       return await this.prisma.message.count({
         where: {
           conversationId,
           deletedAt: null,
-          senderId: { not: userId },
+          senderId: { not: participantId },
         },
       });
     } catch (error) {
@@ -113,14 +110,13 @@ export class MessageReadStatusService {
    * Optimisé pour afficher la liste des conversations avec leurs compteurs
    */
   async getUnreadCountsForConversations(
-    userId: string,
+    participantIds: string[],
     conversationIds: string[]
   ): Promise<Map<string, number>> {
     try {
-      // Récupérer tous les curseurs de l'utilisateur (1 seule requête)
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: {
-          userId,
+          participantId: { in: participantIds },
           conversationId: { in: conversationIds },
         },
       });
@@ -148,12 +144,12 @@ export class MessageReadStatusService {
    * Simplifié: Met à jour le curseur `lastDeliveredAt` UNIQUEMENT.
    */
   async markMessagesAsReceived(
-    userId: string,
+    participantId: string,
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
     try {
-      const dedupKey = `${userId}:${conversationId}:received`;
+      const dedupKey = `${participantId}:${conversationId}:received`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -185,10 +181,10 @@ export class MessageReadStatusService {
 
       await this.prisma.conversationReadCursor.upsert({
         where: {
-          conversation_user_cursor: { userId, conversationId },
+          conversation_participant_cursor: { participantId, conversationId },
         },
         create: {
-          userId,
+          participantId,
           conversationId,
           lastDeliveredMessageId: messageId,
           lastDeliveredAt: now,
@@ -202,11 +198,10 @@ export class MessageReadStatusService {
         },
       });
 
-      // Mettre à jour le compteur (au cas où de nouveaux messages seraient arrivés entre temps)
-      await this.updateUnreadCount(userId, conversationId);
+      await this.updateUnreadCount(participantId, conversationId);
 
       logger.info(
-        `✅ [MessageReadStatus] User ${userId} received update in conversation ${conversationId}`
+        `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
       );
     } catch (error) {
       logger.error(
@@ -222,12 +217,12 @@ export class MessageReadStatusService {
    * Simplifié: Met à jour `lastReadAt` dans `ConversationReadCursor`.
    */
   async markMessagesAsRead(
-    userId: string,
+    participantId: string,
     conversationId: string,
     latestMessageId?: string
   ): Promise<void> {
     try {
-      const dedupKey = `${userId}:${conversationId}:read`;
+      const dedupKey = `${participantId}:${conversationId}:read`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -254,10 +249,10 @@ export class MessageReadStatusService {
 
       await this.prisma.conversationReadCursor.upsert({
         where: {
-          conversation_user_cursor: { userId, conversationId },
+          conversation_participant_cursor: { participantId, conversationId },
         },
         create: {
-          userId,
+          participantId,
           conversationId,
           lastReadMessageId: messageId,
           lastReadAt: now,
@@ -275,19 +270,26 @@ export class MessageReadStatusService {
       });
 
       logger.info(
-        `✅ [MessageReadStatus] User ${userId} marked conversation ${conversationId} as read`
+        `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`
       );
 
-      // Synchroniser avec les notifications
+      // Synchroniser avec les notifications (requires userId from participant)
       try {
-        const { NotificationService } = await import(
-          "./notifications/NotificationService"
-        );
-        const notificationService = new NotificationService(this.prisma);
-        await notificationService.markConversationNotificationsAsRead(
-          userId,
-          conversationId
-        );
+        const participant = await this.prisma.participant.findUnique({
+          where: { id: participantId },
+          select: { userId: true }
+        });
+
+        if (participant?.userId) {
+          const { NotificationService } = await import(
+            "./notifications/NotificationService"
+          );
+          const notificationService = new NotificationService(this.prisma);
+          await notificationService.markConversationNotificationsAsRead(
+            participant.userId,
+            conversationId
+          );
+        }
       } catch (notifError) {
         logger.warn(
           "[MessageReadStatus] Error syncing notifications:",
@@ -314,65 +316,63 @@ export class MessageReadStatusService {
     totalMembers: number;
     receivedCount: number;
     readCount: number;
-    receivedBy: Array<{ userId: string; username: string; receivedAt: Date }>;
-    readBy: Array<{ userId: string; username: string; readAt: Date }>;
+    receivedBy: Array<{ participantId: string; displayName: string; receivedAt: Date }>;
+    readBy: Array<{ participantId: string; displayName: string; readAt: Date }>;
   }> {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { createdAt: true, senderId: true, anonymousSenderId: true },
+        select: { createdAt: true, senderId: true },
       });
 
       if (!message) throw new Error(`Message ${messageId} not found`);
 
-      const authorId = message.senderId || message.anonymousSenderId;
-
-      const members = await this.prisma.conversationMember.findMany({
+      const participants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true },
-        select: { userId: true },
+        select: { id: true, displayName: true },
       });
 
       const totalMembers = Math.max(
         0,
-        members.length - (message.senderId ? 1 : 0)
+        participants.length - 1
       );
 
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: {
           conversationId,
-          userId: { not: authorId },
+          participantId: { not: message.senderId },
         },
         include: {
-          user: { select: { id: true, username: true } },
+          participant: { select: { id: true, displayName: true } },
         },
       });
 
       const receivedBy: Array<{
-        userId: string;
-        username: string;
+        participantId: string;
+        displayName: string;
         receivedAt: Date;
       }> = [];
-      const readBy: Array<{ userId: string; username: string; readAt: Date }> =
+      const readBy: Array<{ participantId: string; displayName: string; readAt: Date }> =
         [];
 
       for (const cursor of cursors) {
-        if (!cursor.user) continue;
+        if (!cursor.participant) continue;
 
         if (
           cursor.lastDeliveredAt &&
           cursor.lastDeliveredAt >= message.createdAt
         ) {
           receivedBy.push({
-            userId: cursor.userId!,
-            username: cursor.user.username,
+            participantId: cursor.participantId,
+            displayName: cursor.participant.displayName,
             receivedAt: cursor.lastDeliveredAt,
           });
         }
 
         if (cursor.lastReadAt && cursor.lastReadAt >= message.createdAt) {
           readBy.push({
-            userId: cursor.userId!,
-            username: cursor.user.username,
+            participantId: cursor.participantId,
+            displayName: cursor.participant.displayName,
             readAt: cursor.lastReadAt,
           });
         }
@@ -410,7 +410,7 @@ export class MessageReadStatusService {
 
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId },
-        select: { userId: true, lastReadAt: true, lastDeliveredAt: true },
+        select: { participantId: true, lastReadAt: true, lastDeliveredAt: true },
       });
 
       const statusMap = new Map<
@@ -423,7 +423,7 @@ export class MessageReadStatusService {
         let readCount = 0;
 
         for (const cursor of cursors) {
-          if (cursor.userId === msg.senderId) continue;
+          if (cursor.participantId === msg.senderId) continue;
 
           if (
             cursor.lastDeliveredAt &&
@@ -458,8 +458,8 @@ export class MessageReadStatusService {
     } = {}
   ): Promise<{
     statuses: Array<{
-      userId: string;
-      username: string;
+      participantId: string;
+      displayName: string;
       avatar?: string | null;
       deliveredAt: Date | null;
       receivedAt: Date | null;
@@ -473,8 +473,6 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    // Cette méthode interrogeait directement MessageStatusEntry.
-    // Pour supporter le nouveau système, on va interroger les curseurs et filtrer.
     const { offset = 0, limit = 20, filter = "all" } = options;
 
     try {
@@ -488,14 +486,22 @@ export class MessageReadStatusService {
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId: message.conversationId },
         include: {
-          user: { select: { id: true, username: true, avatar: true } },
+          participant: { select: { id: true, displayName: true, avatar: true } },
         },
       });
 
-      let results: any[] = [];
+      let results: Array<{
+        participantId: string;
+        displayName: string;
+        avatar?: string | null;
+        deliveredAt: Date | null;
+        receivedAt: Date | null;
+        readAt: Date | null;
+        readDevice?: string | null;
+      }> = [];
 
       for (const cursor of cursors) {
-        if (!cursor.user) continue;
+        if (!cursor.participant) continue;
 
         const deliveredAt =
           cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
@@ -508,16 +514,16 @@ export class MessageReadStatusService {
 
         if (filter === "delivered" && !deliveredAt) continue;
         if (filter === "read" && !readAt) continue;
-        if (filter === "unread" && readAt) continue; // Si lu, on ignore pour 'unread'
+        if (filter === "unread" && readAt) continue;
 
         results.push({
-          userId: cursor.userId!,
-          username: cursor.user.username,
-          avatar: cursor.user.avatar,
+          participantId: cursor.participantId,
+          displayName: cursor.participant.displayName,
+          avatar: cursor.participant.avatar,
           deliveredAt,
-          receivedAt: deliveredAt, // Assimilé à delivered
+          receivedAt: deliveredAt,
           readAt,
-          readDevice: null, // Info perdue avec la simplification, null par défaut
+          readDevice: null,
         });
       }
 
@@ -592,15 +598,15 @@ export class MessageReadStatusService {
         skip: offset,
         orderBy: { createdAt: "desc" },
         include: {
-          user: { select: { id: true, username: true, avatar: true } },
+          participant: { select: { id: true, displayName: true, avatar: true } },
         },
       });
 
       return {
         statuses: statuses.map((s) => ({
-          userId: s.userId!,
-          username: s.user?.username || "Unknown",
-          avatar: s.user?.avatar,
+          userId: s.participantId,
+          username: s.participant?.displayName || "Unknown",
+          avatar: s.participant?.avatar,
           viewedAt: s.viewedAt,
           downloadedAt: s.downloadedAt,
           listenedAt: s.listenedAt,
@@ -629,7 +635,7 @@ export class MessageReadStatusService {
   }
 
   async markAudioAsListened(
-    userId: string,
+    participantId: string,
     attachmentId: string,
     options?: {
       playPositionMs?: number;
@@ -657,13 +663,13 @@ export class MessageReadStatusService {
         this.prisma.$transaction(async (tx) => {
           await tx.attachmentStatusEntry.upsert({
             where: {
-              attachment_user_status: { attachmentId, userId },
+              attachment_participant_status: { attachmentId, participantId },
             },
             create: {
               attachmentId,
               messageId: attachment.messageId,
               conversationId: attachment.message.conversationId,
-              userId,
+              participantId,
               listenedAt: now,
               listenCount: 1,
               lastPlayPositionMs: options?.playPositionMs,
@@ -694,7 +700,7 @@ export class MessageReadStatusService {
   }
 
   async markVideoAsWatched(
-    userId: string,
+    participantId: string,
     attachmentId: string,
     options?: {
       watchPositionMs?: number;
@@ -722,13 +728,13 @@ export class MessageReadStatusService {
         this.prisma.$transaction(async (tx) => {
           await tx.attachmentStatusEntry.upsert({
             where: {
-              attachment_user_status: { attachmentId, userId },
+              attachment_participant_status: { attachmentId, participantId },
             },
             create: {
               attachmentId,
               messageId: attachment.messageId,
               conversationId: attachment.message.conversationId,
-              userId,
+              participantId,
               watchedAt: now,
               watchCount: 1,
               lastWatchPositionMs: options?.watchPositionMs,
@@ -759,7 +765,7 @@ export class MessageReadStatusService {
   }
 
   async markImageAsViewed(
-    userId: string,
+    participantId: string,
     attachmentId: string,
     options?: {
       viewDurationMs?: number;
@@ -786,13 +792,13 @@ export class MessageReadStatusService {
         this.prisma.$transaction(async (tx) => {
           await tx.attachmentStatusEntry.upsert({
             where: {
-              attachment_user_status: { attachmentId, userId },
+              attachment_participant_status: { attachmentId, participantId },
             },
             create: {
               attachmentId,
               messageId: attachment.messageId,
               conversationId: attachment.message.conversationId,
-              userId,
+              participantId,
               viewedAt: now,
               viewDurationMs: options?.viewDurationMs,
               wasZoomed: options?.wasZoomed || false,
@@ -817,7 +823,7 @@ export class MessageReadStatusService {
   }
 
   async markAttachmentAsDownloaded(
-    userId: string,
+    participantId: string,
     attachmentId: string
   ): Promise<void> {
     try {
@@ -840,13 +846,13 @@ export class MessageReadStatusService {
         this.prisma.$transaction(async (tx) => {
           await tx.attachmentStatusEntry.upsert({
             where: {
-              attachment_user_status: { attachmentId, userId },
+              attachment_participant_status: { attachmentId, participantId },
             },
             create: {
               attachmentId,
               messageId: attachment.messageId,
               conversationId: attachment.message.conversationId,
-              userId,
+              participantId,
               downloadedAt: now,
             },
             update: {
@@ -868,7 +874,7 @@ export class MessageReadStatusService {
 
   async getAttachmentStatus(
     attachmentId: string,
-    userId: string
+    participantId: string
   ): Promise<{
     viewed: boolean;
     downloaded: boolean;
@@ -884,7 +890,7 @@ export class MessageReadStatusService {
     try {
       const status = await this.prisma.attachmentStatusEntry.findUnique({
         where: {
-          attachment_user_status: { attachmentId, userId },
+          attachment_participant_status: { attachmentId, participantId },
         },
       });
 
@@ -914,13 +920,13 @@ export class MessageReadStatusService {
   }
 
   private async updateUnreadCount(
-    userId: string,
+    participantId: string,
     conversationId: string
   ): Promise<void> {
     try {
       const cursor = await this.prisma.conversationReadCursor.findUnique({
         where: {
-          conversation_user_cursor: { userId, conversationId },
+          conversation_participant_cursor: { participantId, conversationId },
         },
       });
 
@@ -931,7 +937,7 @@ export class MessageReadStatusService {
           where: {
             conversationId,
             deletedAt: null,
-            senderId: { not: userId },
+            senderId: { not: participantId },
           },
         });
       } else {
@@ -939,7 +945,7 @@ export class MessageReadStatusService {
           where: {
             conversationId,
             deletedAt: null,
-            senderId: { not: userId },
+            senderId: { not: participantId },
             createdAt: { gt: cursor.lastReadAt },
           },
         });
@@ -977,7 +983,6 @@ export class MessageReadStatusService {
             select: {
               conversationId: true,
               senderId: true,
-              anonymousSenderId: true,
             },
           },
         },
@@ -985,17 +990,14 @@ export class MessageReadStatusService {
 
       if (!attachment) return;
 
-      const authorId =
-        attachment.message.senderId || attachment.message.anonymousSenderId;
+      const authorId = attachment.message.senderId;
       const conversationId = attachment.message.conversationId;
 
-      const totalParticipants = await this.prisma.conversationMember.count({
+      const totalParticipants = await this.prisma.participant.count({
         where: {
           conversationId,
           isActive: true,
-          ...(attachment.message.senderId
-            ? { userId: { not: attachment.message.senderId } }
-            : {}),
+          id: { not: authorId },
         },
       });
 
@@ -1005,28 +1007,28 @@ export class MessageReadStatusService {
             where: {
               attachmentId,
               viewedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
             where: {
               attachmentId,
               downloadedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
             where: {
               attachmentId,
               listenedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
             where: {
               attachmentId,
               watchedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
           }),
         ]);
@@ -1050,7 +1052,7 @@ export class MessageReadStatusService {
             where: {
               attachmentId,
               viewedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
             orderBy: { viewedAt: "desc" },
             select: { viewedAt: true },
@@ -1063,7 +1065,7 @@ export class MessageReadStatusService {
             where: {
               attachmentId,
               downloadedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
             orderBy: { downloadedAt: "desc" },
             select: { downloadedAt: true },
@@ -1076,7 +1078,7 @@ export class MessageReadStatusService {
             where: {
               attachmentId,
               listenedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
             orderBy: { listenedAt: "desc" },
             select: { listenedAt: true },
@@ -1089,7 +1091,7 @@ export class MessageReadStatusService {
             where: {
               attachmentId,
               watchedAt: { not: null },
-              userId: { not: authorId },
+              participantId: { not: authorId },
             },
             orderBy: { watchedAt: "desc" },
             select: { watchedAt: true },

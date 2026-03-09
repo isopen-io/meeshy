@@ -60,7 +60,7 @@ export function registerParticipantsRoutes(
           role: { type: 'string', enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'], description: 'Filter by participant role' },
           search: { type: 'string', description: 'Search participants by name or username' },
           limit: { type: 'string', description: 'Maximum number of participants to return (default: 20, max: 100)' },
-          cursor: { type: 'string', description: 'Cursor for pagination (ConversationMember ID)' }
+          cursor: { type: 'string', description: 'Cursor for pagination (Participant ID)' }
         }
       },
       response: {
@@ -93,9 +93,7 @@ export function registerParticipantsRoutes(
       const { id } = request.params;
       const { onlineOnly, role, search, limit, cursor } = request.query;
       const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
 
-      // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
         return reply.status(403).send({
@@ -104,7 +102,6 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que l'utilisateur a accès à cette conversation
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
       if (!canAccess) {
         return reply.status(403).send({
@@ -114,77 +111,36 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Construire les filtres dynamiquement
-      // NOTE: Ne pas filtrer par user.isActive pour éviter d'exclure des membres
-      // dont le compte utilisateur pourrait être temporairement désactivé
       const whereConditions: any = {
         conversationId: conversationId,
         isActive: true
       };
 
-      // Filtre par statut en ligne
       if (onlineOnly === 'true') {
-        whereConditions.user = { ...whereConditions.user, isOnline: true };
+        whereConditions.isOnline = true;
       }
 
-      // Filtre par rôle
       if (role) {
-        whereConditions.user = { ...whereConditions.user, role: role.toUpperCase() };
+        whereConditions.role = role.toLowerCase();
       }
 
-      // Filtre par recherche (nom, prénom, username, email)
       if (search && search.trim().length > 0) {
         const searchTerm = search.trim();
-        whereConditions.user = {
-          ...whereConditions.user,
-          OR: [
-            {
-              firstName: {
-                contains: searchTerm,
-                mode: 'insensitive'
-              }
-            },
-            {
-              lastName: {
-                contains: searchTerm,
-                mode: 'insensitive'
-              }
-            },
-            {
-              username: {
-                contains: searchTerm,
-                mode: 'insensitive'
-              }
-            },
-            {
-              email: {
-                contains: searchTerm,
-                mode: 'insensitive'
-              }
-            },
-            {
-              displayName: {
-                contains: searchTerm,
-                mode: 'insensitive'
-              }
-            }
-          ]
+        whereConditions.displayName = {
+          contains: searchTerm,
+          mode: 'insensitive'
         };
       }
 
-      // Configuration de la pagination
-      const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20; // Max 100, défaut 20
+      const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
 
-      // Si un cursor est fourni, ajouter la condition de cursor
       if (cursor) {
         whereConditions.id = {
-          gt: cursor // Récupérer les participants après ce cursor (ID)
+          gt: cursor
         };
       }
 
-      // Récupérer les participants avec filtres et pagination
-      // On prend pageLimit + 1 pour savoir s'il y a une page suivante
-      const participants = await prisma.conversationMember.findMany({
+      const participants = await prisma.participant.findMany({
         where: whereConditions,
         include: {
           user: {
@@ -209,138 +165,60 @@ export function registerParticipantsRoutes(
           }
         },
         orderBy: [
-          { user: { isOnline: 'desc' } }, // Utilisateurs en ligne en premier
-          { user: { firstName: 'asc' } },  // Puis par prénom
-          { user: { lastName: 'asc' } },   // Puis par nom
-          { id: 'asc' }                    // Ordre stable pour la pagination
+          { isOnline: 'desc' },
+          { displayName: 'asc' },
+          { id: 'asc' }
         ],
-        take: pageLimit + 1 // +1 pour détecter s'il y a plus de résultats
+        take: pageLimit + 1
       });
 
-      // Déduplication : supprimer les doublons basés sur userId
-      // Un même userId pourrait avoir plusieurs entrées ConversationMember actives (bug de données)
-      const seenUserIds = new Set<string>();
-      const uniqueParticipants = participants.filter(p => {
-        if (seenUserIds.has(p.userId)) {
-          console.warn(`[Participants] Doublon détecté pour userId: ${p.userId} dans conversation ${conversationId}`);
-          return false;
-        }
-        seenUserIds.add(p.userId);
-        return true;
-      });
-
-      // Déterminer s'il y a plus de résultats
-      const hasMore = uniqueParticipants.length > pageLimit;
-      const paginatedParticipants = hasMore ? uniqueParticipants.slice(0, pageLimit) : uniqueParticipants;
+      const hasMore = participants.length > pageLimit;
+      const paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
       const nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
 
-      // Transformer les données pour correspondre au format attendu
       const formattedParticipants = paginatedParticipants.map(participant => ({
-        id: participant.user.id,
-        userId: participant.userId, // Ajouter l'ID utilisateur pour la correspondance
-        username: participant.user.username,
-        firstName: participant.user.firstName,
-        lastName: participant.user.lastName,
-        displayName: participant.user.displayName,
-        avatar: participant.user.avatar,
-        email: participant.user.email,
-        role: participant.user.role, // Rôle global de l'utilisateur
-        conversationRole: participant.role, // Rôle dans cette conversation spécifique
-        joinedAt: participant.joinedAt,     // Date d'adhésion à cette conversation
-        isOnline: participant.user.isOnline,
-        lastActiveAt: participant.user.lastActiveAt,
-        systemLanguage: participant.user.systemLanguage,
-        regionalLanguage: participant.user.regionalLanguage,
-        customDestinationLanguage: participant.user.customDestinationLanguage,
-        // TODO: Re-implement with UserPreferences.application
+        id: participant.id,
+        participantId: participant.id,
+        userId: participant.userId,
+        type: participant.type,
+        username: participant.user?.username ?? participant.displayName,
+        firstName: participant.user?.firstName ?? participant.displayName,
+        lastName: participant.user?.lastName ?? '',
+        displayName: participant.displayName,
+        avatar: participant.avatar ?? participant.user?.avatar ?? null,
+        email: participant.user?.email ?? '',
+        role: participant.user?.role ?? 'USER',
+        conversationRole: participant.role,
+        joinedAt: participant.joinedAt,
+        isOnline: participant.isOnline,
+        lastActiveAt: participant.lastActiveAt,
+        systemLanguage: participant.user?.systemLanguage ?? participant.language,
+        regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
+        customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
         autoTranslateEnabled: false,
-        isActive: participant.user.isActive,
-        createdAt: participant.user.createdAt,
-        updatedAt: participant.user.updatedAt,
-        // Permissions par défaut si non définies
+        isActive: participant.isActive,
+        createdAt: participant.user?.createdAt ?? participant.joinedAt,
+        updatedAt: participant.user?.updatedAt ?? participant.joinedAt,
+        isAnonymous: participant.type === 'anonymous',
+        canSendMessages: participant.permissions?.canSendMessages ?? true,
+        canSendFiles: participant.permissions?.canSendFiles ?? true,
+        canSendImages: participant.permissions?.canSendImages ?? true,
         permissions: {
-          canAccessAdmin: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canManageUsers: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canManageGroups: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canManageConversations: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canViewAnalytics: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canModerateContent: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canViewAuditLogs: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canManageNotifications: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
-          canManageTranslations: participant.user.role === 'ADMIN' || participant.user.role === 'BIGBOSS',
+          canAccessAdmin: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canManageUsers: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canManageGroups: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canManageConversations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canViewAnalytics: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canModerateContent: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canViewAuditLogs: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canManageNotifications: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
+          canManageTranslations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
         }
       }));
 
-      // Récupérer les participants anonymes
-      const anonymousParticipants = await prisma.anonymousParticipant.findMany({
-        where: {
-          conversationId: conversationId, // Utiliser l'ID résolu
-          isActive: true
-        },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            language: true,
-            isOnline: true,
-            joinedAt: true,
-            lastActiveAt: true,
-            canSendMessages: true,
-            canSendFiles: true,
-            canSendImages: true
-          },
-          orderBy: { joinedAt: 'desc' }
-        });
-
-      // Transformer les participants anonymes pour correspondre au format attendu
-      const formattedAnonymousParticipants = anonymousParticipants.map(participant => ({
-        id: participant.id,
-        username: participant.username,
-        firstName: participant.firstName,
-        lastName: participant.lastName,
-        displayName: participant.username, // Utiliser username comme displayName pour les anonymes
-        avatar: null,
-        email: '',
-        role: 'MEMBER',
-        isOnline: participant.isOnline,
-        lastActiveAt: participant.lastActiveAt ?? participant.joinedAt,
-        systemLanguage: participant.language,
-        regionalLanguage: participant.language,
-        customDestinationLanguage: participant.language,
-        autoTranslateEnabled: true,
-        translateToSystemLanguage: true,
-        translateToRegionalLanguage: false,
-        useCustomDestination: false,
-        isActive: true,
-        createdAt: participant.joinedAt,
-        updatedAt: participant.joinedAt,
-        // Permissions pour les participants anonymes
-        permissions: {
-          canAccessAdmin: false,
-          canManageUsers: false,
-          canManageGroups: false,
-          canManageConversations: false,
-          canViewAnalytics: false,
-          canModerateContent: false,
-          canViewAuditLogs: false,
-          canManageNotifications: false,
-          canManageTranslations: false,
-        },
-        // Propriétés spécifiques aux participants anonymes
-        isAnonymous: true,
-        canSendMessages: participant.canSendMessages,
-        canSendFiles: participant.canSendFiles,
-        canSendImages: participant.canSendImages
-      }));
-
-      // Combiner les participants authentifiés et anonymes
-      const allParticipants = [...formattedParticipants, ...formattedAnonymousParticipants];
-
-      // Construire la réponse avec pagination
       reply.send({
         success: true,
-        data: allParticipants,
+        data: formattedParticipants,
         pagination: {
           nextCursor,
           hasMore
@@ -408,7 +286,6 @@ export function registerParticipantsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
         return reply.status(403).send({
@@ -417,8 +294,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que l'utilisateur actuel a les droits pour ajouter des participants
-      const currentUserMembership = await prisma.conversationMember.findFirst({
+      const currentUserParticipant = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: currentUserId,
@@ -426,14 +302,13 @@ export function registerParticipantsRoutes(
         }
       });
 
-      if (!currentUserMembership) {
+      if (!currentUserParticipant) {
         return reply.status(403).send({
           success: false,
           error: 'Unauthorized access to this conversation'
         });
       }
 
-      // Vérifier que l'utilisateur à ajouter existe
       const userToAdd = await prisma.user.findFirst({
         where: { id: userId }
       });
@@ -445,8 +320,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que l'utilisateur n'est pas déjà membre
-      const existingMembership = await prisma.conversationMember.findFirst({
+      const existingParticipant = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: userId,
@@ -454,45 +328,56 @@ export function registerParticipantsRoutes(
         }
       });
 
-      if (existingMembership) {
+      if (existingParticipant) {
         return reply.status(400).send({
           success: false,
           error: 'L\'utilisateur est déjà membre de cette conversation'
         });
       }
 
-      // Ajouter le participant
-      await prisma.conversationMember.create({
+      await prisma.participant.create({
         data: {
           conversationId: conversationId,
           userId: userId,
-          role: 'MEMBER',
+          type: 'user',
+          displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
+          avatar: userToAdd.avatar,
+          role: 'member',
+          language: userToAdd.systemLanguage ?? 'en',
+          permissions: {
+            canSendMessages: true,
+            canSendFiles: true,
+            canSendImages: true,
+            canSendAudios: true,
+            canSendVideos: true,
+            canSendLocations: false,
+            canSendLinks: false
+          },
           joinedAt: new Date()
         }
       });
 
-      // Notifications
       const notificationService = (request.server as any).notificationService;
       if (notificationService) {
-        // Notifier le nouveau membre qu'il a été ajouté
         notificationService.createAddedToConversationNotification({
           recipientUserId: userId,
           addedByUserId: currentUserId,
           conversationId,
         }).catch((err: unknown) => console.error('[Participants] Notification error (added):', err));
 
-        // Notifier les membres existants qu'un nouveau membre a rejoint
-        const existingMembers = await prisma.conversationMember.findMany({
-          where: { conversationId, isActive: true, userId: { notIn: [userId, currentUserId] } },
+        const existingMembers = await prisma.participant.findMany({
+          where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
           select: { userId: true },
         });
         for (const member of existingMembers) {
-          notificationService.createMemberJoinedNotification({
-            recipientUserId: member.userId,
-            newMemberUserId: userId,
-            conversationId,
-            joinMethod: 'invited' as const,
-          }).catch((err: unknown) => console.error('[Participants] Notification error (joined):', err));
+          if (member.userId) {
+            notificationService.createMemberJoinedNotification({
+              recipientUserId: member.userId,
+              newMemberUserId: userId,
+              conversationId,
+              joinMethod: 'invited' as const,
+            }).catch((err: unknown) => console.error('[Participants] Notification error (joined):', err));
+          }
         }
       }
 
@@ -552,7 +437,6 @@ export function registerParticipantsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
         return reply.status(403).send({
@@ -561,8 +445,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que l'utilisateur actuel a les droits pour supprimer des participants
-      const currentUserMembership = await prisma.conversationMember.findFirst({
+      const currentUserParticipant = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: currentUserId,
@@ -573,16 +456,15 @@ export function registerParticipantsRoutes(
         }
       });
 
-      if (!currentUserMembership) {
+      if (!currentUserParticipant) {
         return reply.status(403).send({
           success: false,
           error: 'Unauthorized access to this conversation'
         });
       }
 
-      // Seuls les admins ou le créateur peuvent supprimer des participants
-      const isAdmin = currentUserMembership.user.role === 'ADMIN' || currentUserMembership.user.role === 'BIGBOSS';
-      const isCreator = currentUserMembership.role === 'CREATOR';
+      const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
+      const isCreator = currentUserParticipant.role === 'creator';
 
       if (!isAdmin && !isCreator) {
         return reply.status(403).send({
@@ -591,7 +473,6 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Empêcher de se supprimer soi-même
       if (userId === currentUserId) {
         return reply.status(400).send({
           success: false,
@@ -599,8 +480,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Supprimer le participant
-      await prisma.conversationMember.updateMany({
+      await prisma.participant.updateMany({
         where: {
           conversationId: conversationId,
           userId: userId,
@@ -612,32 +492,31 @@ export function registerParticipantsRoutes(
         }
       });
 
-      // Notifications
       const notificationService = (request.server as any).notificationService;
       if (notificationService) {
-        // Notifier le membre retiré
         notificationService.createRemovedFromConversationNotification({
           recipientUserId: userId,
           removedByUserId: currentUserId,
           conversationId,
         }).catch((err: unknown) => console.error('[Participants] Notification error (removed):', err));
 
-        // Notifier les admins/modos restants
-        const adminMembers = await prisma.conversationMember.findMany({
+        const adminParticipants = await prisma.participant.findMany({
           where: {
             conversationId,
             isActive: true,
-            role: { in: ['CREATOR', 'ADMIN', 'MODERATOR'] },
+            role: { in: ['creator', 'admin', 'moderator'] },
             userId: { not: currentUserId },
           },
           select: { userId: true },
         });
-        for (const admin of adminMembers) {
-          notificationService.createMemberRemovedNotification({
-            recipientUserId: admin.userId,
-            removedByUserId: currentUserId,
-            conversationId,
-          }).catch((err: unknown) => console.error('[Participants] Notification error (member_removed):', err));
+        for (const admin of adminParticipants) {
+          if (admin.userId) {
+            notificationService.createMemberRemovedNotification({
+              recipientUserId: admin.userId,
+              removedByUserId: currentUserId,
+              conversationId,
+            }).catch((err: unknown) => console.error('[Participants] Notification error (member_removed):', err));
+          }
         }
       }
 
@@ -708,7 +587,6 @@ export function registerParticipantsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      // Valider le rôle
       if (!['ADMIN', 'MODERATOR', 'MEMBER'].includes(role)) {
         return reply.status(400).send({
           success: false,
@@ -716,7 +594,6 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
         return reply.status(403).send({
@@ -725,8 +602,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que l'utilisateur actuel a les droits pour modifier les rôles
-      const currentUserMembership = await prisma.conversationMember.findFirst({
+      const currentUserParticipant = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: currentUserId,
@@ -737,16 +613,15 @@ export function registerParticipantsRoutes(
         }
       });
 
-      if (!currentUserMembership) {
+      if (!currentUserParticipant) {
         return reply.status(403).send({
           success: false,
           error: 'Unauthorized access to this conversation'
         });
       }
 
-      // Seuls les admins ou le créateur peuvent modifier les rôles
-      const isAdmin = currentUserMembership.user.role === 'ADMIN' || currentUserMembership.user.role === 'BIGBOSS';
-      const isCreator = currentUserMembership.role === 'CREATOR';
+      const isAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
+      const isCreator = currentUserParticipant.role === 'creator';
 
       if (!isAdmin && !isCreator) {
         return reply.status(403).send({
@@ -755,7 +630,6 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Empêcher de modifier son propre rôle
       if (userId === currentUserId) {
         return reply.status(400).send({
           success: false,
@@ -763,8 +637,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      // Vérifier que le participant cible existe et est actif
-      const targetMembership = await prisma.conversationMember.findFirst({
+      const targetParticipant = await prisma.participant.findFirst({
         where: {
           conversationId: conversationId,
           userId: userId,
@@ -772,34 +645,32 @@ export function registerParticipantsRoutes(
         }
       });
 
-      if (!targetMembership) {
+      if (!targetParticipant) {
         return reply.status(404).send({
           success: false,
           error: 'Participant not found or inactive'
         });
       }
 
-      // Empêcher de modifier le rôle du créateur de la conversation
-      if (targetMembership.role === 'CREATOR') {
+      if (targetParticipant.role === 'creator') {
         return reply.status(403).send({
           success: false,
           error: 'Cannot modify the conversation creator\'s role'
         });
       }
 
-      // Mettre à jour le rôle du participant
-      await prisma.conversationMember.update({
+      const newRole = role.toLowerCase();
+      await prisma.participant.update({
         where: {
-          id: targetMembership.id
+          id: targetParticipant.id
         },
         data: {
-          role: role
+          role: newRole
         }
       });
 
-      // Récupérer le participant mis à jour avec ses informations complètes
-      const updatedMembership = await prisma.conversationMember.findUnique({
-        where: { id: targetMembership.id },
+      const updatedParticipant = await prisma.participant.findUnique({
+        where: { id: targetParticipant.id },
         include: {
           user: {
             select: {
@@ -814,27 +685,25 @@ export function registerParticipantsRoutes(
         }
       });
 
-      // Notifier via Socket.IO
       const io = (request.server as any).io;
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
           conversationId,
           userId,
-          newRole: role,
+          newRole,
           updatedBy: currentUserId,
-          participant: updatedMembership
+          participant: updatedParticipant
         });
       }
 
-      // Notification de changement de rôle
       const notificationService = (request.server as any).notificationService;
       if (notificationService) {
         notificationService.createMemberRoleChangedNotification({
           recipientUserId: userId,
           changedByUserId: currentUserId,
           conversationId,
-          newRole: role,
-          previousRole: targetMembership.role,
+          newRole,
+          previousRole: targetParticipant.role,
         }).catch((err: unknown) => console.error('[Participants] Notification error (role_changed):', err));
       }
 
@@ -843,8 +712,8 @@ export function registerParticipantsRoutes(
         data: {
           message: 'Rôle du participant mis à jour avec succès',
           userId,
-          role,
-          participant: updatedMembership
+          role: newRole,
+          participant: updatedParticipant
         }
       });
 

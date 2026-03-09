@@ -25,6 +25,58 @@ enum UserRole {
   AGENT      // Utilisateur géré par une IA (SAV, FAQ, etc.)
 }
 
+// ============================================
+// COMPOSITE TYPES (Embedded Documents)
+// ============================================
+
+/// Default permissions for a conversation participant
+type ParticipantPermissions {
+  canSendMessages  Boolean @default(true)
+  canSendFiles     Boolean @default(false)
+  canSendImages    Boolean @default(true)
+  canSendVideos    Boolean @default(false)
+  canSendAudios    Boolean @default(false)
+  canSendLocations Boolean @default(false)
+  canSendLinks     Boolean @default(false)
+}
+
+/// Session details for an anonymous participant
+type AnonymousSessionDetails {
+  sessionTokenHash  String
+  ipAddress         String?
+  country           String?
+  deviceFingerprint String?
+  connectedAt       DateTime
+}
+
+/// Profile info captured for an anonymous participant
+type AnonymousProfile {
+  firstName String
+  lastName  String
+  username  String
+  email     String?
+  birthday  DateTime?
+}
+
+/// Per-anonymous-session permission overrides (null = inherit from ParticipantPermissions)
+type AnonymousRightsOverride {
+  canSendMessages  Boolean?
+  canSendFiles     Boolean?
+  canSendImages    Boolean?
+  canSendVideos    Boolean?
+  canSendAudios    Boolean?
+  canSendLocations Boolean?
+  canSendLinks     Boolean?
+}
+
+/// Embedded anonymous session data on a Participant
+type AnonymousSession {
+  shareLinkId String
+  session     AnonymousSessionDetails
+  profile     AnonymousProfile
+  rights      AnonymousRightsOverride?
+}
+
 /// Utilisateur enregistré de la plateforme
 model User {
   id                        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -164,21 +216,11 @@ model User {
 
   createdCommunities      Community[]              @relation("CommunityCreator")
   communityMemberships    CommunityMember[]
-  conversations           ConversationMember[]
   conversationPreferences ConversationPreference[]
   createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
   receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
   sentFriendRequests      FriendRequest[]          @relation("FriendRequestSender")
 
-  // Message & Attachment status tracking
-  messageStatusEntries    MessageStatusEntry[]
-  attachmentStatusEntries AttachmentStatusEntry[]
-  readCursors             ConversationReadCursor[] @relation("UserReadCursors")
-  attachmentReactions     AttachmentReaction[]     @relation("UserAttachmentReactions")
-
-  sentMessages           Message[]                     @relation("MessageSender")
-  reactions              Reaction[]                    @relation("UserReactions")
-  mentions               Mention[]                     @relation("UserMentions")
   notifications          Notification[]
   userPreferences        UserPreferences?              @relation("UserPreferences")
   stats                  UserStats?
@@ -186,9 +228,7 @@ model User {
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
   referredRelations      AffiliateRelation[]           @relation("ReferredUser")
   createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
-  trackingLinkClicks     TrackingLinkClick[]           @relation("TrackingLinkClickUser")
   initiatedCalls         CallSession[]                 @relation("CallInitiator")
-  callParticipations     CallParticipant[]             @relation("CallParticipants")
   conversationPrefs      UserConversationPreferences[]
   conversationCategories UserConversationCategory[]
   communityPrefs         UserCommunityPreferences[]
@@ -236,6 +276,9 @@ model User {
 
   // Agent global profile (1:1)
   agentGlobalProfile AgentGlobalProfile?
+
+  // Unified participant model (replaces conversations + anonymousParticipants)
+  participations Participant[]
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -292,8 +335,6 @@ model Conversation {
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
 
-  anonymousParticipants AnonymousParticipant[]
-  members               ConversationMember[]
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
   community             Community?               @relation(fields: [communityId], references: [id])
@@ -316,6 +357,9 @@ model Conversation {
   // Agent service
   agentConfig     AgentConfig?
   agentAnalytic   AgentAnalytic?
+
+  // Unified participant model (replaces members + anonymousParticipants)
+  participants Participant[]
 
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
@@ -355,35 +399,6 @@ model ConversationShare {
   @@index([isPinned])
 }
 
-/// Appartenance d'un utilisateur à une conversation
-model ConversationMember {
-  id               String    @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId   String    @db.ObjectId
-  userId           String    @db.ObjectId
-  /// admin, moderator, member
-  role             String    @default("member")
-  /// Per-conversation display name override
-  nickname         String?
-  canSendMessage   Boolean   @default(true)
-  canSendFiles     Boolean   @default(true)
-  canSendImages    Boolean   @default(true)
-  canSendVideos    Boolean   @default(true)
-  canSendAudios    Boolean   @default(true)
-  canSendLocations Boolean   @default(true)
-  canSendLinks     Boolean   @default(true)
-  joinedAt         DateTime  @default(now())
-  leftAt           DateTime?
-  isActive         Boolean   @default(true)
-
-  user         User         @relation(fields: [userId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
-
-  @@unique([conversationId, userId], name: "unique_conversation_member")
-  @@index([conversationId])
-  @@index([userId])
-  @@index([userId, isActive]) // Optimisation getUserStats: filtrer conversations actives d'un utilisateur
-}
-
 /// Lien de partage pour accès anonyme à une conversation
 model ConversationShareLink {
   id                     String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -418,63 +433,72 @@ model ConversationShareLink {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  anonymousParticipants AnonymousParticipant[] @relation("ShareLinkParticipants")
   creator               User                   @relation("ShareLinkCreator", fields: [createdBy], references: [id])
   conversation          Conversation           @relation(fields: [conversationId], references: [id])
 }
 
-/// Participant anonyme via lien de partage
-model AnonymousParticipant {
-  id                String    @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId    String    @db.ObjectId
-  shareLinkId       String    @db.ObjectId
-  firstName         String
-  lastName          String
-  username          String
-  email             String?
-  birthday          DateTime?
-  sessionToken      String    @unique
-  ipAddress         String?
-  country           String?
-  language          String    @default("fr")
-  deviceFingerprint String?
-  isActive          Boolean   @default(true)
-  isOnline          Boolean   @default(false)
-  /// Updated on every detectable activity (heartbeat, API request, typing, message send)
-  lastActiveAt      DateTime  @default(now())
-  /// Permissions (consistent with ConversationMember)
-  canSendMessages   Boolean   @default(true)
-  canSendFiles      Boolean   @default(false)
-  canSendImages     Boolean   @default(true)
-  canSendVideos     Boolean   @default(false)
-  canSendAudios     Boolean   @default(true)
-  canSendLocations  Boolean   @default(false)
-  canSendLinks      Boolean   @default(true)
-  joinedAt          DateTime  @default(now())
-  leftAt            DateTime?
+/// Unified participant in a conversation (registered user, anonymous, or bot)
+model Participant {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String  @db.ObjectId
+  /// "user" | "anonymous" | "bot"
+  type           String
 
-  shareLink          ConversationShareLink @relation("ShareLinkParticipants", fields: [shareLinkId], references: [id])
-  conversation       Conversation          @relation(fields: [conversationId], references: [id])
-  sentMessages       Message[]             @relation("AnonymousMessageSender")
-  reactions          Reaction[]            @relation("AnonymousReactions")
-  trackingLinkClicks TrackingLinkClick[]   @relation("TrackingLinkClickAnonymous")
+  /// FK to User (null for anonymous/bot participants)
+  userId String? @db.ObjectId
 
-  // Message & Attachment status tracking
-  messageStatusEntries    MessageStatusEntry[]     @relation("AnonymousMessageStatus")
-  attachmentStatusEntries AttachmentStatusEntry[]  @relation("AnonymousAttachmentStatus")
-  readCursors             ConversationReadCursor[] @relation("AnonymousReadCursors")
-  attachmentReactions     AttachmentReaction[]     @relation("AnonymousAttachmentReactions")
+  displayName String
+  avatar      String?
 
-  // Call participation
-  callParticipations CallParticipant[] @relation("AnonymousCallParticipants")
+  /// admin, moderator, member
+  role        String                   @default("member")
+  permissions ParticipantPermissions
+
+  /// ISO 639-1 language code
+  language String @default("en")
+
+  isActive     Boolean   @default(true)
+  isOnline     Boolean   @default(false)
+  lastActiveAt DateTime  @default(now())
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+  bannedAt     DateTime?
+
+  /// Per-conversation display name override
+  nickname String?
+
+  /// SHA-256 hash of anonymous session token (denormalized for indexed lookup)
+  sessionTokenHash String?
+
+  /// Embedded anonymous session data (only for type="anonymous")
+  anonymousSession AnonymousSession?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  sentMessages            Message[]              @relation("MessageSender")
+  reactions               Reaction[]
+  statusEntries           MessageStatusEntry[]
+  readCursors             ConversationReadCursor[]
+  mentions                Mention[]
+  callParticipations      CallParticipant[]
+  attachmentStatusEntries AttachmentStatusEntry[]
+  attachmentReactions     AttachmentReaction[]
+  trackingLinkClicks      TrackingLinkClick[]
+
+  @@unique([conversationId, userId], name: "unique_conversation_user")
+  @@index([conversationId])
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([type])
+  @@index([sessionTokenHash])
 }
 
 /// Message dans une conversation
 model Message {
   id                          String    @id @default(auto()) @map("_id") @db.ObjectId
   conversationId              String    @db.ObjectId
-  senderId                    String?   @db.ObjectId
-  anonymousSenderId           String?   @db.ObjectId
+  senderId                    String    @db.ObjectId
   content                     String
   originalLanguage            String    @default("fr")
   /// Content type: text, image, file, audio, video, location
@@ -587,8 +611,7 @@ model Message {
   notifications   Notification[]        @relation("NotificationMessage")
   replyTo         Message?              @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   replies         Message[]             @relation("MessageReplies")
-  anonymousSender AnonymousParticipant? @relation("AnonymousMessageSender", fields: [anonymousSenderId], references: [id])
-  sender          User?                 @relation("MessageSender", fields: [senderId], references: [id])
+  sender          Participant           @relation("MessageSender", fields: [senderId], references: [id])
   conversation    Conversation          @relation(fields: [conversationId], references: [id])
 
   // Per-user deletions ("delete for me" feature)
@@ -809,10 +832,9 @@ model MessageAttachment {
 /// One record per user per message - detailed tracking
 model MessageStatusEntry {
   id             String  @id @default(auto()) @map("_id") @db.ObjectId
-  messageId      String  @db.ObjectId
-  conversationId String  @db.ObjectId
-  userId         String? @db.ObjectId
-  anonymousId    String? @db.ObjectId
+  messageId      String @db.ObjectId
+  conversationId String @db.ObjectId
+  participantId  String @db.ObjectId
 
   // ===== DELIVERY STATUS =====
   /// When message was delivered to user's device
@@ -841,16 +863,13 @@ model MessageStatusEntry {
   updatedAt DateTime @updatedAt
 
   // Relations
-  message       Message               @relation("MessageStatusEntries", fields: [messageId], references: [id], onDelete: Cascade)
-  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousMessageStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+  message      Message      @relation("MessageStatusEntries", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, userId], name: "message_user_status")
-  @@unique([messageId, anonymousId], name: "message_anonymous_status")
+  @@unique([messageId, participantId], name: "message_participant_status")
   @@index([conversationId])
-  @@index([userId])
-  @@index([anonymousId])
+  @@index([participantId])
   @@index([readAt])
   @@index([deliveredAt])
 }
@@ -859,11 +878,10 @@ model MessageStatusEntry {
 /// Tracks viewed, downloaded, listened, watched status per attachment
 model AttachmentStatusEntry {
   id             String  @id @default(auto()) @map("_id") @db.ObjectId
-  attachmentId   String  @db.ObjectId
-  messageId      String  @db.ObjectId
-  conversationId String  @db.ObjectId
-  userId         String? @db.ObjectId
-  anonymousId    String? @db.ObjectId
+  attachmentId   String @db.ObjectId
+  messageId      String @db.ObjectId
+  conversationId String @db.ObjectId
+  participantId  String @db.ObjectId
 
   // ===== UNIVERSAL STATUS =====
   /// When attachment was delivered to device
@@ -922,18 +940,15 @@ model AttachmentStatusEntry {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  attachment    MessageAttachment     @relation("AttachmentStatusEntries", fields: [attachmentId], references: [id], onDelete: Cascade)
-  message       Message               @relation("MessageAttachmentStatuses", fields: [messageId], references: [id], onDelete: Cascade)
-  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user          User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentStatus", fields: [anonymousId], references: [id], onDelete: Cascade)
+  attachment   MessageAttachment @relation("AttachmentStatusEntries", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message      Message           @relation("MessageAttachmentStatuses", fields: [messageId], references: [id], onDelete: Cascade)
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  participant  Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([attachmentId, userId], name: "attachment_user_status")
-  @@unique([attachmentId, anonymousId], name: "attachment_anonymous_status")
+  @@unique([attachmentId, participantId], name: "attachment_participant_status")
   @@index([messageId])
   @@index([conversationId])
-  @@index([userId])
-  @@index([anonymousId])
+  @@index([participantId])
   @@index([viewedAt])
   @@index([listenedAt])
   @@index([watchedAt])
@@ -942,26 +957,22 @@ model AttachmentStatusEntry {
 /// Reaction on an individual attachment (separate from message reactions)
 model AttachmentReaction {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  attachmentId String   @db.ObjectId
-  messageId    String   @db.ObjectId
-  userId       String?  @db.ObjectId
-  anonymousId  String?  @db.ObjectId
-  emoji        String // Emoji (ex: 🎉, ❤️, 🔥)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  attachmentId  String   @db.ObjectId
+  messageId     String   @db.ObjectId
+  participantId String   @db.ObjectId
+  emoji         String // Emoji (ex: 🎉, ❤️, 🔥)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
-  attachment    MessageAttachment     @relation("AttachmentReactions", fields: [attachmentId], references: [id], onDelete: Cascade)
-  message       Message               @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
-  user          User?                 @relation("UserAttachmentReactions", fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousAttachmentReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
+  attachment  MessageAttachment @relation("AttachmentReactions", fields: [attachmentId], references: [id], onDelete: Cascade)
+  message     Message           @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  participant Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([attachmentId, userId, emoji], name: "attachment_user_reaction")
-  @@unique([attachmentId, anonymousId, emoji], name: "attachment_anonymous_reaction")
+  @@unique([attachmentId, participantId, emoji], name: "attachment_participant_reaction")
   @@index([attachmentId])
   @@index([messageId])
-  @@index([userId])
-  @@index([anonymousId])
+  @@index([participantId])
   @@index([emoji])
 }
 
@@ -969,9 +980,8 @@ model AttachmentReaction {
 /// Kept for performance - aggregated view of MessageStatusEntry
 model ConversationReadCursor {
   id             String  @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId String  @db.ObjectId
-  userId         String? @db.ObjectId
-  anonymousId    String? @db.ObjectId
+  conversationId String @db.ObjectId
+  participantId  String @db.ObjectId
 
   /// Last message ID that was read
   lastReadMessageId String?   @db.ObjectId
@@ -990,55 +1000,45 @@ model ConversationReadCursor {
   updatedAt DateTime @updatedAt
 
   // Relations
-  conversation  Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user          User?                 @relation("UserReadCursors", fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousReadCursors", fields: [anonymousId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([conversationId, userId], name: "conversation_user_cursor")
-  @@unique([conversationId, anonymousId], name: "conversation_anonymous_cursor")
-  @@index([userId])
-  @@index([anonymousId])
+  @@unique([conversationId, participantId], name: "conversation_participant_cursor")
+  @@index([participantId])
   @@index([unreadCount])
 }
 
 /// Réaction emoji sur un message par un utilisateur
 model Reaction {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  messageId   String   @db.ObjectId
-  userId      String?  @db.ObjectId // null pour utilisateurs anonymes
-  anonymousId String?  @db.ObjectId // ID de l'utilisateur anonyme (consistent naming)
-  emoji       String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  messageId     String   @db.ObjectId
+  participantId String   @db.ObjectId
+  emoji         String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  message       Message               @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
-  user          User?                 @relation("UserReactions", fields: [userId], references: [id], onDelete: Cascade)
-  anonymousUser AnonymousParticipant? @relation("AnonymousReactions", fields: [anonymousId], references: [id], onDelete: Cascade)
+  message     Message     @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  // Contrainte: un utilisateur ne peut ajouter le même emoji qu'une seule fois par message
-  @@unique([messageId, userId, emoji], name: "user_reaction_unique")
-  // Contrainte: un utilisateur anonyme ne peut ajouter le même emoji qu'une seule fois par message
-  @@unique([messageId, anonymousId, emoji], name: "anonymous_reaction_unique")
+  @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
   @@index([messageId])
-  @@index([userId])
-  @@index([anonymousId])
+  @@index([participantId])
   @@index([emoji])
 }
 
-/// Mention d'un utilisateur dans un message
+/// Mention d'un participant dans un message
 model Mention {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  messageId       String   @db.ObjectId
-  mentionedUserId String   @db.ObjectId
-  mentionedAt     DateTime @default(now())
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId            String   @db.ObjectId
+  mentionedParticipantId String @db.ObjectId
+  mentionedAt          DateTime @default(now())
 
-  message       Message @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
-  mentionedUser User    @relation("UserMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  message              Message     @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
+  mentionedParticipant Participant @relation(fields: [mentionedParticipantId], references: [id], onDelete: Cascade)
 
-  // Contrainte: un utilisateur ne peut être mentionné qu'une seule fois par message
-  @@unique([messageId, mentionedUserId], name: "message_user_mention_unique")
+  @@unique([messageId, mentionedParticipantId], name: "message_participant_mention_unique")
   @@index([messageId])
-  @@index([mentionedUserId])
+  @@index([mentionedParticipantId])
   @@index([mentionedAt])
 }
 
@@ -1345,8 +1345,7 @@ model TrackingLink {
 model TrackingLinkClick {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   trackingLinkId    String   @db.ObjectId
-  userId            String?  @db.ObjectId // Utilisateur connecté qui a cliqué (null si anonyme)
-  anonymousId       String?  @db.ObjectId // Participant anonyme qui a cliqué
+  participantId     String?  @db.ObjectId // Participant who clicked (null if untracked)
   ipAddress         String? // Adresse IP du visiteur
   country           String? // Pays d'origine
   city              String? // Ville
@@ -1386,9 +1385,8 @@ model TrackingLinkClick {
 
   clickedAt         DateTime @default(now())
 
-  trackingLink  TrackingLink          @relation(fields: [trackingLinkId], references: [id])
-  user          User?                 @relation("TrackingLinkClickUser", fields: [userId], references: [id])
-  anonymousUser AnonymousParticipant? @relation("TrackingLinkClickAnonymous", fields: [anonymousId], references: [id])
+  trackingLink TrackingLink @relation(fields: [trackingLinkId], references: [id])
+  participant  Participant? @relation(fields: [participantId], references: [id])
 }
 
 /// Journal d'audit des actions administratives
@@ -1538,13 +1536,9 @@ model CallParticipant {
   callSessionId String      @db.ObjectId
   callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
 
-  /// Authenticated user (null for anonymous)
-  userId String? @db.ObjectId
-  user   User?   @relation("CallParticipants", fields: [userId], references: [id])
-
-  /// Anonymous participant ID (from AnonymousParticipant model)
-  anonymousId   String?               @db.ObjectId
-  anonymousUser AnonymousParticipant? @relation("AnonymousCallParticipants", fields: [anonymousId], references: [id])
+  /// Unified participant in the conversation
+  participantId String      @db.ObjectId
+  participant   Participant @relation(fields: [participantId], references: [id])
 
   /// Participant role: initiator or participant
   role ParticipantRole @default(participant)
@@ -1562,8 +1556,7 @@ model CallParticipant {
 
   /// Indexes
   @@index([callSessionId])
-  @@index([userId])
-  @@index([anonymousId])
+  @@index([participantId])
 }
 
 /// Transcription - Phase 2A/2B (prepared for future)

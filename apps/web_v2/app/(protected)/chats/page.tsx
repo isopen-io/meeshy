@@ -429,7 +429,7 @@ export default function V2ChatsPage() {
               </svg>
             </div>
           ) : (
-            <LanguageOrb code={currentConversation?.members?.[0]?.user?.systemLanguage || 'fr'} size="md" pulse={false} />
+            <LanguageOrb code={currentConversation?.participants?.[0]?.user?.systemLanguage || 'fr'} size="md" pulse={false} />
           )}
 
           <div>

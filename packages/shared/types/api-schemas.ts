@@ -234,7 +234,7 @@ export const anonymousSenderSchema = {
   type: 'object',
   description: 'Anonymous participant sender information',
   properties: {
-    id: { type: 'string', description: 'Anonymous participant ID' },
+    id: { type: 'string', description: 'Participant ID' },
     username: { type: 'string', description: 'Generated anonymous username' },
     firstName: { type: 'string', description: 'Anonymous first name' },
     lastName: { type: 'string', description: 'Anonymous last name' },
@@ -564,8 +564,7 @@ export const messageSchema = {
     // Identifiers
     id: { type: 'string', description: 'Message unique identifier (MongoDB ObjectId)' },
     conversationId: { type: 'string', description: 'Parent conversation ID' },
-    senderId: { type: 'string', nullable: true, description: 'Authenticated user sender ID' },
-    anonymousSenderId: { type: 'string', nullable: true, description: 'Anonymous participant sender ID' },
+    senderId: { type: 'string', description: 'Sender participant ID' },
 
     // Content
     content: { type: 'string', description: 'Message content (original language)' },
@@ -599,7 +598,6 @@ export const messageSchema = {
         originalLanguage: { type: 'string' },
         createdAt: { type: 'string', format: 'date-time' },
         senderId: { type: 'string', nullable: true },
-        anonymousSenderId: { type: 'string', nullable: true },
         validatedMentions: { type: 'array', items: { type: 'string' } },
         sender: {
           type: 'object',
@@ -1080,7 +1078,7 @@ export const conversationSchema = {
 /**
  * Conversation member schema for minimal conversation
  */
-export const conversationMemberMinimalSchema = {
+export const conversationParticipantMinimalSchema = {
   type: 'object',
   description: 'Conversation member data',
   properties: {
@@ -1137,7 +1135,7 @@ export const conversationMinimalSchema = {
     unreadCount: { type: 'number', nullable: true, description: 'Unread count' },
     members: {
       type: 'array',
-      items: conversationMemberMinimalSchema,
+      items: conversationParticipantMinimalSchema,
       description: 'Conversation members (limited)'
     },
     userPreferences: {
@@ -1160,7 +1158,7 @@ export const conversationMinimalSchema = {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Anonymous participant ID' },
+          id: { type: 'string', description: 'Participant ID' },
           username: { type: 'string', description: 'Anonymous username' },
           firstName: { type: 'string', nullable: true, description: 'First name' },
           lastName: { type: 'string', nullable: true, description: 'Last name' },
@@ -1492,7 +1490,7 @@ export const reactionSchema = {
     id: { type: 'string', description: 'Reaction unique identifier' },
     messageId: { type: 'string', description: 'Message ID' },
     userId: { type: 'string', nullable: true, description: 'User ID (null for anonymous)' },
-    anonymousId: { type: 'string', nullable: true, description: 'Anonymous participant ID' },
+    participantId: { type: 'string', nullable: true, description: 'Participant ID' },
     emoji: { type: 'string', description: 'Emoji character' },
     createdAt: { type: 'string', format: 'date-time', description: 'Reaction timestamp' },
     user: { ...userMinimalSchema, nullable: true, description: 'User info if authenticated' }
@@ -1510,7 +1508,7 @@ export const reactionSummarySchema = {
     count: { type: 'number', description: 'Number of reactions with this emoji' },
     hasCurrentUser: { type: 'boolean', description: 'Whether current user reacted with this emoji' },
     userIds: { type: 'array', items: { type: 'string' }, description: 'User IDs who reacted' },
-    anonymousIds: { type: 'array', items: { type: 'string' }, description: 'Anonymous IDs who reacted' },
+    participantIds: { type: 'array', items: { type: 'string' }, description: 'Participant IDs who reacted' },
     users: {
       type: 'array',
       items: {
@@ -2498,7 +2496,7 @@ export const trackingLinkClickSchema = {
     id: { type: 'string', description: 'Click ID' },
     trackingLinkId: { type: 'string', description: 'Tracking link ID' },
     userId: { type: 'string', nullable: true, description: 'Authenticated user who clicked' },
-    anonymousId: { type: 'string', nullable: true, description: 'Anonymous participant who clicked' },
+    participantId: { type: 'string', nullable: true, description: 'Participant who clicked' },
     ipAddress: { type: 'string', nullable: true, description: 'Visitor IP' },
     userAgent: { type: 'string', nullable: true, description: 'User agent' },
     referrer: { type: 'string', nullable: true, description: 'Referrer URL' },
@@ -2542,7 +2540,7 @@ export const anonymousParticipantSchema = {
   type: 'object',
   description: 'Anonymous participant in a conversation',
   properties: {
-    id: { type: 'string', description: 'Anonymous participant ID' },
+    id: { type: 'string', description: 'Participant ID' },
     conversationId: { type: 'string', description: 'Conversation ID' },
     sessionId: { type: 'string', description: 'Browser session ID' },
     nickname: { type: 'string', nullable: true, description: 'Chosen nickname' },

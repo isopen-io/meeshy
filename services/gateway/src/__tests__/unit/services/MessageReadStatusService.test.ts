@@ -56,9 +56,11 @@ const mockPrisma: any = {
     findUnique: jest.fn(),
     update: jest.fn()
   },
-  conversationMember: {
+  participant: {
     count: jest.fn(),
-    findMany: jest.fn()
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn()
   },
   // Mock $transaction to pass the mock prisma to the callback
   $transaction: jest.fn().mockImplementation(async (callback: (tx: any) => Promise<any>) => {
@@ -80,8 +82,8 @@ describe('MessageReadStatusService', () => {
   let service: MessageReadStatusService;
 
   // Test data
-  const testUserId = '507f1f77bcf86cd799439011';
-  const testUserId2 = '507f1f77bcf86cd799439015';
+  const testParticipantId = '507f1f77bcf86cd799439011';
+  const testParticipantId2 = '507f1f77bcf86cd799439015';
   const testConversationId = '507f1f77bcf86cd799439012';
   const testMessageId = '507f1f77bcf86cd799439013';
   const testMessageId2 = '507f1f77bcf86cd799439014';
@@ -125,17 +127,17 @@ describe('MessageReadStatusService', () => {
   describe('getUnreadCount', () => {
     it('should return cached unreadCount from cursor', async () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
-        userId: testUserId,
+        participantId: testParticipantId,
         conversationId: testConversationId,
         unreadCount: 5
       });
 
-      const count = await service.getUnreadCount(testUserId, testConversationId);
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
       expect(count).toBe(5);
       expect(mockPrisma.conversationReadCursor.findUnique).toHaveBeenCalledWith({
         where: {
-          conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+          conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
         }
       });
     });
@@ -144,14 +146,14 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(10);
 
-      const count = await service.getUnreadCount(testUserId, testConversationId);
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
       expect(count).toBe(10);
       expect(mockPrisma.message.count).toHaveBeenCalledWith({
         where: {
           conversationId: testConversationId,
           deletedAt: null,
-          senderId: { not: testUserId }
+          senderId: { not: testParticipantId }
         }
       });
     });
@@ -159,7 +161,7 @@ describe('MessageReadStatusService', () => {
     it('should return 0 on database error', async () => {
       mockPrisma.conversationReadCursor.findUnique.mockRejectedValue(new Error('Database error'));
 
-      const count = await service.getUnreadCount(testUserId, testConversationId);
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
       expect(count).toBe(0);
       // Le service utilise maintenant enhancedLogger au lieu de console.error
@@ -178,7 +180,7 @@ describe('MessageReadStatusService', () => {
     ];
 
     it('should return empty map for empty conversation list', async () => {
-      const result = await service.getUnreadCountsForConversations(testUserId, []);
+      const result = await service.getUnreadCountsForConversations([testParticipantId],[]);
 
       expect(result).toBeInstanceOf(Map);
       expect(result.size).toBe(0);
@@ -190,7 +192,7 @@ describe('MessageReadStatusService', () => {
         { conversationId: conversationIds[1], unreadCount: 3 }
       ]);
 
-      const result = await service.getUnreadCountsForConversations(testUserId, conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
@@ -201,7 +203,7 @@ describe('MessageReadStatusService', () => {
     it('should return empty map on database error', async () => {
       mockPrisma.conversationReadCursor.findMany.mockRejectedValue(new Error('Database error'));
 
-      const result = await service.getUnreadCountsForConversations(testUserId, conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
 
       expect(result).toBeInstanceOf(Map);
       expect(result.size).toBe(0);
@@ -223,14 +225,14 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
 
-      await service.markMessagesAsReceived(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
 
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith({
         where: {
-          conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+          conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
         },
         create: expect.objectContaining({
-          userId: testUserId,
+          participantId: testParticipantId,
           conversationId: testConversationId,
           lastDeliveredMessageId: testMessageId,
           lastDeliveredAt: expect.any(Date),
@@ -255,7 +257,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
 
-      await service.markMessagesAsReceived(testUserId, testConversationId);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId);
 
       expect(mockPrisma.message.findFirst).toHaveBeenCalledWith({
         where: { conversationId: testConversationId, deletedAt: null },
@@ -267,7 +269,7 @@ describe('MessageReadStatusService', () => {
     it('should return early when no messages in conversation', async () => {
       mockPrisma.message.findFirst.mockResolvedValue(null);
 
-      await service.markMessagesAsReceived(testUserId, testConversationId);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId);
 
       expect(mockPrisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
     });
@@ -281,7 +283,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
 
-      await service.markMessagesAsReceived(testUserId, testConversationId, 'provided-message-id');
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, 'provided-message-id');
 
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -305,11 +307,11 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith({
         where: {
-          conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+          conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
         },
         create: expect.objectContaining({
           lastReadMessageId: testMessageId,
@@ -338,7 +340,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // Notification sync happens after main operation (logged via enhancedLogger)
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalled();
@@ -355,28 +357,28 @@ describe('MessageReadStatusService', () => {
       const mockMessage = {
         id: testMessageId,
         createdAt: messageCreatedAt,
-        senderId: testUserId,
+        senderId: testParticipantId,
         anonymousSenderId: null,
         conversationId: testConversationId
       };
 
       const mockMembers = [
-        { userId: testUserId },
-        { userId: testUserId2 }
+        { id: testParticipantId, displayName: 'User1' },
+        { id: testParticipantId2, displayName: 'User2' }
       ];
 
       // Cursors with lastDeliveredAt and lastReadAt >= message.createdAt
       const mockCursors = [
         {
-          userId: testUserId2,
+          participantId: testParticipantId2,
           lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
           lastReadAt: new Date('2025-01-01T10:10:00Z'),
-          user: { id: testUserId2, username: 'user2' }
+          participant: { id: testParticipantId2, displayName: 'User2' }
         }
       ];
 
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
@@ -402,28 +404,28 @@ describe('MessageReadStatusService', () => {
       const mockMessage = {
         id: testMessageId,
         createdAt: messageCreatedAt,
-        senderId: testUserId,
+        senderId: testParticipantId,
         anonymousSenderId: null,
         conversationId: testConversationId
       };
 
       const mockMembers = [
-        { userId: testUserId },
-        { userId: testUserId2 }
+        { id: testParticipantId, displayName: 'User1' },
+        { id: testParticipantId2, displayName: 'User2' }
       ];
 
       // Cursor for non-sender user with timestamps >= message.createdAt
       const mockCursors = [
         {
-          userId: testUserId2,
+          participantId: testParticipantId2,
           lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
           lastReadAt: new Date('2025-01-01T10:10:00Z'),
-          user: { id: testUserId2, username: 'user2' }
+          participant: { id: testParticipantId2, displayName: 'User2' }
         }
       ];
 
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
@@ -431,7 +433,7 @@ describe('MessageReadStatusService', () => {
       // Should only count non-sender users
       expect(result.receivedCount).toBe(1);
       expect(result.readCount).toBe(1);
-      expect(result.receivedBy[0].userId).toBe(testUserId2);
+      expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
     });
   });
 
@@ -445,16 +447,16 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'audio/mp3',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
       // Mock for updateAttachmentComputedStatus
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAudioAsListened(testUserId, testAttachmentId, {
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 5000,
         listenDurationMs: 10000,
         complete: false
@@ -462,12 +464,12 @@ describe('MessageReadStatusService', () => {
 
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith({
         where: {
-          attachment_user_status: { attachmentId: testAttachmentId, userId: testUserId }
+          attachment_participant_status: { attachmentId: testAttachmentId, participantId: testParticipantId }
         },
         create: expect.objectContaining({
           attachmentId: testAttachmentId,
           messageId: testMessageId,
-          userId: testUserId,
+          participantId: testParticipantId,
           listenedAt: expect.any(Date),
           listenCount: 1,
           lastPlayPositionMs: 5000,
@@ -485,7 +487,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.markAudioAsListened(testUserId, 'nonexistent')
+        service.markAudioAsListened(testParticipantId, 'nonexistent')
       ).rejects.toThrow('Attachment nonexistent not found');
     });
 
@@ -494,15 +496,15 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'audio/mp3',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAudioAsListened(testUserId, testAttachmentId, { complete: true });
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, { complete: true });
 
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -523,15 +525,15 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'video/mp4',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ watchedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markVideoAsWatched(testUserId, testAttachmentId, {
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
         watchPositionMs: 30000,
         watchDurationMs: 60000,
         complete: true
@@ -539,7 +541,7 @@ describe('MessageReadStatusService', () => {
 
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith({
         where: {
-          attachment_user_status: { attachmentId: testAttachmentId, userId: testUserId }
+          attachment_participant_status: { attachmentId: testAttachmentId, participantId: testParticipantId }
         },
         create: expect.objectContaining({
           watchedAt: expect.any(Date),
@@ -559,7 +561,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.markVideoAsWatched(testUserId, 'nonexistent')
+        service.markVideoAsWatched(testParticipantId, 'nonexistent')
       ).rejects.toThrow('Attachment nonexistent not found');
     });
   });
@@ -574,22 +576,22 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'image/jpeg',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ viewedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markImageAsViewed(testUserId, testAttachmentId, {
+      await service.markImageAsViewed(testParticipantId, testAttachmentId, {
         viewDurationMs: 5000,
         wasZoomed: true
       });
 
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith({
         where: {
-          attachment_user_status: { attachmentId: testAttachmentId, userId: testUserId }
+          attachment_participant_status: { attachmentId: testAttachmentId, participantId: testParticipantId }
         },
         create: expect.objectContaining({
           viewedAt: expect.any(Date),
@@ -608,7 +610,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.markImageAsViewed(testUserId, 'nonexistent')
+        service.markImageAsViewed(testParticipantId, 'nonexistent')
       ).rejects.toThrow('Attachment nonexistent not found');
     });
   });
@@ -623,19 +625,19 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'application/pdf',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ downloadedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+      await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
 
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith({
         where: {
-          attachment_user_status: { attachmentId: testAttachmentId, userId: testUserId }
+          attachment_participant_status: { attachmentId: testAttachmentId, participantId: testParticipantId }
         },
         create: expect.objectContaining({
           downloadedAt: expect.any(Date)
@@ -650,7 +652,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.markAttachmentAsDownloaded(testUserId, 'nonexistent')
+        service.markAttachmentAsDownloaded(testParticipantId, 'nonexistent')
       ).rejects.toThrow('Attachment nonexistent not found');
     });
   });
@@ -674,7 +676,7 @@ describe('MessageReadStatusService', () => {
         lastWatchPositionMs: null
       });
 
-      const result = await service.getAttachmentStatus(testAttachmentId, testUserId);
+      const result = await service.getAttachmentStatus(testAttachmentId, testParticipantId);
 
       expect(result).toEqual({
         viewed: true,
@@ -693,7 +695,7 @@ describe('MessageReadStatusService', () => {
     it('should return null when no status exists', async () => {
       mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue(null);
 
-      const result = await service.getAttachmentStatus(testAttachmentId, testUserId);
+      const result = await service.getAttachmentStatus(testAttachmentId, testParticipantId);
 
       expect(result).toBeNull();
     });
@@ -701,7 +703,7 @@ describe('MessageReadStatusService', () => {
     it('should return null on database error', async () => {
       mockPrisma.attachmentStatusEntry.findUnique.mockRejectedValue(new Error('DB error'));
 
-      const result = await service.getAttachmentStatus(testAttachmentId, testUserId);
+      const result = await service.getAttachmentStatus(testAttachmentId, testParticipantId);
 
       expect(result).toBeNull();
       // Le service utilise maintenant enhancedLogger au lieu de console.error
@@ -727,12 +729,12 @@ describe('MessageReadStatusService', () => {
       // Mock cursors: 2 users with different read/delivered timestamps
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
         {
-          userId: testUserId,
+          participantId: testParticipantId,
           lastDeliveredAt: new Date('2025-01-01T12:00:00Z'), // After both messages
           lastReadAt: new Date('2025-01-01T12:00:00Z') // After both messages
         },
         {
-          userId: testUserId2,
+          participantId: testParticipantId2,
           lastDeliveredAt: new Date('2025-01-01T10:30:00Z'), // After message1, before message2
           lastReadAt: null // Never read
         }
@@ -742,10 +744,10 @@ describe('MessageReadStatusService', () => {
 
       expect(result).toBeInstanceOf(Map);
       // message1: user1 delivered+read, user2 delivered only (but user2 is sender so excluded)
-      // Actually sender is 'sender-1', so both testUserId and testUserId2 are counted
-      // testUserId: delivered+read, testUserId2: delivered only
+      // Actually sender is 'sender-1', so both testParticipantId and testParticipantId2 are counted
+      // testParticipantId: delivered+read, testParticipantId2: delivered only
       expect(result.get(testMessageId)).toEqual({ receivedCount: 2, readCount: 1 });
-      // message2: only testUserId delivered+read (testUserId2's delivered is before message2)
+      // message2: only testParticipantId delivered+read (testParticipantId2's delivered is before message2)
       expect(result.get(testMessageId2)).toEqual({ receivedCount: 1, readCount: 1 });
     });
 
@@ -823,7 +825,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
         mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-        await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+        await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
         // message.update should NOT be called for computed status fields
         expect(mockPrisma.message.update).not.toHaveBeenCalled();
@@ -835,7 +837,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
         mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-        await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+        await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
         // messageStatusEntry.upsert should NOT be called
         expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
@@ -850,13 +852,13 @@ describe('MessageReadStatusService', () => {
           mimeType: 'audio/mp3',
           message: {
             conversationId: testConversationId,
-            senderId: testUserId2,
+            senderId: testParticipantId2,
             anonymousSenderId: null
           }
         });
         mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
 
-        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.participant.count.mockResolvedValue(2);
 
         // All counts
         mockPrisma.attachmentStatusEntry.count
@@ -874,7 +876,7 @@ describe('MessageReadStatusService', () => {
 
         mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-        await service.markAudioAsListened(testUserId, testAttachmentId, { complete: true });
+        await service.markAudioAsListened(testParticipantId, testAttachmentId, { complete: true });
 
         expect(mockPrisma.messageAttachment.update).toHaveBeenCalledWith({
           where: { id: testAttachmentId },
@@ -894,7 +896,7 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('Edge Cases', () => {
-    it('should handle empty userId gracefully', async () => {
+    it('should handle empty participantId gracefully', async () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(0);
 
@@ -907,9 +909,9 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 5 });
 
       const promises = [
-        service.getUnreadCount(testUserId, testConversationId),
-        service.getUnreadCount(testUserId, testConversationId),
-        service.getUnreadCount(testUserId, testConversationId)
+        service.getUnreadCount(testParticipantId, testConversationId),
+        service.getUnreadCount(testParticipantId, testConversationId),
+        service.getUnreadCount(testParticipantId, testConversationId)
       ];
 
       const results = await Promise.all(promises);
@@ -928,7 +930,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(5);
 
-      let unreadCount = await service.getUnreadCount(testUserId, testConversationId);
+      let unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
       expect(unreadCount).toBe(5);
 
       // 2. Mark as received: cursor created (cursor-only approach)
@@ -938,7 +940,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(4);
 
-      await service.markMessagesAsReceived(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
 
       // Verify cursor-only approach: no messageStatusEntry or message.update
       expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
@@ -947,7 +949,7 @@ describe('MessageReadStatusService', () => {
       // 3. After received, cursor has updated unreadCount
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 4 });
 
-      unreadCount = await service.getUnreadCount(testUserId, testConversationId);
+      unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
       expect(unreadCount).toBe(4);
     });
 
@@ -956,18 +958,18 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'audio/mp3',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       };
 
       mockPrisma.messageAttachment.findUnique.mockResolvedValue(attachmentSetup);
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
       // 1. First listen (partial)
-      await service.markAudioAsListened(testUserId, testAttachmentId, {
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 5000,
         listenDurationMs: 5000,
         complete: false
@@ -983,7 +985,7 @@ describe('MessageReadStatusService', () => {
       );
 
       // 2. Second listen (complete)
-      await service.markAudioAsListened(testUserId, testAttachmentId, {
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 10000,
         listenDurationMs: 10000,
         complete: true
@@ -1009,7 +1011,7 @@ describe('MessageReadStatusService', () => {
       // Setup: User has 5 unread messages
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 5 });
 
-      let unreadCount = await service.getUnreadCount(testUserId, testConversationId);
+      let unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
       expect(unreadCount).toBe(5);
 
       // Mark all as read
@@ -1017,7 +1019,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // After reading, cursor should be updated to 0
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
@@ -1037,7 +1039,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // message.update should NOT be called in cursor-based approach
       expect(mockPrisma.message.update).not.toHaveBeenCalled();
@@ -1050,7 +1052,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // message.update should NOT be called in cursor-based approach
       expect(mockPrisma.message.update).not.toHaveBeenCalled();
@@ -1070,7 +1072,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
 
       // 4 participants, 3 viewed, 2 downloaded, 3 listened
-      mockPrisma.conversationMember.count.mockResolvedValue(4);
+      mockPrisma.participant.count.mockResolvedValue(4);
       mockPrisma.attachmentStatusEntry.count
         .mockResolvedValueOnce(3) // viewedCount
         .mockResolvedValueOnce(2) // downloadedCount
@@ -1083,7 +1085,7 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAudioAsListened(testUserId, testAttachmentId);
+      await service.markAudioAsListened(testParticipantId, testAttachmentId);
 
       expect(mockPrisma.messageAttachment.update).toHaveBeenCalledWith({
         where: { id: testAttachmentId },
@@ -1109,13 +1111,13 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
       // First read
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // Clear the dedup cache to allow second call
       (MessageReadStatusService as any).recentActionCache.clear();
 
       // Second read - should use cursor upsert.update path
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // Cursor upsert should be called twice (once per markMessagesAsRead call)
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(2);
@@ -1128,15 +1130,15 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'audio/mp3',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAudioAsListened(testUserId, testAttachmentId);
+      await service.markAudioAsListened(testParticipantId, testAttachmentId);
 
       // Create should start with listenCount: 1, not increment
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledWith(
@@ -1156,17 +1158,17 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'application/pdf',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(2);
+      mockPrisma.participant.count.mockResolvedValue(2);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ downloadedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
       // Download twice
-      await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
-      await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+      await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
+      await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
 
       // Both calls should succeed via upsert
       expect(mockPrisma.attachmentStatusEntry.upsert).toHaveBeenCalledTimes(2);
@@ -1210,7 +1212,7 @@ describe('MessageReadStatusService', () => {
         message: { conversationId: testConversationId, senderId: 'sender-id' }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
+      mockPrisma.participant.count.mockResolvedValue(5);
       mockPrisma.attachmentStatusEntry.count.mockResolvedValue(3);
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
       mockPrisma.messageAttachment.update.mockResolvedValue({});
@@ -1231,7 +1233,7 @@ describe('MessageReadStatusService', () => {
       // Rapid successive reads
       const promises = [];
       for (let i = 0; i < 10; i++) {
-        promises.push(service.getUnreadCount(testUserId, testConversationId));
+        promises.push(service.getUnreadCount(testParticipantId, testConversationId));
       }
 
       const results = await Promise.all(promises);
@@ -1247,39 +1249,38 @@ describe('MessageReadStatusService', () => {
 
   describe('Anonymous User Handling', () => {
     it('should handle messages from anonymous senders using cursor-based approach', async () => {
-      const anonymousSenderId = 'anon-sender-123';
+      const anonymousParticipantId = 'anon-sender-123';
       const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       const mockMessage = {
         id: testMessageId,
         createdAt: messageCreatedAt,
-        senderId: null,
-        anonymousSenderId: anonymousSenderId,
+        senderId: anonymousParticipantId,
         conversationId: testConversationId
       };
 
       const mockMembers = [
-        { userId: testUserId },
-        { userId: testUserId2 },
-        { userId: 'user-3' }
+        { id: anonymousParticipantId, displayName: 'AnonSender' },
+        { id: testParticipantId, displayName: 'User1' },
+        { id: testParticipantId2, displayName: 'User2' }
       ];
 
       // Cursor with timestamps >= message.createdAt
       const mockCursors = [
         {
-          userId: testUserId,
+          participantId: testParticipantId,
           lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
           lastReadAt: new Date('2025-01-01T10:10:00Z'),
-          user: { id: testUserId, username: 'user1' }
+          participant: { id: testParticipantId, displayName: 'User1' }
         }
       ];
 
       mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
-      mockPrisma.conversationMember.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
 
-      expect(result.totalMembers).toBe(3); // Anonymous sender not excluded
+      expect(result.totalMembers).toBe(2); // 3 participants minus 1 sender
       expect(result.receivedBy).toHaveLength(1);
     });
 
@@ -1291,13 +1292,13 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, testMessageId);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
 
       // Should update the read cursor
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+            conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
           }
         })
       );
@@ -1317,14 +1318,14 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
 
-      await service.markMessagesAsRead(testUserId, testConversationId, 'msg-49');
+      await service.markMessagesAsRead(testParticipantId, testConversationId, 'msg-49');
 
       // Should update cursor once regardless of message count
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
       expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            conversation_user_cursor: { userId: testUserId, conversationId: testConversationId }
+            conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
           },
           update: expect.objectContaining({
             lastReadMessageId: 'msg-49',
@@ -1346,7 +1347,7 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(cursors);
 
-      const result = await service.getUnreadCountsForConversations(testUserId, conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
 
       expect(result.size).toBe(conversationCount);
       // Should make only 1 findMany for cursors - no individual message.count calls needed
@@ -1380,7 +1381,7 @@ describe('MessageReadStatusService', () => {
 
       // Should not throw - notification sync errors are caught internally
       await expect(
-        service.markMessagesAsRead(testUserId, testConversationId, testMessageId)
+        service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
       ).resolves.not.toThrow();
 
       // Cursor should still have been updated
@@ -1400,7 +1401,7 @@ describe('MessageReadStatusService', () => {
         new Error('Connection timeout')
       );
 
-      const count = await service.getUnreadCount(testUserId, testConversationId);
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
       expect(count).toBe(0);
       // Le service utilise maintenant enhancedLogger au lieu de console.error
@@ -1417,10 +1418,10 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'audio/mpeg',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
+      mockPrisma.participant.count.mockResolvedValue(5);
 
       // 3 viewed, 2 downloaded, 4 listened, 0 watched
       mockPrisma.attachmentStatusEntry.count
@@ -1432,7 +1433,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue(null);
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAudioAsListened(testUserId, testAttachmentId);
+      await service.markAudioAsListened(testParticipantId, testAttachmentId);
 
       // Verify consumedCount is listenedCount for audio
       const updateCall = mockPrisma.messageAttachment.update.mock.calls[0][0];
@@ -1446,10 +1447,10 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'video/mp4',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
+      mockPrisma.participant.count.mockResolvedValue(5);
 
       // 4 viewed, 3 downloaded, 0 listened, 2 watched
       mockPrisma.attachmentStatusEntry.count
@@ -1461,7 +1462,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue(null);
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markVideoAsWatched(testUserId, testAttachmentId);
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId);
 
       // Verify consumedCount is watchedCount for video
       const updateCall = mockPrisma.messageAttachment.update.mock.calls[0][0];
@@ -1475,10 +1476,10 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'image/png',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
+      mockPrisma.participant.count.mockResolvedValue(5);
 
       // 3 viewed, 2 downloaded, 0 listened, 0 watched
       mockPrisma.attachmentStatusEntry.count
@@ -1490,7 +1491,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue(null);
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markImageAsViewed(testUserId, testAttachmentId);
+      await service.markImageAsViewed(testParticipantId, testAttachmentId);
 
       // Verify consumedCount is viewedCount for non-audio/video
       const updateCall = mockPrisma.messageAttachment.update.mock.calls[0][0];
@@ -1504,10 +1505,10 @@ describe('MessageReadStatusService', () => {
         id: testAttachmentId,
         messageId: testMessageId,
         mimeType: 'application/pdf',
-        message: { conversationId: testConversationId, senderId: testUserId2 }
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
       });
       mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
-      mockPrisma.conversationMember.count.mockResolvedValue(5);
+      mockPrisma.participant.count.mockResolvedValue(5);
 
       // 5 viewed, 4 downloaded, 0 listened, 0 watched
       mockPrisma.attachmentStatusEntry.count
@@ -1519,7 +1520,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue(null);
       mockPrisma.messageAttachment.update.mockResolvedValue({});
 
-      await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+      await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
 
       // Verify consumedCount is viewedCount for documents
       const updateCall = mockPrisma.messageAttachment.update.mock.calls[0][0];
@@ -1553,9 +1554,9 @@ describe('MessageReadStatusService', () => {
           id: testAttachmentId,
           messageId: testMessageId,
           mimeType: 'audio/mp3',
-          message: { conversationId: testConversationId, senderId: testUserId2 }
+          message: { conversationId: testConversationId, senderId: testParticipantId2 }
         });
-        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.participant.count.mockResolvedValue(2);
         mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
         mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
         mockPrisma.messageAttachment.update.mockResolvedValue({});
@@ -1569,7 +1570,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markAudioAsListened(testUserId, testAttachmentId);
+        await service.markAudioAsListened(testParticipantId, testAttachmentId);
 
         // $transaction should have been called twice (1 failure + 1 success)
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
@@ -1584,7 +1585,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markAudioAsListened(testUserId, testAttachmentId);
+        await service.markAudioAsListened(testParticipantId, testAttachmentId);
 
         // $transaction should have been called 3 times (2 failures + 1 success)
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
@@ -1598,7 +1599,7 @@ describe('MessageReadStatusService', () => {
           .mockRejectedValueOnce(createDeadlockError());
 
         await expect(
-          service.markAudioAsListened(testUserId, testAttachmentId)
+          service.markAudioAsListened(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2034' });
 
         // $transaction should have been called 3 times (all failures)
@@ -1610,7 +1611,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2025'));
 
         await expect(
-          service.markAudioAsListened(testUserId, testAttachmentId)
+          service.markAudioAsListened(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2025' });
 
         // $transaction should have been called only once (no retry for non-P2034)
@@ -1624,9 +1625,9 @@ describe('MessageReadStatusService', () => {
           id: testAttachmentId,
           messageId: testMessageId,
           mimeType: 'video/mp4',
-          message: { conversationId: testConversationId, senderId: testUserId2 }
+          message: { conversationId: testConversationId, senderId: testParticipantId2 }
         });
-        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.participant.count.mockResolvedValue(2);
         mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
         mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ watchedAt: new Date() });
         mockPrisma.messageAttachment.update.mockResolvedValue({});
@@ -1639,7 +1640,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markVideoAsWatched(testUserId, testAttachmentId);
+        await service.markVideoAsWatched(testParticipantId, testAttachmentId);
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
       });
@@ -1651,7 +1652,7 @@ describe('MessageReadStatusService', () => {
           .mockRejectedValueOnce(createDeadlockError());
 
         await expect(
-          service.markVideoAsWatched(testUserId, testAttachmentId)
+          service.markVideoAsWatched(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2034' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
@@ -1661,7 +1662,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2002'));
 
         await expect(
-          service.markVideoAsWatched(testUserId, testAttachmentId)
+          service.markVideoAsWatched(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2002' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -1674,9 +1675,9 @@ describe('MessageReadStatusService', () => {
           id: testAttachmentId,
           messageId: testMessageId,
           mimeType: 'image/jpeg',
-          message: { conversationId: testConversationId, senderId: testUserId2 }
+          message: { conversationId: testConversationId, senderId: testParticipantId2 }
         });
-        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.participant.count.mockResolvedValue(2);
         mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
         mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ viewedAt: new Date() });
         mockPrisma.messageAttachment.update.mockResolvedValue({});
@@ -1689,7 +1690,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markImageAsViewed(testUserId, testAttachmentId);
+        await service.markImageAsViewed(testParticipantId, testAttachmentId);
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
       });
@@ -1701,7 +1702,7 @@ describe('MessageReadStatusService', () => {
           .mockRejectedValueOnce(createDeadlockError());
 
         await expect(
-          service.markImageAsViewed(testUserId, testAttachmentId)
+          service.markImageAsViewed(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2034' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
@@ -1711,7 +1712,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.$transaction.mockRejectedValueOnce(createNonDeadlockError('P2003'));
 
         await expect(
-          service.markImageAsViewed(testUserId, testAttachmentId)
+          service.markImageAsViewed(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2003' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -1724,9 +1725,9 @@ describe('MessageReadStatusService', () => {
           id: testAttachmentId,
           messageId: testMessageId,
           mimeType: 'application/pdf',
-          message: { conversationId: testConversationId, senderId: testUserId2 }
+          message: { conversationId: testConversationId, senderId: testParticipantId2 }
         });
-        mockPrisma.conversationMember.count.mockResolvedValue(2);
+        mockPrisma.participant.count.mockResolvedValue(2);
         mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
         mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ downloadedAt: new Date() });
         mockPrisma.messageAttachment.update.mockResolvedValue({});
@@ -1739,7 +1740,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+        await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
       });
@@ -1752,7 +1753,7 @@ describe('MessageReadStatusService', () => {
             return callback(mockPrisma);
           });
 
-        await service.markAttachmentAsDownloaded(testUserId, testAttachmentId);
+        await service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId);
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
       });
@@ -1764,7 +1765,7 @@ describe('MessageReadStatusService', () => {
           .mockRejectedValueOnce(createDeadlockError());
 
         await expect(
-          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+          service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2034' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
@@ -1775,7 +1776,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.$transaction.mockRejectedValueOnce(uniqueConstraintError);
 
         await expect(
-          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+          service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId)
         ).rejects.toMatchObject({ code: 'P2002' });
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -1786,7 +1787,7 @@ describe('MessageReadStatusService', () => {
         mockPrisma.$transaction.mockRejectedValueOnce(genericError);
 
         await expect(
-          service.markAttachmentAsDownloaded(testUserId, testAttachmentId)
+          service.markAttachmentAsDownloaded(testParticipantId, testAttachmentId)
         ).rejects.toThrow('Generic database error');
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);

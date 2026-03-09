@@ -1216,9 +1216,6 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
             createdAt: true,
             conversation: {
               select: { id: true, identifier: true }
-            },
-            _count: {
-              select: { anonymousParticipants: true }
             }
           },
           orderBy: { createdAt: 'desc' },

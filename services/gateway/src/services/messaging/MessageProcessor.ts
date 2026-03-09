@@ -282,8 +282,7 @@ export class MessageProcessor {
    */
   async saveMessage(data: {
     conversationId: string;
-    senderId?: string;
-    anonymousSenderId?: string;
+    senderId: string;
     content: string;
     originalLanguage: string;
     messageType?: string;
@@ -299,7 +298,7 @@ export class MessageProcessor {
     const processedContent = await this.processLinksInContent(
       data.content,
       data.conversationId,
-      data.senderId || data.anonymousSenderId,
+      data.senderId,
       undefined
     );
 
@@ -327,7 +326,6 @@ export class MessageProcessor {
       data: {
         conversationId: data.conversationId,
         senderId: data.senderId,
-        anonymousSenderId: data.anonymousSenderId,
         content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
         originalLanguage: data.originalLanguage,
         messageType: data.messageType || 'text',
@@ -345,20 +343,12 @@ export class MessageProcessor {
         sender: {
           select: {
             id: true,
-            username: true,
             displayName: true,
             avatar: true,
             role: true,
-            isOnline: true
-          }
-        },
-        anonymousSender: {
-          select: {
-            id: true,
-            conversationId: true,
-            username: true,
-            firstName: true,
-            lastName: true,
+            isOnline: true,
+            type: true,
+            userId: true,
             language: true
           }
         },
@@ -394,18 +384,10 @@ export class MessageProcessor {
             sender: {
               select: {
                 id: true,
-                username: true,
                 displayName: true,
-                avatar: true
-              }
-            },
-            anonymousSender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                language: true
+                avatar: true,
+                type: true,
+                userId: true
               }
             }
           }
@@ -570,8 +552,8 @@ export class MessageProcessor {
         select: {
           title: true,
           type: true,
-          members: {
-            where: { isActive: true },
+          participants: {
+            where: { isActive: true, type: 'user' },
             select: { userId: true }
           }
         }
@@ -603,7 +585,9 @@ export class MessageProcessor {
         logger.error('[MessageProcessor] Error fetching attachments for mention', err);
       }
 
-      const memberIds = conversation.members.map(m => m.userId);
+      const memberIds = conversation.participants
+        .map(p => p.userId)
+        .filter((id): id is string => id !== null);
 
       const count = await this.notificationService.createMentionNotificationsBatch(
         mentionedUserIds,
@@ -645,21 +629,23 @@ export class MessageProcessor {
     conversationId: string
   ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
     try {
-      const members = await this.prisma.conversationMember.findMany({
-        where: { conversationId, isActive: true },
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true, type: 'user' },
         select: {
+          userId: true,
+          displayName: true,
           user: {
             select: { id: true, username: true, displayName: true }
           }
         }
       });
 
-      return members
-        .filter((m): m is typeof m & { user: NonNullable<typeof m.user> } => m.user !== null)
-        .map((m) => ({
-          userId: m.user.id,
-          username: m.user.username,
-          displayName: m.user.displayName ?? m.user.username,
+      return participants
+        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
+        .map((p) => ({
+          userId: p.user.id,
+          username: p.user.username,
+          displayName: p.user.displayName ?? p.user.username,
         }));
     } catch {
       return [];

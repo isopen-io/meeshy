@@ -88,7 +88,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           id: true,
           conversationId: true,
           senderId: true,
-          anonymousSenderId: true,
           content: true,
           originalLanguage: true,
           messageType: true,
@@ -124,23 +123,24 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true,
+              displayName: true,
               avatar: true,
-              isOnline: true
-            }
-          },
-          anonymousSender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true
+              isOnline: true,
+              type: true,
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
             }
           },
           conversation: {
             select: {
-              members: {
-                where: { userId: userId },
+              participants: {
+                where: { userId: userId, isActive: true },
                 select: { userId: true, role: true }
               }
             }
@@ -180,7 +180,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
-      if (!(message as any).conversation.members.length) {
+      if (!(message as any).conversation.participants.length) {
         return reply.status(403).send({
           success: false,
           error: 'Accès non autorisé à ce message'
@@ -262,7 +262,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           },
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true }
               }
@@ -299,8 +299,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true,
-              avatar: true
+              displayName: true,
+              avatar: true,
+              user: { select: { username: true } }
             }
           }
         }
@@ -388,12 +389,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
-              username: true
+              displayName: true,
+              user: { select: { username: true } }
             }
           },
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true, role: true }
               }
@@ -415,7 +417,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Vérifier les permissions de suppression
-      const userMembership = message.conversation.members[0];
+      const userMembership = message.conversation.participants[0];
       const canDelete =
         // L'auteur du message peut le supprimer
         message.senderId === userId ||
@@ -535,7 +537,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true }
               }
@@ -544,7 +546,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!message || !message.conversation.members.length) {
+      if (!message || !message.conversation.participants.length) {
         return reply.status(404).send({
           success: false,
           error: 'Message non trouvé ou accès non autorisé'
@@ -625,7 +627,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true, role: true }
               }
@@ -634,7 +636,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!message || !message.conversation.members.length) {
+      if (!message || !message.conversation.participants.length) {
         return reply.status(404).send({
           success: false,
           error: 'Message non trouvé ou accès non autorisé'
@@ -642,7 +644,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Seuls les modérateurs/admins ou l'auteur peuvent voir l'historique
-      const userMembership = message.conversation.members[0];
+      const userMembership = message.conversation.participants[0];
       const canViewHistory =
         message.senderId === userId ||
         userMembership?.role === 'admin' ||
@@ -718,7 +720,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Vérifier que l'utilisateur est membre de la conversation
-      const membership = await prisma.conversationMember.findFirst({
+      const membership = await prisma.participant.findFirst({
         where: {
           conversationId: message.conversationId,
           userId: userId,
@@ -786,7 +788,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         include: {
           conversation: {
             include: {
-              members: {
+              participants: {
                 where: { userId: userId },
                 select: { userId: true }
               }
@@ -795,7 +797,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!message || !message.conversation.members.length) {
+      if (!message || !message.conversation.participants.length) {
         return reply.status(404).send({
           success: false,
           error: 'Message non trouvé ou accès non autorisé'
@@ -853,7 +855,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             include: {
               conversation: {
                 include: {
-                  members: {
+                  participants: {
                     where: { userId: userId },
                     select: { userId: true }
                   }
@@ -864,7 +866,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!attachment || !attachment.message.conversation.members.length) {
+      if (!attachment || !attachment.message.conversation.participants.length) {
         return reply.status(404).send({
           success: false,
           error: 'Attachment non trouvé ou accès non autorisé'
@@ -930,7 +932,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             include: {
               conversation: {
                 include: {
-                  members: {
+                  participants: {
                     where: { userId: userId },
                     select: { userId: true }
                   }
@@ -941,7 +943,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!attachment || !attachment.message.conversation.members.length) {
+      if (!attachment || !attachment.message.conversation.participants.length) {
         return reply.status(404).send({
           success: false,
           error: 'Attachment non trouvé ou accès non autorisé'

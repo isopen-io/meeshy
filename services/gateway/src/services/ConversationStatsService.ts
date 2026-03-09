@@ -180,7 +180,7 @@ export class ConversationStatsService {
         participantsPerLanguage[u.systemLanguage] = (participantsPerLanguage[u.systemLanguage] || 0) + 1;
       }
     } else {
-      const members = await prisma.conversationMember.findMany({
+      const members = await prisma.participant.findMany({
         where: {
           conversationId: realConversationId,
           isActive: true,
@@ -246,7 +246,7 @@ export class ConversationStatsService {
     }
     
     if (!isGlobalConversation) {
-      const members = await prisma.conversationMember.findMany({
+      const members = await prisma.participant.findMany({
         where: { conversationId: realConversationId, isActive: true, userId: { in: connectedUserIds } },
         select: { userId: true }
       }).catch(() => [] as any[]);

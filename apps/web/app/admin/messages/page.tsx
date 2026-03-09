@@ -39,12 +39,6 @@ interface Message {
     displayName?: string;
     avatar?: string;
   };
-  anonymousSender?: {
-    id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-  };
   conversation: {
     id: string;
     identifier?: string;
@@ -446,10 +440,7 @@ export default function AdminMessagesPage() {
                           <div className="flex items-center space-x-1">
                             <User className="h-4 w-4" />
                             <span>
-                              {message.sender 
-                                ? (message.sender.displayName || message.sender.username)
-                                : `${message.anonymousSender?.firstName} ${message.anonymousSender?.lastName} (Anonyme)`
-                              }
+                              {message.sender?.displayName || message.sender?.username || 'Unknown'}
                             </span>
                           </div>
                           <div className="flex items-center space-x-1">

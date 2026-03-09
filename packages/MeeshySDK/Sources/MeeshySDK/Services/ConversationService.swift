@@ -9,7 +9,7 @@ public protocol ConversationServiceProviding: Sendable {
     func delete(conversationId: String) async throws
     func markRead(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
-    func getParticipants(conversationId: String, limit: Int) async throws -> [APIConversationMember]
+    func getParticipants(conversationId: String, limit: Int) async throws -> [APIParticipant]
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
 }
@@ -51,8 +51,8 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
     }
 
-    public func getParticipants(conversationId: String, limit: Int = 100) async throws -> [APIConversationMember] {
-        let response: APIResponse<[APIConversationMember]> = try await api.request(
+    public func getParticipants(conversationId: String, limit: Int = 100) async throws -> [APIParticipant] {
+        let response: APIResponse<[APIParticipant]> = try await api.request(
             endpoint: "/conversations/\(conversationId)/participants",
             queryItems: [URLQueryItem(name: "limit", value: "\(limit)")]
         )

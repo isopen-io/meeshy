@@ -136,16 +136,22 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
     case 'reactions_given':
     case 'reactions': {
       const topReactors = await fastify.prisma.reaction.groupBy({
-        by: ['userId'],
-        where: { ...msgDateFilter, userId: { not: null } },
+        by: ['participantId'],
+        where: { ...msgDateFilter },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const userIds = topReactors.map(r => r.userId!).filter(Boolean);
+      const participantIds = topReactors.map(r => r.participantId);
+      const participants = await fastify.prisma.participant.findMany({
+        where: { id: { in: participantIds }, userId: { not: null } },
+        select: { id: true, userId: true }
+      });
+      const partToUser = new Map(participants.map(p => [p.id, p.userId!]));
+      const userIds = [...new Set(participants.map(p => p.userId!).filter(Boolean))];
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
-        topReactors.map(r => [r.userId!, r._count.id] as [string, number]),
+        topReactors.map(r => [partToUser.get(r.participantId) || r.participantId, r._count.id] as [string, number]).filter(([id]) => id),
         userMap
       );
     }
@@ -202,16 +208,22 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'mentions_received': {
       const topMentioned = await fastify.prisma.mention.groupBy({
-        by: ['mentionedUserId'],
+        by: ['mentionedParticipantId'],
         where: dateWhere(startDate, 'mentionedAt'),
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const userIds = topMentioned.map(m => m.mentionedUserId);
-      const userMap = await fetchUserDetails(fastify, userIds);
+      const mentionedParticipantIds = topMentioned.map(m => m.mentionedParticipantId);
+      const mentionedParticipants = await fastify.prisma.participant.findMany({
+        where: { id: { in: mentionedParticipantIds }, userId: { not: null } },
+        select: { id: true, userId: true }
+      });
+      const mentPartToUser = new Map(mentionedParticipants.map(p => [p.id, p.userId!]));
+      const mentUserIds = [...new Set(mentionedParticipants.map(p => p.userId!).filter(Boolean))];
+      const userMap = await fetchUserDetails(fastify, mentUserIds);
       return buildUserRankings(
-        topMentioned.map(m => [m.mentionedUserId, m._count.id] as [string, number]),
+        topMentioned.map(m => [mentPartToUser.get(m.mentionedParticipantId) || m.mentionedParticipantId, m._count.id] as [string, number]).filter(([id]) => id),
         userMap
       );
     }
@@ -235,7 +247,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 
     case 'conversations_joined':
     case 'conversations': {
-      const topConversors = await fastify.prisma.conversationMember.groupBy({
+      const topConversors = await fastify.prisma.participant.groupBy({
         by: ['userId'],
         where: dateWhere(startDate, 'joinedAt'),
         _count: { id: true },
@@ -256,7 +268,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
         select: { id: true }
       });
       const convoIds = groupConvos.map(c => c.id);
-      const adminMembers = await fastify.prisma.conversationMember.findMany({
+      const adminMembers = await fastify.prisma.participant.findMany({
         where: { conversationId: { in: convoIds }, role: 'admin' },
         select: { userId: true, conversationId: true },
         orderBy: { joinedAt: 'asc' }
@@ -392,17 +404,23 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
     }
 
     case 'call_participations': {
-      const topParticipants = await fastify.prisma.callParticipant.groupBy({
-        by: ['userId'],
-        where: { ...dateWhere(startDate, 'joinedAt'), userId: { not: null } },
+      const topCallParticipants = await fastify.prisma.callParticipant.groupBy({
+        by: ['participantId'],
+        where: dateWhere(startDate, 'joinedAt'),
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: limit
       });
-      const userIds = topParticipants.map(p => p.userId!).filter(Boolean);
-      const userMap = await fetchUserDetails(fastify, userIds);
+      const callPartIds = topCallParticipants.map(p => p.participantId);
+      const callParts = await fastify.prisma.participant.findMany({
+        where: { id: { in: callPartIds }, userId: { not: null } },
+        select: { id: true, userId: true }
+      });
+      const callPartToUser = new Map(callParts.map(p => [p.id, p.userId!]));
+      const callUserIds = [...new Set(callParts.map(p => p.userId!).filter(Boolean))];
+      const userMap = await fetchUserDetails(fastify, callUserIds);
       return buildUserRankings(
-        topParticipants.map(p => [p.userId!, p._count.id] as [string, number]),
+        topCallParticipants.map(p => [callPartToUser.get(p.participantId) || p.participantId, p._count.id] as [string, number]).filter(([id]) => id),
         userMap
       );
     }
@@ -516,7 +534,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
 
     case 'member_count':
     case 'members': {
-      const topConvos = await fastify.prisma.conversationMember.groupBy({
+      const topConvos = await fastify.prisma.participant.groupBy({
         by: ['conversationId'],
         where: { isActive: true },
         _count: { id: true },
@@ -626,7 +644,7 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
         messageType: true,
         createdAt: true,
         sender: {
-          select: { id: true, username: true, displayName: true, avatar: true }
+          select: { id: true, displayName: true, avatar: true, user: { select: { username: true } } }
         },
         conversation: {
           select: { id: true, identifier: true, title: true, type: true }
@@ -642,7 +660,7 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
         contentPreview: msg?.content ? msg.content.substring(0, 100) : '',
         messageType: msg?.messageType,
         createdAt: msg?.createdAt?.toISOString(),
-        sender: msg?.sender,
+        sender: msg?.sender ? { ...msg.sender, username: msg.sender.user?.username } : undefined,
         conversation: msg?.conversation,
         count: e.count
       };
@@ -778,9 +796,6 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
           },
           conversation: {
             select: { id: true, identifier: true, title: true, type: true }
-          },
-          _count: {
-            select: { anonymousParticipants: true }
           }
         },
         orderBy: { currentUses: 'desc' },

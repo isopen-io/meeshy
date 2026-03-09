@@ -19,7 +19,7 @@ import {
   Ghost
 } from 'lucide-react';
 import { SocketIOUser as User, ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
-import type { AnonymousParticipant } from '@meeshy/shared/types/anonymous';
+import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -27,8 +27,8 @@ import { getUserInitials } from '@/lib/avatar-utils';
 import { cn } from '@/lib/utils';
 
 // Helper pour détecter si un utilisateur est anonyme
-function isAnonymousUser(user: any): user is AnonymousParticipant {
-  return user && ('sessionToken' in user || 'shareLinkId' in user);
+function isAnonymousUser(user: any): user is Participant {
+  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
 }
 
 interface ConversationParticipantsProps {

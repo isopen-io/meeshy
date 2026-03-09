@@ -158,6 +158,7 @@ export class TrackingLinkService {
     token: string;
     userId?: string;
     anonymousId?: string;
+    participantId?: string;
     ipAddress?: string;
     country?: string;
     city?: string;
@@ -215,8 +216,7 @@ export class TrackingLinkService {
     const click = await this.prisma.trackingLinkClick.create({
       data: {
         trackingLinkId: trackingLink.id,
-        userId: params.userId,
-        anonymousId: params.anonymousId,
+        participantId: params.participantId ?? params.userId ?? params.anonymousId,
         ipAddress: params.ipAddress,
         country: params.country,
         city: params.city,

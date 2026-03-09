@@ -85,7 +85,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
             encryptionEnabledAt: true,
             encryptionMode: true,
             encryptionEnabledBy: true,
-            members: {
+            participants: {
               where: { isActive: true },
               select: { userId: true }
             }
@@ -101,7 +101,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         // Check if user is a member
         if (!authContext.isAnonymous) {
-          const isMember = conversation.members.some(m => m.userId === authContext.userId);
+          const isMember = conversation.participants.some(m => m.userId === authContext.userId);
           if (!isMember) {
             return reply.status(403).send({
               success: false,
@@ -174,7 +174,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
             type: true,
             encryptionEnabledAt: true,
             encryptionMode: true,
-            members: {
+            participants: {
               where: { isActive: true },
               select: {
                 userId: true,
@@ -206,7 +206,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // Check permission to enable encryption
         // - Direct (1:1) conversations: any participant can enable
         // - Group conversations: only moderator, admin, or owner can enable
-        const member = conversation.members.find(m => m.userId === authContext.userId);
+        const member = conversation.participants.find(m => m.userId === authContext.userId);
         if (!member) {
           return reply.status(403).send({
             success: false,

@@ -21,7 +21,6 @@ interface MessageContentProps {
       content: string;
       createdAt: Date | string;
       sender?: any;
-      anonymousSender?: any;
       attachments?: any[];
     };
   };

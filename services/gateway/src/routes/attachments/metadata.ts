@@ -306,7 +306,7 @@ export async function registerMetadataRoutes(
         const query = request.query as ConversationAttachmentsQuery;
 
         if (authContext.isAuthenticated) {
-          const member = await prisma.conversationMember.findFirst({
+          const member = await prisma.participant.findFirst({
             where: {
               conversationId,
               userId: authContext.userId,
@@ -320,16 +320,13 @@ export async function registerMetadataRoutes(
               error: 'Access denied to this conversation',
             });
           }
-        } else if (authContext.isAnonymous && authContext.anonymousParticipant) {
-          const participant = await prisma.anonymousParticipant.findUnique({
-            where: { id: authContext.anonymousParticipant.id },
+        } else if (authContext.isAnonymous && authContext.participantId) {
+          const participant = await prisma.participant.findUnique({
+            where: { id: authContext.participantId },
             select: {
               conversationId: true,
-              shareLink: {
-                select: {
-                  allowViewHistory: true,
-                },
-              },
+              type: true,
+              anonymousSession: true,
             },
           });
 
@@ -352,12 +349,18 @@ export async function registerMetadataRoutes(
             });
           }
 
-          if (!participant.shareLink.allowViewHistory) {
-            console.error('[AttachmentRoutes] Historique non autorisé');
-            return reply.status(403).send({
-              success: false,
-              error: 'History viewing not allowed on this link',
+          if (participant.type === 'anonymous' && participant.anonymousSession?.shareLinkId) {
+            const shareLink = await prisma.conversationShareLink.findUnique({
+              where: { id: participant.anonymousSession.shareLinkId },
+              select: { allowViewHistory: true }
             });
+            if (!shareLink?.allowViewHistory) {
+              console.error('[AttachmentRoutes] Historique non autorisé');
+              return reply.status(403).send({
+                success: false,
+                error: 'History viewing not allowed on this link',
+              });
+            }
           }
         }
 

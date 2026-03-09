@@ -17,7 +17,7 @@ interface UserLike {
  * 3. username
  * 4. fallback (par défaut: 'Utilisateur inconnu')
  *
- * @param user - Objet utilisateur (peut être SocketIOUser, AnonymousParticipant, etc.)
+ * @param user - Objet utilisateur (peut être SocketIOUser, Participant, etc.)
  * @param fallback - Texte à afficher si aucune information n'est disponible
  * @returns Le nom à afficher
  */

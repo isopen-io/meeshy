@@ -48,8 +48,8 @@ export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
   }
 
   // Gérer les utilisateurs anonymes ET membres
-  const sender = message.anonymousSender || message.sender;
-  const isAnonymous = !!message.anonymousSender;
+  const sender = message.sender;
+  const isAnonymous = false;
 
   const senderPrefix = sender ? (
     <span className="font-medium">

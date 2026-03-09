@@ -61,6 +61,23 @@ export class CallEventsHandler {
     this.callService = new CallService(prisma);
   }
 
+  private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
+    const participant = await this.prisma.participant.findFirst({
+      where: { userId, conversationId, isActive: true },
+      select: { id: true }
+    });
+    return participant?.id ?? null;
+  }
+
+  private async resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { conversationId: true }
+    });
+    if (!call) return null;
+    return this.resolveParticipantId(userId, call.conversationId);
+  }
+
   /**
    * Initialiser le service de notifications
    */
@@ -123,10 +140,21 @@ export class CallEventsHandler {
           type: data.type
         });
 
+        // Resolve participantId from userId + conversationId
+        const participantId = await this.resolveParticipantId(userId, data.conversationId);
+        if (!participantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // Initiate call via service
         const callSession = await this.callService.initiateCall({
           conversationId: data.conversationId,
           initiatorId: userId,
+          participantId,
           type: data.type,
           settings: data.settings as any
         });
@@ -150,20 +178,19 @@ export class CallEventsHandler {
             username: callSession.initiator.username,
             avatar: callSession.initiator.avatar
           },
-          participants: callSession.participants.map((p) => ({
+          participants: callSession.participants.map((p: any) => ({
             id: p.id,
             callSessionId: p.callSessionId,
-            userId: p.userId,
-            anonymousId: p.anonymousId,
+            userId: p.participant?.userId || p.participantId,
             role: p.role,
             joinedAt: p.joinedAt,
             leftAt: p.leftAt,
             isAudioEnabled: p.isAudioEnabled,
             isVideoEnabled: p.isVideoEnabled,
             connectionQuality: p.connectionQuality as any,
-            username: p.user?.username,
-            displayName: p.user?.displayName,
-            avatar: p.user?.avatar
+            username: p.participant?.user?.username || p.participant?.displayName,
+            displayName: p.participant?.displayName || p.participant?.user?.displayName,
+            avatar: p.participant?.user?.avatar || p.participant?.avatar
           }))
         };
 
@@ -175,18 +202,19 @@ export class CallEventsHandler {
         });
         socket.emit(CALL_EVENTS.INITIATED, initiatedEvent);
 
-        // Get all conversation members and send to their sockets directly
-        const conversationMembers = await this.prisma.conversationMember.findMany({
+        // Get all conversation participants and send to their sockets directly
+        const conversationParticipants = await this.prisma.participant.findMany({
           where: {
             conversationId: data.conversationId,
-            leftAt: null
+            isActive: true,
+            userId: { not: null }
           },
           select: {
             userId: true
           }
         });
 
-        const memberUserIds = conversationMembers.map(m => m.userId);
+        const memberUserIds = conversationParticipants.map(p => p.userId!).filter(Boolean);
         logger.info('📋 Conversation members to notify', {
           conversationId: data.conversationId,
           memberUserIds
@@ -278,10 +306,21 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
+        // Resolve participantId from userId + callId
+        const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!joinParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // CVE-005: Join call via service (returns dynamic ICE servers)
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
+          participantId: joinParticipantId,
           settings: data.settings
         });
 
@@ -292,7 +331,7 @@ export class CallEventsHandler {
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
-          (p) => p.userId === userId && !p.leftAt
+          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!participant) {
@@ -300,22 +339,22 @@ export class CallEventsHandler {
         }
 
         // Prepare event data
+        const pAny = participant as any;
         const joinedEvent: CallParticipantJoinedEvent = {
           callId: callSession.id,
           participant: {
             id: participant.id,
             callSessionId: participant.callSessionId,
-            userId: participant.userId,
-            anonymousId: participant.anonymousId,
+            userId: pAny.participant?.userId || participant.participantId,
             role: participant.role,
             joinedAt: participant.joinedAt,
             leftAt: participant.leftAt,
             isAudioEnabled: participant.isAudioEnabled,
             isVideoEnabled: participant.isVideoEnabled,
             connectionQuality: participant.connectionQuality as any,
-            username: participant.user?.username,
-            displayName: participant.user?.displayName,
-            avatar: participant.user?.avatar
+            username: pAny.participant?.user?.username || pAny.participant?.displayName,
+            displayName: pAny.participant?.displayName || pAny.participant?.user?.displayName,
+            avatar: pAny.participant?.user?.avatar || pAny.participant?.avatar
           },
           mode: callSession.mode
         };
@@ -401,7 +440,7 @@ export class CallEventsHandler {
         // Find participant before leaving
         const callBefore = await this.callService.getCallSession(data.callId);
         const participant = callBefore.participants.find(
-          (p) => p.userId === userId && !p.leftAt
+          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!participant) {
@@ -409,18 +448,21 @@ export class CallEventsHandler {
           return;
         }
 
+        // Resolve participantId from userId + callId
+        const leaveParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+
         // Leave call via service
         const callSession = await this.callService.leaveCall({
           callId: data.callId,
-          userId
+          userId,
+          participantId: leaveParticipantId || userId
         });
 
         // Prepare event data BEFORE leaving room
         const leftEvent: CallParticipantLeftEvent = {
           callId: callSession.id,
           participantId: participant.id,
-          userId: participant.userId || undefined,
-          anonymousId: participant.anonymousId || undefined,
+          userId: (participant as any).participant?.userId || participant.participantId,
           mode: callSession.mode
         };
 
@@ -430,8 +472,7 @@ export class CallEventsHandler {
         logger.info('📤 Broadcasting call:participant-left event', {
           callId: data.callId,
           participantId: participant.id,
-          userId: participant.userId,
-          anonymousId: participant.anonymousId,
+          userId: (participant as any).participant?.userId || participant.participantId,
           remainingParticipants: callSession.participants.filter(p => !p.leftAt).length,
           roomName: ROOMS.call(data.callId),
           socketsInRoom: socketsInRoom.length,
@@ -529,7 +570,7 @@ export class CallEventsHandler {
         // Force leave each active call where user is a participant
         for (const call of activeCalls) {
           const participant = call.participants.find(
-            (p) => p.userId === userId && !p.leftAt
+            (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
           );
 
           if (participant) {
@@ -540,18 +581,21 @@ export class CallEventsHandler {
             });
 
             try {
+              // Resolve participantId for cleanup
+              const cleanupParticipantId = await this.resolveParticipantIdFromCall(userId, call.id);
+
               // Leave the call
               const callSession = await this.callService.leaveCall({
                 callId: call.id,
-                userId
+                userId,
+                participantId: cleanupParticipantId || userId
               });
 
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
                 participantId: participant.id,
-                userId: participant.userId || undefined,
-                anonymousId: participant.anonymousId || undefined,
+                userId: (participant as any).participant?.userId || participant.participantId,
                 mode: callSession.mode
               };
 
@@ -649,7 +693,7 @@ export class CallEventsHandler {
         // CVE-001: Verify sender is actually a participant in the call
         const callSession = await this.callService.getCallSession(data.callId);
         const senderParticipant = callSession.participants.find(
-          (p) => (p.userId === userId || p.anonymousId === userId) && !p.leftAt
+          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!senderParticipant) {
@@ -665,7 +709,7 @@ export class CallEventsHandler {
         }
 
         // CVE-001: Verify signal.from matches the authenticated user
-        if (data.signal.from !== userId && data.signal.from !== senderParticipant.anonymousId) {
+        if (data.signal.from !== userId && data.signal.from !== senderParticipant.participantId) {
           logger.warn('⚠️ Socket: Signal sender mismatch', {
             userId,
             signalFrom: data.signal.from,
@@ -680,7 +724,7 @@ export class CallEventsHandler {
 
         // CVE-001: Find and validate target participant
         const targetParticipant = callSession.participants.find(
-          (p) => (p.userId === data.signal.to || p.anonymousId === data.signal.to) && !p.leftAt
+          (p: any) => ((p.participant?.userId || p.participantId) === data.signal.to) && !p.leftAt
         );
 
         if (!targetParticipant) {
@@ -901,10 +945,21 @@ export class CallEventsHandler {
           isAnonymous
         });
 
+        // Resolve participantId from userId + callId
+        const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!endParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
+
         // CVE-004: End call via service (with anonymous check)
         const callSession = await this.callService.endCall(
           data.callId,
           userId,
+          endParticipantId,
           isAnonymous
         );
 
@@ -959,8 +1014,8 @@ export class CallEventsHandler {
         // Find any active calls the user is in
         const activeParticipations = await this.prisma.callParticipant.findMany({
           where: {
-            userId,
-            leftAt: null
+            leftAt: null,
+            participant: { userId }
           },
           include: {
             callSession: true
@@ -974,7 +1029,8 @@ export class CallEventsHandler {
               // Try normal leave flow first
               await this.callService.leaveCall({
                 callId: participation.callSessionId,
-                userId
+                userId,
+                participantId: participation.participantId
               });
 
               // Broadcast to call participants

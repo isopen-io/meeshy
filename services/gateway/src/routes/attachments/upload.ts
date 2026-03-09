@@ -127,9 +127,9 @@ export async function registerUploadRoutes(
           });
         }
 
-        if (isAnonymous && authContext.anonymousParticipant) {
+        if (isAnonymous && authContext.participantId) {
           const shareLink = await prisma.conversationShareLink.findUnique({
-            where: { id: authContext.anonymousParticipant.shareLinkId },
+            where: { id: authContext.anonymousUser?.shareLinkId },
             select: {
               allowAnonymousFiles: true,
               allowAnonymousImages: true,

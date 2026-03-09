@@ -27,7 +27,8 @@ const createMockPrisma = (): PrismaClient => ({
   user: {
     findUnique: jest.fn()
   },
-  anonymousParticipant: {
+  participant: {
+    findFirst: jest.fn(),
     findUnique: jest.fn()
   }
 } as unknown as PrismaClient);
@@ -103,19 +104,20 @@ describe('AuthHandler', () => {
         }
       });
 
-      jest.spyOn(mockPrisma.anonymousParticipant, 'findUnique').mockResolvedValue({
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
         id: 'anon-123',
-        sessionToken: 'anon-session-123'
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId: 'conv-123'
       } as any);
 
       await authHandler.handleTokenAuthentication(mockSocket);
 
       expect(connectedUsers.size).toBe(1);
-      expect(socketToUser.get('socket-123')).toBe('anon-session-123');
+      expect(socketToUser.get('socket-123')).toBe('anon-123');
       expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', {
         userId: 'anon-123',
-        isAnonymous: true,
-        sessionToken: 'anon-session-123'
+        isAnonymous: true
       });
     });
 

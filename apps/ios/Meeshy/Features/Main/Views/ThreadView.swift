@@ -81,8 +81,8 @@ struct ThreadView: View {
                     name: parentMessage.senderName ?? "?",
                     mode: .custom(32),
                     accentColor: accentColor,
-                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId ?? "")?.moodEmoji,
-                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId ?? "")
+                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
+                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -144,8 +144,8 @@ struct ThreadView: View {
                 name: message.senderName ?? "?",
                 mode: .custom(28),
                 accentColor: message.senderColor ?? "4ECDC4",
-                moodEmoji: statusViewModel.statusForUser(userId: message.senderId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId ?? "")
+                moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
+                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
             )
 
             VStack(alignment: .leading, spacing: 3) {

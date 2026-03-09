@@ -221,16 +221,16 @@ export class PostService {
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string): Promise<void> {
     try {
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const contacts = await this.prisma.conversationMember.findMany({
+      const contacts = await this.prisma.participant.findMany({
         where: {
-          conversation: { members: { some: { userId: authorId } } },
+          conversation: { participants: { some: { userId: authorId } } },
           userId: { not: authorId },
         },
         include: { user: { select: { systemLanguage: true } } },
         take: 100,
       });
 
-      const targetLanguages = [...new Set(
+      const targetLanguages: string[] = [...new Set(
         contacts
           .map((c) => c.user?.systemLanguage ?? undefined)
           .filter((l): l is string => !!l && l !== 'en')

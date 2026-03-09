@@ -295,7 +295,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         const existingMessage = await fastify.prisma.message.findUnique({
           where: { id: validatedData.message_id },
           include: {
-            conversation: { include: { members: true } }
+            conversation: { include: { participants: true } }
           }
         });
 
@@ -505,7 +505,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           _count: {
             select: {
               messages: true,
-              members: true
+              participants: true
             }
           }
         }
@@ -529,7 +529,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
           createdAt: conversation.createdAt,
           lastMessageAt: conversation.lastMessageAt,
           messageCount: conversation._count.messages,
-          memberCount: conversation._count.members
+          memberCount: conversation._count.participants
         }
       });
 

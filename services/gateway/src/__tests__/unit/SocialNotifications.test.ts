@@ -76,7 +76,7 @@ function createMockPrisma() {
     user: { findUnique: jest.fn() },
     userPreferences: { findUnique: jest.fn() },
     conversation: { findUnique: jest.fn() },
-    conversationMember: { count: jest.fn() },
+    participant: { count: jest.fn() },
   } as any;
 }
 

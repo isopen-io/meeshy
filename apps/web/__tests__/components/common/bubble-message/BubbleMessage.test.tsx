@@ -507,8 +507,8 @@ describe('BubbleMessage', () => {
   describe('Messages anonymes', () => {
     it('devrait identifier correctement un message anonyme comme le sien', () => {
       const message = createMockMessage({
-        sender: null,
-        anonymousSender: { id: 'anon-123', username: 'Anonymous User' },
+        senderId: 'anon-123',
+        sender: { id: 'anon-123', username: 'Anonymous User', type: 'anonymous' },
       });
       const currentUser = createMockUser({ id: 'user-456' });
 
@@ -526,8 +526,8 @@ describe('BubbleMessage', () => {
 
     it('ne devrait pas permettre edit/delete pour un message anonyme d\'autrui', () => {
       const message = createMockMessage({
-        sender: null,
-        anonymousSender: { id: 'anon-other', username: 'Other Anonymous' },
+        senderId: 'anon-other',
+        sender: { id: 'anon-other', username: 'Other Anonymous', type: 'anonymous' },
       });
       const currentUser = createMockUser({ id: 'user-456' });
 

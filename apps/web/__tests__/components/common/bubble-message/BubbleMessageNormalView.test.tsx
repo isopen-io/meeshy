@@ -220,7 +220,7 @@ jest.mock('@/utils/user-display-name', () => ({
 // Mock getMessageInitials
 jest.mock('@/lib/avatar-utils', () => ({
   getMessageInitials: (message: any) => {
-    const sender = message.anonymousSender || message.sender;
+    const sender = message.sender;
     if (sender?.firstName) return sender.firstName[0];
     if (sender?.username) return sender.username[0].toUpperCase();
     return '?';
@@ -768,10 +768,8 @@ describe('BubbleMessageNormalView', () => {
       const onEnterEditMode = jest.fn();
       renderNormalView({
         message: createMockMessage({
-          senderId: null,
-          sender: null,
-          anonymousSenderId: 'anon-123',
-          anonymousSender: { id: 'anon-123', username: 'Anonymous Fox' },
+          senderId: 'anon-123',
+          sender: { id: 'anon-123', username: 'Anonymous Fox' },
         }),
         currentUser: createMockUser({ id: 'user-456' }),
         isAnonymous: true,
@@ -787,8 +785,8 @@ describe('BubbleMessageNormalView', () => {
     it('devrait afficher l\'icone Ghost pour les expediteurs anonymes', () => {
       renderNormalView({
         message: createMockMessage({
-          sender: null,
-          anonymousSender: { id: 'anon-456', username: 'Ghost User' },
+          senderId: 'anon-456',
+          sender: { id: 'anon-456', username: 'Ghost User', displayName: 'Ghost User', type: 'anonymous' },
         }),
         isAnonymous: true,
       });

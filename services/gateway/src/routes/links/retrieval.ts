@@ -136,7 +136,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         if (shareLink.conversation.identifier === "meeshy") {
           hasAccess = true;
         } else {
-          const isMember = shareLink.conversation.members.some(
+          const isMember = shareLink.conversation.participants.filter(p => p.type === "user").some(
             member => member.userId === hybridRequest.user.id && member.isActive
           );
           hasAccess = isMember;
@@ -172,7 +172,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       let currentUser: any = null;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
-        const isMember = shareLink.conversation.members.some(
+        const isMember = shareLink.conversation.participants.filter(p => p.type === "user").some(
           member => member.userId === hybridRequest.user.id && member.isActive
         );
         userType = isMember ? 'member' : 'anonymous';
@@ -211,9 +211,9 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
 
       const stats = {
         totalMessages,
-        totalMembers: shareLink.conversation.members.length,
-        totalAnonymousParticipants: shareLink.conversation.anonymousParticipants.length,
-        onlineAnonymousParticipants: shareLink.conversation.anonymousParticipants.filter(p => p.isOnline).length,
+        totalMembers: shareLink.conversation.participants.filter(p => p.type === "user").length,
+        totalAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").length,
+        onlineAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").filter(p => p.isOnline).length,
         hasMore: totalMessages > parseInt(offset) + messages.length
       };
 
@@ -248,7 +248,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           }),
           messages: formattedMessages.reverse(),
           stats,
-          members: shareLink.conversation.members.map(member => ({
+          members: shareLink.conversation.participants.filter(p => p.type === "user").map(member => ({
             id: member.id,
             role: member.role,
             joinedAt: member.joinedAt,
@@ -263,7 +263,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               lastActiveAt: member.user.lastActiveAt ?? member.joinedAt
             }
           })),
-          anonymousParticipants: shareLink.conversation.anonymousParticipants.map(participant => ({
+          anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({
             id: participant.id,
             username: participant.username,
             firstName: participant.firstName,

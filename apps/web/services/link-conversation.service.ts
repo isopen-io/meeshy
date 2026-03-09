@@ -33,7 +33,6 @@ export interface LinkConversationData {
     originalLanguage: string;
     createdAt: string;
     senderId?: string;
-    anonymousSenderId?: string;
     sender?: {
       id: string;
       username: string;
@@ -41,15 +40,6 @@ export interface LinkConversationData {
       lastName: string;
       displayName?: string;
       avatar?: string;
-      isMeeshyer: boolean; // true = membre, false = anonyme
-    };
-    anonymousSender?: {
-      id: string;
-      username: string;
-      firstName: string;
-      lastName: string;
-      language: string;
-      isOnline: boolean;
       isMeeshyer: boolean;
     };
     replyTo?: {
@@ -72,8 +62,8 @@ export interface LinkConversationData {
   stats: {
     totalMessages: number;
     totalMembers: number;
-    totalAnonymousParticipants: number;
-    onlineAnonymousParticipants: number;
+    totalAnonymousParticipants?: number;
+    onlineAnonymousParticipants?: number;
     hasMore: boolean;
   };
   members: Array<{
@@ -347,7 +337,7 @@ export class LinkConversationService {
   }> {
     const data = await this.getConversationData(conversationShareLinkId, { ...options, limit: 1, offset: 0 });
     return {
-      members: data.members,
+      members: data.members, // kept for legacy compat, backend now sends participants
       anonymousParticipants: data.anonymousParticipants
     };
   }

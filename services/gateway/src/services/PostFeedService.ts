@@ -404,14 +404,14 @@ export class PostFeedService {
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {
     try {
-      const myMemberships = await this.prisma.conversationMember.findMany({
+      const myMemberships = await this.prisma.participant.findMany({
         where: { userId, isActive: true, conversation: { type: 'direct' } },
         select: { conversationId: true },
       });
       const conversationIds = myMemberships.map((m) => m.conversationId);
       if (conversationIds.length === 0) return [];
 
-      const otherMembers = await this.prisma.conversationMember.findMany({
+      const otherMembers = await this.prisma.participant.findMany({
         where: {
           conversationId: { in: conversationIds },
           userId: { not: userId },
@@ -419,7 +419,7 @@ export class PostFeedService {
         },
         select: { userId: true },
       });
-      return [...new Set(otherMembers.map((m) => m.userId))];
+      return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
     } catch {
       return [];
     }

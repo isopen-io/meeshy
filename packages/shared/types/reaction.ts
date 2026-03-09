@@ -17,8 +17,7 @@ export interface ReactionPayload {
 export interface ReactionData {
   readonly id: string;
   readonly messageId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
   readonly emoji: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -31,9 +30,8 @@ export interface ReactionData {
 export interface ReactionAggregation {
   readonly emoji: string;
   readonly count: number;
-  readonly userIds: readonly string[];        // IDs des utilisateurs ayant réagi
-  readonly anonymousIds: readonly string[]; // IDs des utilisateurs anonymes ayant réagi
-  readonly hasCurrentUser: boolean;           // L'utilisateur actuel a-t-il réagi avec cet emoji?
+  readonly participantIds: readonly string[];
+  readonly hasCurrentUser: boolean;
 }
 
 /**
@@ -53,11 +51,10 @@ export interface ReactionSync {
  */
 export interface ReactionUpdateEvent {
   readonly messageId: string;
-  readonly userId?: string;
-  readonly anonymousId?: string;
+  readonly participantId: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
-  readonly aggregation: ReactionAggregation;  // État après l'action pour cet emoji
+  readonly aggregation: ReactionAggregation;
   readonly timestamp: Date;
 }
 

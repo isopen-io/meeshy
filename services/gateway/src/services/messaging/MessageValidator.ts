@@ -150,37 +150,46 @@ export class MessageValidator {
   ): Promise<MessagePermissionResult> {
     const identifier = authContext.sessionToken || authContext.userId || '';
 
-    const anonymousParticipant = await this.prisma.anonymousParticipant.findFirst({
+    const participant = await this.prisma.participant.findFirst({
       where: {
-        sessionToken: identifier,
+        sessionTokenHash: identifier,
         conversationId: conversationId,
+        type: 'anonymous',
         isActive: true
-      },
-      include: {
-        shareLink: {
-          select: {
-            id: true,
-            isActive: true,
-            allowAnonymousMessages: true,
-            allowAnonymousFiles: true,
-            allowAnonymousImages: true,
-            maxUses: true,
-            currentUses: true,
-            expiresAt: true,
-            maxConcurrentUsers: true,
-            currentConcurrentUsers: true
-          }
-        }
       }
     });
 
-    if (!anonymousParticipant || !anonymousParticipant.shareLink) {
+    if (!participant) {
       return this.createPermissionDenied(
         'Utilisateur anonyme non autorisé dans cette conversation ou lien invalide'
       );
     }
 
-    const shareLink = anonymousParticipant.shareLink;
+    // Look up the share link via conversation
+    const shareLink = await this.prisma.conversationShareLink.findFirst({
+      where: {
+        conversationId: conversationId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        isActive: true,
+        allowAnonymousMessages: true,
+        allowAnonymousFiles: true,
+        allowAnonymousImages: true,
+        maxUses: true,
+        currentUses: true,
+        expiresAt: true,
+        maxConcurrentUsers: true,
+        currentConcurrentUsers: true
+      }
+    });
+
+    if (!shareLink) {
+      return this.createPermissionDenied(
+        'Aucun lien de partage actif pour cette conversation'
+      );
+    }
 
     // Vérifier si le lien est toujours actif et valide
     if (!shareLink.isActive) {
@@ -203,7 +212,7 @@ export class MessageValidator {
     }
 
     // Vérifier les permissions spécifiques du participant
-    if (!anonymousParticipant.canSendMessages) {
+    if (!participant.permissions?.canSendMessages) {
       return this.createPermissionDenied('Vos permissions d\'envoi de messages ont été révoquées');
     }
 
@@ -211,7 +220,7 @@ export class MessageValidator {
     return {
       canSend: true,
       canSendAnonymous: true,
-      canAttachFiles: shareLink.allowAnonymousFiles && anonymousParticipant.canSendFiles,
+      canAttachFiles: shareLink.allowAnonymousFiles && (participant.permissions?.canSendFiles ?? false),
       canMentionUsers: false,
       canUseHighPriority: false,
       restrictions: {
@@ -233,7 +242,7 @@ export class MessageValidator {
   ): Promise<MessagePermissionResult> {
     const userId = authContext.userId!;
 
-    const membership = await this.prisma.conversationMember.findFirst({
+    const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId,
         userId,
@@ -256,9 +265,9 @@ export class MessageValidator {
     }
 
     return {
-      canSend: membership.canSendMessage,
+      canSend: membership.permissions?.canSendMessages ?? true,
       canSendAnonymous: false,
-      canAttachFiles: membership.canSendFiles,
+      canAttachFiles: membership.permissions?.canSendFiles ?? true,
       canMentionUsers: true,
       canUseHighPriority: conversation.type !== 'public',
       restrictions: {

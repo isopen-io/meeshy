@@ -242,7 +242,7 @@ export class AttachmentTranslateService {
 
     // User is part of the conversation
     if (attachment.message?.conversationId) {
-      const member = await this.prisma.conversationMember.findFirst({
+      const member = await this.prisma.participant.findFirst({
         where: {
           conversationId: attachment.message.conversationId,
           userId: userId,

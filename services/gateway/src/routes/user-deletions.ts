@@ -75,7 +75,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const userId = authRequest.authContext.userId;
 
         // Verify user is a member of this conversation
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId,
             userId,
@@ -272,7 +272,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         }
 
         // Verify user is a member
-        const membership = await prisma.conversationMember.findFirst({
+        const membership = await prisma.participant.findFirst({
           where: {
             conversationId,
             userId,
@@ -371,7 +371,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           include: {
             conversation: {
               include: {
-                members: {
+                participants: {
                   where: { userId, isActive: true },
                 },
               },
@@ -386,7 +386,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        if (message.conversation.members.length === 0) {
+        if (message.conversation.participants.length === 0) {
           return reply.status(403).send({
             success: false,
             error: 'Not a member of this conversation',
@@ -574,7 +574,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           where: {
             id: { in: messageIds },
             conversation: {
-              members: {
+              participants: {
                 some: { userId, isActive: true },
               },
             },

@@ -66,7 +66,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       // Registered user (JWT)
-      if (authContext.type === 'jwt' && authContext.registeredUser) {
+      if (authContext.type === 'user' && authContext.registeredUser) {
         const user = authContext.registeredUser;
         const permissions = authService.getUserPermissions(user as any);
 
@@ -79,7 +79,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       // Anonymous user (Session)
-      if (authContext.type === 'session' && authContext.anonymousUser) {
+      if (authContext.type === 'anonymous' && authContext.anonymousUser) {
         const anonymousUser = authContext.anonymousUser;
 
         return reply.send({

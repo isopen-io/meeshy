@@ -10,14 +10,13 @@ import { getMessageInitials } from '@/lib/avatar-utils';
 import { cn } from '@/lib/utils';
 import { ImageLightbox } from '@/components/attachments/ImageLightbox';
 import type { Attachment } from '@meeshy/shared/types/attachment';
-import type { MessageSender, AnonymousSender } from './types';
+import type { MessageSender } from './types';
 
 interface MessageHeaderProps {
   message: {
     id: string;
     createdAt: Date | string;
     sender?: MessageSender;
-    anonymousSender?: AnonymousSender;
   };
   isOwnMessage: boolean;
   t: (key: string) => string;
@@ -30,10 +29,10 @@ export const MessageHeader = memo(function MessageHeader({
 }: MessageHeaderProps) {
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
 
-  const user = message.anonymousSender || message.sender;
-  const username = message.anonymousSender?.username || message.sender?.username;
+  const user = message.sender;
+  const username = message.sender?.username;
   const displayName = getUserDisplayName(user, t('anonymous'));
-  const isAnonymous = !!message.anonymousSender;
+  const isAnonymous = false;
   const avatarUrl = (message.sender as MessageSender)?.avatar;
 
   return (

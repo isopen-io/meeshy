@@ -88,8 +88,7 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
 public struct APIMessage: Decodable, Sendable {
     public let id: String
     public let conversationId: String
-    public let senderId: String?
-    public let anonymousSenderId: String?
+    public let senderId: String
     public let content: String?
     public let originalLanguage: String?
     public let messageType: String?
@@ -205,7 +204,7 @@ extension APIMessage {
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
-                thumbnailUrl: apiAtt.thumbnailUrl, duration: apiAtt.duration, uploadedBy: senderId ?? "",
+                thumbnailUrl: apiAtt.thumbnailUrl, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: DynamicColorGenerator.colorForName(sender?.username ?? "?")
             )
@@ -219,7 +218,7 @@ extension APIMessage {
                 return (0..<count).map { index in
                     MeeshyReaction(
                         messageId: id,
-                        userId: (meReacted && index == 0) ? currentUserId : nil,
+                        participantId: (meReacted && index == 0) ? currentUserId : nil,
                         emoji: emoji
                     )
                 }
@@ -260,7 +259,7 @@ extension APIMessage {
 
         return MeeshyMessage(
             id: id, conversationId: conversationId, senderId: senderId,
-            anonymousSenderId: anonymousSenderId, content: content ?? "",
+            content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
             isEdited: isEdited ?? false, isDeleted: isDeleted ?? false, replyToId: replyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,

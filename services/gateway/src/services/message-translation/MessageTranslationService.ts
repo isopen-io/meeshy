@@ -31,7 +31,6 @@ export interface MessageData {
   id?: string;
   conversationId: string;
   senderId?: string;
-  anonymousSenderId?: string;
   content: string;
   originalLanguage: string;
   messageType?: string;
@@ -235,8 +234,7 @@ export class MessageTranslationService extends EventEmitter {
       const message = await this.prisma.message.create({
         data: {
           conversationId: messageData.conversationId,
-          senderId: messageData.senderId || null,
-          anonymousSenderId: messageData.anonymousSenderId || null,
+          senderId: messageData.senderId!,
           content: messageData.content,
           originalLanguage: messageData.originalLanguage,
           messageType: messageData.messageType || 'text',
@@ -594,77 +592,58 @@ export class MessageTranslationService extends EventEmitter {
       const startTime = Date.now();
       const languages = new Set<string>();
 
-      // OPTIMISATION: Faire les 2 requêtes en parallèle au lieu de séquentiellement
-      const [members, anonymousParticipants] = await Promise.all([
-        this.prisma.conversationMember.findMany({
-          where: {
-            conversationId: conversationId,
-            isActive: true
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                systemLanguage: true,
-                regionalLanguage: true,
-                customDestinationLanguage: true
-              }
+      // Single query: all active participants with their user data (if registered)
+      const participants = await this.prisma.participant.findMany({
+        where: {
+          conversationId: conversationId,
+          isActive: true
+        },
+        select: {
+          id: true,
+          displayName: true,
+          type: true,
+          language: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              systemLanguage: true,
+              regionalLanguage: true,
+              customDestinationLanguage: true
             }
           }
-        }),
-        this.prisma.anonymousParticipant.findMany({
-          where: {
-            conversationId: conversationId,
-            isActive: true
-          },
-          select: {
-            id: true,
-            username: true,
-            language: true
+        }
+      });
+
+      logger.info(`[LANG-TRACE] Participants: ${participants.length}`);
+
+      for (const participant of participants) {
+        if (participant.type === 'user' && participant.user) {
+          logger.info(
+            `   [LANG-TRACE] Registered: ${participant.user.username} (${participant.user.id}) | ` +
+            `systemLang=${participant.user.systemLanguage} | regionalLang=${participant.user.regionalLanguage} | ` +
+            `customDestinationLang=${participant.user.customDestinationLanguage}`
+          );
+
+          if (participant.user.systemLanguage) {
+            languages.add(participant.user.systemLanguage);
           }
-        })
-      ]);
+          if (participant.user.regionalLanguage) {
+            languages.add(participant.user.regionalLanguage);
+          }
+          if (participant.user.customDestinationLanguage) {
+            languages.add(participant.user.customDestinationLanguage);
+          }
+        } else {
+          // Anonymous or bot participant — use participant.language
+          logger.info(
+            `   [LANG-TRACE] ${participant.type}: ${participant.displayName} (${participant.id}) | ` +
+            `language=${participant.language}`
+          );
 
-      logger.info(`👥 [LANG-TRACE] Membres trouvés: ${members.length} auth + ${anonymousParticipants.length} anon`);
-      
-      // Extraire TOUTES les langues des utilisateurs authentifiés
-      // On extrait toujours systemLanguage, et les autres langues configurées
-      // TODO: Utiliser UserPreferences pour filtrer selon autoTranslateEnabled
-      for (const member of members) {
-        logger.info(
-          `   👤 [LANG-TRACE] Membre auth: ${member.user.username} (${member.user.id}) | ` +
-          `systemLang=${member.user.systemLanguage} | regionalLang=${member.user.regionalLanguage} | ` +
-          `customDestinationLang=${member.user.customDestinationLanguage}`
-        );
-
-        // Toujours ajouter la langue système du participant
-        if (member.user.systemLanguage) {
-          languages.add(member.user.systemLanguage);
-          logger.info(`      ✅ Ajouté systemLanguage: ${member.user.systemLanguage}`);
-        }
-
-        // Ajouter les langues additionnelles (simplifié - pas de vérification des préférences pour l'instant)
-        if (member.user.regionalLanguage) {
-          languages.add(member.user.regionalLanguage);
-          logger.info(`      ✅ Ajouté regionalLanguage: ${member.user.regionalLanguage}`);
-        }
-        if (member.user.customDestinationLanguage) {
-          languages.add(member.user.customDestinationLanguage);
-          logger.info(`      ✅ Ajouté customDestinationLanguage: ${member.user.customDestinationLanguage}`);
-        }
-      }
-
-      // Extraire les langues des participants anonymes
-      for (const anonymousParticipant of anonymousParticipants) {
-        logger.info(
-          `   👻 [LANG-TRACE] Participant anonyme: ${anonymousParticipant.username} (${anonymousParticipant.id}) | ` +
-          `language=${anonymousParticipant.language}`
-        );
-
-        if (anonymousParticipant.language) {
-          languages.add(anonymousParticipant.language);
-          logger.info(`      ✅ Ajouté language: ${anonymousParticipant.language}`);
+          if (participant.language) {
+            languages.add(participant.language);
+          }
         }
       }
 
