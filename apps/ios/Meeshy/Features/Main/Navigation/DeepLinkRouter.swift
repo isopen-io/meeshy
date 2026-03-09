@@ -140,12 +140,14 @@ enum DeepLinkParser {
 
 enum DeepLink: Equatable {
     case joinLink(identifier: String)
+    case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
 
     static func == (lhs: DeepLink, rhs: DeepLink) -> Bool {
         switch (lhs, rhs) {
         case (.joinLink(let a), .joinLink(let b)): return a == b
+        case (.chatLink(let a), .chatLink(let b)): return a == b
         case (.magicLink(let a), .magicLink(let b)): return a == b
         case (.conversation(let a), .conversation(let b)): return a == b
         default: return false
@@ -182,6 +184,11 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .joinLink(identifier: identifier)
             return true
 
+        case "chat":
+            guard pathComponents.count >= 2 else { return false }
+            pendingDeepLink = .chatLink(identifier: pathComponents[1])
+            return true
+
         case "auth":
             guard pathComponents.count >= 3, pathComponents[1] == "magic-link" else { return false }
             let token = pathComponents[2]
@@ -211,6 +218,11 @@ final class DeepLinkRouter: ObservableObject {
         case "join":
             guard !pathComponents.isEmpty else { return false }
             pendingDeepLink = .joinLink(identifier: pathComponents[0])
+            return true
+
+        case "chat":
+            guard !pathComponents.isEmpty else { return false }
+            pendingDeepLink = .chatLink(identifier: pathComponents[0])
             return true
 
         case "auth":

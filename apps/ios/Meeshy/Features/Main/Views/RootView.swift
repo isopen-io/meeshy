@@ -409,6 +409,9 @@ struct RootView: View {
             joinFlowIdentifier = identifier
             showJoinFlow = true
 
+        case .chatLink:
+            break
+
         case .conversation(let id):
             let conv = Conversation(
                 id: id, identifier: id, type: .group,

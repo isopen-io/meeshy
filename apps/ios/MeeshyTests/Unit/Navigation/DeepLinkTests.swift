@@ -372,6 +372,68 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 }
 
+// MARK: - DeepLinkRouter chatLink Tests
+
+@MainActor
+final class DeepLinkRouterChatLinkTests: XCTestCase {
+
+    private var sut: DeepLinkRouter { DeepLinkRouter.shared }
+
+    override func setUp() {
+        super.setUp()
+        _ = sut.consumePendingDeepLink()
+    }
+
+    func test_handle_chatPath_setsChatLink() {
+        let url = URL(string: "https://meeshy.me/chat/mshy_support")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        guard case .chatLink(let id) = sut.pendingDeepLink else {
+            XCTFail("Expected chatLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+        XCTAssertEqual(id, "mshy_support")
+    }
+
+    func test_handle_chatCustomScheme_setsChatLink() {
+        let url = URL(string: "meeshy://chat/mshy_abc123")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        guard case .chatLink(let id) = sut.pendingDeepLink else {
+            XCTFail("Expected chatLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+        XCTAssertEqual(id, "mshy_abc123")
+    }
+
+    func test_handle_joinPath_setsJoinLink() {
+        let url = URL(string: "https://meeshy.me/join/mshy_xyz")!
+
+        _ = sut.handle(url: url)
+
+        guard case .joinLink(let id) = sut.pendingDeepLink else {
+            XCTFail("Expected joinLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+        XCTAssertEqual(id, "mshy_xyz")
+    }
+
+    func test_handle_lShortPath_setsJoinLink() {
+        let url = URL(string: "https://meeshy.me/l/mshy_xyz")!
+
+        _ = sut.handle(url: url)
+
+        guard case .joinLink = sut.pendingDeepLink else {
+            XCTFail("Expected joinLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+    }
+}
+
 // MARK: - DeepLink Equatable Tests
 
 final class DeepLinkEquatableTests: XCTestCase {
@@ -379,6 +441,11 @@ final class DeepLinkEquatableTests: XCTestCase {
     func test_joinLink_equality() {
         XCTAssertEqual(DeepLink.joinLink(identifier: "a"), DeepLink.joinLink(identifier: "a"))
         XCTAssertNotEqual(DeepLink.joinLink(identifier: "a"), DeepLink.joinLink(identifier: "b"))
+    }
+
+    func test_chatLink_equality() {
+        XCTAssertEqual(DeepLink.chatLink(identifier: "a"), DeepLink.chatLink(identifier: "a"))
+        XCTAssertNotEqual(DeepLink.chatLink(identifier: "a"), DeepLink.chatLink(identifier: "b"))
     }
 
     func test_magicLink_equality() {
@@ -394,5 +461,6 @@ final class DeepLinkEquatableTests: XCTestCase {
     func test_differentCases_notEqual() {
         XCTAssertNotEqual(DeepLink.joinLink(identifier: "x"), DeepLink.conversation(id: "x"))
         XCTAssertNotEqual(DeepLink.magicLink(token: "x"), DeepLink.joinLink(identifier: "x"))
+        XCTAssertNotEqual(DeepLink.chatLink(identifier: "x"), DeepLink.joinLink(identifier: "x"))
     }
 }
