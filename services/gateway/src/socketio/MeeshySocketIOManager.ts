@@ -2673,8 +2673,32 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
 
+      // Résoudre le participantId : pour les anonymes, il est sur le SocketUser ;
+      // pour les registered, il faut le chercher en DB via le message → conversationId
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
@@ -2787,7 +2811,31 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      // Résoudre le participantId pour les registered users
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
@@ -2871,8 +2919,31 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
 
+      // Résoudre le participantId pour les registered users
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
