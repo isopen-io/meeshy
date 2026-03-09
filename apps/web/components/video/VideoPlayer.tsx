@@ -13,12 +13,14 @@ interface VideoPlayerProps {
   attachment: UploadedAttachmentResponse;
   className?: string;
   onOpenLightbox?: () => void;
+  isOwnMessage?: boolean;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   attachment,
   className = '',
-  onOpenLightbox
+  onOpenLightbox,
+  isOwnMessage,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +43,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     fileUrl: attachment.fileUrl,
     duration: attachmentDuration,
     mimeType: attachment.mimeType,
-    attachmentId: attachment.id
+    attachmentId: attachment.id,
+    isOwnMessage,
   });
 
   const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef);

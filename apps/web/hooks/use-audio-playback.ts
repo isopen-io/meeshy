@@ -31,6 +31,7 @@ interface UseAudioPlaybackOptions {
   attachmentId: string;
   attachmentDuration?: number;
   mimeType?: string;
+  isOwnMessage?: boolean;
 }
 
 interface UseAudioPlaybackReturn {
@@ -71,6 +72,7 @@ export function useAudioPlayback({
   attachmentId,
   attachmentDuration,
   mimeType,
+  isOwnMessage = false,
 }: UseAudioPlaybackOptions): UseAudioPlaybackReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -84,6 +86,27 @@ export function useAudioPlayback({
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const playStartTimeRef = useRef<number | null>(null);
+  const hasTrackedCompletionRef = useRef(false);
+
+  const trackConsumption = useCallback((complete: boolean) => {
+    if (isOwnMessage) return;
+    const audio = audioRef.current;
+    const playPositionMs = audio ? Math.round(audio.currentTime * 1000) : 0;
+    const durationMs = audio ? Math.round(audio.duration * 1000) : 0;
+    apiService.post(`/attachments/${attachmentId}/status`, {
+      action: 'listened',
+      playPositionMs,
+      durationMs: isFinite(durationMs) ? durationMs : 0,
+      complete,
+    }).catch(() => {});
+  }, [attachmentId, isOwnMessage]);
+
+  // Reset tracking refs when attachment changes
+  useEffect(() => {
+    hasTrackedCompletionRef.current = false;
+    playStartTimeRef.current = null;
+  }, [attachmentId]);
 
   // Charger l'audio via apiService
   useEffect(() => {
@@ -260,6 +283,11 @@ export function useAudioPlayback({
 
     try {
       if (isPlaying) {
+        const listenedMs = playStartTimeRef.current ? Date.now() - playStartTimeRef.current : 0;
+        playStartTimeRef.current = null;
+        if (listenedMs >= 3000 && !hasTrackedCompletionRef.current) {
+          trackConsumption(false);
+        }
         audioRef.current.pause();
         setIsPlaying(false);
         AudioManager.getInstance().stop(audioRef.current);
@@ -280,6 +308,7 @@ export function useAudioPlayback({
         }
 
         await audioRef.current.play();
+        playStartTimeRef.current = Date.now();
         setIsPlaying(true);
         setIsLoading(false);
       }
@@ -296,7 +325,7 @@ export function useAudioPlayback({
         setErrorMessage('Erreur de lecture audio');
       }
     }
-  }, [objectUrl, isPlaying]);
+  }, [objectUrl, isPlaying, trackConsumption]);
 
   // Handler pour récupérer la durée
   const tryToGetDuration = useCallback(() => {
@@ -322,11 +351,15 @@ export function useAudioPlayback({
 
   const handleEnded = useCallback(() => {
     setIsPlaying(false);
+    if (!hasTrackedCompletionRef.current) {
+      hasTrackedCompletionRef.current = true;
+      trackConsumption(true);
+    }
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       setCurrentTime(0);
     }
-  }, []);
+  }, [trackConsumption]);
 
   const handleAudioError = useCallback((e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
     const audio = e.currentTarget;

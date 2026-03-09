@@ -111,6 +111,7 @@ export const MessageAttachments = React.memo(function MessageAttachments({
             key={attachment.id}
             attachment={attachment}
             messageId={attachment.messageId}
+            isOwnMessage={isOwnMessage}
           />
         ))}
       </div>
@@ -129,6 +130,7 @@ export const MessageAttachments = React.memo(function MessageAttachments({
             canDelete={currentUserId === attachment.uploadedBy}
             onOpenLightbox={handleVideoLightbox}
             onDeleteClick={deletion.handleOpenDeleteConfirm}
+            isOwnMessage={isOwnMessage}
           />
         ))}
       </div>
