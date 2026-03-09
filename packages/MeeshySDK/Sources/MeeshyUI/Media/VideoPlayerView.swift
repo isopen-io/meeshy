@@ -113,7 +113,8 @@ public struct VideoPlayerView: View {
         .fullScreenCover(isPresented: $showFullscreen) {
             VideoFullscreenPlayer(
                 urlString: attachment.fileUrl,
-                speed: playbackSpeed
+                speed: playbackSpeed,
+                attachmentId: attachment.id
             )
         }
     }
@@ -285,29 +286,60 @@ public struct VideoPlayerView: View {
 public struct VideoFullscreenPlayer: View {
     public let urlString: String
     public let speed: PlaybackSpeed
+    public var attachmentId: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var saveState: VideoSaveState = .idle
+    @State private var avPlayer: AVPlayer?
+    @State private var watchStartTime: Date?
+    @State private var endObserver: Any?
 
     private enum VideoSaveState {
         case idle, saving, saved, failed
     }
 
-    public init(urlString: String, speed: PlaybackSpeed) {
-        self.urlString = urlString; self.speed = speed
+    public init(urlString: String, speed: PlaybackSpeed, attachmentId: String? = nil) {
+        self.urlString = urlString; self.speed = speed; self.attachmentId = attachmentId
+    }
+
+    private struct WatchStatusBody: Encodable {
+        let action: String
+        let playPositionMs: Int
+        let durationMs: Int
+        let complete: Bool
+    }
+
+    private func reportWatchProgress(player: AVPlayer, complete: Bool) {
+        guard let attId = attachmentId else { return }
+        guard let start = watchStartTime else { return }
+        let watchedSeconds = Date().timeIntervalSince(start)
+        guard complete || watchedSeconds >= 3 else { return }
+        let currentSeconds = player.currentTime().seconds
+        let totalSeconds = player.currentItem?.duration.seconds ?? 0
+        let positionMs = Int((currentSeconds.isNaN ? 0 : currentSeconds) * 1000)
+        let totalDurationMs = Int((totalSeconds.isNaN || totalSeconds.isInfinite ? 0 : totalSeconds) * 1000)
+
+        Task {
+            let body = WatchStatusBody(
+                action: "watched",
+                playPositionMs: positionMs,
+                durationMs: totalDurationMs,
+                complete: complete
+            )
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                endpoint: "/attachments/\(attId)/status",
+                body: body
+            )
+        }
     }
 
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let url = MeeshyConfig.resolveMediaURL(urlString) {
-                VideoPlayer(player: {
-                    let p = AVPlayer(url: url)
-                    p.rate = Float(speed.rawValue)
-                    return p
-                }())
-                .ignoresSafeArea()
+            if let player = avPlayer {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
             }
 
             VStack {
@@ -344,6 +376,33 @@ public struct VideoFullscreenPlayer: View {
                 }
                 Spacer()
             }
+        }
+        .onAppear {
+            guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
+            let player = AVPlayer(url: url)
+            player.rate = Float(speed.rawValue)
+            avPlayer = player
+            watchStartTime = Date()
+            endObserver = NotificationCenter.default.addObserver(
+                forName: AVPlayerItem.didPlayToEndTimeNotification,
+                object: player.currentItem,
+                queue: .main
+            ) { _ in
+                reportWatchProgress(player: player, complete: true)
+                watchStartTime = nil
+            }
+        }
+        .onDisappear {
+            if let player = avPlayer {
+                reportWatchProgress(player: player, complete: false)
+                player.pause()
+            }
+            if let observer = endObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            avPlayer = nil
+            watchStartTime = nil
+            endObserver = nil
         }
     }
 
