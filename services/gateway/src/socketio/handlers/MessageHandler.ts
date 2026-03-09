@@ -591,7 +591,7 @@ export class MessageHandler {
       isViewOnce: Boolean((message as never)['isViewOnce']),
       expiresAt: (message as never)['expiresAt'] || undefined,
       isEdited: Boolean((message as never)['isEdited']),
-      isDeleted: (message as never)['deletedAt'] !== null,
+      deletedAt: (message as never)['deletedAt'] || undefined,
       createdAt: message.createdAt,
       validatedMentions: (message as never)['validatedMentions'] || [],
       translations,

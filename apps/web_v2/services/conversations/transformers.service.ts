@@ -350,7 +350,6 @@ export class TransformersService {
         },
         translations: [],
         isEdited: false,
-        isDeleted: false,
         updatedAt: new Date(String(replyToMsg.updatedAt || replyToMsg.createdAt)),
       };
     }
@@ -371,7 +370,7 @@ export class TransformersService {
       messageType: (String(msg.messageType) || 'text') as MessageType,
       messageSource: (String(msg.messageSource) || 'user') as MessageSource,
       isEdited: Boolean(msg.isEdited),
-      isDeleted: Boolean(msg.isDeleted),
+      deletedAt: msg.deletedAt ? new Date(String(msg.deletedAt)) : undefined,
       isViewOnce: Boolean(msg.isViewOnce),
       viewOnceCount: Number(msg.viewOnceCount) || 0,
       isBlurred: Boolean(msg.isBlurred),

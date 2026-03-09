@@ -671,8 +671,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         isEdited: message.isEdited,
         editedAt: message.editedAt,
         createdAt: message.createdAt,
-        deletedAt: message.deletedAt,
-        isDeleted: message.deletedAt !== null
+        deletedAt: message.deletedAt
       };
 
       return reply.send({

@@ -135,10 +135,10 @@ export function canEditMessage(
  * Génère un titre par défaut pour une conversation sans titre
  */
 export function generateDefaultConversationTitle(
-  members: Array<{ displayName?: string; username?: string; firstName?: string; lastName?: string }>,
+  members: Array<{ id?: string; displayName?: string; username?: string; firstName?: string; lastName?: string }>,
   currentUserId: string
 ): string {
-  const otherMembers = members.filter((m: any) => m.id !== currentUserId);
+  const otherMembers = members.filter((m) => m.id !== currentUserId);
   
   if (otherMembers.length === 0) {
     return 'Conversation';

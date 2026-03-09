@@ -413,7 +413,6 @@ class MeeshySocketIOService {
         sender: replyToFinalSender,
         translations: [],
         isEdited: false,
-        isDeleted: false,
         updatedAt: new Date(replyToMsg.updatedAt || replyToMsg.createdAt),
       };
     }
@@ -489,7 +488,6 @@ class MeeshySocketIOService {
       createdAt: socketMessage.createdAt,
       updatedAt: socketMessage.updatedAt,
       isEdited: false,
-      isDeleted: false,
       translations: [],
       replyTo: replyTo,
       sender: sender,

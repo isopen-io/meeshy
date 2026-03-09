@@ -691,7 +691,6 @@ export function registerMessagesRoutes(
           // Édition/Suppression
           isEdited: message.isEdited,
           editedAt: message.editedAt,
-          isDeleted: message.deletedAt !== null,
           deletedAt: message.deletedAt,
 
           // Reply/Forward

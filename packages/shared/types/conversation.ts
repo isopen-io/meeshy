@@ -6,6 +6,10 @@
 import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
 import type { Attachment } from './attachment.js';
+import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
+
+// Re-export canonical types from message-types.ts
+export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
 
 /**
  * Import du type UserRole depuis user.ts (eviter la duplication)
@@ -72,37 +76,7 @@ export interface ConversationIdentifiers {
   readonly identifier?: string;
 }
 
-// ===== MESSAGE TYPES CONSOLIDATED =====
-
-/**
- * Modele de traduction
- */
-export type TranslationModel = 'basic' | 'medium' | 'premium';
-
-/**
- * Type de base pour toutes les traductions
- * Aligned with schema.prisma MessageTranslation
- */
-export interface MessageTranslation {
-  readonly id: string;
-  readonly messageId: string;
-  readonly targetLanguage: string;
-  readonly translatedContent: string;
-  readonly translationModel: TranslationModel;
-  readonly confidenceScore?: number;
-  readonly createdAt: Date;
-  readonly updatedAt?: Date;
-
-  // Encryption fields for secure conversations (server/hybrid modes)
-  readonly isEncrypted?: boolean;
-  readonly encryptionKeyId?: string;
-  readonly encryptionIv?: string;
-  readonly encryptionAuthTag?: string;
-
-  // Derived from message.originalLanguage (for compatibility)
-  readonly sourceLanguage?: string;
-  readonly cached?: boolean;
-}
+// ===== MESSAGE TYPES (canonical definitions in message-types.ts) =====
 
 /**
  * Informations d'un expediteur anonyme
@@ -146,7 +120,6 @@ export interface Message {
   // ===== ETAT DU MESSAGE =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
-  readonly isDeleted: boolean;
   readonly deletedAt?: Date;
 
   // ===== REPONSE & FORWARDING =====
@@ -210,25 +183,6 @@ export interface Message {
 }
 
 /**
- * Statut de traduction UI
- */
-export type UITranslationStatus = 'pending' | 'translating' | 'completed' | 'failed';
-
-/**
- * Etat de traduction dans l'interface utilisateur
- */
-export interface UITranslationState {
-  readonly language: string;
-  readonly content: string;
-  readonly status: UITranslationStatus;
-  readonly timestamp: Date;
-  readonly confidence?: number;
-  readonly model?: TranslationModel;
-  readonly error?: string;
-  readonly fromCache: boolean;
-}
-
-/**
  * Statut de lecture pour un message
  */
 export interface MessageReadStatus {
@@ -241,7 +195,7 @@ export interface MessageReadStatus {
  */
 export interface MessageWithTranslations extends Message {
   readonly uiTranslations: readonly UITranslationState[];
-  readonly translatingLanguages: Set<string>;
+  readonly translatingLanguages: readonly string[];
   readonly currentDisplayLanguage: string;
   readonly showingOriginal: boolean;
   readonly originalContent: string;
@@ -495,35 +449,7 @@ export interface ConversationParticipant {
 // ===== TYPE ALIASES FOR COMPATIBILITY =====
 export type BubbleStreamMessage = MessageWithTranslations;
 
-// ===== STATUS ENTRY TYPES =====
-
-/**
- * Per-participant message delivery/read status
- * Aligned with schema.prisma MessageStatusEntry
- */
-export interface MessageStatusEntry {
-  readonly id: string;
-  readonly messageId: string;
-  readonly conversationId: string;
-  readonly participantId: string;
-
-  // Delivery timestamps
-  readonly deliveredAt?: Date;
-  readonly receivedAt?: Date;
-  readonly readAt?: Date;
-
-  // Read details
-  readonly readDurationMs?: number;
-  readonly readDevice?: 'ios' | 'android' | 'web' | 'desktop';
-  readonly clientVersion?: string;
-
-  // View-once status
-  readonly viewedOnceAt?: Date;
-  readonly revealedAt?: Date;
-
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
+// ===== STATUS ENTRY TYPES (MessageStatusEntry canonical definition in message-types.ts) =====
 
 /**
  * Per-participant attachment consumption status

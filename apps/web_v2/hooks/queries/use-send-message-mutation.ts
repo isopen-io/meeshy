@@ -17,7 +17,6 @@ interface OptimisticMessage {
   senderId?: string;
   createdAt: Date;
   updatedAt: Date;
-  isDeleted: boolean;
   isEdited: boolean;
   messageType: string;
   originalLanguage: string;
@@ -79,7 +78,6 @@ export function useSendMessageMutation() {
           : undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
-        isDeleted: false,
         isEdited: false,
         translations: [],
         status: 'sending',

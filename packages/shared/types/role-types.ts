@@ -33,6 +33,8 @@ export enum GlobalUserRole {
   ANALYST = 'ANALYST',
   /** Utilisateur standard */
   USER = 'USER',
+  /** Agent IA (SAV, FAQ bots) - privilèges minimaux */
+  AGENT = 'AGENT',
 }
 
 /**
@@ -45,7 +47,8 @@ export type GlobalUserRoleType =
   | 'MODERATOR'
   | 'AUDIT'
   | 'ANALYST'
-  | 'USER';
+  | 'USER'
+  | 'AGENT';
 
 /**
  * Hiérarchie numérique des rôles globaux
@@ -58,6 +61,7 @@ export const GLOBAL_ROLE_HIERARCHY: Record<GlobalUserRole, number> = {
   [GlobalUserRole.AUDIT]: 40,
   [GlobalUserRole.ANALYST]: 30,
   [GlobalUserRole.USER]: 10,
+  [GlobalUserRole.AGENT]: 5,
 };
 
 /**
@@ -151,6 +155,7 @@ const UNIFIED_ROLE_LEVELS: Record<string, number> = {
   ANALYST: 30,
   MEMBER: 10,
   USER: 10,
+  AGENT: 5,
 };
 
 /**

@@ -583,8 +583,7 @@ export const messageSchema = {
     // State
     isEdited: { type: 'boolean', description: 'Message has been edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edit timestamp' },
-    isDeleted: { type: 'boolean', description: 'Message has been deleted' },
-    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp' },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp (null = not deleted)' },
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },

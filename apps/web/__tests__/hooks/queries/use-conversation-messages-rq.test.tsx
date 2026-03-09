@@ -57,7 +57,6 @@ const createMockMessage = (id: string, content: string, createdAt = new Date('20
   messageType: 'text',
   messageSource: 'user',
   isEdited: false,
-  isDeleted: false,
   createdAt,
   updatedAt: createdAt,
   sender: {

@@ -41,7 +41,6 @@ describe('ConversationStore', () => {
     content: 'Hello, world!',
     originalLanguage: 'en',
     isEdited: false,
-    isDeleted: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -53,7 +52,6 @@ describe('ConversationStore', () => {
     content: 'Hi there!',
     originalLanguage: 'en',
     isEdited: false,
-    isDeleted: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

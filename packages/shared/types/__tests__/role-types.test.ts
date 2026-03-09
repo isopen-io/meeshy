@@ -1,9 +1,37 @@
 import { describe, it, expect } from 'vitest';
 import {
+  GlobalUserRole,
+  GLOBAL_ROLE_HIERARCHY,
+  normalizeGlobalRole,
+  isGlobalUserRole,
+  hasMinimumRole,
   getEffectiveRole,
   getEffectiveRoleLevel,
   hasModeratorPrivileges,
 } from '../role-types';
+
+describe('AGENT role', () => {
+  it('GlobalUserRole includes AGENT', () => {
+    expect(GlobalUserRole.AGENT).toBe('AGENT');
+  });
+
+  it('AGENT has correct hierarchy level', () => {
+    expect(GLOBAL_ROLE_HIERARCHY[GlobalUserRole.AGENT]).toBe(5);
+  });
+
+  it('normalizeGlobalRole recognizes AGENT', () => {
+    expect(normalizeGlobalRole('AGENT')).toBe(GlobalUserRole.AGENT);
+  });
+
+  it('isGlobalUserRole accepts AGENT', () => {
+    expect(isGlobalUserRole('AGENT')).toBe(true);
+  });
+
+  it('AGENT is below USER in hierarchy', () => {
+    expect(hasMinimumRole('AGENT', 'USER')).toBe(false);
+    expect(hasMinimumRole('USER', 'AGENT')).toBe(true);
+  });
+});
 
 describe('getEffectiveRole', () => {
   it('returns global role when higher than member role', () => {

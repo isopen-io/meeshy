@@ -63,7 +63,6 @@ export function formatMessageWithSeparateSenders(message: any) {
     messageType: message.messageType,
     isEdited: message.isEdited,
     editedAt: message.editedAt,
-    isDeleted: message.deletedAt !== null,
     deletedAt: message.deletedAt,
     replyToId: message.replyToId,
     createdAt: message.createdAt,

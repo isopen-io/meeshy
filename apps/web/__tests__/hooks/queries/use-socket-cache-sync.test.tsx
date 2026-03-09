@@ -85,7 +85,6 @@ const createMockMessage = (id: string, content: string, conversationId = 'conv-1
   messageType: 'text',
   messageSource: 'user',
   isEdited: false,
-  isDeleted: false,
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   sender: {

@@ -60,19 +60,19 @@ export interface AttachmentTranscription {
   durationMs?: number;
 
   // Spécifique audio: analyse vocale avancée
-  speakerAnalysis?: any;
+  speakerAnalysis?: Record<string, unknown>;
   senderVoiceIdentified?: boolean;
   senderSpeakerId?: string;
-  voiceQualityAnalysis?: any;
+  voiceQualityAnalysis?: Record<string, unknown>;
 
   // Spécifique document: structure et layout
   pageCount?: number;
-  documentLayout?: any;
+  documentLayout?: Record<string, unknown>;
 
   // Spécifique image: métadonnées vision
   imageDescription?: string;
-  detectedObjects?: any[];
-  ocrRegions?: any[];
+  detectedObjects?: readonly Record<string, unknown>[];
+  ocrRegions?: readonly Record<string, unknown>[];
 }
 
 /**
@@ -158,7 +158,7 @@ export interface AttachmentWithAudio {
   // Nouvelles propriétés JSON
   transcription?: AttachmentTranscription;
   translations?: AttachmentTranslations;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   createdAt: Date;
 }

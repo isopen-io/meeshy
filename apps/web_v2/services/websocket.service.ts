@@ -200,7 +200,7 @@ class WebSocketService {
       createdAt: socketMessage.createdAt,
       updatedAt: socketMessage.updatedAt,
       isEdited: socketMessage.isEdited || false,
-      isDeleted: socketMessage.isDeleted || false,
+      deletedAt: socketMessage.deletedAt || undefined,
       translations: socketMessage.translations || [],
       replyToId: socketMessage.replyToId,
       sender: socketMessage.sender

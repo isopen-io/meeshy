@@ -109,7 +109,7 @@ export interface UserCategoriesResponse {
 export interface ConversationGroup {
   readonly type: 'pinned' | 'uncategorized' | 'category';
   readonly category?: UserConversationCategory;
-  readonly conversations: any[]; // Sera typé avec Conversation + UserConversationPreferences
+  readonly conversations: readonly Record<string, unknown>[]; // Sera typé avec Conversation + UserConversationPreferences
   readonly isExpanded: boolean;
 }
 

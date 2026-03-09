@@ -85,7 +85,7 @@ export interface PushNotificationData {
   readonly url?: string;
 
   /** Données personnalisées additionnelles */
-  readonly [key: string]: any;
+  readonly [key: string]: string | number | boolean | null | undefined;
 }
 
 /**

@@ -140,7 +140,7 @@ export interface BackendMessageData {
   messageType?: unknown;
   messageSource?: unknown;
   isEdited?: unknown;
-  isDeleted?: unknown;
+  deletedAt?: unknown;
   isViewOnce?: unknown;
   viewOnceCount?: unknown;
   isBlurred?: unknown;

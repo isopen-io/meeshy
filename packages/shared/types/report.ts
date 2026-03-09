@@ -156,7 +156,7 @@ export interface ReportWithDetails extends Report {
     content?: string;
     title?: string;
     username?: string;
-    [key: string]: any;
+    [key: string]: string | number | boolean | null | undefined;
   };
   reporter?: {
     id: string;

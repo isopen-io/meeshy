@@ -457,8 +457,8 @@ export interface CallState {
   peerConnections: Map<string, RTCPeerConnection>;
 
   // SFU state (Phase 1B)
-  sfuDevice: any | null;                // mediasoup-client Device
-  sfuTransport: any | null;             // mediasoup Transport
+  sfuDevice: unknown;                    // mediasoup-client Device
+  sfuTransport: unknown;                // mediasoup Transport
 
   // UI state
   controls: CallControls;
@@ -514,7 +514,7 @@ export type CallEventName = typeof CALL_EVENTS[keyof typeof CALL_EVENTS];
 export interface CallError {
   readonly code: CallErrorCode;
   readonly message: string;
-  readonly details?: any;
+  readonly details?: Record<string, unknown>;
 }
 
 /**
