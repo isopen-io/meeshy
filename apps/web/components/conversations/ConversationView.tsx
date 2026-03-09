@@ -17,7 +17,7 @@ import { MessageComposer } from '@/components/common/message-composer';
 import { ConnectionStatusIndicator } from './connection-status-indicator';
 import { FailedMessageBanner } from '@/components/messages/failed-message-banner';
 import { getAuthToken } from '@/utils/token-utils';
-import type { Conversation, ThreadMember, UserRoleEnum, Message, User } from '@meeshy/shared/types';
+import type { Conversation, ThreadMember, Message, User } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 import type { LanguageChoice } from '@/types/bubble-stream';
 
@@ -265,7 +265,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             isMobile={isMobile}
             conversationType={conversationType}
             scrollContainerRef={scrollContainerRef}
-            userRole={effectiveRole as UserRoleEnum}
+            userRole={effectiveRole}
             conversationId={conversation.id}
             addTranslatingState={addTranslatingState}
             isTranslating={isTranslating}
