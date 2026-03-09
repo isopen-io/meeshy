@@ -225,6 +225,7 @@ public protocol MessageSocketProviding: Sendable {
     var connectionState: ConnectionState { get }
     var activeConversationId: String? { get set }
     func connect()
+    func connectAnonymous(sessionToken: String)
     func disconnect()
     func joinConversation(_ conversationId: String)
     func leaveConversation(_ conversationId: String)
@@ -330,6 +331,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .log(false),
             .compress,
             .extraHeaders(["Authorization": "Bearer \(token)"]),
+            .forceWebsockets(true),
+            .reconnects(true),
+            .reconnectWait(1),
+            .reconnectWaitMax(16),
+            .reconnectAttempts(-1),
+        ])
+
+        socket = manager?.defaultSocket
+        setupEventHandlers()
+        socket?.connect()
+    }
+
+    public func connectAnonymous(sessionToken: String) {
+        disconnect()
+
+        guard let url = SocketConfig.baseURL else { return }
+
+        DispatchQueue.main.async { self.connectionState = .connecting }
+
+        manager = SocketManager(socketURL: url, config: [
+            .log(false),
+            .compress,
+            .extraHeaders(["X-Session-Token": sessionToken]),
             .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(1),
