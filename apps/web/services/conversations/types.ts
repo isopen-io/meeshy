@@ -113,6 +113,7 @@ export interface ConversationParticipantResponse {
 export interface AllParticipantsResponse {
   authenticatedParticipants: ConversationParticipantResponse[];
   anonymousParticipants: ConversationParticipantResponse[];
+  totalCount?: number;
 }
 
 /**

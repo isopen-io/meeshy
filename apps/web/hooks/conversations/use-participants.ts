@@ -46,6 +46,11 @@ interface UseParticipantsReturn {
    * Indique si le chargement est en cours
    */
   isLoading: boolean;
+
+  /**
+   * Nombre total de participants (depuis le backend)
+   */
+  totalCount: number | undefined;
 }
 
 function mapResponseToParticipant(
@@ -107,6 +112,7 @@ function mapResponseToParticipant(
 export function useParticipants({ conversationId }: UseParticipantsOptions): UseParticipantsReturn {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | undefined>(undefined);
   const participantsRef = useRef<Participant[]>([]);
   const userStore = useUserStore();
 
@@ -172,6 +178,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
 
       userStore.setParticipants(users as any[]);
       setParticipants(uniqueParticipants);
+      setTotalCount(participantsData.totalCount);
     } catch (error) {
       console.error('[useParticipants] ❌ Erreur chargement participants:', error);
       setParticipants([]);
@@ -185,5 +192,6 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
     participantsRef,
     loadParticipants,
     isLoading,
+    totalCount,
   };
 }

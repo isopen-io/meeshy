@@ -134,11 +134,8 @@ export function registerParticipantsRoutes(
 
       const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
 
-      if (cursor) {
-        whereConditions.id = {
-          gt: cursor
-        };
-      }
+      // Cursor-based pagination: skip the cursor record, ordered by id for stable pagination
+      const cursorOption = cursor ? { id: cursor } : undefined;
 
       const participants = await prisma.participant.findMany({
         where: whereConditions,
@@ -164,17 +161,22 @@ export function registerParticipantsRoutes(
             }
           }
         },
-        orderBy: [
-          { isOnline: 'desc' },
-          { displayName: 'asc' },
-          { id: 'asc' }
-        ],
-        take: pageLimit + 1
+        orderBy: { id: 'asc' },
+        take: pageLimit + 1,
+        ...(cursorOption ? { cursor: cursorOption, skip: 1 } : {})
       });
 
       const hasMore = participants.length > pageLimit;
       const paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
       const nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
+
+      // Total count for accurate header display
+      const totalCount = await prisma.participant.count({
+        where: {
+          conversationId: conversationId,
+          isActive: true
+        }
+      });
 
       const formattedParticipants = paginatedParticipants.map(participant => ({
         id: participant.id,
@@ -221,7 +223,8 @@ export function registerParticipantsRoutes(
         data: formattedParticipants,
         pagination: {
           nextCursor,
-          hasMore
+          hasMore,
+          totalCount
         }
       });
 

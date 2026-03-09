@@ -18,6 +18,7 @@ interface PaginatedParticipantsResponse {
   pagination?: {
     nextCursor: string | null;
     hasMore: boolean;
+    totalCount?: number;
   };
 }
 
@@ -114,6 +115,7 @@ export class ParticipantsService {
 
       let cursor: string | null = null;
       let hasMore = true;
+      let totalCount: number | undefined;
 
       // Charger tous les participants avec pagination
       while (hasMore) {
@@ -129,6 +131,11 @@ export class ParticipantsService {
 
         const pageParticipants = response.data?.data ?? [];
         allParticipants.push(...pageParticipants);
+
+        // Capture totalCount from first response
+        if (totalCount === undefined && response.data?.pagination?.totalCount !== undefined) {
+          totalCount = response.data.pagination.totalCount;
+        }
 
         // Vérifier s'il y a plus de pages
         hasMore = response.data?.pagination?.hasMore ?? false;
@@ -154,7 +161,8 @@ export class ParticipantsService {
 
       return {
         authenticatedParticipants,
-        anonymousParticipants
+        anonymousParticipants,
+        totalCount
       };
     } catch (error) {
       console.error('Erreur lors de la récupération de tous les participants:', error);
