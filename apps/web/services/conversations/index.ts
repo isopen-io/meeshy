@@ -25,6 +25,7 @@ import type {
   GetConversationsResponse,
   GetMessagesResponse,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
 } from './types';
@@ -233,6 +234,7 @@ export type {
   GetConversationsResponse,
   GetMessagesResponse,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
 };
