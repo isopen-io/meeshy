@@ -1,12 +1,15 @@
 import Foundation
+import os
 import Security
 
 enum AnonymousSessionStore {
 
     private static let service = "me.meeshy.app.anonymous-session"
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "keychain")
 
-    static func save(_ context: AnonymousSessionContext) {
-        guard let data = try? JSONEncoder().encode(context) else { return }
+    @discardableResult
+    static func save(_ context: AnonymousSessionContext) -> Bool {
+        guard let data = try? JSONEncoder().encode(context) else { return false }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -15,7 +18,11 @@ enum AnonymousSessionStore {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess {
+            logger.debug("AnonymousSessionStore.save failed for linkId \(context.linkId): OSStatus \(status)")
+        }
+        return status == errSecSuccess
     }
 
     static func load(linkId: String) -> AnonymousSessionContext? {

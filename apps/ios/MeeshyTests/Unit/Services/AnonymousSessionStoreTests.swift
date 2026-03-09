@@ -4,17 +4,11 @@ import MeeshySDK
 
 final class AnonymousSessionStoreTests: XCTestCase {
 
-    private let linkId = "test_link_\(UUID().uuidString)"
-
-    override func tearDown() {
-        super.tearDown()
-        AnonymousSessionStore.delete(linkId: linkId)
-    }
-
     func test_save_thenLoad_returnsContext() {
         let ctx = makeContext()
+        defer { AnonymousSessionStore.delete(linkId: ctx.linkId) }
         AnonymousSessionStore.save(ctx)
-        let loaded = AnonymousSessionStore.load(linkId: linkId)
+        let loaded = AnonymousSessionStore.load(linkId: ctx.linkId)
         XCTAssertEqual(loaded?.sessionToken, ctx.sessionToken)
         XCTAssertEqual(loaded?.participantId, ctx.participantId)
         XCTAssertEqual(loaded?.linkId, ctx.linkId)
@@ -37,9 +31,10 @@ final class AnonymousSessionStoreTests: XCTestCase {
     }
 
     func test_delete_removesFromKeychain() {
-        AnonymousSessionStore.save(makeContext())
-        AnonymousSessionStore.delete(linkId: linkId)
-        XCTAssertNil(AnonymousSessionStore.load(linkId: linkId))
+        let ctx = makeContext()
+        AnonymousSessionStore.save(ctx)
+        AnonymousSessionStore.delete(linkId: ctx.linkId)
+        XCTAssertNil(AnonymousSessionStore.load(linkId: ctx.linkId))
     }
 
     func test_load_missingKey_returnsNil() {
@@ -53,7 +48,7 @@ final class AnonymousSessionStoreTests: XCTestCase {
         linkId: String? = nil,
         token: String = "test-session-token"
     ) -> AnonymousSessionContext {
-        let id = linkId ?? self.linkId
+        let id = linkId ?? "test_link_\(UUID().uuidString)"
         return AnonymousSessionContext(
             sessionToken: token,
             participantId: "participant_\(id)",
