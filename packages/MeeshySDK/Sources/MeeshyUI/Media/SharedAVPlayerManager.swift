@@ -133,13 +133,6 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Watch Progress Reporting
 
-    private struct AttachmentStatusBody: Encodable {
-        let action: String
-        let playPositionMs: Int
-        let durationMs: Int
-        let complete: Bool
-    }
-
     private func reportWatchProgress(complete: Bool) {
         guard let attId = attachmentId else { return }
         guard let start = watchStartTime else { return }

@@ -3,15 +3,6 @@ import AVFoundation
 import Combine
 import MeeshySDK
 
-// MARK: - Attachment Status Body
-
-private struct AttachmentStatusBody: Encodable {
-    let action: String
-    let playPositionMs: Int
-    let durationMs: Int
-    let complete: Bool
-}
-
 // MARK: - Audio Playback Manager
 
 @MainActor

@@ -302,13 +302,6 @@ public struct VideoFullscreenPlayer: View {
         self.urlString = urlString; self.speed = speed; self.attachmentId = attachmentId
     }
 
-    private struct WatchStatusBody: Encodable {
-        let action: String
-        let playPositionMs: Int
-        let durationMs: Int
-        let complete: Bool
-    }
-
     private func reportWatchProgress(player: AVPlayer, complete: Bool) {
         guard let attId = attachmentId else { return }
         guard let start = watchStartTime else { return }
@@ -320,7 +313,7 @@ public struct VideoFullscreenPlayer: View {
         let totalDurationMs = Int((totalSeconds.isNaN || totalSeconds.isInfinite ? 0 : totalSeconds) * 1000)
 
         Task {
-            let body = WatchStatusBody(
+            let body = AttachmentStatusBody(
                 action: "watched",
                 playPositionMs: positionMs,
                 durationMs: totalDurationMs,

@@ -137,28 +137,6 @@ export class StatusHandler {
     }
   }
 
-  async handleHeartbeat(socket: Socket): Promise<void> {
-    const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) return;
-
-    try {
-      const result = getConnectedUser(userIdOrToken, this.connectedUsers);
-      if (!result) return;
-      const { user: connectedUser, realUserId: userId } = result;
-
-      this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
-
-      if (!connectedUser.isAnonymous) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: { lastActiveAt: new Date() }
-        });
-      }
-    } catch {
-      // Silent - heartbeat failure is not critical
-    }
-  }
-
   /**
    * Récupère le nom d'affichage d'un utilisateur.
    * For anonymous users, resolve from Participant table.
