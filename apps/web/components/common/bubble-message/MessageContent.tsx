@@ -2,14 +2,54 @@
 
 import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Check } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { MarkdownMessage } from '@/components/messages/MarkdownMessage';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
+import { useReadStatusSummary } from '@/stores/conversation-store';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 
 type UseReactionsQueryReturn = ReturnType<typeof useReactionsQuery>;
+
+const DeliveryIndicator = memo(function DeliveryIndicator({
+  isOwnMessage,
+  conversationId,
+}: {
+  isOwnMessage: boolean;
+  conversationId: string;
+}) {
+  const summary = useReadStatusSummary(conversationId);
+
+  if (!isOwnMessage) return null;
+
+  if (!summary) {
+    return <Check className="h-3 w-3 text-gray-400 flex-shrink-0" />;
+  }
+
+  const { totalMembers, deliveredCount, readCount } = summary;
+
+  if (totalMembers > 0 && readCount >= totalMembers) {
+    return (
+      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+        <Check className="h-3 w-3 text-indigo-400" />
+        <Check className="h-3 w-3 text-indigo-400" />
+      </span>
+    );
+  }
+
+  if (deliveredCount > 0) {
+    return (
+      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+        <Check className="h-3 w-3 text-gray-400" />
+        <Check className="h-3 w-3 text-gray-400" />
+      </span>
+    );
+  }
+
+  return <Check className="h-3 w-3 text-gray-400 flex-shrink-0" />;
+});
 
 interface MessageContentProps {
   message: {
@@ -104,6 +144,16 @@ export const MessageContent = memo(function MessageContent({
               </motion.div>
             </AnimatePresence>
           </div>
+
+          {/* Delivery status indicator for own messages */}
+          {isOwnMessage && (
+            <div className="flex justify-end px-1 pb-0.5 -mt-0.5">
+              <DeliveryIndicator
+                isOwnMessage={isOwnMessage}
+                conversationId={conversationId || message.conversationId}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
