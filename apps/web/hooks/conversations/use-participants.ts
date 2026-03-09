@@ -12,7 +12,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { conversationsService } from '@/services/conversations.service';
 import { useUserStore } from '@/stores/user-store';
-import type { ThreadMember } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types';
+import type { ConversationParticipantResponse } from '@/services/conversations/types';
 import { MemberRole } from '@meeshy/shared/types';
 
 interface UseParticipantsOptions {
@@ -26,12 +27,12 @@ interface UseParticipantsReturn {
   /**
    * Liste des participants
    */
-  participants: ThreadMember[];
+  participants: Participant[];
 
   /**
    * Ref stable vers les participants
    */
-  participantsRef: React.RefObject<ThreadMember[]>;
+  participantsRef: React.RefObject<Participant[]>;
 
   /**
    * Charge les participants d'une conversation
@@ -44,13 +45,66 @@ interface UseParticipantsReturn {
   isLoading: boolean;
 }
 
+function mapResponseToParticipant(
+  response: ConversationParticipantResponse,
+  conversationId: string
+): Participant {
+  return {
+    id: response.participantId || response.id,
+    conversationId,
+    type: response.type || (response.isAnonymous ? 'anonymous' : 'user'),
+    userId: response.userId || undefined,
+    displayName: response.displayName || response.username,
+    avatar: response.avatar || undefined,
+    role: response.conversationRole || MemberRole.MEMBER,
+    language: response.systemLanguage || 'fr',
+    permissions: {
+      canSendMessages: response.canSendMessages ?? true,
+      canSendFiles: response.canSendFiles ?? true,
+      canSendImages: response.canSendImages ?? true,
+      canSendVideos: true,
+      canSendAudios: true,
+      canSendLocations: true,
+      canSendLinks: true,
+    },
+    isActive: response.isActive,
+    isOnline: response.isOnline,
+    joinedAt: new Date(response.joinedAt),
+    lastActiveAt: response.lastActiveAt ? new Date(response.lastActiveAt) : undefined,
+    user: {
+      id: response.userId || response.id,
+      username: response.username,
+      firstName: response.firstName,
+      lastName: response.lastName,
+      displayName: response.displayName,
+      avatar: response.avatar,
+      email: response.email,
+      isOnline: response.isOnline,
+      lastActiveAt: new Date(response.lastActiveAt || Date.now()),
+      systemLanguage: response.systemLanguage,
+      regionalLanguage: response.regionalLanguage,
+      customDestinationLanguage: response.customDestinationLanguage,
+      role: response.role,
+      isActive: response.isActive,
+      createdAt: new Date(response.createdAt || Date.now()),
+      updatedAt: new Date(response.updatedAt || Date.now()),
+      autoTranslateEnabled: response.autoTranslateEnabled,
+      translateToSystemLanguage: true,
+      translateToRegionalLanguage: false,
+      useCustomDestination: false,
+      keepOriginalMessages: true,
+      translationQuality: 'medium',
+    },
+  };
+}
+
 /**
  * Hook pour gérer les participants d'une conversation
  */
 export function useParticipants({ conversationId }: UseParticipantsOptions): UseParticipantsReturn {
-  const [participants, setParticipants] = useState<ThreadMember[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const participantsRef = useRef<ThreadMember[]>([]);
+  const participantsRef = useRef<Participant[]>([]);
   const userStore = useUserStore();
 
   // Sync ref avec state
@@ -67,61 +121,19 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
     try {
       const participantsData = await conversationsService.getAllParticipants(convId);
 
-      // Mapper les participants authentifiés
-      const authenticatedMembers: ThreadMember[] = participantsData.authenticatedParticipants.map(user => ({
-        id: user.id,
-        conversationId: convId,
-        userId: user.id,
-        user,
-        role: ((user as any).conversationRole || MemberRole.MEMBER) as any,
-        joinedAt: new Date(),
-        isActive: true,
-        isAnonymous: false,
-      }));
+      const allResponses = [
+        ...participantsData.authenticatedParticipants,
+        ...participantsData.anonymousParticipants,
+      ];
 
-      // Mapper les participants anonymes
-      const anonymousMembers: ThreadMember[] = participantsData.anonymousParticipants.map(participant => ({
-        id: participant.id,
-        conversationId: convId,
-        userId: participant.id,
-        user: {
-          ...participant,
-          displayName: participant.username,
-          email: '',
-          phoneNumber: '',
-          isOnline: false,
-          lastActiveAt: new Date(),
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
-          role: 'USER' as const,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          autoTranslateEnabled: true,
-          translateToSystemLanguage: true,
-          translateToRegionalLanguage: false,
-          useCustomDestination: false,
-          keepOriginalMessages: true,
-          translationQuality: 'medium',
-        },
-        role: MemberRole.MEMBER as any,
-        joinedAt: new Date(),
-        isActive: true,
-        isAnonymous: true,
-      }));
-
-      // Déduplication avec Map (js-index-maps)
-      // Priorité aux participants authentifiés
-      const participantsMap = new Map<string, ThreadMember>();
-
-      // D'abord les anonymes
-      for (const p of anonymousMembers) {
-        participantsMap.set(p.userId, p);
-      }
-
-      // Puis les authentifiés (écrasent les anonymes si même ID)
-      for (const p of authenticatedMembers) {
-        participantsMap.set(p.userId, p);
+      // Map and deduplicate (authenticated wins if duplicate)
+      const participantsMap = new Map<string, Participant>();
+      for (const response of allResponses) {
+        const participant = mapResponseToParticipant(response, convId);
+        const key = participant.userId || participant.id;
+        if (!participantsMap.has(key) || !response.isAnonymous) {
+          participantsMap.set(key, participant);
+        }
       }
 
       const uniqueParticipants = Array.from(participantsMap.values());
