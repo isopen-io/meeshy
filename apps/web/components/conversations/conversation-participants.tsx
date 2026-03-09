@@ -18,7 +18,7 @@ import {
   Loader2,
   Ghost
 } from 'lucide-react';
-import { SocketIOUser as User, ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
+import { SocketIOUser as User, ThreadMember, UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
@@ -104,7 +104,7 @@ export function ConversationParticipants({
   };
 
   const isCreator = (participant: ThreadMember): boolean => {
-    return participant.role === UserRoleEnum.CREATOR;
+    return (participant.role as string) === MemberRole.CREATOR;
   };
 
   const shouldShowCrown = (participant: ThreadMember): boolean => {
@@ -124,7 +124,7 @@ export function ConversationParticipants({
   const currentUserParticipant = uniqueParticipants.find(p => p.userId === currentUser.id);
   const allParticipantsIncludingCurrent = currentUserParticipant
     ? uniqueParticipants
-    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: UserRoleEnum.MEMBER } as ThreadMember];
+    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: MemberRole.MEMBER as any } as ThreadMember];
 
   // Afficher les 3 premiers participants en ligne (incluant l'utilisateur connecté s'il est en ligne)
   // Afficher l'utilisateur courant + 2 autres participants (en ligne ou non)

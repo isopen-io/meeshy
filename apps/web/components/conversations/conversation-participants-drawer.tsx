@@ -40,7 +40,7 @@ import { usersService } from '@/services/users.service';
 import type { User as SocketIOUser } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -61,7 +61,7 @@ interface ConversationParticipantsDrawerProps {
   currentUser: any;
   isGroup: boolean;
   conversationType?: string;
-  userConversationRole?: UserRoleEnum;
+  userConversationRole?: UserRoleEnum | string;
   /** Nombre total de membres (depuis conversation.memberCount) */
   memberCount?: number;
   onParticipantRemoved?: (userId: string) => void;
@@ -159,9 +159,10 @@ export function ConversationParticipantsDrawer({
 
   // Vérifier si l'utilisateur actuel est admin/moderator/creator
   const currentUserParticipant = participants.find(p => p.userId === currentUser.id);
-  const isAdmin = currentUserParticipant?.role === UserRoleEnum.ADMIN ||
-                  currentUserParticipant?.role === UserRoleEnum.CREATOR ||
-                  currentUserParticipant?.role === UserRoleEnum.MODERATOR;
+  const currentRole = currentUserParticipant?.role as string | undefined;
+  const isAdmin = currentRole === MemberRole.CREATOR ||
+                  currentRole === MemberRole.ADMIN ||
+                  currentRole === MemberRole.MODERATOR;
 
   // Recherche backend des participants quand searchQuery change
   useEffect(() => {
@@ -179,7 +180,7 @@ export function ConversationParticipantsDrawer({
           conversationId,
           userId: user.id,
           user,
-          role: (user as any).conversationRole || 'MEMBER',
+          role: (user as any).conversationRole || MemberRole.MEMBER,
           joinedAt: new Date(),
           isActive: true,
           isAnonymous: (user as any).isAnonymous || false,
@@ -322,14 +323,16 @@ export function ConversationParticipantsDrawer({
   };
 
   const getUpgradeRole = (currentRole: string): 'ADMIN' | 'MODERATOR' | 'MEMBER' | null => {
-    if (currentRole === 'MEMBER') return 'MODERATOR';
-    if (currentRole === 'MODERATOR') return 'ADMIN';
+    const normalized = currentRole.toLowerCase();
+    if (normalized === MemberRole.MEMBER) return 'MODERATOR';
+    if (normalized === MemberRole.MODERATOR) return 'ADMIN';
     return null;
   };
 
   const getDowngradeRole = (currentRole: string): 'ADMIN' | 'MODERATOR' | 'MEMBER' | null => {
-    if (currentRole === 'ADMIN') return 'MODERATOR';
-    if (currentRole === 'MODERATOR') return 'MEMBER';
+    const normalized = currentRole.toLowerCase();
+    if (normalized === MemberRole.ADMIN) return 'MODERATOR';
+    if (normalized === MemberRole.MODERATOR) return 'MEMBER';
     return null;
   };
 
@@ -340,15 +343,15 @@ export function ConversationParticipantsDrawer({
 
   // Rôles assignables selon le rôle de l'utilisateur courant
   const getAssignableRoles = (): Array<{ value: 'MEMBER' | 'MODERATOR' | 'ADMIN'; label: string }> => {
-    const role = currentUserParticipant?.role;
-    if (role === UserRoleEnum.CREATOR || role === UserRoleEnum.ADMIN) {
+    const role = currentUserParticipant?.role as string | undefined;
+    if (role === MemberRole.CREATOR || role === MemberRole.ADMIN) {
       return [
         { value: 'MEMBER', label: 'Membre' },
         { value: 'MODERATOR', label: 'Modérateur' },
         { value: 'ADMIN', label: 'Administrateur' },
       ];
     }
-    if (role === UserRoleEnum.MODERATOR) {
+    if (role === MemberRole.MODERATOR as string) {
       return [
         { value: 'MEMBER', label: 'Membre' },
         { value: 'MODERATOR', label: 'Modérateur' },
@@ -396,7 +399,7 @@ export function ConversationParticipantsDrawer({
         transition={{ delay: index * 0.03 }}
         layout
         className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-[color,box-shadow,opacity] duration-200 group ${
-          participant.role === 'CREATOR'
+          (participant.role as string) === MemberRole.CREATOR
             ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
             : isOnline
               ? 'border border-white/30 dark:border-gray-700/40'
@@ -447,7 +450,7 @@ export function ConversationParticipantsDrawer({
                   {t('conversationDetails.you')}
                 </Badge>
               )}
-              {(['ADMIN', 'CREATOR'].includes(participant.role)) && (
+              {([MemberRole.ADMIN as string, MemberRole.CREATOR as string].includes(participant.role as string)) && (
                 <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
               )}
             </div>
@@ -474,7 +477,7 @@ export function ConversationParticipantsDrawer({
           {/* Actions admin */}
           {isAdmin && !isCurrentUser && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              {participant.role !== 'CREATOR' && getUpgradeRole(participant.role) && (
+              {(participant.role as string) !== MemberRole.CREATOR && getUpgradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"
@@ -494,7 +497,7 @@ export function ConversationParticipantsDrawer({
                   </Button>
                 </motion.div>
               )}
-              {participant.role !== 'CREATOR' && getDowngradeRole(participant.role) && (
+              {(participant.role as string) !== MemberRole.CREATOR && getDowngradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"

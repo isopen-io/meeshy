@@ -599,7 +599,7 @@ describe('ConversationDetailsSidebar', () => {
     it('should show image upload option for moderators', async () => {
       const moderatorUser: User = {
         ...mockCurrentUser,
-        role: UserRoleEnum.MODO,
+        role: UserRoleEnum.MODERATOR,
       } as User;
 
       render(

@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import type { Conversation, User } from '@meeshy/shared/types';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import { useI18n } from './use-i18n';
 
 /**
@@ -23,20 +23,20 @@ export function useParticipantManagement(
   const isAdmin =
     currentUser.role === UserRoleEnum.ADMIN ||
     currentUser.role === UserRoleEnum.BIGBOSS ||
-    userMembership?.role === UserRoleEnum.ADMIN ||
-    userMembership?.role === UserRoleEnum.MODERATOR;
+    userMembership?.role === MemberRole.CREATOR ||
+    userMembership?.role === MemberRole.ADMIN ||
+    userMembership?.role === MemberRole.MODERATOR;
 
   // Check if user can modify image
   const canModifyImage = conversation.type !== 'direct' && (
     currentUser.role === UserRoleEnum.BIGBOSS ||
     currentUser.role === UserRoleEnum.ADMIN ||
-    currentUser.role === UserRoleEnum.MODO ||
     currentUser.role === UserRoleEnum.MODERATOR ||
     currentUser.role === UserRoleEnum.AUDIT ||
     currentUser.role === UserRoleEnum.ANALYST ||
-    currentUser.role === UserRoleEnum.CREATOR ||
-    userMembership?.role === UserRoleEnum.MODERATOR ||
-    userMembership?.role === UserRoleEnum.CREATOR
+    userMembership?.role === MemberRole.CREATOR ||
+    userMembership?.role === MemberRole.ADMIN ||
+    userMembership?.role === MemberRole.MODERATOR
   );
 
   // Remove participant

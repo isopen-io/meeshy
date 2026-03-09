@@ -157,7 +157,7 @@ describe('Groups API Integration - Real Data Flow', () => {
       
       // Vérifier les rôles
       const adminMembers = result.data.members.filter(m => m.role === UserRoleEnum.ADMIN);
-      const regularMembers = result.data.members.filter(m => m.role === UserRoleEnum.MEMBER);
+      const regularMembers = result.data.members.filter(m => m.role === UserRoleEnum.USER);
       expect(adminMembers).toHaveLength(1);
       expect(regularMembers).toHaveLength(2);
 
@@ -216,14 +216,14 @@ describe('Groups API Integration - Real Data Flow', () => {
     it('should invite member and update group state', async () => {
       const inviteData = {
         userId: 'user-new-456',
-        role: UserRoleEnum.MEMBER
+        role: UserRoleEnum.USER
       };
 
       const newMember: GroupMember = {
         id: 'member-new-789',
         userId: 'user-new-456',
         groupId: 'group-789',
-        role: UserRoleEnum.MEMBER,
+        role: UserRoleEnum.USER,
         joinedAt: new Date('2024-01-15T16:00:00Z'),
         user: {
           id: 'user-new-456',

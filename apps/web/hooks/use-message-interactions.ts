@@ -14,7 +14,7 @@ interface UseMessageInteractionsProps {
   isAnonymous?: boolean;
   conversationId?: string;
   conversationType?: ConversationType;
-  userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
+  userRole?: string;
   onEnterReactionMode?: () => void;
   onEnterEditMode?: () => void;
   onEnterDeleteMode?: () => void;
@@ -51,7 +51,8 @@ export function useMessageInteractions({
   const canModifyMessage = useCallback(() => {
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
-    const hasSpecialPrivileges = ['MODERATOR', 'MODO', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(userRole);
+    const normalizedRole = userRole.toUpperCase();
+    const hasSpecialPrivileges = ['MODERATOR', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(normalizedRole);
 
     if (messageAge > twentyFourHoursInMs && !hasSpecialPrivileges) {
       return false;
@@ -70,7 +71,7 @@ export function useMessageInteractions({
   const canDeleteMessage = useCallback(() => {
     if (onEnterDeleteMode) return true;
 
-    if (['BIGBOSS', 'ADMIN', 'MODERATOR', 'MODO'].includes(userRole)) return true;
+    if (['BIGBOSS', 'ADMIN', 'MODERATOR', 'CREATOR'].includes(userRole.toUpperCase())) return true;
 
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twelveHours = 12 * 60 * 60 * 1000;
@@ -153,7 +154,7 @@ export function useMessageInteractions({
     } else {
       const newContent = prompt(t('editMessagePrompt'), message.content);
       if (newContent && newContent.trim() !== message.content) {
-        await onEditMessage?.(message.id, newContent.trim(), message.originalLanguage);
+        await onEditMessage?.(message.id, newContent.trim(), message.originalLanguage || '');
       }
     }
   }, [onEnterEditMode, onEditMessage, message.id, message.content, t]);

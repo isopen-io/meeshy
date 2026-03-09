@@ -5,6 +5,7 @@
 
 import {
   UserRoleEnum,
+  MemberRole,
 } from '@meeshy/shared/types';
 import type {
   Conversation,
@@ -56,15 +57,15 @@ export class TransformersService {
   /**
    * Map statique pour la conversion des rôles (O(1) lookup)
    */
-  private static readonly ROLE_MAP = new Map<string, UserRoleEnum>([
+  private static readonly ROLE_MAP = new Map<string, string>([
     ['ADMIN', UserRoleEnum.ADMIN],
     ['MODERATOR', UserRoleEnum.MODERATOR],
     ['BIGBOSS', UserRoleEnum.BIGBOSS],
-    ['CREATOR', UserRoleEnum.CREATOR],
+    ['CREATOR', MemberRole.CREATOR],
     ['AUDIT', UserRoleEnum.AUDIT],
     ['ANALYST', UserRoleEnum.ANALYST],
     ['USER', UserRoleEnum.USER],
-    ['MEMBER', UserRoleEnum.MEMBER],
+    ['MEMBER', MemberRole.MEMBER],
   ]);
 
   /**
@@ -107,8 +108,8 @@ export class TransformersService {
   /**
    * Convertir un rôle string en UserRoleEnum
    */
-  stringToUserRole(role: string): UserRoleEnum {
-    return TransformersService.ROLE_MAP.get(role.toUpperCase()) ?? UserRoleEnum.MEMBER;
+  stringToUserRole(role: string): string {
+    return TransformersService.ROLE_MAP.get(role.toUpperCase()) ?? MemberRole.MEMBER;
   }
 
   /**

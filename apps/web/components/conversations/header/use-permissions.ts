@@ -12,7 +12,6 @@ export function usePermissions(
     return [
       UserRoleEnum.BIGBOSS,
       UserRoleEnum.ADMIN,
-      UserRoleEnum.MODO,
       UserRoleEnum.MODERATOR,
       UserRoleEnum.AUDIT,
       UserRoleEnum.ANALYST
@@ -25,11 +24,9 @@ export function usePermissions(
     return [
       UserRoleEnum.BIGBOSS,
       UserRoleEnum.ADMIN,
-      UserRoleEnum.MODO,
       UserRoleEnum.MODERATOR,
       UserRoleEnum.AUDIT,
-      UserRoleEnum.ANALYST,
-      UserRoleEnum.CREATOR
+      UserRoleEnum.ANALYST
     ].includes(currentUserRole);
   }, [conversation.type, currentUserRole]);
 
