@@ -181,6 +181,19 @@ final class ConversationSocketHandler {
                             self.clearTypingSafetyTimer(for: senderName)
                         }
                     }
+
+                    // Auto mark-as-received for messages from other users
+                    let msgConvId = apiMsg.conversationId
+                    do {
+                        let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                            endpoint: "/conversations/\(msgConvId)/mark-as-received",
+                            method: "POST"
+                        )
+                    } catch {
+                        await PendingStatusQueue.shared.enqueue(.init(
+                            conversationId: msgConvId, type: "received", timestamp: Date()
+                        ))
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -483,6 +496,7 @@ final class ConversationSocketHandler {
                 guard let self else { return }
                 Task { [weak self] in
                     await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
                 }
             }
             .store(in: &cancellables)
