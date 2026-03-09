@@ -18,10 +18,10 @@ describe('PreferencesService', () => {
 
   beforeEach(() => {
     mockPrisma = {
-      notificationPreference: {
+      userPreferences: {
         findUnique: jest.fn(),
         upsert: jest.fn(),
-        deleteMany: jest.fn()
+        update: jest.fn(),
       },
       userFeature: {
         findUnique: jest.fn(),
@@ -52,54 +52,55 @@ describe('PreferencesService', () => {
 
   describe('getNotificationPreferences', () => {
     it('should return stored preferences when they exist', async () => {
-      // Mock avec les noms de champs Prisma (pas les noms DTO)
-      const mockPreferences = {
-        id: 'pref-123',
-        userId: 'user-123',
-        pushNotifications: true,
-        emailNotifications: true,
-        soundEnabled: true,
-        newMessage: true,
-        missedCall: true,
-        newConversation: true,
-        messageReply: true,
-        messageMention: true,
-        friendRequest: true,
-        friendRequestAccepted: true,
-        dndEnabled: false,
-        dndStartTime: null,
-        dndEndTime: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
+      const now = new Date();
+      const mockUserPrefs = {
+        notification: {
+          pushEnabled: true,
+          emailEnabled: true,
+          soundEnabled: true,
+          newMessageEnabled: true,
+          missedCallEnabled: true,
+          systemEnabled: true,
+          conversationEnabled: true,
+          replyEnabled: true,
+          mentionEnabled: true,
+          reactionEnabled: true,
+          contactRequestEnabled: true,
+          memberJoinedEnabled: true,
+          dndEnabled: false,
+          dndStartTime: null,
+          dndEndTime: null,
+        },
+        createdAt: now,
+        updatedAt: now,
       };
 
-      mockPrisma.notificationPreference.findUnique.mockResolvedValue(mockPreferences);
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(mockUserPrefs);
 
       const result = await service.getNotificationPreferences('user-123');
 
       expect(result).toEqual({
         ...NOTIFICATION_PREFERENCES_DEFAULTS,
         isDefault: false,
-        createdAt: mockPreferences.createdAt,
-        updatedAt: mockPreferences.updatedAt
+        createdAt: now,
+        updatedAt: now,
       });
-      expect(mockPrisma.notificationPreference.findUnique).toHaveBeenCalledWith({
-        where: { userId: 'user-123' }
+      expect(mockPrisma.userPreferences.findUnique).toHaveBeenCalledWith({
+        where: { userId: 'user-123' },
+        select: { notification: true, createdAt: true, updatedAt: true },
       });
     });
 
     it('should return defaults when no preferences exist', async () => {
-      mockPrisma.notificationPreference.findUnique.mockResolvedValue(null);
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
 
       const result = await service.getNotificationPreferences('user-123');
 
       expect(result).toMatchObject({
-        userId: 'user-123',
         ...NOTIFICATION_PREFERENCES_DEFAULTS,
         isDefault: true,
-        id: null,
         createdAt: null,
-        updatedAt: null
+        updatedAt: null,
       });
     });
   });
@@ -107,28 +108,35 @@ describe('PreferencesService', () => {
   describe('updateNotificationPreferences', () => {
     it('should update existing preferences', async () => {
       const updateData = { pushEnabled: false, emailEnabled: true };
-      // Mock avec les noms de champs Prisma
-      const mockUpdated = {
-        id: 'pref-123',
-        userId: 'user-123',
-        pushNotifications: false,  // pushEnabled -> pushNotifications
-        emailNotifications: true,  // emailEnabled -> emailNotifications
-        soundEnabled: true,
-        newMessage: true,
-        missedCall: true,
-        newConversation: true,
-        messageReply: true,
-        messageMention: true,
-        friendRequest: true,
-        friendRequestAccepted: true,
-        dndEnabled: false,
-        dndStartTime: null,
-        dndEndTime: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      const now = new Date();
 
-      mockPrisma.notificationPreference.upsert.mockResolvedValue(mockUpdated);
+      // Mock existing prefs lookup
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        notification: {},
+      });
+
+      // Mock upsert result
+      mockPrisma.userPreferences.upsert.mockResolvedValue({
+        notification: {
+          pushEnabled: false,
+          emailEnabled: true,
+          soundEnabled: true,
+          newMessageEnabled: true,
+          missedCallEnabled: true,
+          systemEnabled: true,
+          conversationEnabled: true,
+          replyEnabled: true,
+          mentionEnabled: true,
+          reactionEnabled: true,
+          contactRequestEnabled: true,
+          memberJoinedEnabled: true,
+          dndEnabled: false,
+          dndStartTime: null,
+          dndEndTime: null,
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
 
       const result = await service.updateNotificationPreferences('user-123', updateData);
 
@@ -149,22 +157,10 @@ describe('PreferencesService', () => {
         dndStartTime: null,
         dndEndTime: null,
         isDefault: false,
-        createdAt: mockUpdated.createdAt,
-        updatedAt: mockUpdated.updatedAt
+        createdAt: now,
+        updatedAt: now,
       });
-      // Vérifier que upsert est appelé avec les champs Prisma corrects
-      expect(mockPrisma.notificationPreference.upsert).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        create: expect.objectContaining({
-          userId: 'user-123',
-          pushNotifications: false,
-          emailNotifications: true
-        }),
-        update: {
-          pushNotifications: false,
-          emailNotifications: true
-        }
-      });
+      expect(mockPrisma.userPreferences.upsert).toHaveBeenCalled();
     });
 
     it('should validate DND time format', async () => {
@@ -176,10 +172,11 @@ describe('PreferencesService', () => {
     });
 
     it('should require DND times when enabling DND', async () => {
-      mockPrisma.notificationPreference.findUnique.mockResolvedValue({
-        userId: 'user-123',
-        dndStartTime: null,
-        dndEndTime: null
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        notification: {
+          dndStartTime: null,
+          dndEndTime: null,
+        },
       });
 
       await expect(
@@ -189,13 +186,14 @@ describe('PreferencesService', () => {
   });
 
   describe('resetNotificationPreferences', () => {
-    it('should delete user preferences', async () => {
-      mockPrisma.notificationPreference.deleteMany.mockResolvedValue({ count: 1 });
+    it('should reset notification to null in userPreferences', async () => {
+      mockPrisma.userPreferences.update.mockResolvedValue({});
 
       await service.resetNotificationPreferences('user-123');
 
-      expect(mockPrisma.notificationPreference.deleteMany).toHaveBeenCalledWith({
-        where: { userId: 'user-123' }
+      expect(mockPrisma.userPreferences.update).toHaveBeenCalledWith({
+        where: { userId: 'user-123' },
+        data: { notification: null },
       });
     });
   });

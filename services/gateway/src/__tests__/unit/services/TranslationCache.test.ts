@@ -122,6 +122,10 @@ jest.mock('../../../services/RedisWrapper', () => ({
   RedisWrapper: jest.fn().mockImplementation((url: string) => {
     mockRedisInstance = new MockRedisWrapper(url);
     return mockRedisInstance;
+  }),
+  getRedisWrapper: jest.fn().mockImplementation((url: string) => {
+    mockRedisInstance = new MockRedisWrapper(url);
+    return mockRedisInstance;
   })
 }));
 

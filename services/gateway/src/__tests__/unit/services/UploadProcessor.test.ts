@@ -51,10 +51,11 @@ jest.mock('../../../services/AttachmentEncryptionService', () => ({
 
 jest.mock('fs', () => ({
   promises: {
-    mkdir: jest.fn(),
-    writeFile: jest.fn(),
-    chmod: jest.fn(),
-    unlink: jest.fn(),
+    mkdir: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    writeFile: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    chmod: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    unlink: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    readFile: jest.fn<() => Promise<Buffer>>().mockResolvedValue(Buffer.from('amplified')),
   },
 }));
 

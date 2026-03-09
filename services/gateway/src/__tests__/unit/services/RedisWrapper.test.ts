@@ -493,8 +493,8 @@ describe('RedisWrapper', () => {
       redisWrapper = new RedisWrapper();
       await jest.advanceTimersByTimeAsync(10);
 
-      // Enable error simulation
-      mockRedisInstance?.enableSetexError();
+      // Enable error simulation — setex delegates to set(), so we trigger set error
+      mockRedisInstance?.enableSetError();
 
       await redisWrapper.setex('error-key', 60, 'error-value');
 
