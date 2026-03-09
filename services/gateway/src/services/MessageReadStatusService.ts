@@ -919,6 +919,44 @@ export class MessageReadStatusService {
     }
   }
 
+  async getLatestMessageSummary(
+    conversationId: string
+  ): Promise<{ totalMembers: number; deliveredCount: number; readCount: number }> {
+    try {
+      const latestMessage = await this.prisma.message.findFirst({
+        where: { conversationId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, senderId: true }
+      });
+
+      if (!latestMessage) {
+        return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
+      }
+
+      const totalMembers = await this.prisma.participant.count({
+        where: { conversationId, isActive: true, id: { not: latestMessage.senderId } }
+      });
+
+      const cursors = await this.prisma.conversationReadCursor.findMany({
+        where: { conversationId, participantId: { not: latestMessage.senderId } },
+        select: { lastDeliveredAt: true, lastReadAt: true }
+      });
+
+      const deliveredCount = cursors.filter(c =>
+        c.lastDeliveredAt && c.lastDeliveredAt >= latestMessage.createdAt
+      ).length;
+
+      const readCount = cursors.filter(c =>
+        c.lastReadAt && c.lastReadAt >= latestMessage.createdAt
+      ).length;
+
+      return { totalMembers, deliveredCount, readCount };
+    } catch (error) {
+      logger.error('[MessageReadStatus] Error computing summary:', error);
+      return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
+    }
+  }
+
   private async updateUnreadCount(
     participantId: string,
     conversationId: string

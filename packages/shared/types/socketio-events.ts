@@ -183,6 +183,9 @@ export const CLIENT_EVENTS = {
   // --- Feed subscription ---
   FEED_SUBSCRIBE: 'feed:subscribe',
   FEED_UNSUBSCRIBE: 'feed:unsubscribe',
+
+  // --- Presence ---
+  HEARTBEAT: 'heartbeat',
 } as const;
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
@@ -330,13 +333,23 @@ export interface ReactionSyncEventData {
 }
 
 /**
+ * Résumé des statuts de lecture pour enrichir les événements temps réel
+ */
+export interface ReadStatusSummary {
+  readonly totalMembers: number;
+  readonly deliveredCount: number;
+  readonly readCount: number;
+}
+
+/**
  * Données pour l'événement de mise à jour du statut de lecture
  */
 export interface ReadStatusUpdatedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  readonly participantId: string;
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
+  readonly summary: ReadStatusSummary;
 }
 
 /**
@@ -745,6 +758,9 @@ export interface ClientToServerEvents {
   // Feed subscription
   [CLIENT_EVENTS.FEED_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.FEED_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
+
+  // Presence
+  [CLIENT_EVENTS.HEARTBEAT]: () => void;
 }
 
 // ===== TYPES DE BASE =====
