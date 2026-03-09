@@ -164,7 +164,8 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.seed(from: conversations, currentUserId: "me")
 
-        XCTAssertTrue(sut.presenceMap.isEmpty)
+        XCTAssertEqual(sut.presenceMap.count, 1, "Participant with userId is added even without user object")
+        XCTAssertEqual(sut.presenceState(for: "other-1"), PresenceState.offline)
     }
 
     func test_seed_skipsMembersWithNilIsOnline() {
@@ -191,7 +192,8 @@ final class PresenceManagerTests: XCTestCase {
 
         sut.seed(from: conversations, currentUserId: "me")
 
-        XCTAssertNil(sut.presenceMap["other-1"])
+        XCTAssertEqual(sut.presenceState(for: "other-1"), PresenceState.offline,
+                       "Participant with nil isOnline defaults to offline")
     }
 
     func test_seed_preservesLastActiveAt_awayState() {
