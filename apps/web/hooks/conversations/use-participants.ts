@@ -11,10 +11,13 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { conversationsService } from '@/services/conversations.service';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStore } from '@/stores/user-store';
 import type { Participant } from '@meeshy/shared/types';
 import type { ConversationParticipantResponse } from '@/services/conversations/types';
+import type { ParticipantRoleUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { MemberRole } from '@meeshy/shared/types';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 interface UseParticipantsOptions {
   /**
@@ -111,6 +114,30 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
   useEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
+
+  // Listen for real-time role updates
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const handleRoleUpdated = (data: ParticipantRoleUpdatedEventData) => {
+      if (data.conversationId !== conversationId) return;
+
+      setParticipants(prev =>
+        prev.map(p =>
+          p.userId === data.userId
+            ? { ...p, role: data.newRole }
+            : p
+        )
+      );
+    };
+
+    const socket = meeshySocketIOService.getSocket();
+    socket?.on(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, handleRoleUpdated);
+
+    return () => {
+      socket?.off(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, handleRoleUpdated);
+    };
+  }, [conversationId]);
 
   /**
    * Charge les participants d'une conversation
