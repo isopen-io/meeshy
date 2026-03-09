@@ -362,10 +362,13 @@ export function registerCoreRoutes(
       const conversationIds = conversations.map(c => c.id);
 
       // Collect all unique member userIds (optimized: only from returned conversations)
+      // Filter out null userIds (anonymous participants have userId: null)
       const allMemberUserIds = new Set<string>();
       for (const conv of conversations) {
         for (const member of (conv as any).participants) {
-          allMemberUserIds.add(member.userId);
+          if (member.userId) {
+            allMemberUserIds.add(member.userId);
+          }
         }
       }
 
@@ -375,7 +378,15 @@ export function registerCoreRoutes(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [memberUsers, unreadCountMap, totalCount] = await Promise.all([
+      // Resolve current user's participantIds for unread counts
+      const userParticipants = conversationIds.length > 0
+        ? prisma.participant.findMany({
+            where: { userId, conversationId: { in: conversationIds }, isActive: true },
+            select: { id: true }
+          })
+        : Promise.resolve([]);
+
+      const [memberUsers, userParticipantRecords, totalCount] = await Promise.all([
         // Fetch user data only for members in these conversations
         allMemberUserIds.size > 0
           ? prisma.user.findMany({
@@ -393,14 +404,20 @@ export function registerCoreRoutes(
             })
           : Promise.resolve([]),
 
-        // Unread counts
-        readStatusService.getUnreadCountsForConversations([userId], conversationIds),
+        // Resolve participantIds for unread count query
+        userParticipants,
 
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
           : Promise.resolve(0)
       ]);
+
+      // Unread counts using resolved participantIds
+      const participantIds = userParticipantRecords.map(p => p.id);
+      const unreadCountMap = participantIds.length > 0
+        ? await readStatusService.getUnreadCountsForConversations(participantIds, conversationIds)
+        : new Map<string, number>();
 
       perfTimings.parallelQueries = performance.now() - t0;
       const userMap = new Map(memberUsers.map(u => [u.id, u]));
@@ -414,13 +431,13 @@ export function registerCoreRoutes(
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
-        // Filter out orphaned members and merge user data (optimized: use userMap)
+        // Merge user data for registered participants, keep anonymous participants with their own data
         const membersWithUser = conversation.participants
-          .filter((m: any) => userMap.has(m.userId))
-          .slice(0, 5) // Limit to 5 members as originally intended
+          .filter((m: any) => m.userId ? userMap.has(m.userId) : m.type === 'anonymous')
+          .slice(0, 5)
           .map((m: any) => ({
             ...m,
-            user: userMap.get(m.userId) || null
+            user: m.userId ? (userMap.get(m.userId) || null) : null
           }));
 
         // S'assurer qu'un titre existe toujours

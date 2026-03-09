@@ -440,11 +440,27 @@ export async function translationRoutes(fastify: FastifyInstance) {
           : (validatedData.model_type || 'basic');
 
         // Créer les données du message
+        const senderId = (request as any).user?.id;
+        if (!senderId) {
+          return reply.status(401).send({
+            success: false,
+            error: 'AUTH_REQUIRED',
+            message: 'Authentication required for new message translation'
+          });
+        }
+
+        // Resolve the user's participantId in this conversation
+        const senderParticipant = await fastify.prisma.participant.findFirst({
+          where: { userId: senderId, conversationId: validatedData.conversation_id, isActive: true },
+          select: { id: true }
+        });
+
         const messageData: any = {
           conversationId: validatedData.conversation_id,
           content: validatedData.text,
+          senderId: senderParticipant?.id || senderId,
           originalLanguage: validatedData.source_language || 'auto',
-          targetLanguage: validatedData.target_language, // Passer la langue cible
+          targetLanguage: validatedData.target_language,
           modelType: finalModelType
         };
 
