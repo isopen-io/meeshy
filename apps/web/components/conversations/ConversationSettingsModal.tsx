@@ -66,7 +66,8 @@ import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
-import type { Conversation, ConversationParticipant, Message, ThreadMember, SocketIOUser } from '@meeshy/shared/types';
+import type { Conversation, ConversationParticipant, Message, SocketIOUser } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
@@ -110,7 +111,7 @@ interface ConversationSettingsModalProps {
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
   currentUser?: any; // User from shared/types - optionnel pour compatibilité
-  conversationParticipants?: ThreadMember[]; // Pour accéder aux données de l'autre utilisateur
+  conversationParticipants?: Participant[]; // Pour accéder aux données de l'autre utilisateur
   messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
   onConversationUpdate?: (conversation: Conversation) => void;

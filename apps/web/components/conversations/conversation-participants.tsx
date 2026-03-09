@@ -18,7 +18,7 @@ import {
   Loader2,
   Ghost
 } from 'lucide-react';
-import { SocketIOUser as User, ThreadMember, UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+import { SocketIOUser as User, UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
@@ -33,7 +33,7 @@ function isAnonymousUser(user: any): user is Participant {
 
 interface ConversationParticipantsProps {
   conversationId: string;
-  participants: ThreadMember[];
+  participants: Participant[];
   currentUser: User;
   isGroup: boolean;
   conversationType?: string; // Ajouter le type de conversation
@@ -103,16 +103,16 @@ export function ConversationParticipants({
     return getUserInitials(user);
   };
 
-  const isCreator = (participant: ThreadMember): boolean => {
-    return (participant.role as string) === MemberRole.CREATOR;
+  const isCreator = (participant: Participant): boolean => {
+    return participant.role === MemberRole.CREATOR;
   };
 
-  const shouldShowCrown = (participant: ThreadMember): boolean => {
+  const shouldShowCrown = (participant: Participant): boolean => {
     return conversationType !== 'direct' && isCreator(participant);
   };
 
   // Dédupliquer les participants par userId pour éviter les erreurs de clés dupliquées
-  const uniqueParticipantsMap = new Map<string, ThreadMember>();
+  const uniqueParticipantsMap = new Map<string, Participant>();
   participants.forEach(p => {
     if (p.userId && !uniqueParticipantsMap.has(p.userId)) {
       uniqueParticipantsMap.set(p.userId, p);
@@ -124,11 +124,11 @@ export function ConversationParticipants({
   const currentUserParticipant = uniqueParticipants.find(p => p.userId === currentUser.id);
   const allParticipantsIncludingCurrent = currentUserParticipant
     ? uniqueParticipants
-    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: MemberRole.MEMBER as any } as ThreadMember];
+    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: MemberRole.MEMBER } as Participant];
 
   // Afficher les 3 premiers participants en ligne (incluant l'utilisateur connecté s'il est en ligne)
   // Afficher l'utilisateur courant + 2 autres participants (en ligne ou non)
-  let displayParticipants: ThreadMember[] = [];
+  let displayParticipants: Participant[] = [];
   if (currentUserParticipant) {
     displayParticipants = [currentUserParticipant];
     // Ajoute 2 autres participants (excluant l'utilisateur courant)

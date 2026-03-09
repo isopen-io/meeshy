@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { useUserStore } from '@/stores/user-store';
 import { getUserStatus, type UserStatus } from '@/lib/user-status';
-import type { Conversation, SocketIOUser as User, ThreadMember } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import type { ParticipantInfo } from './types';
 
@@ -12,7 +13,7 @@ function isAnonymousUser(user: any): boolean {
 export function useParticipantInfo(
   conversation: Conversation,
   currentUser: User,
-  conversationParticipants: ThreadMember[]
+  conversationParticipants: Participant[]
 ) {
   const userStore = useUserStore();
   const _lastStatusUpdate = userStore._lastStatusUpdate;

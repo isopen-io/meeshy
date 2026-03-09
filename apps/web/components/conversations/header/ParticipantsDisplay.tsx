@@ -6,13 +6,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { ConversationParticipants } from '../conversation-participants';
 import { TypingIndicator } from './TypingIndicator';
-import type { Conversation, SocketIOUser as User, ThreadMember } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { ParticipantInfo } from './types';
 
 interface ParticipantsDisplayProps {
   conversation: Conversation;
   currentUser: User;
-  conversationParticipants: ThreadMember[];
+  conversationParticipants: Participant[];
   typingUsers: Array<{ userId: string; username: string; conversationId: string; timestamp: number }>;
   participantInfo: ParticipantInfo;
   customName?: string;

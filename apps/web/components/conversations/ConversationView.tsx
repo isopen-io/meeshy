@@ -17,7 +17,8 @@ import { MessageComposer } from '@/components/common/message-composer';
 import { ConnectionStatusIndicator } from './connection-status-indicator';
 import { FailedMessageBanner } from '@/components/messages/failed-message-banner';
 import { getAuthToken } from '@/utils/token-utils';
-import type { Conversation, ThreadMember, Message, User } from '@meeshy/shared/types';
+import type { Conversation, Message, User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 import type { LanguageChoice } from '@/types/bubble-stream';
 
@@ -39,7 +40,7 @@ interface ConversationViewProps {
   conversation: Conversation;
   currentUser: User;
   messages: Message[];
-  participants: ThreadMember[];
+  participants: Participant[];
 
   // État UI
   isMobile: boolean;
@@ -182,7 +183,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
 
     // Rôle effectif : max(rôle global, rôle conversation)
     const currentParticipant = participants.find(p => p.userId === currentUser.id);
-    const conversationRole = (currentParticipant?.role as string) || '';
+    const conversationRole = currentParticipant?.role || '';
     const globalRole = (currentUser.role as string) || 'USER';
     const PRIVILEGE_LEVELS: Record<string, number> = {
       BIGBOSS: 100, ADMIN: 80, CREATOR: 70, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10, MEMBER: 10,

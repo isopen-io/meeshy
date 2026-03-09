@@ -33,7 +33,7 @@ import {
   ChevronDown,
   Settings,
 } from 'lucide-react';
-import { ThreadMember } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { participantsService } from '@/services/conversations/participants.service';
 import { usersService } from '@/services/users.service';
@@ -57,7 +57,7 @@ function isAnonymousUser(user: any): user is Participant {
 
 interface ConversationParticipantsDrawerProps {
   conversationId: string;
-  participants: ThreadMember[];
+  participants: Participant[];
   currentUser: any;
   isGroup: boolean;
   conversationType?: string;
@@ -94,7 +94,7 @@ export function ConversationParticipantsDrawer({
   const [isPlatformSearching, setIsPlatformSearching] = useState(false);
 
   // Recherche backend des participants de la conversation
-  const [backendSearchResults, setBackendSearchResults] = useState<ThreadMember[] | null>(null);
+  const [backendSearchResults, setBackendSearchResults] = useState<Participant[] | null>(null);
   const [isFilterSearching, setIsFilterSearching] = useState(false);
 
   // TEMPS RÉEL: Activer les listeners Socket.IO pour les statuts utilisateur
@@ -159,7 +159,7 @@ export function ConversationParticipantsDrawer({
 
   // Vérifier si l'utilisateur actuel est admin/moderator/creator
   const currentUserParticipant = participants.find(p => p.userId === currentUser.id);
-  const currentRole = currentUserParticipant?.role as string | undefined;
+  const currentRole = currentUserParticipant?.role;
   const isAdmin = currentRole === MemberRole.CREATOR ||
                   currentRole === MemberRole.ADMIN ||
                   currentRole === MemberRole.MODERATOR;
@@ -175,15 +175,20 @@ export function ConversationParticipantsDrawer({
       setIsFilterSearching(true);
       try {
         const results = await participantsService.searchParticipants(conversationId, searchQuery, 50);
-        const mappedResults: ThreadMember[] = results.map(user => ({
+        const mappedResults: Participant[] = results.map(user => ({
           id: user.id,
           conversationId,
+          type: 'user' as const,
           userId: user.id,
-          user,
+          displayName: user.displayName || user.username,
+          avatar: user.avatar,
           role: (user as any).conversationRole || MemberRole.MEMBER,
-          joinedAt: new Date(),
+          language: 'en',
+          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
           isActive: true,
-          isAnonymous: (user as any).isAnonymous || false,
+          isOnline: user.isOnline ?? false,
+          joinedAt: new Date(),
+          user,
         }));
         setBackendSearchResults(mappedResults);
       } catch (error) {
@@ -343,7 +348,7 @@ export function ConversationParticipantsDrawer({
 
   // Rôles assignables selon le rôle de l'utilisateur courant
   const getAssignableRoles = (): Array<{ value: 'MEMBER' | 'MODERATOR' | 'ADMIN'; label: string }> => {
-    const role = currentUserParticipant?.role as string | undefined;
+    const role = currentUserParticipant?.role;
     if (role === MemberRole.CREATOR || role === MemberRole.ADMIN) {
       return [
         { value: 'MEMBER', label: 'Membre' },
@@ -351,7 +356,7 @@ export function ConversationParticipantsDrawer({
         { value: 'ADMIN', label: 'Administrateur' },
       ];
     }
-    if (role === MemberRole.MODERATOR as string) {
+    if (role === MemberRole.MODERATOR) {
       return [
         { value: 'MEMBER', label: 'Membre' },
         { value: 'MODERATOR', label: 'Modérateur' },
@@ -385,7 +390,7 @@ export function ConversationParticipantsDrawer({
   };
 
   // Rendu d'une carte participant (partagé online/offline)
-  const renderParticipantCard = (participant: ThreadMember, index: number, isOnline: boolean) => {
+  const renderParticipantCard = (participant: Participant, index: number, isOnline: boolean) => {
     const user = participant.user;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
@@ -399,7 +404,7 @@ export function ConversationParticipantsDrawer({
         transition={{ delay: index * 0.03 }}
         layout
         className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-[color,box-shadow,opacity] duration-200 group ${
-          (participant.role as string) === MemberRole.CREATOR
+          participant.role === MemberRole.CREATOR
             ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
             : isOnline
               ? 'border border-white/30 dark:border-gray-700/40'
@@ -450,7 +455,7 @@ export function ConversationParticipantsDrawer({
                   {t('conversationDetails.you')}
                 </Badge>
               )}
-              {([MemberRole.ADMIN as string, MemberRole.CREATOR as string].includes(participant.role as string)) && (
+              {([MemberRole.ADMIN, MemberRole.CREATOR].includes(participant.role)) && (
                 <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
               )}
             </div>

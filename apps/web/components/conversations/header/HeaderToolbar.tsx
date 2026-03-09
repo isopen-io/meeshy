@@ -13,13 +13,14 @@ import {
 import { ConversationParticipantsDrawer } from '../conversation-participants-drawer';
 import { CreateLinkButton } from '../create-link-button';
 import { HeaderActions } from './HeaderActions';
-import type { Conversation, SocketIOUser as User, ThreadMember } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 
 interface HeaderToolbarProps {
   conversation: Conversation;
   currentUser: User;
-  conversationParticipants: ThreadMember[];
+  conversationParticipants: Participant[];
   currentUserRole: UserRoleEnum;
   canUseVideoCalls: boolean;
   isPinned: boolean;
