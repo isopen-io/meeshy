@@ -107,7 +107,7 @@ describe('useMessaging', () => {
   describe('Initial State', () => {
     it('should return isSending false initially', () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       expect(result.current.isSending).toBe(false);
@@ -115,7 +115,7 @@ describe('useMessaging', () => {
 
     it('should return sendError null initially', () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       expect(result.current.sendError).toBeNull();
@@ -123,7 +123,7 @@ describe('useMessaging', () => {
 
     it('should return empty typingUsers initially', () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       expect(result.current.typingUsers).toEqual([]);
@@ -131,7 +131,7 @@ describe('useMessaging', () => {
 
     it('should return isTyping false initially', () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       expect(result.current.isTyping).toBe(false);
@@ -141,7 +141,7 @@ describe('useMessaging', () => {
   describe('Send Message', () => {
     it('should send message successfully', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = false;
@@ -163,7 +163,7 @@ describe('useMessaging', () => {
 
     it('should send message with reply', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       await act(async () => {
@@ -182,7 +182,7 @@ describe('useMessaging', () => {
 
     it('should send message with mentions', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       await act(async () => {
@@ -201,7 +201,7 @@ describe('useMessaging', () => {
 
     it('should send message with attachments', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       await act(async () => {
@@ -227,7 +227,7 @@ describe('useMessaging', () => {
 
     it('should fail when conversationId is missing', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ currentUser: mockUser })
+        useMessaging({ currentUser: mockUser as any })
       );
 
       let success: boolean = true;
@@ -257,7 +257,7 @@ describe('useMessaging', () => {
 
     it('should fail when message is empty without attachments', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = true;
@@ -276,7 +276,7 @@ describe('useMessaging', () => {
       const { result } = renderHook(() =>
         useMessaging({
           conversationId: mockConversationId,
-          currentUser: mockUser,
+          currentUser: mockUser as any,
           onMessageSent,
         })
       );
@@ -296,7 +296,7 @@ describe('useMessaging', () => {
       const { result } = renderHook(() =>
         useMessaging({
           conversationId: mockConversationId,
-          currentUser: mockUser,
+          currentUser: mockUser as any,
           onMessageFailed,
         })
       );
@@ -314,7 +314,7 @@ describe('useMessaging', () => {
       const { result } = renderHook(() =>
         useMessaging({
           conversationId: mockConversationId,
-          currentUser: mockUser,
+          currentUser: mockUser as any,
         })
       );
 
@@ -335,7 +335,7 @@ describe('useMessaging', () => {
   describe('Edit Message', () => {
     it('should edit message successfully', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = false;
@@ -353,7 +353,7 @@ describe('useMessaging', () => {
       mockEditMessage.mockResolvedValue(false);
 
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = true;
@@ -369,7 +369,7 @@ describe('useMessaging', () => {
   describe('Delete Message', () => {
     it('should delete message successfully', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = false;
@@ -387,7 +387,7 @@ describe('useMessaging', () => {
       mockDeleteMessage.mockResolvedValue(false);
 
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       let success: boolean = true;
@@ -403,7 +403,7 @@ describe('useMessaging', () => {
   describe('Typing Indicators', () => {
     it('should start typing', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       act(() => {
@@ -416,7 +416,7 @@ describe('useMessaging', () => {
 
     it('should stop typing', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       // Start typing first
@@ -437,7 +437,7 @@ describe('useMessaging', () => {
 
     it('should not call startTyping if already typing', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       act(() => {
@@ -454,7 +454,7 @@ describe('useMessaging', () => {
 
     it('should stop typing when message is sent', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       // Start typing
@@ -476,7 +476,7 @@ describe('useMessaging', () => {
   describe('Typing Users Management', () => {
     it('should add typing user on event', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       // Simulate typing event
@@ -493,7 +493,7 @@ describe('useMessaging', () => {
 
     it('should remove typing user when they stop typing', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       const onUserTyping = (global as any).__mockOnUserTyping;
@@ -516,7 +516,7 @@ describe('useMessaging', () => {
 
     it('should clean up stale typing users after 5 seconds', async () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       const onUserTyping = (global as any).__mockOnUserTyping;
@@ -541,7 +541,7 @@ describe('useMessaging', () => {
   describe('Cleanup', () => {
     it('should clean up on unmount without errors', () => {
       const { result, unmount } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       // Start typing to create state that needs cleanup
@@ -557,7 +557,7 @@ describe('useMessaging', () => {
   describe('Socket Messaging Reference', () => {
     it('should expose socketMessaging object', () => {
       const { result } = renderHook(() =>
-        useMessaging({ conversationId: mockConversationId, currentUser: mockUser })
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
 
       expect(result.current.socketMessaging).toBeDefined();

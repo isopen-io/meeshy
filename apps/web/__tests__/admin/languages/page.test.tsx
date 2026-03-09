@@ -412,8 +412,8 @@ describe('AdminLanguagesPage', () => {
             totalMessages: 0,
             totalUsers: 0,
             totalTranslations: 0,
-          },
-        },
+          } as any,
+        } as any,
       });
 
       render(<AdminLanguagesPage />);
@@ -433,8 +433,8 @@ describe('AdminLanguagesPage', () => {
             totalMessages: 0,
             totalUsers: 0,
             totalTranslations: 0,
-          },
-        },
+          } as any,
+        } as any,
       });
 
       render(<AdminLanguagesPage />);
@@ -528,7 +528,7 @@ describe('AdminLanguagesPage', () => {
             topLanguages: manyLanguages,
             totalMessages: 5740,
           },
-        },
+        } as any,
       });
     });
 
@@ -639,7 +639,7 @@ describe('AdminLanguagesPage', () => {
             ...createMockDashboardStats().data.statistics,
             topLanguages: [{ language: 'xyz', count: 100 }],
           },
-        },
+        } as any,
       });
 
       render(<AdminLanguagesPage />);

@@ -100,7 +100,7 @@ describe('useConversationMessages', () => {
   describe('Initial State', () => {
     it('should return empty messages array initially', () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: false })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: false })
       );
 
       expect(result.current.messages).toEqual([]);
@@ -108,7 +108,7 @@ describe('useConversationMessages', () => {
 
     it('should return isLoading false when disabled', () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: false })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: false })
       );
 
       expect(result.current.isLoading).toBe(false);
@@ -116,7 +116,7 @@ describe('useConversationMessages', () => {
 
     it('should return hasMore true initially', () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: false })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: false })
       );
 
       expect(result.current.hasMore).toBe(true);
@@ -124,7 +124,7 @@ describe('useConversationMessages', () => {
 
     it('should return error as null initially', () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: false })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: false })
       );
 
       expect(result.current.error).toBeNull();
@@ -134,7 +134,7 @@ describe('useConversationMessages', () => {
   describe('Message Loading', () => {
     it('should load messages when enabled', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -147,7 +147,7 @@ describe('useConversationMessages', () => {
 
     it('should not load when conversationId is null', async () => {
       renderHook(() =>
-        useConversationMessages(null, mockUser, { enabled: true })
+        useConversationMessages(null as any, mockUser as any, { enabled: true })
       );
 
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -157,7 +157,7 @@ describe('useConversationMessages', () => {
 
     it('should not load when currentUser is null', async () => {
       renderHook(() =>
-        useConversationMessages(mockConversationId, null, { enabled: true })
+        useConversationMessages(mockConversationId, null as any, { enabled: true })
       );
 
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -167,7 +167,7 @@ describe('useConversationMessages', () => {
 
     it('should use correct endpoint for regular conversations', async () => {
       renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -181,7 +181,7 @@ describe('useConversationMessages', () => {
 
     it('should sort messages by createdAt descending', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -199,11 +199,11 @@ describe('useConversationMessages', () => {
 
   describe('Anonymous User Loading', () => {
     it('should use session token for anonymous users with linkId', async () => {
-      mockGetAuthToken.mockReturnValue(null);
-      mockGetAnonymousSession.mockReturnValue({ token: 'anon-session-token' });
+      mockGetAuthToken.mockReturnValue(null as any);
+      mockGetAnonymousSession.mockReturnValue({ token: 'anon-session-token' } as any);
 
       renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, {
+        useConversationMessages(mockConversationId, mockUser as any, {
           enabled: true,
           linkId: 'link-123',
         })
@@ -237,7 +237,7 @@ describe('useConversationMessages', () => {
       });
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -247,7 +247,7 @@ describe('useConversationMessages', () => {
 
     it('should load more messages when loadMore is called', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -274,7 +274,7 @@ describe('useConversationMessages', () => {
       });
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -294,7 +294,7 @@ describe('useConversationMessages', () => {
   describe('Refresh', () => {
     it('should reload messages on refresh', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -314,7 +314,7 @@ describe('useConversationMessages', () => {
   describe('Clear Messages', () => {
     it('should clear all messages', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -334,7 +334,7 @@ describe('useConversationMessages', () => {
   describe('Add Message', () => {
     it('should add new message to the list', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -344,7 +344,7 @@ describe('useConversationMessages', () => {
       const newMessage = createMockMessage('msg-4', 'New message', '2024-01-04T10:00:00Z');
 
       act(() => {
-        result.current.addMessage(newMessage);
+        result.current.addMessage(newMessage as any);
       });
 
       // Check the message was added by verifying state change
@@ -357,7 +357,7 @@ describe('useConversationMessages', () => {
 
     it('should not add duplicate message', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -369,7 +369,7 @@ describe('useConversationMessages', () => {
 
       let wasAdded: boolean = true;
       act(() => {
-        wasAdded = result.current.addMessage(duplicateMessage);
+        wasAdded = result.current.addMessage(duplicateMessage as any);
       });
 
       expect(wasAdded).toBe(false);
@@ -380,7 +380,7 @@ describe('useConversationMessages', () => {
   describe('Update Message', () => {
     it('should update message with partial updates', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -397,7 +397,7 @@ describe('useConversationMessages', () => {
 
     it('should update message with callback function', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -419,7 +419,7 @@ describe('useConversationMessages', () => {
   describe('Remove Message', () => {
     it('should remove message from list', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -436,7 +436,7 @@ describe('useConversationMessages', () => {
 
     it('should handle removing non-existent message', async () => {
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -457,7 +457,7 @@ describe('useConversationMessages', () => {
       mockApiGet.mockRejectedValue(new Error('Network error'));
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -473,7 +473,7 @@ describe('useConversationMessages', () => {
       });
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -482,11 +482,11 @@ describe('useConversationMessages', () => {
     });
 
     it('should set error when auth token is missing', async () => {
-      mockGetAuthToken.mockReturnValue(null);
-      mockGetAnonymousSession.mockReturnValue(null);
+      mockGetAuthToken.mockReturnValue(null as any);
+      mockGetAnonymousSession.mockReturnValue(null as any);
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -507,7 +507,7 @@ describe('useConversationMessages', () => {
       } as any;
 
       const { result } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       await waitFor(() => {
@@ -535,7 +535,7 @@ describe('useConversationMessages', () => {
       const uniqueConvId = `conv-options-test`;
 
       renderHook(() =>
-        useConversationMessages(uniqueConvId, mockUser, {
+        useConversationMessages(uniqueConvId, mockUser as any, {
           enabled: true,
           limit: 50,
         })
@@ -554,7 +554,7 @@ describe('useConversationMessages', () => {
 
     it('should not load when enabled is false', async () => {
       renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: false })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: false })
       );
 
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -574,7 +574,7 @@ describe('useConversationMessages', () => {
       } as any;
 
       const { unmount } = renderHook(() =>
-        useConversationMessages(mockConversationId, mockUser, { enabled: true })
+        useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
 
       unmount();

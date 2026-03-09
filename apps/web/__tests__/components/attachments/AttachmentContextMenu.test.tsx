@@ -327,7 +327,7 @@ describe('AttachmentContextMenu', () => {
         <AttachmentContextMenu
           {...defaultProps}
           canDelete={true}
-          onDelete={onDelete}
+          onDelete={onDelete as any}
         />
       );
 

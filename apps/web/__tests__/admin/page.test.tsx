@@ -124,7 +124,7 @@ const createMockAdminUser = (overrides: any = {}) => ({
 });
 
 // Factory function for creating mock dashboard data
-const createMockDashboardData = (overrides: any = {}) => ({
+const createMockDashboardData = (overrides: any = {}): any => ({
   success: true,
   data: {
     success: true,
@@ -826,7 +826,7 @@ describe('AdminDashboard', () => {
             timestamp: new Date().toISOString(),
           },
         },
-      });
+      } as any);
 
       render(<AdminDashboard />);
 
@@ -862,7 +862,7 @@ describe('AdminDashboard', () => {
           },
           timestamp: new Date().toISOString(),
         },
-      });
+      } as any);
 
       render(<AdminDashboard />);
 

@@ -17,7 +17,7 @@ Object.defineProperty(window, 'open', {
 });
 
 // Create mock attachment
-const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse => ({
+const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): any => ({
   id: 'pdf-attachment-123',
   fileUrl: 'https://example.com/document.pdf',
   originalName: 'test-document.pdf',

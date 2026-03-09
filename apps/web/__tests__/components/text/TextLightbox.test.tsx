@@ -96,13 +96,11 @@ const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {
   fileUrl: 'https://example.com/file.txt',
   originalName: 'test-file.txt',
   mimeType: 'text/plain',
-  size: 1024,
+  fileSize: 1024,
   duration: undefined,
   createdAt: new Date().toISOString(),
-  uploadedAt: new Date().toISOString(),
-  storagePath: '/uploads/text/file.txt',
   ...overrides,
-});
+} as any);
 
 describe('TextLightbox', () => {
   beforeEach(() => {

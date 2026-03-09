@@ -92,13 +92,13 @@ const createMockVideo = (overrides: Partial<Attachment> = {}): Attachment => ({
   fileUrl: 'https://example.com/video.mp4',
   originalName: 'test-video.mp4',
   mimeType: 'video/mp4',
-  fileSize: 5242880, // 5 MB
+  fileSize: 5242880,
   width: 1920,
   height: 1080,
-  duration: 120, // 2 minutes
+  duration: 120,
   createdAt: new Date().toISOString(),
   ...overrides,
-});
+} as any);
 
 describe('VideoLightbox', () => {
   const defaultProps = {

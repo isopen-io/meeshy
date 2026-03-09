@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// @ts-expect-error module may not exist yet
 import { NotificationSettings } from '@/components/notifications/notifications-v2/NotificationSettings';
 
 // Mock FCM manager
@@ -76,7 +77,7 @@ describe('NotificationSettings', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.NODE_ENV = 'production';
+    (process.env as any).NODE_ENV ='production';
 
     // Default mock values
     mockFcm.isSupported.mockResolvedValue(true);
@@ -93,7 +94,7 @@ describe('NotificationSettings', () => {
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    (process.env as any).NODE_ENV =originalEnv;
   });
 
   describe('Basic Rendering', () => {
@@ -509,7 +510,7 @@ describe('NotificationSettings', () => {
 
   describe('Developer Info', () => {
     it('should show developer info in development mode with token', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
       mockFcm.getPermissionStatus.mockReturnValue('granted');
       mockFcm.getCurrentToken.mockReturnValue('test-fcm-token-12345');
 
@@ -521,7 +522,7 @@ describe('NotificationSettings', () => {
     });
 
     it('should not show developer info in production', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV ='production';
       mockFcm.getCurrentToken.mockReturnValue('test-token');
 
       render(<NotificationSettings />);
@@ -532,7 +533,7 @@ describe('NotificationSettings', () => {
     });
 
     it('should show FCM token in developer info', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
       mockFcm.getPermissionStatus.mockReturnValue('granted');
       mockFcm.getCurrentToken.mockReturnValue('test-fcm-token-abcdef');
 

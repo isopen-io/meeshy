@@ -63,7 +63,7 @@ jest.mock('@/stores/failed-messages-store', () => ({
 }));
 
 // Create mock failed message
-const createMockFailedMessage = (overrides: Partial<FailedMessage> = {}): FailedMessage => ({
+const createMockFailedMessage = (overrides: Partial<FailedMessage> = {}): any => ({
   id: 'failed-msg-1',
   conversationId: 'conv-123',
   content: 'This is a failed message',

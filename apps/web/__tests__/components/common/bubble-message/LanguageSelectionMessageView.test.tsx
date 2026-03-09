@@ -158,7 +158,7 @@ jest.mock('@/lib/utils', () => ({
 
 // === HELPERS ===
 
-const createMockMessage = (overrides = {}) => ({
+const createMockMessage = (overrides = {}): any => ({
   id: 'msg-123',
   content: 'Hello World',
   originalContent: 'Hello World',

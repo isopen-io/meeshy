@@ -26,7 +26,7 @@ jest.mock('../../services/notification.service', () => ({
 }));
 
 describe('NotificationStore', () => {
-  const createMockNotification = (overrides: Partial<Notification> = {}): Notification => ({
+  const createMockNotification = (overrides: Partial<any> = {}): Notification => ({
     id: `notif-${Date.now()}-${Math.random()}`,
     type: 'new_message' as NotificationType,
     title: 'New Message',
@@ -36,10 +36,10 @@ describe('NotificationStore', () => {
     createdAt: new Date(),
     userId: 'user-123',
     ...overrides,
-  });
+  } as any);
 
   const mockNotification1 = createMockNotification({ id: 'notif-1' });
-  const mockNotification2 = createMockNotification({ id: 'notif-2', isRead: true });
+  const mockNotification2 = createMockNotification({ id: 'notif-2', isRead: true } as any);
   const mockNotification3 = createMockNotification({ id: 'notif-3', type: 'mention' as NotificationType });
 
   beforeEach(() => {
@@ -52,8 +52,7 @@ describe('NotificationStore', () => {
           total: 0,
           unread: 0,
           byType: {} as Record<NotificationType, number>,
-          byPriority: {} as Record<NotificationPriority, number>,
-        },
+        } as any,
         isLoading: false,
         isLoadingMore: false,
         error: null,
@@ -218,8 +217,8 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect(state.notifications[0].isRead).toBe(true);
-      expect(state.notifications[0].readAt).toBeDefined();
+      expect((state.notifications[0] as any).isRead).toBe(true);
+      expect((state.notifications[0] as any).readAt).toBeDefined();
       expect(state.unreadCount).toBe(0);
     });
 
@@ -255,7 +254,7 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect(state.notifications[0].isRead).toBe(false);
+      expect((state.notifications[0] as any).isRead).toBe(false);
       expect(state.unreadCount).toBe(1);
     });
   });
@@ -277,7 +276,7 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect(state.notifications.every(n => n.isRead)).toBe(true);
+      expect(state.notifications.every(n => (n as any).isRead)).toBe(true);
       expect(state.unreadCount).toBe(0);
     });
 
@@ -399,7 +398,7 @@ describe('NotificationStore', () => {
           unread: 5,
           byType: { new_message: 3, mention: 2 } as Record<NotificationType, number>,
           byPriority: { normal: 5, high: 5 } as Record<NotificationPriority, number>,
-        };
+        } as any;
 
         act(() => {
           useNotificationStore.getState().updateCounts(newCounts);
@@ -508,7 +507,7 @@ describe('NotificationStore', () => {
         unread: 5,
         byType: {} as Record<NotificationType, number>,
         byPriority: {} as Record<NotificationPriority, number>,
-      };
+      } as any;
 
       act(() => {
         useNotificationStore.setState({ counts });

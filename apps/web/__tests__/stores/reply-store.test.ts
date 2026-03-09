@@ -29,11 +29,11 @@ describe('ReplyStore', () => {
     attachments: [
       {
         id: 'att-1',
-        filename: 'document.pdf',
+        fileName: 'document.pdf',
         mimeType: 'application/pdf',
         size: 1024,
         url: 'https://example.com/document.pdf',
-      },
+      } as any,
     ],
   };
 
@@ -297,9 +297,9 @@ describe('ReplyStore', () => {
         originalLanguage: 'en',
         createdAt: new Date(),
         attachments: [
-          { id: 'att-1', filename: 'doc.pdf', mimeType: 'application/pdf', size: 1024 },
-          { id: 'att-2', filename: 'image.png', mimeType: 'image/png', size: 2048 },
-          { id: 'att-3', filename: 'audio.mp3', mimeType: 'audio/mpeg', size: 3072 },
+          { id: 'att-1', fileName: 'doc.pdf', mimeType: 'application/pdf', size: 1024 } as any,
+          { id: 'att-2', fileName: 'image.png', mimeType: 'image/png', size: 2048 } as any,
+          { id: 'att-3', fileName: 'audio.mp3', mimeType: 'audio/mpeg', size: 3072 } as any,
         ],
       };
 

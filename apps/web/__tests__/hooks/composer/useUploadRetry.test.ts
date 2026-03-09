@@ -74,7 +74,7 @@ describe('useUploadRetry', () => {
     });
 
     expect(didThrow).toBe(true);
-    expect(thrownError?.message).toBe('Permanent error');
+    expect((thrownError as any)?.message).toBe('Permanent error');
     expect(uploadFn).toHaveBeenCalledTimes(3); // Initial + 2 retries
   });
 

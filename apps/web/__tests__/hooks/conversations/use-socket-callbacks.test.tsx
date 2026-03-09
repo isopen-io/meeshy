@@ -59,7 +59,7 @@ describe('useSocketCallbacks', () => {
     originalLanguage: 'en',
     createdAt: new Date(),
     translations: [],
-  } as Message;
+  } as unknown as Message;
 
   const mockConversation: Conversation = {
     id: mockConversationId,
@@ -69,7 +69,7 @@ describe('useSocketCallbacks', () => {
     lastMessage: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-  } as Conversation;
+  } as unknown as Conversation;
 
   beforeEach(() => {
     jest.clearAllMocks();

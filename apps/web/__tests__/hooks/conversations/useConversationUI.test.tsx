@@ -374,7 +374,7 @@ describe('useConversationUI', () => {
         useConversationUI({ selectedConversationId: null })
       );
 
-      expect(result.current.isDetailsOpen).toBe(false);
+      expect((result.current as any).isDetailsOpen).toBe(false);
     });
 
     it('should allow toggling create modal', () => {
@@ -401,16 +401,16 @@ describe('useConversationUI', () => {
       );
 
       act(() => {
-        result.current.setIsDetailsOpen(true);
+        (result.current as any).setIsDetailsOpen(true);
       });
 
-      expect(result.current.isDetailsOpen).toBe(true);
+      expect((result.current as any).isDetailsOpen).toBe(true);
 
       act(() => {
-        result.current.setIsDetailsOpen(false);
+        (result.current as any).setIsDetailsOpen(false);
       });
 
-      expect(result.current.isDetailsOpen).toBe(false);
+      expect((result.current as any).isDetailsOpen).toBe(false);
     });
   });
 
@@ -571,7 +571,7 @@ describe('useConversationUI', () => {
       const firstSetters = {
         setShowConversationList: result.current.setShowConversationList,
         setIsCreateModalOpen: result.current.setIsCreateModalOpen,
-        setIsDetailsOpen: result.current.setIsDetailsOpen,
+        setIsDetailsOpen: (result.current as any).setIsDetailsOpen,
         setGalleryOpen: result.current.setGalleryOpen,
         setSelectedAttachmentId: result.current.setSelectedAttachmentId,
       };
@@ -580,7 +580,7 @@ describe('useConversationUI', () => {
 
       expect(result.current.setShowConversationList).toBe(firstSetters.setShowConversationList);
       expect(result.current.setIsCreateModalOpen).toBe(firstSetters.setIsCreateModalOpen);
-      expect(result.current.setIsDetailsOpen).toBe(firstSetters.setIsDetailsOpen);
+      expect((result.current as any).setIsDetailsOpen).toBe(firstSetters.setIsDetailsOpen);
       expect(result.current.setGalleryOpen).toBe(firstSetters.setGalleryOpen);
       expect(result.current.setSelectedAttachmentId).toBe(firstSetters.setSelectedAttachmentId);
     });

@@ -479,7 +479,7 @@ describe('ParticipantsService', () => {
       expect(anon.username).toBe('guest42');
       expect(anon.firstName).toBe('Guest');
       expect(anon.lastName).toBe('Forty-Two');
-      expect(anon.language).toBe('pt');
+      expect((anon as any).language).toBe('pt');
       expect(anon.isOnline).toBe(false);
       expect(anon.joinedAt).toBe('2026-03-01T12:00:00.000Z');
       expect(anon.canSendMessages).toBe(true);
@@ -503,7 +503,7 @@ describe('ParticipantsService', () => {
 
       const result = await participantsService.getAllParticipants(conversationId);
 
-      expect(result.anonymousParticipants[0].language).toBe('fr');
+      expect((result.anonymousParticipants[0] as any).language).toBe('fr');
     });
 
     it('should default language to fr when systemLanguage is empty string', async () => {
@@ -522,7 +522,7 @@ describe('ParticipantsService', () => {
 
       const result = await participantsService.getAllParticipants(conversationId);
 
-      expect(result.anonymousParticipants[0].language).toBe('fr');
+      expect((result.anonymousParticipants[0] as any).language).toBe('fr');
     });
 
     it('should use current date when createdAt is missing', async () => {

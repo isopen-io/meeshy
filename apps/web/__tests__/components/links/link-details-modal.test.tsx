@@ -67,7 +67,7 @@ jest.mock('sonner', () => ({
 }));
 
 // Create mock link data
-const createMockLink = (overrides = {}) => ({
+const createMockLink = (overrides = {}): any => ({
   id: 'link-id-123',
   linkId: 'abc123',
   name: 'Test Link',

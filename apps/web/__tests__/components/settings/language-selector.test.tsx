@@ -24,13 +24,13 @@ jest.mock('@/hooks/useI18n', () => ({
 }));
 
 describe('LanguageSelector', () => {
-  const mockLanguages: SupportedLanguageInfo[] = [
+  const mockLanguages = [
     { code: 'fr', name: 'French', nativeName: 'Francais', flag: '🇫🇷' },
     { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧' },
     { code: 'es', name: 'Spanish', nativeName: 'Espanol', flag: '🇪🇸' },
     { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
     { code: 'pt', name: 'Portuguese', nativeName: 'Portugues', flag: '🇵🇹' },
-  ];
+  ] as any as SupportedLanguageInfo[];
 
   const defaultProps = {
     value: '',
@@ -356,9 +356,9 @@ describe('LanguageSelector', () => {
 
   describe('Langues sans nom natif', () => {
     it('gere les langues sans nativeName', async () => {
-      const languagesWithoutNative: SupportedLanguageInfo[] = [
+      const languagesWithoutNative = [
         { code: 'xx', name: 'Test Language', flag: '🏴' },
-      ];
+      ] as any as SupportedLanguageInfo[];
 
       render(
         <LanguageSelector
@@ -376,9 +376,9 @@ describe('LanguageSelector', () => {
     });
 
     it('n\'affiche pas le nom natif si identique au nom', async () => {
-      const languagesSameName: SupportedLanguageInfo[] = [
+      const languagesSameName = [
         { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧' },
-      ];
+      ] as any as SupportedLanguageInfo[];
 
       render(
         <LanguageSelector

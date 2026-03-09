@@ -118,7 +118,7 @@ jest.mock('@/components/common/BubbleMessage', () => ({
 
 // === HELPERS ===
 
-const createMockMessage = (id: string, overrides = {}) => ({
+const createMockMessage = (id: string, overrides = {}): any => ({
   id,
   content: `Message ${id}`,
   originalContent: `Message ${id}`,
@@ -131,7 +131,7 @@ const createMockMessage = (id: string, overrides = {}) => ({
   ...overrides,
 });
 
-const createMockUser = (overrides = {}) => ({
+const createMockUser = (overrides = {}): any => ({
   id: 'current-user',
   firstName: 'Test',
   lastName: 'User',

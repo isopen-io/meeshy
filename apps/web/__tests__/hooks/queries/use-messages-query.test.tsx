@@ -81,9 +81,9 @@ const createMockMessage = (id: string, content: string): Message => ({
     lastActiveAt: new Date(),
     isActive: true,
     updatedAt: new Date(),
-  },
+  } as any,
   translations: [],
-});
+} as any);
 
 const mockMessages = [
   createMockMessage('msg-1', 'Hello'),

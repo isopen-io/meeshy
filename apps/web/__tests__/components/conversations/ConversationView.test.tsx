@@ -114,7 +114,7 @@ const mockConversation: Conversation = {
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   participants: [],
-} as Conversation;
+} as any;
 
 const mockMessages: Message[] = [
   {
@@ -123,14 +123,14 @@ const mockMessages: Message[] = [
     createdAt: new Date().toISOString(),
     sender: { id: 'user-2', username: 'john' },
     conversationId: 'conv-1',
-  } as Message,
+  } as any,
   {
     id: 'msg-2',
     content: 'Hi there!',
     createdAt: new Date().toISOString(),
     sender: { id: 'user-1', username: 'testuser' },
     conversationId: 'conv-1',
-  } as Message,
+  } as any,
 ];
 
 const defaultPermissions = {
@@ -185,7 +185,7 @@ const mockT = (key: string) => {
 const mockTCommon = (key: string) => key;
 
 describe('ConversationView', () => {
-  const defaultProps = {
+  const defaultProps: any = {
     conversation: mockConversation,
     currentUser: mockCurrentUser,
     messages: mockMessages,

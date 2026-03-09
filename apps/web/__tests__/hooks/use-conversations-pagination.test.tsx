@@ -376,7 +376,7 @@ describe('useConversationsPagination', () => {
       const customConversations = [createMockConversation('custom-1')];
 
       act(() => {
-        result.current.setConversations(customConversations);
+        result.current.setConversations(customConversations as any);
       });
 
       expect(result.current.conversations).toEqual(customConversations);

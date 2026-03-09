@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// @ts-expect-error module may not exist yet
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 
 // Mock date-fns locale
@@ -371,7 +372,7 @@ describe('NotificationCenter', () => {
       expect(window.location.href).toBe('/conversations/conv-123');
 
       // Restore
-      window.location = originalLocation;
+      (window as any).location = originalLocation;
     });
   });
 

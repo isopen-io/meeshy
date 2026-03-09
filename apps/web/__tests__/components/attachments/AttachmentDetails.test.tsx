@@ -88,7 +88,7 @@ describe('AttachmentDetails', () => {
               { action: 'activate', effectType: 'voice-coder', timestamp: 0, params: {} },
             ],
             metadata: {},
-          },
+          } as any,
         },
       });
 

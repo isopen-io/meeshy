@@ -3,11 +3,11 @@ import { notFound } from 'next/navigation';
 import { buildApiUrl } from '@/lib/config';
 
 interface ConversationPageProps {
-  params: { conversationId: string };
+  params: Promise<{ conversationId: string }>;
 }
 
 export async function generateMetadata({ params }: ConversationPageProps): Promise<Metadata> {
-  const { conversationId } = params;
+  const { conversationId } = await params;
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
 
   try {
@@ -74,7 +74,7 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
   notFound();
 }
 
-export default function ConversationPage({ params }: ConversationPageProps) {
+export default async function ConversationPage({ params }: ConversationPageProps) {
   // Rediriger vers la page de conversation dans l'application
   return (
     <div className="flex items-center justify-center min-h-screen">

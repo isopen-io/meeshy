@@ -316,7 +316,7 @@ const mockConversation: Conversation = {
       role: UserRoleEnum.USER,
     },
   ],
-} as Conversation;
+} as any;
 
 const mockDirectConversation: Conversation = {
   ...mockConversation,
@@ -332,14 +332,14 @@ const mockMessages: Message[] = [
     originalLanguage: 'fr',
     senderId: 'user-1',
     createdAt: new Date().toISOString(),
-  } as Message,
+  } as any,
   {
     id: 'msg-2',
     content: 'Hi',
     originalLanguage: 'en',
     senderId: 'user-2',
     createdAt: new Date().toISOString(),
-  } as Message,
+  } as any,
 ];
 
 describe('ConversationDetailsSidebar', () => {

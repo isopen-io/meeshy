@@ -167,7 +167,7 @@ describe('attachment-url', () => {
       const attachment = {
         fileUrl: undefined,
         thumbnailUrl: undefined,
-      };
+      } as any;
 
       const result = buildAttachmentUrls(attachment);
 

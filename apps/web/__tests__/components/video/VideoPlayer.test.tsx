@@ -132,15 +132,13 @@ const createMockAttachment = (
   fileUrl: 'https://example.com/video.mp4',
   originalName: 'test-video.mp4',
   mimeType: 'video/mp4',
-  size: 5242880,
-  duration: 60000, // 60 seconds in ms
+  fileSize: 5242880,
+  duration: 60000,
   width: 1920,
   height: 1080,
   createdAt: new Date().toISOString(),
-  uploadedAt: new Date().toISOString(),
-  storagePath: '/uploads/video.mp4',
   ...overrides,
-});
+} as any);
 
 describe('VideoPlayer', () => {
   beforeEach(() => {

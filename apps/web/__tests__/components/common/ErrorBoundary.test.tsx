@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  window.location = originalLocation;
+  window.location = originalLocation as any;
 });
 
 describe('ErrorBoundary', () => {
@@ -175,11 +175,11 @@ describe('ErrorBoundary', () => {
     const originalNodeEnv = process.env.NODE_ENV;
 
     afterEach(() => {
-      process.env.NODE_ENV = originalNodeEnv;
+      (process.env as any).NODE_ENV = originalNodeEnv;
     });
 
     it('shows error details in development mode', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
 
       render(
         <ErrorBoundary>
@@ -195,7 +195,7 @@ describe('ErrorBoundary', () => {
     });
 
     it('hides error details in production mode', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
 
       render(
         <ErrorBoundary>

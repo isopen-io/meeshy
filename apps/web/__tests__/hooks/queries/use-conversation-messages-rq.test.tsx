@@ -90,9 +90,9 @@ const createMockMessage = (id: string, content: string, createdAt = new Date('20
     lastActiveAt: new Date(),
     isActive: true,
     updatedAt: new Date(),
-  },
+  } as any,
   translations: [],
-});
+} as any);
 
 const mockUser: User = {
   id: 'user-1',

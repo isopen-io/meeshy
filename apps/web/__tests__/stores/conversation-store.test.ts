@@ -8,7 +8,7 @@ import { useConversationStore } from '../../stores/conversation-store';
 import type { Conversation, Message, MessageTranslation } from '@meeshy/shared/types';
 
 describe('ConversationStore', () => {
-  const mockConversation: Conversation = {
+  const mockConversation = {
     id: 'conv-123',
     identifier: 'conv-identifier-123',
     type: 'direct',
@@ -19,9 +19,9 @@ describe('ConversationStore', () => {
     creatorId: 'user-1',
     members: [],
     unreadCount: 0,
-  };
+  } as any as Conversation;
 
-  const mockConversation2: Conversation = {
+  const mockConversation2 = {
     id: 'conv-456',
     identifier: 'conv-identifier-456',
     type: 'group',
@@ -32,9 +32,9 @@ describe('ConversationStore', () => {
     creatorId: 'user-1',
     members: [],
     unreadCount: 5,
-  };
+  } as any as Conversation;
 
-  const mockMessage: Message = {
+  const mockMessage = {
     id: 'msg-123',
     conversationId: 'conv-123',
     senderId: 'user-1',
@@ -43,9 +43,9 @@ describe('ConversationStore', () => {
     isEdited: false,
     createdAt: new Date(),
     updatedAt: new Date(),
-  };
+  } as any as Message;
 
-  const mockMessage2: Message = {
+  const mockMessage2 = {
     id: 'msg-456',
     conversationId: 'conv-123',
     senderId: 'user-2',
@@ -54,13 +54,13 @@ describe('ConversationStore', () => {
     isEdited: false,
     createdAt: new Date(),
     updatedAt: new Date(),
-  };
+  } as any as Message;
 
-  const mockTranslation: MessageTranslation = {
+  const mockTranslation = {
     targetLanguage: 'fr',
     translatedContent: 'Bonjour, monde!',
     translatedAt: new Date(),
-  };
+  } as any as MessageTranslation;
 
   beforeEach(() => {
     // Reset the store to initial state
@@ -154,22 +154,22 @@ describe('ConversationStore', () => {
       it('should update an existing conversation', () => {
         act(() => {
           useConversationStore.getState().addConversation(mockConversation);
-          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' });
+          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' } as any);
         });
 
         const state = useConversationStore.getState();
-        expect(state.conversations[0].name).toBe('Updated Name');
+        expect((state.conversations[0] as any).name).toBe('Updated Name');
       });
 
       it('should also update currentConversation if it matches', () => {
         act(() => {
           useConversationStore.getState().addConversation(mockConversation);
           useConversationStore.getState().selectConversation('conv-123');
-          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' });
+          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' } as any);
         });
 
         const state = useConversationStore.getState();
-        expect(state.currentConversation?.name).toBe('Updated Name');
+        expect((state.currentConversation as any)?.name).toBe('Updated Name');
       });
 
       it('should not affect currentConversation if different conversation is updated', () => {
@@ -177,11 +177,11 @@ describe('ConversationStore', () => {
           useConversationStore.getState().addConversation(mockConversation);
           useConversationStore.getState().addConversation(mockConversation2);
           useConversationStore.getState().selectConversation('conv-123');
-          useConversationStore.getState().updateConversation('conv-456', { name: 'Updated Group' });
+          useConversationStore.getState().updateConversation('conv-456', { name: 'Updated Group' } as any);
         });
 
         const state = useConversationStore.getState();
-        expect(state.currentConversation?.name).toBe('Test Conversation');
+        expect((state.currentConversation as any)?.name).toBe('Test Conversation');
       });
     });
 
@@ -433,11 +433,11 @@ describe('ConversationStore', () => {
       });
 
       it('should update existing translation for same language', () => {
-        const existingTranslation: MessageTranslation = {
+        const existingTranslation = {
           targetLanguage: 'fr',
           translatedContent: 'Old translation',
           translatedAt: new Date(),
-        };
+        } as any as MessageTranslation;
 
         const messageWithTranslation = { ...mockMessage, translations: [existingTranslation] };
 

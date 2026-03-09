@@ -66,7 +66,7 @@ describe('CallStore', () => {
     isVideoEnabled: true,
     isSpeaking: false,
     joinedAt: new Date(),
-  };
+  } as any;
 
   const mockParticipant2: CallParticipant = {
     id: 'participant-2',
@@ -75,7 +75,7 @@ describe('CallStore', () => {
     isVideoEnabled: false,
     isSpeaking: false,
     joinedAt: new Date(),
-  };
+  } as any;
 
   const mockCallSession: CallSession = {
     id: 'call-123',
@@ -85,7 +85,7 @@ describe('CallStore', () => {
     participants: [mockParticipant],
     initiatorId: 'user-1',
     startedAt: new Date(),
-  };
+  } as any;
 
   beforeEach(() => {
     // Reset the store to initial state
@@ -229,11 +229,11 @@ describe('CallStore', () => {
           useCallStore.getState().updateParticipant('participant-1', {
             isSpeaking: true,
             isAudioEnabled: false,
-          });
+          } as any);
         });
 
         const participant = useCallStore.getState().currentCall?.participants[0];
-        expect(participant?.isSpeaking).toBe(true);
+        expect((participant as any)?.isSpeaking).toBe(true);
         expect(participant?.isAudioEnabled).toBe(false);
       });
     });

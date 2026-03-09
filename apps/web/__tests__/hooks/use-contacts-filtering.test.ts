@@ -21,7 +21,7 @@ const mockContacts: User[] = [
     isOnline: true,
     role: 'user',
     createdAt: new Date().toISOString(),
-  } as User,
+  } as any as User,
   {
     id: '2',
     username: 'jane_smith',
@@ -31,7 +31,7 @@ const mockContacts: User[] = [
     isOnline: false,
     role: 'user',
     createdAt: new Date().toISOString(),
-  } as User,
+  } as any as User,
 ];
 
 const mockFriendRequests = [

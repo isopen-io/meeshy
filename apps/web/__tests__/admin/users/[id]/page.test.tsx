@@ -95,7 +95,7 @@ jest.mock('@/components/ui/avatar', () => ({
 // Import after mocks
 import UserDetailPage from '../../../../app/admin/users/[id]/page';
 
-const mockApiService = apiService as jest.Mocked<typeof apiService>;
+const mockApiService = apiService as any;
 const mockAdminService = adminService as jest.Mocked<typeof adminService>;
 const mockToast = toast as jest.Mocked<typeof toast>;
 

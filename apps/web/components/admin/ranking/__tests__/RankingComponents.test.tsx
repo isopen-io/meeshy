@@ -416,7 +416,7 @@ describe('Integration: Full Ranking Flow', () => {
     const { adminService } = require('@/services/admin.service');
     adminService.getRankings.mockResolvedValue(mockApiResponse);
 
-    const { result, waitForNextUpdate } = renderHook(() =>
+    const { result } = renderHook(() =>
       useRankingData({
         entityType: 'users',
         criterion: 'messages_sent',
@@ -430,7 +430,7 @@ describe('Integration: Full Ranking Flow', () => {
     expect(result.current.rankings).toEqual([]);
 
     // Wait for data
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     // Final state
     expect(result.current.loading).toBe(false);

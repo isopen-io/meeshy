@@ -105,7 +105,7 @@ Object.defineProperty(global.URL, 'revokeObjectURL', {
 // Helper to create File with proper arrayBuffer method (jsdom lacks it)
 function createMockFile(content: string | Uint8Array, name: string, type: string): File {
   const data = typeof content === 'string' ? new TextEncoder().encode(content) : content;
-  const blob = new Blob([data], { type });
+  const blob = new Blob([data as BlobPart], { type });
   const file = new File([blob], name, { type });
 
   // Polyfill arrayBuffer for jsdom
@@ -124,7 +124,7 @@ function createMockFile(content: string | Uint8Array, name: string, type: string
 // Helper to create Blob with proper arrayBuffer method
 function createMockBlob(content: string | Uint8Array, type: string): Blob {
   const data = typeof content === 'string' ? new TextEncoder().encode(content) : content;
-  const blob = new Blob([data], { type });
+  const blob = new Blob([data as BlobPart], { type });
 
   // Polyfill arrayBuffer for jsdom
   if (!blob.arrayBuffer) {

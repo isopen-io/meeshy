@@ -15,8 +15,8 @@ import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 const mockOnUserStatus = jest.fn(() => jest.fn());
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
-  getSocketIOService: () => ({
-    onUserStatus: (callback: any) => mockOnUserStatus(callback),
+  getSocketIOService: (...args: any[]) => ({
+    onUserStatus: (...args2: any[]) => (mockOnUserStatus as any)(...args2),
   }),
 }));
 
@@ -69,7 +69,7 @@ describe('useUserStatusRealtime', () => {
     it('should call updateUserStatus when event received', () => {
       let eventCallback: (event: any) => void = () => {};
 
-      mockOnUserStatus.mockImplementation((callback) => {
+      (mockOnUserStatus as any).mockImplementation((callback: any) => {
         eventCallback = callback;
         return jest.fn();
       });
@@ -93,7 +93,7 @@ describe('useUserStatusRealtime', () => {
     it('should handle user going offline', () => {
       let eventCallback: (event: any) => void = () => {};
 
-      mockOnUserStatus.mockImplementation((callback) => {
+      (mockOnUserStatus as any).mockImplementation((callback: any) => {
         eventCallback = callback;
         return jest.fn();
       });
@@ -116,7 +116,7 @@ describe('useUserStatusRealtime', () => {
     it('should handle undefined lastActiveAt', () => {
       let eventCallback: (event: any) => void = () => {};
 
-      mockOnUserStatus.mockImplementation((callback) => {
+      (mockOnUserStatus as any).mockImplementation((callback: any) => {
         eventCallback = callback;
         return jest.fn();
       });
@@ -139,7 +139,7 @@ describe('useUserStatusRealtime', () => {
     it('should convert lastActiveAt string to Date', () => {
       let eventCallback: (event: any) => void = () => {};
 
-      mockOnUserStatus.mockImplementation((callback) => {
+      (mockOnUserStatus as any).mockImplementation((callback: any) => {
         eventCallback = callback;
         return jest.fn();
       });
@@ -165,7 +165,7 @@ describe('useUserStatusRealtime', () => {
     it('should handle multiple status updates', () => {
       let eventCallback: (event: any) => void = () => {};
 
-      mockOnUserStatus.mockImplementation((callback) => {
+      (mockOnUserStatus as any).mockImplementation((callback: any) => {
         eventCallback = callback;
         return jest.fn();
       });

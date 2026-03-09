@@ -181,7 +181,7 @@ const mockConversation: Conversation = {
   encryptionMode: 'e2ee',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
-} as Conversation;
+} as any;
 
 const mockDirectConversation: Conversation = {
   ...mockConversation,

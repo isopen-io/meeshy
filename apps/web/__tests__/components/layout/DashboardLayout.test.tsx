@@ -331,7 +331,7 @@ describe('DashboardLayout', () => {
       );
 
       // Verify admin user is set correctly
-      expect(mockCurrentUser.permissions.canAccessAdmin).toBe(true);
+      expect((mockCurrentUser as any).permissions.canAccessAdmin).toBe(true);
     });
 
     it('should not have admin flag for regular users', () => {
@@ -342,7 +342,7 @@ describe('DashboardLayout', () => {
       );
 
       // Verify regular user doesn't have admin access
-      expect(mockCurrentUser.permissions.canAccessAdmin).toBeFalsy();
+      expect((mockCurrentUser as any)!.permissions.canAccessAdmin).toBeFalsy();
     });
   });
 
