@@ -149,11 +149,18 @@ public struct AudioTranslationEvent: Decodable, Sendable {
     public let processingTimeMs: Int?
 }
 
+public struct ReadStatusSummary: Decodable, Sendable {
+    public let totalMembers: Int
+    public let deliveredCount: Int
+    public let readCount: Int
+}
+
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
-    public let type: String // "read" or "received"
+    public let participantId: String
+    public let type: String
     public let updatedAt: Date
+    public let summary: ReadStatusSummary
 }
 
 public struct MessageConsumedEvent: Decodable, Sendable {

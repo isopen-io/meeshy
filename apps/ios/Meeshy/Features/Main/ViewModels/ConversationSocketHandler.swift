@@ -267,31 +267,39 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read)
+        // Read status updated (delivered / read) — uses summary counts
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
-            .filter { $0.userId != userId }
+            .filter { $0.participantId != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
-                let newStatus: Message.DeliveryStatus = event.type == "read" ? .read : .delivered
-                
+                let summary = event.summary
+
+                let newStatus: Message.DeliveryStatus
+                if summary.totalMembers > 0 && summary.readCount >= summary.totalMembers {
+                    newStatus = .read
+                } else if summary.readCount > 0 {
+                    newStatus = summary.totalMembers == 1 ? .read : .delivered
+                } else if summary.deliveredCount > 0 {
+                    newStatus = .delivered
+                } else {
+                    return
+                }
+
                 for i in delegate.messages.indices.reversed() {
                     guard delegate.messages[i].isMe else { continue }
-                    
+
                     let current = delegate.messages[i].deliveryStatus
-                    
+
                     if delegate.messages[i].createdAt <= event.updatedAt {
-                        // Break early: if current message already has target state (or better), older ones do too
                         if newStatus == .read && current == .read { break }
                         if newStatus == .delivered && (current == .delivered || current == .read) { break }
-                        
+
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             delegate.messages[i].deliveryStatus = newStatus
                         }
                     } else if current == .read {
-                        // Even if this message is newer than updatedAt, if it's already read, we don't need to keep checking older ones
-                        // because they will be read too.
                         break
                     }
                 }
