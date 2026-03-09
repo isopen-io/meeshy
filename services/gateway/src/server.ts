@@ -66,6 +66,7 @@ import { maintenanceRoutes } from './routes/maintenance';
 import affiliateRoutes from './routes/affiliate';
 import { userStatsRoutes } from './routes/user-stats';
 import messageRoutes from './routes/messages';
+import messageReadStatusRoutes from './routes/message-read-status';
 import mentionRoutes from './routes/mentions';
 import { notificationRoutes } from './routes/notifications';
 import { friendRequestRoutes } from './routes/friends';
@@ -1011,6 +1012,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register message routes with /api prefix
     await this.server.register(messageRoutes, { prefix: API_PREFIX });
+
+    // Register message read status routes
+    await this.server.register(messageReadStatusRoutes, { prefix: API_PREFIX });
 
     // Register mention routes with /api prefix
     await this.server.register(mentionRoutes, { prefix: API_PREFIX });

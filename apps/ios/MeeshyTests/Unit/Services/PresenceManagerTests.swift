@@ -143,8 +143,23 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_seed_skipsMembersWithNoUser() {
+        let now = ISO8601DateFormatter().string(from: Date())
         let conversations = [makeConversation(members: [
-            ["userId": "other-1"] as [String: Any]
+            [
+                "id": "participant-other-1",
+                "conversationId": "conv-test",
+                "type": "user",
+                "userId": "other-1",
+                "displayName": "other1",
+                "role": "USER",
+                "language": "en",
+                "permissions": [
+                    "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+                    "canSendVideos": true, "canSendAudios": true, "canSendLocations": true, "canSendLinks": true
+                ],
+                "isActive": true,
+                "joinedAt": now
+            ] as [String: Any]
         ])]
 
         sut.seed(from: conversations, currentUserId: "me")
@@ -153,9 +168,25 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     func test_seed_skipsMembersWithNilIsOnline() {
+        let now = ISO8601DateFormatter().string(from: Date())
         let conversations = [makeConversation(members: [
             makeMemberJSON(userId: "me", isOnline: true, lastActiveAt: nil),
-            ["userId": "other-1", "user": ["id": "other-1", "username": "other1"]] as [String: Any]
+            [
+                "id": "participant-other-1",
+                "conversationId": "conv-test",
+                "type": "user",
+                "userId": "other-1",
+                "displayName": "other1",
+                "role": "USER",
+                "language": "en",
+                "permissions": [
+                    "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+                    "canSendVideos": true, "canSendAudios": true, "canSendLocations": true, "canSendLinks": true
+                ],
+                "isActive": true,
+                "joinedAt": now,
+                "user": ["id": "other-1", "username": "other1"]
+            ] as [String: Any]
         ])]
 
         sut.seed(from: conversations, currentUserId: "me")
@@ -195,13 +226,14 @@ final class PresenceManagerTests: XCTestCase {
     // MARK: - Factory Helpers
 
     private func makeConversation(members: [[String: Any]]?) -> APIConversation {
+        let now = ISO8601DateFormatter().string(from: Date())
         var json: [String: Any] = [
             "id": UUID().uuidString,
             "type": "direct",
-            "createdAt": ISO8601DateFormatter().string(from: Date())
+            "createdAt": now
         ]
         if let members {
-            json["members"] = members
+            json["participants"] = members
         }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
@@ -219,6 +251,28 @@ final class PresenceManagerTests: XCTestCase {
     }
 
     private func makeMemberJSON(userId: String, isOnline: Bool, lastActiveAt: Date?) -> [String: Any] {
+        let now = ISO8601DateFormatter().string(from: Date())
+        var participantDict: [String: Any] = [
+            "id": "participant-\(userId)",
+            "conversationId": "conv-test",
+            "type": "user",
+            "userId": userId,
+            "displayName": "user_\(userId)",
+            "role": "USER",
+            "language": "en",
+            "permissions": [
+                "canSendMessages": true,
+                "canSendFiles": true,
+                "canSendImages": true,
+                "canSendVideos": true,
+                "canSendAudios": true,
+                "canSendLocations": true,
+                "canSendLinks": true
+            ],
+            "isActive": true,
+            "isOnline": isOnline,
+            "joinedAt": now
+        ]
         var userDict: [String: Any] = [
             "id": userId,
             "username": "user_\(userId)",
@@ -227,11 +281,11 @@ final class PresenceManagerTests: XCTestCase {
         if let lastActiveAt {
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            userDict["lastActiveAt"] = formatter.string(from: lastActiveAt)
+            let dateStr = formatter.string(from: lastActiveAt)
+            userDict["lastActiveAt"] = dateStr
+            participantDict["lastActiveAt"] = dateStr
         }
-        return [
-            "userId": userId,
-            "user": userDict
-        ]
+        participantDict["user"] = userDict
+        return participantDict
     }
 }
