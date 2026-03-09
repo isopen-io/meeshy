@@ -15,17 +15,22 @@ public struct MessageDeletedEvent: Decodable, Sendable {
     }
 }
 
-public struct ReactionUpdateEvent: Decodable, Sendable {
-    public let messageId: String
+public struct ReactionAggregationEvent: Decodable, Sendable {
     public let emoji: String
     public let count: Int
-    public let userId: String?
-    public let conversationId: String?
+    public let participantIds: [String]?
+    public let hasCurrentUser: Bool?
+}
 
-    public init(messageId: String, emoji: String, count: Int, userId: String? = nil, conversationId: String? = nil) {
-        self.messageId = messageId; self.emoji = emoji; self.count = count
-        self.userId = userId; self.conversationId = conversationId
-    }
+public struct ReactionUpdateEvent: Decodable, Sendable {
+    public let messageId: String
+    public let participantId: String?
+    public let emoji: String
+    public let action: String?
+    public let aggregation: ReactionAggregationEvent?
+    public let timestamp: String?
+
+    public var count: Int { aggregation?.count ?? 0 }
 }
 
 public struct TypingEvent: Decodable, Sendable {

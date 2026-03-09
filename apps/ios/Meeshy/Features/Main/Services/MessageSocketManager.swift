@@ -10,23 +10,6 @@ struct MessageDeletedEvent: Decodable {
     let conversationId: String
 }
 
-struct ReactionUpdateEvent: Decodable {
-    let messageId: String
-    let participantId: String?
-    let emoji: String
-    let action: String?
-    let aggregation: ReactionAggregation?
-    let timestamp: String?
-
-    struct ReactionAggregation: Decodable {
-        let emoji: String
-        let count: Int
-        let participantIds: [String]?
-        let hasCurrentUser: Bool?
-    }
-
-    var count: Int { aggregation?.count ?? 0 }
-}
 
 struct TypingEvent: Decodable {
     let userId: String

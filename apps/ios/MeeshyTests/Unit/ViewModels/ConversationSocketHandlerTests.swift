@@ -85,6 +85,30 @@ final class ConversationSocketHandlerTests: XCTestCase {
         return (sut, delegate, messageSocket)
     }
 
+    private func makeReactionEvent(
+        messageId: String,
+        emoji: String,
+        participantId: String,
+        action: String
+    ) -> ReactionUpdateEvent {
+        let json = """
+        {
+            "messageId": "\(messageId)",
+            "participantId": "\(participantId)",
+            "emoji": "\(emoji)",
+            "action": "\(action)",
+            "aggregation": {
+                "emoji": "\(emoji)",
+                "count": \(action == "remove" ? 0 : 1),
+                "participantIds": ["\(participantId)"],
+                "hasCurrentUser": false
+            },
+            "timestamp": "2026-03-06T12:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+        return try! JSONDecoder().decode(ReactionUpdateEvent.self, from: json)
+    }
+
     private func makeMessage(
         id: String = "msg1",
         senderId: String? = nil,
@@ -285,7 +309,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [makeMessage(id: "msg1")]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 1, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -303,7 +327,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [msg]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 1, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -324,7 +348,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [msg]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 0, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "remove")
         socket.reactionRemoved.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
