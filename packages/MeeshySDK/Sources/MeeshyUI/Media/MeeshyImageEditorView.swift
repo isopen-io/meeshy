@@ -525,8 +525,12 @@ public struct MeeshyImageEditorView: View {
             HapticFeedback.success()
             dismiss()
         } label: {
-            Text("Utiliser")
-                .font(.system(size: 16, weight: .bold))
+            HStack(spacing: 6) {
+                    Image(systemName: "eye")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Aper\u{00E7}u")
+                        .font(.system(size: 16, weight: .bold))
+                }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
