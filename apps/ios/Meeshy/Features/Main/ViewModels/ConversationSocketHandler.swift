@@ -182,18 +182,7 @@ final class ConversationSocketHandler {
                         }
                     }
 
-                    // Auto mark-as-received for messages from other users
-                    let msgConvId = apiMsg.conversationId
-                    do {
-                        let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                            endpoint: "/conversations/\(msgConvId)/mark-as-received",
-                            method: "POST"
-                        )
-                    } catch {
-                        await PendingStatusQueue.shared.enqueue(.init(
-                            conversationId: msgConvId, type: "received", timestamp: Date()
-                        ))
-                    }
+                    // mark-as-received is handled globally by ConversationListViewModel
                 }
             }
             .store(in: &cancellables)
