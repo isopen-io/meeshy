@@ -11,6 +11,20 @@ import { agentAdminService, type AgentConfigData } from '@/services/agent-admin.
 import { AgentConfigDialog } from './AgentConfigDialog';
 import { toast } from 'sonner';
 
+const TYPE_LABELS: Record<string, string> = {
+  group: 'Groupe',
+  channel: 'Canal',
+  public: 'Public',
+  global: 'Global',
+  broadcast: 'Broadcast',
+  direct: 'Direct',
+};
+
+function conversationLabel(config: AgentConfigData): string {
+  if (config.conversation?.title) return config.conversation.title;
+  return config.conversationId.slice(0, 8) + '...';
+}
+
 export function AgentConversationsTab() {
   const [configs, setConfigs] = useState<AgentConfigData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,9 +59,9 @@ export function AgentConversationsTab() {
       setConfigs(prev => prev.map(c =>
         c.conversationId === config.conversationId ? { ...c, enabled: !c.enabled } : c
       ));
-      toast.success(`Agent ${!config.enabled ? 'activé' : 'désactivé'}`);
+      toast.success(`Agent ${!config.enabled ? 'activ\u00e9' : 'd\u00e9sactiv\u00e9'}`);
     } catch {
-      toast.error('Erreur lors de la mise à jour');
+      toast.error('Erreur lors de la mise \u00e0 jour');
     }
   };
 
@@ -56,7 +70,7 @@ export function AgentConversationsTab() {
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
-      toast.success('Configuration supprimée');
+      toast.success('Configuration supprim\u00e9e');
     } catch {
       toast.error('Erreur lors de la suppression');
     }
@@ -97,60 +111,86 @@ export function AgentConversationsTab() {
           <CardTitle className="text-lg">Configurations Agent</CardTitle>
           <Button size="sm" onClick={handleCreate}>
             <Plus className="h-4 w-4 mr-2" />
-            Configurer
+            <span className="hidden sm:inline">Configurer</span>
           </Button>
         </CardHeader>
         <CardContent>
           {configs.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-8">
-              Aucune conversation configurée pour l&apos;agent
+              Aucune conversation configur&eacute;e pour l&apos;agent
             </p>
           ) : (
             <div className="space-y-2">
-              <div className="hidden md:grid grid-cols-5 gap-4 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
-                <span>Conversation</span>
+              {/* Desktop header */}
+              <div className="hidden lg:grid grid-cols-6 gap-4 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
+                <span className="col-span-2">Conversation</span>
                 <span>Statut</span>
                 <span>Triggers</span>
-                <span>Contrôlés</span>
+                <span>Contr&ocirc;l&eacute;s</span>
                 <span>Actions</span>
               </div>
+
               {configs.map(config => (
                 <div
                   key={config.id}
-                  className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center px-4 py-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800"
+                  className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 items-start lg:items-center px-4 py-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  <span className="font-mono text-sm truncate" title={config.conversationId}>
-                    {(config.conversationId ?? '').slice(0, 8)}...
-                  </span>
-                  <div>
-                    <Switch
-                      checked={config.enabled}
-                      onCheckedChange={() => handleToggle(config)}
-                    />
-                    <Badge variant={config.enabled ? 'default' : 'secondary'} className="ml-2">
-                      {config.enabled ? 'Actif' : 'Inactif'}
-                    </Badge>
+                  {/* Conversation name + type */}
+                  <div className="col-span-1 lg:col-span-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium truncate text-gray-900 dark:text-gray-100" title={config.conversationId}>
+                        {conversationLabel(config)}
+                      </span>
+                      {config.conversation?.type && (
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {TYPE_LABELS[config.conversation.type] ?? config.conversation.type}
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-400 font-mono block mt-0.5">
+                      {config.conversationId.slice(0, 12)}...
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {config.triggerOnTimeout && <Badge variant="outline">Timeout</Badge>}
-                    {config.triggerOnUserMessage && <Badge variant="outline">Message</Badge>}
-                    {config.triggerOnReplyTo && <Badge variant="outline">Reply</Badge>}
-                  </div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {(config.manualUserIds ?? []).length} / {config.maxControlledUsers}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(config)}>
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(config.conversationId)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+
+                  {/* Mobile: row with status + triggers + controlled + actions */}
+                  <div className="flex items-center gap-2 lg:contents">
+                    {/* Status */}
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={config.enabled}
+                        onCheckedChange={() => handleToggle(config)}
+                      />
+                      <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-xs">
+                        {config.enabled ? 'Actif' : 'Inactif'}
+                      </Badge>
+                    </div>
+
+                    {/* Triggers */}
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {config.triggerOnTimeout && <Badge variant="outline" className="text-xs">Timeout</Badge>}
+                      {config.triggerOnUserMessage && <Badge variant="outline" className="text-xs">Message</Badge>}
+                      {config.triggerOnReplyTo && <Badge variant="outline" className="text-xs">Reply</Badge>}
+                    </div>
+
+                    {/* Controlled */}
+                    <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      {(config.manualUserIds ?? []).length}/{config.maxControlledUsers}
+                    </span>
+
+                    {/* Actions */}
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(config)}>
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(config.conversationId)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -160,7 +200,7 @@ export function AgentConversationsTab() {
           {total > limit && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
               <span className="text-sm text-gray-500">
-                Page {page} - {total} résultats
+                Page {page} - {total} r&eacute;sultats
               </span>
               <div className="flex gap-2">
                 <Button

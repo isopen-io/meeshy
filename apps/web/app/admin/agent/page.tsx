@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity } from 'lucide-react';
+import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings } from 'lucide-react';
 
 const AgentOverviewTab = dynamic(
   () => import('@/components/admin/agent/AgentOverviewTab').then(mod => mod.AgentOverviewTab),
@@ -27,7 +27,12 @@ const AgentArchetypesTab = dynamic(
 );
 
 const AgentLiveTab = dynamic(
-  () => import('@/components/admin/agent/AgentLiveTab'),
+  () => import('@/components/admin/agent/AgentLiveTab').then(mod => mod.AgentLiveTab),
+  { loading: () => <SectionLoader /> }
+);
+
+const AgentGlobalConfigTab = dynamic(
+  () => import('@/components/admin/agent/AgentGlobalConfigTab').then(mod => mod.AgentGlobalConfigTab),
   { loading: () => <SectionLoader /> }
 );
 
@@ -42,8 +47,9 @@ function SectionLoader() {
 const tabs = [
   { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { id: 'global', label: 'Global', icon: Settings },
   { id: 'llm', label: 'Config LLM', icon: Cpu },
-  { id: 'archetypes', label: 'Archétypes', icon: Users },
+  { id: 'archetypes', label: 'Arch\u00e9types', icon: Users },
   { id: 'live', label: 'Live', icon: Activity },
 ] as const;
 
@@ -61,12 +67,12 @@ export default function AgentAdminPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 gap-2">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 gap-1">
             {tabs.map(tab => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger key={tab.id} value={tab.id}>
-                  <Icon className="h-4 w-4 mr-2" />
+                <TabsTrigger key={tab.id} value={tab.id} className="text-xs sm:text-sm px-1 sm:px-3">
+                  <Icon className="h-4 w-4 sm:mr-1.5" />
                   <span className="hidden sm:inline">{tab.label}</span>
                 </TabsTrigger>
               );
@@ -79,6 +85,10 @@ export default function AgentAdminPage() {
 
           <TabsContent value="conversations" className="mt-6">
             <AgentConversationsTab />
+          </TabsContent>
+
+          <TabsContent value="global" className="mt-6">
+            <AgentGlobalConfigTab />
           </TabsContent>
 
           <TabsContent value="llm" className="mt-6">

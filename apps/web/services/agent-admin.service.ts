@@ -21,9 +21,16 @@ export type AgentStatsData = {
   totalArchetypes: number;
 };
 
+export type AgentConfigConversation = {
+  id: string;
+  title: string | null;
+  type: string;
+};
+
 export type AgentConfigData = {
   id: string;
   conversationId: string;
+  conversation?: AgentConfigConversation;
   enabled: boolean;
   configuredBy: string;
   manualUserIds: string[];
@@ -122,6 +129,9 @@ export type AgentGlobalConfigData = {
   fallbackModel: string | null;
   globalDailyBudgetUsd: number;
   maxConcurrentCalls: number;
+  eligibleConversationTypes: string[];
+  messageFreshnessHours: number;
+  maxConversationsPerCycle: number;
   updatedAt: string;
 };
 
@@ -134,6 +144,9 @@ export type AgentGlobalConfigUpsert = {
   fallbackModel?: string | null;
   globalDailyBudgetUsd?: number;
   maxConcurrentCalls?: number;
+  eligibleConversationTypes?: string[];
+  messageFreshnessHours?: number;
+  maxConversationsPerCycle?: number;
 };
 
 export type AgentRoleData = {
