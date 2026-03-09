@@ -3,6 +3,7 @@
  * Responsabilité: Opérations sur les participants (récupération, ajout, suppression, rôles)
  */
 
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { apiService } from '../api.service';
 import { cacheService } from './cache.service';
 import type {
@@ -190,9 +191,9 @@ export class ParticipantsService {
   async updateParticipantRole(
     conversationId: string,
     userId: string,
-    role: 'ADMIN' | 'MODERATOR' | 'MEMBER'
+    role: MemberRoleType,
   ): Promise<void> {
-    await apiService.patch(`/conversations/${conversationId}/participants/${userId}/role`, { role });
+    await apiService.patch(`/conversations/${conversationId}/participants/${userId}/role`, { role: role.toLowerCase() });
 
     // Invalider le cache des participants
     cacheService.invalidateParticipantsCache();

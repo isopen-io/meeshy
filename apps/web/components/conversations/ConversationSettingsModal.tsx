@@ -69,6 +69,7 @@ import { useConversationPreferencesStore } from '@/stores/conversation-preferenc
 import type { Conversation, ConversationParticipant, Message, SocketIOUser } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { useUserStore } from '@/stores/user-store';
@@ -103,8 +104,6 @@ const ShareLinksSection = lazy(() =>
 // Dialog upload image
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
 
-// Rôles qui peuvent accéder à la configuration admin
-const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'BIGBOSS', 'CREATOR', 'AUDIT', 'ANALYST', 'admin', 'moderator'];
 
 interface ConversationSettingsModalProps {
   open: boolean;
@@ -201,10 +200,10 @@ export function ConversationSettingsModal({
   );
 
   // Déterminer si l'utilisateur peut accéder aux paramètres admin
-  const canAccessAdminSettings = useMemo(() => {
-    return ADMIN_ROLES.includes(currentUserRole.toUpperCase()) ||
-           ADMIN_ROLES.includes(currentUserRole.toLowerCase());
-  }, [currentUserRole]);
+  const canAccessAdminSettings = useMemo(
+    () => hasMinimumMemberRole(currentUserRole.toLowerCase(), MemberRole.MODERATOR),
+    [currentUserRole],
+  );
 
   // État des tabs synchronisé avec l'URL
   const [activeTab, setActiveTab] = useState(() => {

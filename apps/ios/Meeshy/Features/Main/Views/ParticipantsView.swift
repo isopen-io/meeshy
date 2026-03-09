@@ -25,21 +25,25 @@ struct ParticipantsView: View {
 
     private var accent: Color { Color(hex: accentColor) }
 
+    private var parsedRole: MemberRole {
+        guard let roleStr = currentUserRole?.lowercased() else { return .member }
+        return MemberRole(rawValue: roleStr) ?? .member
+    }
+
     private var isAdmin: Bool {
-        let role = currentUserRole?.uppercased() ?? ""
-        return ["ADMIN", "CREATOR", "BIGBOSS"].contains(role)
+        parsedRole.hasMinimumRole(.admin)
     }
 
     private var isCreator: Bool {
-        (currentUserRole?.uppercased() ?? "") == "CREATOR"
+        parsedRole == .creator
     }
 
     private var isConvAdmin: Bool {
-        (currentUserRole?.uppercased() ?? "") == "ADMIN"
+        parsedRole == .admin
     }
 
     private var isModerator: Bool {
-        (currentUserRole?.uppercased() ?? "") == "MODERATOR"
+        parsedRole == .moderator
     }
 
     private var canManageMembers: Bool { isAdmin || isModerator }
@@ -226,7 +230,9 @@ struct ParticipantsView: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    if let role = participant.conversationRole, role.uppercased() != "MEMBER" {
+                    if let role = participant.conversationRole,
+                       let memberRole = MemberRole(rawValue: role.lowercased()),
+                       memberRole != .member {
                         roleBadge(role)
                     }
                 }
@@ -273,33 +279,33 @@ struct ParticipantsView: View {
     @ViewBuilder
     private func contextMenuItems(for participant: ConversationParticipant) -> some View {
         let isCurrentUser = participant.id == currentUserId
-        let participantRole = participant.conversationRole?.uppercased() ?? "MEMBER"
+        let targetRole = MemberRole(rawValue: participant.conversationRole?.lowercased() ?? "member") ?? .member
 
-        if !isCurrentUser && participantRole != "CREATOR" {
+        if !isCurrentUser && targetRole != .creator {
             if isCreator {
                 // Créateur : peut gérer tout le monde (MEMBER, MODERATOR, ADMIN)
-                if participantRole == "MEMBER" {
+                if targetRole == .member {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Promouvoir Moderateur", systemImage: "shield.fill")
                     }
                 }
-                if participantRole != "ADMIN" {
+                if targetRole != .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
                     } label: {
                         Label("Promouvoir Admin", systemImage: "crown.fill")
                     }
                 }
-                if participantRole == "ADMIN" {
+                if targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Retrograder en Moderateur", systemImage: "shield")
                     }
                 }
-                if participantRole == "MODERATOR" || participantRole == "ADMIN" {
+                if targetRole == .moderator || targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
                     } label: {
@@ -307,9 +313,9 @@ struct ParticipantsView: View {
                     }
                 }
                 Divider()
-            } else if isConvAdmin && participantRole != "ADMIN" {
+            } else if isConvAdmin && targetRole != .admin {
                 // Admin : peut gérer MEMBER et MODERATOR uniquement (pas les autres admins)
-                if participantRole == "MEMBER" {
+                if targetRole == .member {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
@@ -321,7 +327,7 @@ struct ParticipantsView: View {
                 } label: {
                     Label("Promouvoir Admin", systemImage: "crown.fill")
                 }
-                if participantRole == "MODERATOR" {
+                if targetRole == .moderator {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
                     } label: {
@@ -404,30 +410,27 @@ struct ParticipantsView: View {
         let isCurrentUser = participant.id == currentUserId
         guard !isCurrentUser else { return false }
 
-        let targetRole = participant.conversationRole?.uppercased() ?? "MEMBER"
-        if targetRole == "CREATOR" { return false }
+        let targetRole = MemberRole(rawValue: participant.conversationRole?.lowercased() ?? "member") ?? .member
+        if targetRole == .creator { return false }
 
         if isAdmin { return true }
-        if isModerator && targetRole == "MEMBER" { return true }
+        if isModerator && targetRole == .member { return true }
         return false
     }
 
     // MARK: - Display Helpers
 
     private func roleDisplayLabel(_ role: String) -> String {
-        switch role.uppercased() {
-        case "ADMIN": return "Admin"
-        case "CREATOR": return "Createur"
-        case "MODERATOR": return "Mod"
-        default: return role.capitalized
-        }
+        let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
+        return memberRole.displayName
     }
 
     private func roleBadgeColor(_ role: String) -> Color {
-        switch role.uppercased() {
-        case "ADMIN", "CREATOR": return Color(hex: "A855F7")
-        case "MODERATOR": return Color(hex: "08D9D6")
-        default: return Color(hex: "6B7280")
+        let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
+        switch memberRole {
+        case .creator, .admin: return Color(hex: "A855F7")
+        case .moderator: return Color(hex: "08D9D6")
+        case .member: return Color(hex: "6B7280")
         }
     }
 

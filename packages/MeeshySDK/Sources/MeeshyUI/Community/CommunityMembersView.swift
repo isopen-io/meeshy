@@ -52,7 +52,7 @@ public struct CommunityMembersView: View {
     private var memberList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(groupedMembers.keys.sorted(by: { $0.hierarchy > $1.hierarchy }), id: \.self) { role in
+                ForEach(groupedMembers.keys.sorted(by: { $0.level > $1.level }), id: \.self) { role in
                     if let members = groupedMembers[role] {
                         Section {
                             ForEach(members) { member in
@@ -184,6 +184,7 @@ struct MemberRow: View {
 
     private var roleColor: Color {
         switch member.communityRole {
+        case .creator: return Color(hex: "F59E0B")
         case .admin: return Color(hex: "FF2E63")
         case .moderator: return Color(hex: "A855F7")
         case .member: return theme.textMuted
@@ -250,7 +251,7 @@ final class CommunityMembersViewModel: ObservableObject {
 
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             isCurrentUserAdmin = members.contains {
-                $0.userId == currentUserId && $0.communityRole == .admin
+                $0.userId == currentUserId && $0.communityRole.hasMinimumRole(.admin)
             }
         } catch {
             print("[CommunityMembersVM] Error loading: \(error)")

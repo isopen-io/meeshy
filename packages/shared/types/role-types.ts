@@ -191,14 +191,6 @@ export function hasModeratorPrivileges(effectiveRole: string): boolean {
   return level >= UNIFIED_ROLE_LEVELS.MODERATOR;
 }
 
-// Aliases de compatibilité (à supprimer progressivement)
-/** @deprecated Utilisez hasMinimumMemberRole à la place */
-export const hasMinimumConversationRole = hasMinimumMemberRole;
-/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
-export const CONVERSATION_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
-/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
-export const COMMUNITY_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
-
 // ============================================================================
 // WRITE PERMISSIONS - Permissions d'écriture dans une conversation
 // ============================================================================
@@ -275,9 +267,6 @@ export function isMemberRole(value: string): value is MemberRoleType {
   return validRoles.includes(value.toLowerCase());
 }
 
-/** @deprecated Utilisez isMemberRole à la place */
-export const isConversationMemberRole = isMemberRole;
-
 /**
  * Vérifie si un utilisateur est un administrateur global (ADMIN ou BIGBOSS)
  */
@@ -317,8 +306,3 @@ export function isMemberCreator(role: MemberRole | MemberRoleType | string): boo
   return normalized === MemberRole.CREATOR;
 }
 
-// Aliases de compatibilité (à supprimer progressivement)
-/** @deprecated Utilisez isMemberAdmin à la place */
-export const isConversationAdmin = isMemberAdmin;
-/** @deprecated Utilisez isMemberModerator à la place */
-export const isConversationModerator = isMemberModerator;

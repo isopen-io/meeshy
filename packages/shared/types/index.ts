@@ -219,13 +219,6 @@ export {
   getEffectiveRole,
   getEffectiveRoleLevel,
   hasModeratorPrivileges,
-  // Aliases de compatibilité (deprecated)
-  hasMinimumConversationRole,
-  isConversationMemberRole,
-  isConversationAdmin,
-  isConversationModerator,
-  CONVERSATION_ROLE_HIERARCHY,
-  COMMUNITY_ROLE_HIERARCHY,
 } from './role-types.js';
 
 // Action types (pas de conflits majeurs)

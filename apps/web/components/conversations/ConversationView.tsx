@@ -21,6 +21,7 @@ import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 import type { LanguageChoice } from '@/types/bubble-stream';
+import { getEffectiveRole } from '@meeshy/shared/types/role-types';
 
 // Types pour les indicateurs de frappe
 interface TypingIndicator {
@@ -185,14 +186,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const currentParticipant = participants.find(p => p.userId === currentUser.id);
     const conversationRole = currentParticipant?.role || '';
     const globalRole = currentUser.role || 'USER';
-    const PRIVILEGE_LEVELS: Record<string, number> = {
-      BIGBOSS: 100, ADMIN: 80, CREATOR: 70, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10, MEMBER: 10,
-    };
-    const convRoleUpper = conversationRole.toUpperCase();
-    const globalRoleUpper = globalRole.toUpperCase();
-    const effectiveRole = (PRIVILEGE_LEVELS[convRoleUpper] || 0) > (PRIVILEGE_LEVELS[globalRoleUpper] || 0)
-      ? convRoleUpper
-      : globalRoleUpper;
+    const effectiveRole = getEffectiveRole(globalRole, conversationRole);
 
     // Token pour les attachments
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;

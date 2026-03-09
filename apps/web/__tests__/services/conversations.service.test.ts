@@ -468,11 +468,11 @@ describe('ConversationsService', () => {
         success: true,
       });
 
-      await conversationsService.updateParticipantRole('conv-123', 'user-456', 'ADMIN');
+      await conversationsService.updateParticipantRole('conv-123', 'user-456', 'admin');
 
       expect(mockApiService.patch).toHaveBeenCalledWith(
         '/conversations/conv-123/participants/user-456/role',
-        { role: 'ADMIN' }
+        { role: 'admin' }
       );
     });
 

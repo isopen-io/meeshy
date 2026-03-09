@@ -6,6 +6,7 @@
  * pour garantir une compatibilité totale avec l'API existante.
  */
 
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { conversationsCrudService } from './crud.service';
 import { messagesService } from './messages.service';
 import { participantsService } from './participants.service';
@@ -172,7 +173,7 @@ export class ConversationsService {
   async updateParticipantRole(
     conversationId: string,
     userId: string,
-    role: 'ADMIN' | 'MODERATOR' | 'MEMBER'
+    role: MemberRoleType,
   ): Promise<void> {
     return participantsService.updateParticipantRole(conversationId, userId, role);
   }

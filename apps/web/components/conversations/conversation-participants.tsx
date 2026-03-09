@@ -18,18 +18,13 @@ import {
   Loader2,
   Ghost
 } from 'lucide-react';
-import { SocketIOUser as User, UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
-import { getUserInitials } from '@/lib/avatar-utils';
 import { cn } from '@/lib/utils';
-
-// Helper pour détecter si un utilisateur est anonyme
-function isAnonymousUser(user: any): user is Participant {
-  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
-}
+import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
 
 interface ConversationParticipantsProps {
   conversationId: string;
@@ -93,16 +88,6 @@ export function ConversationParticipants({
     }
   };
 
-  const getDisplayName = (user: User): string => {
-    return user.displayName || 
-           `${user.firstName} ${user.lastName}`.trim() || 
-           user.username;
-  };
-
-  const getAvatarFallback = (user: User): string => {
-    return getUserInitials(user);
-  };
-
   const isCreator = (participant: Participant): boolean => {
     return participant.role === MemberRole.CREATOR;
   };
@@ -157,7 +142,7 @@ export function ConversationParticipants({
             <div className="flex -space-x-2">
               {displayParticipants.map((participant, index) => {
                 const user = participant.user;
-                const isAnonymous = isAnonymousUser(user);
+                const isAnonymous = isAnonymousParticipant(user);
                 const isCurrentUser = user.id === currentUser.id;
                 // Utiliser index pour garantir l'unicité même en cas de doublons dans les données
                 const uniqueKey = `${participant.userId || participant.user?.id || 'unknown'}-${index}`;
@@ -172,7 +157,7 @@ export function ConversationParticipants({
                       <Avatar className="h-6 w-6 border-2 border-background">
                         <AvatarImage src={user.avatar} />
                         <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {getAvatarFallback(user)}
+                          {getParticipantInitials(user)}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -180,7 +165,7 @@ export function ConversationParticipants({
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                       <div className="flex items-center gap-1">
                         {isAnonymous && <Ghost className="h-3 w-3" />}
-                        {getDisplayName(user)}
+                        {getParticipantDisplayName(user)}
                         {isCurrentUser && ` (${t('conversationDetails.you')})`}
                       </div>
                     </div>

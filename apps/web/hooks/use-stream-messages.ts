@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { messageService } from '@/services/message.service';
 import { useReplyStore } from '@/stores/reply-store';
 import type { Message, User } from '@meeshy/shared/types';
+import { getEffectiveRole } from '@meeshy/shared/types/role-types';
 
 interface UseStreamMessagesOptions {
   conversationId: string;
@@ -181,14 +182,10 @@ export function useStreamMessages({
   }, [tCommon, messages, hasMore, loadMore]);
 
   // Obtenir le rôle effectif (max entre rôle global et rôle conversation)
-  const getUserModerationRole = useCallback((): string => {
-    const globalRole = (user.role as string) || 'USER';
-    const convRole = (conversationRole || '').toUpperCase();
-    const LEVELS: Record<string, number> = {
-      BIGBOSS: 100, ADMIN: 80, CREATOR: 70, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10, MEMBER: 10,
-    };
-    return (LEVELS[convRole] || 0) > (LEVELS[globalRole] || 0) ? convRole : globalRole;
-  }, [user.role, conversationRole]);
+  const getUserModerationRole = useCallback(
+    (): string => getEffectiveRole(user.role as string, conversationRole),
+    [user.role, conversationRole],
+  );
 
   return {
     handleEditMessage,

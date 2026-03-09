@@ -716,43 +716,43 @@ describe('ParticipantsService', () => {
     const conversationId = 'conv-role';
     const userId = 'user-role';
 
-    it('should call PATCH with correct endpoint and body for ADMIN', async () => {
+    it('should call PATCH with correct endpoint and body for admin', async () => {
       mockApi.patch.mockResolvedValue({} as any);
 
-      await participantsService.updateParticipantRole(conversationId, userId, 'ADMIN');
+      await participantsService.updateParticipantRole(conversationId, userId, 'admin');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
         `/conversations/${conversationId}/participants/${userId}/role`,
-        { role: 'ADMIN' }
+        { role: 'admin' }
       );
     });
 
-    it('should call PATCH with correct endpoint and body for MODERATOR', async () => {
+    it('should call PATCH with correct endpoint and body for moderator', async () => {
       mockApi.patch.mockResolvedValue({} as any);
 
-      await participantsService.updateParticipantRole(conversationId, userId, 'MODERATOR');
+      await participantsService.updateParticipantRole(conversationId, userId, 'moderator');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
         `/conversations/${conversationId}/participants/${userId}/role`,
-        { role: 'MODERATOR' }
+        { role: 'moderator' }
       );
     });
 
-    it('should call PATCH with correct endpoint and body for MEMBER', async () => {
+    it('should call PATCH with correct endpoint and body for member', async () => {
       mockApi.patch.mockResolvedValue({} as any);
 
-      await participantsService.updateParticipantRole(conversationId, userId, 'MEMBER');
+      await participantsService.updateParticipantRole(conversationId, userId, 'member');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
         `/conversations/${conversationId}/participants/${userId}/role`,
-        { role: 'MEMBER' }
+        { role: 'member' }
       );
     });
 
     it('should invalidate cache after success', async () => {
       mockApi.patch.mockResolvedValue({} as any);
 
-      await participantsService.updateParticipantRole(conversationId, userId, 'ADMIN');
+      await participantsService.updateParticipantRole(conversationId, userId, 'admin');
 
       expect(mockCache.invalidateParticipantsCache).toHaveBeenCalledTimes(1);
     });
@@ -762,7 +762,7 @@ describe('ParticipantsService', () => {
       mockApi.patch.mockRejectedValue(error);
 
       await expect(
-        participantsService.updateParticipantRole(conversationId, userId, 'ADMIN')
+        participantsService.updateParticipantRole(conversationId, userId, 'admin')
       ).rejects.toThrow('Role update failed');
     });
 
@@ -770,7 +770,7 @@ describe('ParticipantsService', () => {
       mockApi.patch.mockRejectedValue(new Error('fail'));
 
       try {
-        await participantsService.updateParticipantRole(conversationId, userId, 'ADMIN');
+        await participantsService.updateParticipantRole(conversationId, userId, 'admin');
       } catch {
         // expected
       }

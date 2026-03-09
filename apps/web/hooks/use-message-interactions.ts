@@ -6,6 +6,7 @@ import type { Message } from '@meeshy/shared/types/conversation';
 import type { ConversationType } from '@meeshy/shared/types';
 import { formatFullDate } from '@/utils/date-format';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 
 interface UseMessageInteractionsProps {
   message: Partial<Message> & { id: string; content: string; createdAt: Date | string; senderId?: string; };
@@ -51,8 +52,7 @@ export function useMessageInteractions({
   const canModifyMessage = useCallback(() => {
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
-    const normalizedRole = userRole.toUpperCase();
-    const hasSpecialPrivileges = ['MODERATOR', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(normalizedRole);
+    const hasSpecialPrivileges = hasModeratorPrivileges(userRole);
 
     if (messageAge > twentyFourHoursInMs && !hasSpecialPrivileges) {
       return false;
@@ -71,7 +71,7 @@ export function useMessageInteractions({
   const canDeleteMessage = useCallback(() => {
     if (onEnterDeleteMode) return true;
 
-    if (['BIGBOSS', 'ADMIN', 'MODERATOR', 'CREATOR'].includes(userRole.toUpperCase())) return true;
+    if (hasModeratorPrivileges(userRole)) return true;
 
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twelveHours = 12 * 60 * 60 * 1000;
