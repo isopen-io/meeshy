@@ -66,8 +66,9 @@ extension ProfileSheetUser {
 
     public static func from(message: MeeshyMessage) -> ProfileSheetUser {
         ProfileSheetUser(
-            userId: message.senderId,
-            username: message.senderName ?? "?",
+            userId: message.senderUserId ?? message.senderId,
+            username: message.senderUsername ?? message.senderName ?? "?",
+            displayName: message.senderName,
             avatarURL: message.senderAvatarURL,
             accentColor: message.senderColor ?? ""
         )

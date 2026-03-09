@@ -309,6 +309,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var senderUsername: String?
     public var senderColor: String?
     public var senderAvatarURL: String?
+    public var senderUserId: String?
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -343,7 +344,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
-                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
+                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0) {
@@ -359,7 +360,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
-        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
+        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount

@@ -276,7 +276,7 @@ extension APIMessage {
             attachments: uiAttachments, reactions: uiReactions, replyTo: uiReplyTo,
             forwardedFrom: uiForwardRef,
             senderName: senderDisplayName, senderUsername: sender?.username, senderColor: senderColor,
-            senderAvatarURL: sender?.avatar,
+            senderAvatarURL: sender?.avatar, senderUserId: sender?.userId,
             isMe: senderId == currentUserId
         )
     }
