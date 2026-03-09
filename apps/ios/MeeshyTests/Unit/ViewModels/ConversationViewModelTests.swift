@@ -734,14 +734,14 @@ final class ConversationViewModelTests: XCTestCase {
             linkId: "mshy_test",
             conversationId: "conv-456"
         )
-        let _ = makeSUT(anonymousSession: session)
+        let sut = makeSUT(anonymousSession: session)
         XCTAssertEqual(APIClient.shared.anonymousSessionToken, "test-anon-token")
-        // Cleanup
-        APIClient.shared.anonymousSessionToken = nil
+        _ = sut
     }
 
     func test_init_withNilAnonymousSession_doesNotSetSessionToken() {
-        let _ = makeSUT(anonymousSession: nil)
+        let sut = makeSUT(anonymousSession: nil)
         XCTAssertNil(APIClient.shared.anonymousSessionToken)
+        _ = sut
     }
 }

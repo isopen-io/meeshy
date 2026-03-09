@@ -25,12 +25,12 @@ final class MockMessageService: MessageServiceProviding {
     )
     var sendResult: Result<SendMessageResponseData, Error> = .success(
         JSONStub.decode("""
-        {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":null,"content":"","messageType":null,"createdAt":"2026-01-01T00:00:00.000Z"}
+        {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","content":"","messageType":null,"createdAt":"2026-01-01T00:00:00.000Z"}
         """)
     )
     var editResult: Result<APIMessage, Error> = .success(
         JSONStub.decode("""
-        {"id":"000000000000000000000001","conversationId":"000000000000000000000002","createdAt":"2026-01-01T00:00:00.000Z"}
+        {"id":"000000000000000000000001","conversationId":"000000000000000000000002","senderId":"000000000000000000000099","createdAt":"2026-01-01T00:00:00.000Z"}
         """)
     )
     var deleteResult: Result<Void, Error> = .success(())
