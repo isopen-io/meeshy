@@ -59,7 +59,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -139,7 +145,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -216,7 +228,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -239,6 +257,31 @@ export class ReactionHandler {
       };
       if (callback) callback(errorResponse);
     }
+  }
+
+  /**
+   * Résout le Participant.id pour un utilisateur enregistré via le messageId → conversationId.
+   * Pour les anonymes, retourne directement user.participantId.
+   */
+  private async _resolveParticipantId(
+    user: SocketUser | undefined,
+    userId: string,
+    isAnonymous: boolean,
+    messageId: string
+  ): Promise<string | undefined> {
+    if (isAnonymous) return user?.participantId;
+
+    const msg = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { conversationId: true }
+    });
+    if (!msg) return undefined;
+
+    const participant = await this.prisma.participant.findFirst({
+      where: { userId, conversationId: msg.conversationId, isActive: true },
+      select: { id: true }
+    });
+    return participant?.id;
   }
 
   /**
