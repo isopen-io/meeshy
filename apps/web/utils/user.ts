@@ -1,4 +1,4 @@
-import { User, ThreadMember } from '@/types';
+import { User, Participant } from '@/types';
 import { SUPPORTED_LANGUAGES } from '@/types';
 
 /**
@@ -71,18 +71,20 @@ export function getUserFirstName(user: User | null | undefined): string {
 /**
  * Retourne le prénom d'un membre de thread
  */
-export function getThreadMemberFirstName(member: ThreadMember): string {
-  const user = member.user;
-  
-  if (user.firstName) {
-    return user.firstName;
+export function getThreadMemberFirstName(member: Participant): string {
+  if (member.user?.firstName) {
+    return member.user.firstName;
   }
-  
-  if (user.displayName) {
-    return user.displayName.split(' ')[0];
+
+  if (member.displayName) {
+    return member.displayName.split(' ')[0];
   }
-  
-  return user.username;
+
+  if (member.user?.username) {
+    return member.user.username;
+  }
+
+  return 'Utilisateur';
 }
 
 /**
@@ -107,10 +109,10 @@ export function formatUserForConversation(user: User): string {
  * Formate un membre de thread pour l'affichage dans une conversation
  * Retourne "firstName (username)"
  */
-export function formatThreadMemberForConversation(member: ThreadMember): string {
-  const user = member.user;
+export function formatThreadMemberForConversation(member: Participant): string {
   const firstName = getThreadMemberFirstName(member);
-  return `${firstName} (${user.username})`;
+  const username = member.user?.username || member.displayName;
+  return `${firstName} (${username})`;
 }
 
 /**
@@ -126,8 +128,8 @@ export function getLanguageFlag(languageCode: string): string {
  * Affiche: "🏴 username, 🏴 username, 🏴 username" (avec drapeaux des langues de lecture)
  */
 export function formatConversationTitle(
-  participants: ThreadMember[], 
-  currentUserId: string, 
+  participants: Participant[],
+  currentUserId: string,
   isGroup: boolean,
   members?: Array<User>
 ): string {
@@ -160,11 +162,11 @@ export function formatConversationTitle(
       }
       
       const flag = getLanguageFlag(readingLanguage);
-      return `${flag} ${participant.user.username}`;
+      return `${flag} ${participant.user?.username || participant.displayName}`;
     }
-    
+
     // Fallback si pas d'infos complètes
-    return `🌐 ${participant.user.username}`;
+    return `🌐 ${participant.user?.username || participant.displayName}`;
   });
   
   if (otherParticipants.length > 3) {
@@ -179,36 +181,36 @@ export function formatConversationTitle(
  * Affiche: "🏴 username, 🏴 username, 🏴 username" (avec drapeaux des langues de lecture)
  */
 export function formatConversationTitleFromMembers(
-  participants: ThreadMember[], 
+  participants: Participant[],
   currentUserId: string
 ): string {
   const otherParticipants = participants.filter(p => p.userId !== currentUserId);
-  
+
   if (otherParticipants.length === 0) {
     return "Conversation vide";
   }
-  
+
   // Afficher les 3 premiers participants avec drapeau + username
   const displayParticipants = otherParticipants.slice(0, 3);
   const participantNames = displayParticipants.map(participant => {
     const user = participant.user;
-    
+
     // Déterminer la langue de lecture selon les préférences de l'utilisateur
-    let readingLanguage = user.systemLanguage; // Par défaut
-    
-    if (user.useCustomDestination && user.customDestinationLanguage) {
+    let readingLanguage = participant.language || user?.systemLanguage || 'en';
+
+    if (user?.useCustomDestination && user?.customDestinationLanguage) {
       readingLanguage = user.customDestinationLanguage;
-    } else if (user.translateToRegionalLanguage) {
+    } else if (user?.translateToRegionalLanguage) {
       readingLanguage = user.regionalLanguage;
     }
-    
+
     const flag = getLanguageFlag(readingLanguage);
-    return `${flag} ${user.username}`;
+    return `${flag} ${user?.username || participant.displayName}`;
   });
-  
+
   if (otherParticipants.length > 3) {
     participantNames.push(`+${otherParticipants.length - 3} autres`);
   }
-  
+
   return participantNames.join(', ');
 }
