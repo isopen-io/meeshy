@@ -215,12 +215,13 @@ export function usePreferences<C extends PreferenceCategory>(
         });
       }
 
-      return { previousData };
+      return { previousData } as { previousData: PreferenceDataType<C> | undefined };
     },
-    onError: (err, variables, context) => {
+    onError: (err: Error, variables: Partial<PreferenceDataType<C>>, _onMutateResult: unknown, context: unknown) => {
+      const ctx = context as { previousData?: PreferenceDataType<C> } | undefined;
       // Rollback en cas d'erreur
-      if (context?.previousData) {
-        queryClient.setQueryData(queryKey, context.previousData);
+      if (ctx?.previousData) {
+        queryClient.setQueryData(queryKey, ctx.previousData);
       }
 
       // Vérifier si c'est une erreur de consentement
@@ -277,11 +278,12 @@ export function usePreferences<C extends PreferenceCategory>(
       // Optimistic update avec remplacement complet
       queryClient.setQueryData<PreferenceDataType<C>>(queryKey, newData);
 
-      return { previousData };
+      return { previousData } as { previousData: PreferenceDataType<C> | undefined };
     },
-    onError: (err, variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(queryKey, context.previousData);
+    onError: (err: Error, variables: PreferenceDataType<C>, _onMutateResult: unknown, context: unknown) => {
+      const ctx = context as { previousData?: PreferenceDataType<C> } | undefined;
+      if (ctx?.previousData) {
+        queryClient.setQueryData(queryKey, ctx.previousData);
       }
 
       const violations = checkConsentError(err);

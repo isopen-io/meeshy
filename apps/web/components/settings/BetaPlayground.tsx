@@ -82,9 +82,8 @@ interface SpeechRecognition extends EventTarget {
 
 // Déclaration globale pour TypeScript
 declare global {
+  // @ts-ignore - SpeechRecognition type override for compatibility
   interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
     translation?: {
       canTranslate?: (options: { sourceLanguage: string; targetLanguage: string }) => Promise<string>;
       createTranslator?: (options: { sourceLanguage: string; targetLanguage: string }) => Promise<any>;
@@ -349,9 +348,9 @@ export function BetaPlayground() {
 
       const startTime = performance.now();
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognition.onresult = (event: any) => {
         const transcript = Array.from(event.results)
-          .map((result) => result[0].transcript)
+          .map((result: any) => result[0].transcript)
           .join('');
 
         setTranscriptionOutput(transcript);
@@ -380,7 +379,7 @@ export function BetaPlayground() {
         setIsRecording(false);
       };
 
-      recognitionRef.current = recognition;
+      recognitionRef.current = recognition as any;
       recognition.start();
       setIsRecording(true);
       setTranscriptionMetrics({ ...transcriptionMetrics, status: 'running' });

@@ -59,7 +59,7 @@ export class AttachmentService {
       });
 
       // Vérifier que c'est bien un File valide
-      if (!(file instanceof File) && !(file instanceof Blob)) {
+      if (!((file as any) instanceof File) && !((file as any) instanceof Blob)) {
         console.error(`❌ [AttachmentService.uploadFiles] Invalid file at index ${index}:`, typeof file);
         throw new Error(`Invalid file at index ${index}: expected File or Blob`);
       }

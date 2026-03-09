@@ -180,11 +180,11 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
         const messageType = lastMessage.messageType || 'text';
         lastMessageData = {
           content: lastMessage.content || '',
-          type: messageType as 'text' | 'photo' | 'voice' | 'video' | 'file' | 'location',
+          type: messageType as 'text' | 'photo' | 'voice' | 'file',
           timestamp: lastMessage.createdAt
             ? new Date(lastMessage.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
             : '',
-          senderName: conv.isGroup ? lastMessage.sender?.displayName || lastMessage.sender?.username : undefined,
+          senderName: conv.isGroup ? lastMessage.sender?.displayName || (lastMessage.sender as any)?.username : undefined,
         };
       }
 
@@ -203,7 +203,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
         participantCount: conv.participants?.length,
         tags: [],
         unreadCount: conv.unreadCount || 0,
-        lastMessage: lastMessageData,
+        lastMessage: lastMessageData as any,
         isTyping: isTypingInConv,
       };
     });

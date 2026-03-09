@@ -203,9 +203,14 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
   // Don't return it to avoid unnecessary re-renders
 
   return {
+    honeypotValue,
+    setHoneypotValue,
+    honeypotFieldName,
     honeypotProps,
     validateSubmission,
     reset,
+    timeElapsed: Date.now() - loadTimeRef.current,
+    jsVerified,
   };
 }
 

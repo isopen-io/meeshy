@@ -55,4 +55,3 @@ function ReactionPicker({ onReact, currentReaction, className }: ReactionPickerP
 ReactionPicker.displayName = 'ReactionPicker';
 
 export { ReactionPicker };
-export type { ReactionPickerProps };

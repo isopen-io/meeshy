@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ReactNode } from 'react';
+import React, { useState, useRef, ReactNode } from 'react';
 
 export interface SwipeAction {
   id: string;
@@ -25,7 +25,7 @@ export function SwipeableRow({
   rightActions,
   onLongPress,
   className = '',
-}: SwipeableRowProps): JSX.Element {
+}: SwipeableRowProps): React.JSX.Element {
   const [offsetX, setOffsetX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef(0);

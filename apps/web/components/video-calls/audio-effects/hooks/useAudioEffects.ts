@@ -37,7 +37,8 @@ export const useAudioEffects = (effectsState: AudioEffectsState, onToggleEffect:
 
   const getEffectStatus = useCallback((id: EffectTileType) => {
     if (id === 'reset') return null;
-    return effectsState[id as AudioEffectType];
+    const camelKey = id.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
+    return (effectsState as any)[camelKey];
   }, [effectsState]);
 
   return {

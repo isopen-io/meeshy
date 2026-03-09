@@ -149,7 +149,7 @@ describe('useConversationTyping', () => {
         {
           ...mockParticipants[0],
           user: {
-            ...mockParticipants[0].user,
+            ...(mockParticipants[0].user as Record<string, unknown>),
             displayName: undefined,
           },
         } as Participant,
@@ -599,7 +599,7 @@ describe('useConversationTyping', () => {
         {
           ...mockParticipants[0],
           user: {
-            ...mockParticipants[0].user,
+            ...(mockParticipants[0].user as Record<string, unknown>),
             displayName: 'Updated Name',
           },
         } as Participant,

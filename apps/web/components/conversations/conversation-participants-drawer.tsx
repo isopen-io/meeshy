@@ -41,6 +41,9 @@ import type { User as SocketIOUser } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+
+/** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
+type ParticipantUser = SocketIOUser & { type?: string; sessionToken?: string; shareLinkId?: string };
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
@@ -106,7 +109,7 @@ export function ConversationParticipantsDrawer({
   // Initialiser le store avec les participants au montage
   useEffect(() => {
     if (participants && participants.length > 0) {
-      const users = participants.map(p => p.user);
+      const users = participants.map(p => p.user as SocketIOUser);
       setStoreParticipants(users);
     }
   }, [participants, setStoreParticipants]);
@@ -115,7 +118,7 @@ export function ConversationParticipantsDrawer({
   const rawActiveParticipants = storeParticipants.length > 0
     ? participants.map(p => ({
         ...p,
-        user: storeParticipants.find(u => u.id === p.userId) || p.user
+        user: storeParticipants.find(u => u.id === p.userId) || (p.user as SocketIOUser)
       }))
     : participants;
 
@@ -175,14 +178,14 @@ export function ConversationParticipantsDrawer({
           type: 'user' as const,
           userId: user.id,
           displayName: user.displayName || user.username,
-          avatar: user.avatar,
-          role: MemberRole.MEMBER,
+          avatar: user.avatar ?? undefined,
+          role: MemberRole.MEMBER as string,
           language: 'en',
-          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
-          isActive: true,
-          isOnline: user.isOnline ?? false,
+          permissions: { canSendMessages: true as boolean, canSendFiles: true as boolean, canSendImages: true as boolean, canSendVideos: true as boolean, canSendAudios: true as boolean, canSendLocations: true as boolean, canSendLinks: true as boolean },
+          isActive: true as boolean,
+          isOnline: (user.isOnline ?? false) as boolean,
           joinedAt: new Date(),
-          user,
+          user: user as unknown,
         }));
         setBackendSearchResults(mappedResults);
       } catch (error) {
@@ -243,10 +246,10 @@ export function ConversationParticipantsDrawer({
     ? backendSearchResults
     : activeParticipants.filter(participant => {
         if (!searchQuery.trim()) return true;
-        const user = participant.user;
+        const user = participant.user as ParticipantUser;
         const searchTerm = searchQuery.toLowerCase();
         return (
-          user.username.toLowerCase().includes(searchTerm) ||
+          user.username?.toLowerCase().includes(searchTerm) ||
           user.displayName?.toLowerCase().includes(searchTerm) ||
           user.firstName?.toLowerCase().includes(searchTerm) ||
           user.lastName?.toLowerCase().includes(searchTerm) ||
@@ -255,8 +258,8 @@ export function ConversationParticipantsDrawer({
       });
 
   // Séparer en ligne / hors ligne
-  const onlineParticipants = filteredParticipants.filter(p => p.user.isOnline);
-  const offlineParticipants = filteredParticipants.filter(p => !p.user.isOnline);
+  const onlineParticipants = filteredParticipants.filter(p => (p.user as ParticipantUser)?.isOnline);
+  const offlineParticipants = filteredParticipants.filter(p => !(p.user as ParticipantUser)?.isOnline);
 
   // Pagination : limiter le rendu
   const displayedOnline = onlineParticipants.slice(0, displayLimit);
@@ -374,7 +377,7 @@ export function ConversationParticipantsDrawer({
 
   // Rendu d'une carte participant (partagé online/offline)
   const renderParticipantCard = (participant: Participant, index: number, isOnline: boolean) => {
-    const user = participant.user;
+    const user = participant.user as ParticipantUser;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
 
@@ -438,7 +441,7 @@ export function ConversationParticipantsDrawer({
                   {t('conversationDetails.you')}
                 </Badge>
               )}
-              {([MemberRole.ADMIN, MemberRole.CREATOR].includes(participant.role)) && (
+              {([MemberRole.ADMIN as string, MemberRole.CREATOR as string].includes(participant.role)) && (
                 <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
               )}
             </div>
@@ -824,7 +827,7 @@ export function ConversationParticipantsDrawer({
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         conversationId={conversationId}
-        currentParticipants={participants.map(p => p.user)}
+        currentParticipants={participants.map(p => p.user as SocketIOUser)}
         onUserInvited={handleUserInvited}
       />
     </>

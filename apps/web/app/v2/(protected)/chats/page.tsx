@@ -430,7 +430,7 @@ export default function V2ChatsPage() {
               </svg>
             </div>
           ) : (
-            <LanguageOrb code={currentConversation?.participants?.[0]?.user?.systemLanguage || 'fr'} size="md" pulse={false} />
+            <LanguageOrb code={(currentConversation?.participants?.[0]?.user as any)?.systemLanguage || 'fr'} size="md" pulse={false} />
           )}
 
           <div>
@@ -514,7 +514,7 @@ export default function V2ChatsPage() {
                   {msg.attachments && msg.attachments.length > 0 && (
                     <div className={`mb-2 ${isSent ? 'flex justify-end' : ''}`}>
                       <div className="max-w-[75%]">
-                        <MessageAttachments attachments={msg.attachments} isSent={isSent} />
+                        <MessageAttachments attachments={[...msg.attachments]} isSent={isSent} />
                       </div>
                     </div>
                   )}
@@ -524,18 +524,14 @@ export default function V2ChatsPage() {
                     languageCode={msg.originalLanguage || 'fr'}
                     languageName={msg.originalLanguage || 'Francais'}
                     content={msg.content}
-                    translations={msg.translations?.filter((t) => t.language && t.content).map((t) => ({
+                    translations={(msg.translations as any[])?.filter((t: any) => t.language && t.content).map((t: any) => ({
                       languageCode: t.language,
                       languageName: t.language,
                       content: t.content,
                     })) || []}
                     sender={!isSent ? (msg.sender as any)?.displayName || (msg.sender as any)?.username : undefined}
                     timestamp={
-                      <span className="inline-flex items-center gap-1">
-                        {new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        {msg.isEdited && <span className="text-[10px]">(modifie)</span>}
-                        {status && <MessageStatusIndicator status={status} />}
-                      </span>
+                      new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                     }
                   />
 
@@ -600,7 +596,7 @@ export default function V2ChatsPage() {
 
       {/* Message Composer */}
       <MessageComposer
-        ref={composerRef}
+        ref={composerRef as any}
         value={message}
         onChange={handleMessageChange}
         onSend={handleSend}

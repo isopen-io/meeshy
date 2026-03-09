@@ -507,6 +507,6 @@ export class WebRTCService {
 
     this.participantId = null;
 
-    logger.info('[WebRTCService] Connection closed and cleaned up');
+    logger.info('[WebRTCService]', 'Connection closed and cleaned up');
   }
 }

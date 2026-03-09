@@ -6,6 +6,9 @@ import type { Participant } from '@meeshy/shared/types/participant';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import type { ParticipantInfo } from './types';
 
+/** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
+type ParticipantUser = User & { sessionToken?: string; shareLinkId?: string };
+
 function isAnonymousUser(user: any): boolean {
   return user && ('sessionToken' in user || 'shareLinkId' in user);
 }
@@ -25,7 +28,7 @@ export function useParticipantInfo(
 
     const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
     if (otherParticipant?.user) {
-      const user = otherParticipant.user;
+      const user = otherParticipant.user as ParticipantUser;
       const name = user.displayName || user.username ||
              (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
       if (name) return name;
@@ -74,8 +77,8 @@ export function useParticipantInfo(
   const getConversationAvatarUrl = useCallback(() => {
     if (conversation.type === 'direct') {
       const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
-      if (otherParticipant?.user?.avatar) {
-        return otherParticipant.user.avatar;
+      if (otherParticipant?.user && (otherParticipant.user as ParticipantUser)?.avatar) {
+        return (otherParticipant.user as ParticipantUser).avatar;
       }
 
       const otherConvParticipant = (conversation as any).participants?.find((p: any) => p.userId !== currentUser?.id);
@@ -129,7 +132,7 @@ export function useParticipantInfo(
         }
 
         if (otherParticipant?.user) {
-          return getUserStatus(otherParticipant.user);
+          return getUserStatus(otherParticipant.user as ParticipantUser);
         }
       }
 

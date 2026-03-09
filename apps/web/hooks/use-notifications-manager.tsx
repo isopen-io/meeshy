@@ -81,10 +81,9 @@ export function useNotificationsManager() {
       return name.substring(0, 2).toUpperCase();
     };
 
-    const hasAvatar = !!notification.sender;
-    const senderName = notification.sender?.displayName ||
-                       notification.sender?.firstName ||
-                       notification.sender?.username ||
+    const hasAvatar = !!notification.actor;
+    const senderName = notification.actor?.displayName ||
+                       notification.actor?.username ||
                        'User';
 
     // Toast personnalisé avec avatar de l'auteur
@@ -103,9 +102,9 @@ export function useNotificationsManager() {
           {hasAvatar ? (
             <div className="w-10 h-10 flex-shrink-0">
               <div className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                {notification.sender?.avatar ? (
+                {notification.actor?.avatar ? (
                   <img
-                    src={notification.sender.avatar}
+                    src={notification.actor.avatar}
                     alt={senderName}
                     className="w-full h-full object-cover"
                   />

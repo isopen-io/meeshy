@@ -194,7 +194,8 @@ const mockStatuses: StatusItem[] = [
 // ─── Page ────────────────────────────────────────────────────────────────
 
 export default function V2FeedsPage() {
-  const { toast } = useToast();
+  const toastCtx = useToast();
+  const toast = (opts: any) => toastCtx.addToast(opts.title || opts.description || '', opts.type);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [newPostContent, setNewPostContent] = useState('');
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
@@ -288,9 +289,13 @@ export default function V2FeedsPage() {
     }
   };
 
-  const handleStoryPublish = (story: { content?: string; storyEffects: Record<string, unknown>; visibility: string }) => {
+  const handleStoryPublish = (story: { content?: string; storyEffects: Record<string, unknown>; visibility: string; mediaIds?: string[] }) => {
     setStoryComposerOpen(false);
-    toast({ title: 'Story publi\u00e9e !', description: 'Votre story est visible par vos amis.', type: 'success' });
+    const mediaCount = story.mediaIds?.length ?? 0;
+    const desc = mediaCount > 0
+      ? `Votre story est visible par vos amis (${mediaCount} media).`
+      : 'Votre story est visible par vos amis.';
+    toast({ title: 'Story publi\u00e9e !', description: desc, type: 'success' });
   };
 
   const handleStatusPress = (statusId: string) => {

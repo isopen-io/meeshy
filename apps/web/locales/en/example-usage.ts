@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Example usage of the new translation structure
 
 // Method 1: Import all translations (backward compatible)

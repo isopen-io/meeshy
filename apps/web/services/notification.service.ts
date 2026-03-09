@@ -96,7 +96,7 @@ function parseNotification(raw: any): Notification {
       isRead: state.isRead ?? false,
       readAt,
       createdAt: createdAt!, // Force non-null (on gère dans l'UI)
-      expiresAt,
+      expiresAt: expiresAt ?? undefined,
     },
 
     delivery: raw.delivery || { emailSent: false, pushSent: false },
@@ -244,6 +244,15 @@ export const NotificationService = {
   async deleteNotification(notificationId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
       return apiService.delete(`/notifications/${notificationId}`);
+    });
+  },
+
+  /**
+   * Supprime toutes les notifications lues
+   */
+  async deleteAllRead(): Promise<ApiResponse<void>> {
+    return withRetry(async () => {
+      return apiService.delete('/notifications/read');
     });
   },
 

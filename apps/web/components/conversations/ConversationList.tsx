@@ -184,7 +184,7 @@ export const ConversationList = memo(function ConversationList({
                     isMuted={prefs?.isMuted || false}
                     isArchived={prefs?.isArchived || false}
                     reaction={prefs?.reaction}
-                    tags={prefs?.tags || []}
+                    tags={[...(prefs?.tags || [])]}
                     isMobile={isMobile}
                   />
                 );

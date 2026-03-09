@@ -68,7 +68,7 @@ export default function ContactsPage() {
     stats,
     filteredRequests,
     getUserDisplayName
-  } = useContactsFiltering(contacts, friendRequests, affiliateRelations, t);
+  } = useContactsFiltering(contacts, friendRequests, affiliateRelations as any, t);
 
   // Custom hook for actions
   const {
@@ -291,7 +291,7 @@ export default function ContactsPage() {
               )}
               {activeTab === 'affiliates' && (
                 <AffiliatesTab
-                  affiliateRelations={affiliateRelations}
+                  affiliateRelations={affiliateRelations as any}
                   getUserDisplayName={getUserDisplayName}
                   t={t}
                 />

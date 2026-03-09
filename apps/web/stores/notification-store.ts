@@ -13,7 +13,6 @@ import type {
   NotificationFilters,
   NotificationCounts,
   NotificationType,
-  NotificationPriority,
   NotificationPaginationOptions
 } from '@/types/notification';
 import { firebaseChecker } from '@/utils/firebase-availability-checker';
@@ -29,7 +28,6 @@ const initialState = {
     total: 0,
     unread: 0,
     byType: {} as Record<NotificationType, number>,
-    byPriority: {} as Record<NotificationPriority, number>
   },
   isLoading: false,
   isLoadingMore: false,
@@ -164,7 +162,7 @@ export const useNotificationStore = create<NotificationStore>()(
                   : [...state.notifications, ...notifications],
                 page,
                 hasMore: pagination.hasMore,
-                unreadCount: notifications.filter(n => !n.isRead).length,
+                unreadCount: notifications.filter(n => !n.state.isRead).length,
                 lastSync: new Date()
               }));
 
@@ -282,8 +280,8 @@ export const useNotificationStore = create<NotificationStore>()(
             if (notifications.length > STORE_CONFIG.MAX_NOTIFICATIONS) {
               // Supprimer les notifications lues les plus anciennes
               const sorted = [...notifications].sort((a, b) => {
-                if (a.isRead !== b.isRead) return a.isRead ? -1 : 1;
-                return a.createdAt.getTime() - b.createdAt.getTime();
+                if (a.state.isRead !== b.state.isRead) return a.state.isRead ? -1 : 1;
+                return a.state.createdAt.getTime() - b.state.createdAt.getTime();
               });
 
               const toRemoveCount = Math.ceil(STORE_CONFIG.MAX_NOTIFICATIONS * 0.2);
@@ -291,13 +289,13 @@ export const useNotificationStore = create<NotificationStore>()(
 
               return {
                 notifications: notifications.filter(n => !idsToRemove.has(n.id)),
-                unreadCount: state.unreadCount + (notification.isRead ? 0 : 1)
+                unreadCount: state.unreadCount + (notification.state.isRead ? 0 : 1)
               };
             }
 
             return {
               notifications,
-              unreadCount: state.unreadCount + (notification.isRead ? 0 : 1)
+              unreadCount: state.unreadCount + (notification.state.isRead ? 0 : 1)
             };
           });
 
@@ -315,7 +313,7 @@ export const useNotificationStore = create<NotificationStore>()(
 
             return {
               notifications,
-              unreadCount: notification && !notification.isRead
+              unreadCount: notification && !notification.state.isRead
                 ? state.unreadCount - 1
                 : state.unreadCount
             };
@@ -330,14 +328,14 @@ export const useNotificationStore = create<NotificationStore>()(
         markAsRead: async (id: string) => {
           const notification = get().notifications.find(n => n.id === id);
 
-          if (!notification || notification.isRead) {
+          if (!notification || notification.state.isRead) {
             return;
           }
 
           // Optimistic update
           set(state => ({
             notifications: state.notifications.map(n =>
-              n.id === id ? { ...n, isRead: true, readAt: new Date() } : n
+              n.id === id ? { ...n, state: { ...n.state, isRead: true, readAt: new Date() } } : n
             ),
             unreadCount: Math.max(0, state.unreadCount - 1)
           }));
@@ -352,7 +350,7 @@ export const useNotificationStore = create<NotificationStore>()(
             // Rollback optimistic update
             set(state => ({
               notifications: state.notifications.map(n =>
-                n.id === id ? { ...n, isRead: false, readAt: undefined } : n
+                n.id === id ? { ...n, state: { ...n.state, isRead: false, readAt: null } } : n
               ),
               unreadCount: state.unreadCount + 1
             }));
@@ -370,8 +368,7 @@ export const useNotificationStore = create<NotificationStore>()(
           set(state => ({
             notifications: state.notifications.map(n => ({
               ...n,
-              isRead: true,
-              readAt: n.readAt || new Date()
+              state: { ...n.state, isRead: true, readAt: n.state.readAt || new Date() }
             })),
             unreadCount: 0
           }));
@@ -422,7 +419,7 @@ export const useNotificationStore = create<NotificationStore>()(
 
           // Optimistic update
           set(state => ({
-            notifications: state.notifications.filter(n => !n.isRead)
+            notifications: state.notifications.filter(n => !n.state.isRead)
           }));
 
           try {
@@ -481,19 +478,16 @@ export const useNotificationStore = create<NotificationStore>()(
           const { notifications } = get();
 
           const byType = {} as Record<NotificationType, number>;
-          const byPriority = {} as Record<NotificationPriority, number>;
 
           notifications.forEach(n => {
             byType[n.type] = (byType[n.type] || 0) + 1;
-            byPriority[n.priority] = (byPriority[n.priority] || 0) + 1;
           });
 
           set({
             counts: {
               total: notifications.length,
-              unread: notifications.filter(n => !n.isRead).length,
+              unread: notifications.filter(n => !n.state.isRead).length,
               byType,
-              byPriority
             }
           });
         },
@@ -547,7 +541,7 @@ export const useNotificationStore = create<NotificationStore>()(
               unreadCount: 0
             };
           }
-          return persistedState as NotificationStore;
+          return persistedState as any;
         }
       }
     ),
@@ -589,6 +583,7 @@ export const useNotificationActions = () =>
       deleteAllRead: state.deleteAllRead,
       setFilters: state.setFilters,
       clearFilters: state.clearFilters,
+      updateCounts: state.updateCounts,
       setActiveConversationId: state.setActiveConversationId
     }))
   );

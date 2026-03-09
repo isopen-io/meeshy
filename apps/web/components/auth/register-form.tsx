@@ -14,5 +14,5 @@
  * Réduction: 816 lignes → ~400 lignes totales
  */
 
-export { RegisterForm } from './register-form';
+export { RegisterForm } from './register-form/index';
 export type { RegisterFormData } from '@/hooks/use-register-form';

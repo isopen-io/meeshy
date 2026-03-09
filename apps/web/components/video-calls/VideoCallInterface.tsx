@@ -116,7 +116,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         }
       } catch (error) {
         if (mounted) {
-          logger.error('[VideoCallInterface]', 'Failed to initialize local stream: ' + (error?.message || 'Unknown error'));
+          logger.error('[VideoCallInterface]', 'Failed to initialize local stream: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
       }
     };
@@ -151,7 +151,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const activeParticipants = currentCall.participants?.filter(p => !p.leftAt) || [];
 
     activeParticipants.forEach((participant) => {
-      const participantId = participant.userId || participant.anonymousId;
+      const participantId = participant.userId || participant.participantId;
 
       if (!participantId || participantId === user.id) return;
 
@@ -173,11 +173,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Monitor peer connections changes
   useEffect(() => {
     const unsubscribe = useCallStore.subscribe(
-      (state) => state.peerConnections.size,
-      (size) => setPeerConnectionsCount(size)
+      (state) => {
+        const newSize = state.peerConnections.size;
+        if (newSize !== peerConnectionsCount) {
+          setPeerConnectionsCount(newSize);
+        }
+      }
     );
     return unsubscribe;
-  }, []);
+  }, [peerConnectionsCount]);
 
   // Apply audio effects to outgoing stream
   // Replace audio tracks in all peer connections when processed audio stream changes or new connections are added
@@ -450,7 +454,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   // Get remote participant info
   const remoteParticipant = currentCall?.participants?.find(
-    p => (p.userId || p.anonymousId) !== user?.id && !p.leftAt
+    p => (p.userId || p.participantId) !== user?.id && !p.leftAt
   );
 
   // Toggle fullscreen for a participant
@@ -517,17 +521,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               className="w-full h-full object-cover"
               participantName={
                 currentCall?.participants?.find(
-                  (p) => (p.userId || p.anonymousId) === displayParticipant[0]
+                  (p) => (p.userId || p.participantId) === displayParticipant[0]
                 )?.username
               }
               isAudioEnabled={
                 currentCall?.participants?.find(
-                  (p) => (p.userId || p.anonymousId) === displayParticipant[0]
+                  (p) => (p.userId || p.participantId) === displayParticipant[0]
                 )?.isAudioEnabled ?? true
               }
               isVideoEnabled={
                 currentCall?.participants?.find(
-                  (p) => (p.userId || p.anonymousId) === displayParticipant[0]
+                  (p) => (p.userId || p.participantId) === displayParticipant[0]
                 )?.isVideoEnabled ?? true
               }
               isDisconnected={disconnectedParticipants.has(displayParticipant[0])}
@@ -560,7 +564,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         .filter(([id]) => id !== displayParticipant?.[0])
         .map(([participantId, stream], index) => {
           const participant = currentCall?.participants?.find(
-            (p) => (p.userId || p.anonymousId) === participantId
+            (p) => (p.userId || p.participantId) === participantId
           );
 
           return (

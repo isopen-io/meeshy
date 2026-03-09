@@ -47,8 +47,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isOwnMessage,
   });
 
-  const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef);
-  const { volume, isMuted, toggleMute, handleVolumeChange } = useVolume(videoRef);
+  const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef as React.RefObject<HTMLDivElement>);
+  const { volume, isMuted, toggleMute, handleVolumeChange } = useVolume(videoRef as React.RefObject<HTMLVideoElement>);
 
   const handleFullscreenClick = onOpenLightbox || toggleFullscreen;
 

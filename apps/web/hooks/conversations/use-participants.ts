@@ -60,7 +60,7 @@ function mapResponseToParticipant(
   return {
     id: response.participantId || response.id,
     conversationId,
-    type: response.type || (response.isAnonymous ? 'anonymous' : 'user'),
+    type: (response.type || (response.isAnonymous ? 'anonymous' : 'user')) as 'user' | 'anonymous' | 'bot',
     userId: response.userId || undefined,
     displayName: response.displayName || response.username,
     avatar: response.avatar || undefined,

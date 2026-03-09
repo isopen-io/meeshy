@@ -26,7 +26,7 @@ export default function CallPage({ params }: CallPageProps) {
   const resolvedParams = use(params);
   const { callId } = resolvedParams;
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isChecking: isLoading } = useAuth();
   const { currentCall, setCurrentCall, setInCall, reset } = useCallStore();
 
   const [isJoining, setIsJoining] = React.useState(false);

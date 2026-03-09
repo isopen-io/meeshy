@@ -18,7 +18,7 @@ interface MessageComposerProps {
   location?: string;
   isComposingEnabled?: boolean;
   placeholder?: string;
-  onKeyPress?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyPress?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   className?: string;
   choices?: any[];
   onAttachmentsChange?: (attachmentIds: string[], mimeTypes: string[]) => void;
@@ -76,7 +76,7 @@ export const useComposerState = (props: MessageComposerProps) => {
 
   // Typing state & glow color
   const [isTyping, setIsTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<NodeJS.Timeout>(undefined);
 
   // Cleanup typing timeout on unmount
   useEffect(() => {

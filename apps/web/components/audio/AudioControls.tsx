@@ -240,7 +240,7 @@ export const AudioControls = memo<AudioControlsProps>(({
                     >
                       <div className="relative flex-shrink-0 w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mt-0.5">
                         <span className="text-sm">{langInfo?.flag || '🌐'}</span>
-                        {audio.cloned && (
+                        {(audio as any).cloned && (
                           <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-purple-600 rounded-full flex items-center justify-center" title="Voix clonée">
                             <Sparkles className="w-2 h-2 text-white" />
                           </div>

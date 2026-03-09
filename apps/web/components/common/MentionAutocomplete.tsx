@@ -345,8 +345,8 @@ export function MentionAutocomplete({
                 <AvatarFallback className="text-xs">
                   {getUserInitials({
                     firstName: suggestion.displayName || suggestion.username,
-                    lastName: ''
-                  })}
+                    lastName: '',
+                  } as any)}
                 </AvatarFallback>
               </Avatar>
 

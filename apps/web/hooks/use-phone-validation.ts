@@ -69,7 +69,7 @@ export function usePhoneValidation({
   const [status, setStatus] = useState<PhoneValidationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [validationResult, setValidationResult] = useState<PhoneValidationResult | null>(null);
-  const checkTimeout = useRef<NodeJS.Timeout>();
+  const checkTimeout = useRef<NodeJS.Timeout>(undefined);
   const lastCheckedPhone = useRef<string>('');
 
   /**

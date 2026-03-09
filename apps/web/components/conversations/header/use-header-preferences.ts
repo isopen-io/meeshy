@@ -72,7 +72,7 @@ export function useHeaderPreferences(conversationId: string, currentUser: any, t
       isMuted: storePrefs?.isMuted ?? false,
       isArchived: storePrefs?.isArchived ?? false,
       customName: storePrefs?.customName,
-      tags: storePrefs?.tags ?? [],
+      tags: [...(storePrefs?.tags ?? [])],
       categoryName,
       isLoading: store.isLoading || isLoadingCategory,
     };

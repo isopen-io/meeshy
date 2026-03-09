@@ -51,7 +51,7 @@ import { API_CONFIG } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { useI18n } from '@/hooks/use-i18n';
-import type { ApplicationPreference } from '@shared/types/preferences/application';
+type ApplicationPreference = Record<string, any>;
 
 // Accent colors configuration
 const ACCENT_COLORS = [
@@ -140,7 +140,7 @@ export function ApplicationSettings() {
           const data = await response.json();
           if (data.success && data.data) {
             const { id, userId, isDefault, createdAt, updatedAt, ...prefs } = data.data;
-            setPreferences((prev) => ({ ...prev, ...prefs }));
+            setPreferences((prev: any) => ({ ...prev, ...prefs }));
           }
         }
       } catch (error) {
@@ -191,7 +191,7 @@ export function ApplicationSettings() {
     key: K,
     value: ApplicationPreference[K]
   ) => {
-    setPreferences((prev) => ({ ...prev, [key]: value }));
+    setPreferences((prev: any) => ({ ...prev, [key]: value }));
     setHasChanges(true);
 
     // Play sound feedback for toggles

@@ -58,7 +58,7 @@ export function useConversationStats(
       if (!userLanguages[lang]) {
         userLanguages[lang] = new Set();
       }
-      userLanguages[lang].add(participant.userId);
+      userLanguages[lang].add(participant.userId || participant.id || '');
     });
 
     return Object.entries(userLanguages)

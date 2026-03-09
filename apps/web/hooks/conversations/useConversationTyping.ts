@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Participant } from '@meeshy/shared/types';
+import type { SocketIOUser } from '@meeshy/shared/types/socketio-events';
 
 interface TypingUser {
   id: string;
@@ -59,7 +60,7 @@ function getParticipantDisplayName(
   if (participant) {
     if (participant.displayName) return participant.displayName;
     if (participant.user) {
-      const user = participant.user;
+      const user = participant.user as SocketIOUser;
       if (user.firstName || user.lastName) {
         return `${user.firstName || ''} ${user.lastName || ''}`.trim();
       }

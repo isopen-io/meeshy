@@ -222,7 +222,7 @@ export function useMessagesV2(
         translations: [],
         replyToId,
         sender: currentUser,
-      } as Message;
+      } as unknown as Message;
 
       // Add optimistic message immediately
       addMessage(optimisticMessage);

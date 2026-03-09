@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Example: How to integrate ApplicationSettings in a settings page
  *

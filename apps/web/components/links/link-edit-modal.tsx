@@ -49,10 +49,10 @@ export function LinkEditModal({ link, isOpen, onClose, onUpdate }: LinkEditModal
     allowAnonymousImages: link.allowAnonymousImages,
     allowAnonymousFiles: link.allowAnonymousFiles,
     allowViewHistory: link.allowViewHistory,
-    requireAccount: link.requireAccount || false,
+    requireAccount: (link as any).requireAccount || false,
     requireNickname: link.requireNickname,
     requireEmail: link.requireEmail,
-    requireBirthday: link.requireBirthday || false
+    requireBirthday: (link as any).requireBirthday || false
   });
 
   // Quand requireAccount est activé, activer automatiquement toutes les permissions
@@ -173,7 +173,7 @@ export function LinkEditModal({ link, isOpen, onClose, onUpdate }: LinkEditModal
                     type="datetime-local"
                     value={formData.expiresAt ? formData.expiresAt.toISOString().slice(0, 16) : ''}
                     onChange={(e) => {
-                      const date = e.target.value ? new Date(e.target.value) : null;
+                      const date = e.target.value ? new Date(e.target.value) : undefined;
                       setFormData({ ...formData, expiresAt: date });
                     }}
                     min={new Date().toISOString().slice(0, 16)}

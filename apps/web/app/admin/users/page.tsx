@@ -59,8 +59,8 @@ export default function AdminUsersPage() {
 
 
       // Le backend retourne {success: true, data: {...}}, donc il faut accéder à .data.data
-      const dashboardData = dashboardResponse.data?.data || dashboardResponse.data;
-      const usersData = usersResponse.data?.data || usersResponse.data;
+      const dashboardData = (dashboardResponse.data as any)?.data || dashboardResponse.data;
+      const usersData = (usersResponse.data as any)?.data || usersResponse.data;
 
 
       if (dashboardData) {

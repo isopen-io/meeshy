@@ -26,7 +26,7 @@ export class AnonymousChatService {
   constructor() {
     // Vérifier que le code s'exécute côté client
     if (typeof window !== 'undefined') {
-      this.sessionToken = authManager.getAnonymousSession()?.token;
+      this.sessionToken = authManager.getAnonymousSession()?.token ?? null;
     }
   }
 
@@ -36,7 +36,7 @@ export class AnonymousChatService {
   public initialize(linkId: string): void {
     this.linkId = linkId;
     if (typeof window !== 'undefined') {
-      this.sessionToken = authManager.getAnonymousSession()?.token;
+      this.sessionToken = authManager.getAnonymousSession()?.token ?? null;
     }
   }
 

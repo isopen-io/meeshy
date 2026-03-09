@@ -143,7 +143,7 @@ export class ConversationsService {
    * Obtenir les participants d'une conversation
    */
   async getParticipants(conversationId: string, filters?: ParticipantsFilters): Promise<User[]> {
-    return participantsService.getParticipants(conversationId, filters);
+    return participantsService.getParticipants(conversationId, filters) as any;
   }
 
   /**

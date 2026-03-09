@@ -67,7 +67,7 @@ export async function subscribeToPushNotifications(
     // 4. Créer une nouvelle souscription
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true, // Obligatoire - toutes les notifications doivent être visibles
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as ArrayBuffer,
     });
 
     console.log('[Push] Subscribed:', subscription.endpoint);

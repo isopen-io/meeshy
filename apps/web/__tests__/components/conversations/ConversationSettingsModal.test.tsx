@@ -282,7 +282,7 @@ const mockConversation: Conversation = {
     { userId: 'user-1', user: { id: 'user-1', username: 'alice' } },
     { userId: 'user-2', user: { id: 'user-2', username: 'bob' } },
   ],
-} as Conversation;
+} as unknown as Conversation;
 
 const mockPreferences = {
   isPinned: false,
@@ -692,9 +692,9 @@ describe('ConversationSettingsModal', () => {
     it('should show Direct badge for direct conversations', async () => {
       const directConversation = {
         ...mockConversation,
-        type: 'direct',
+        type: 'direct' as const,
         isGroup: false,
-      };
+      } as unknown as Conversation;
 
       render(
         <ConversationSettingsModal

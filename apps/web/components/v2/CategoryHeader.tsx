@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 export interface CategoryHeaderProps {
   id: string;
@@ -26,7 +26,7 @@ export function CategoryHeader({
   onToggle,
   onDrop,
   className = '',
-}: CategoryHeaderProps): JSX.Element {
+}: CategoryHeaderProps): React.JSX.Element {
   const [internalDragOver, setInternalDragOver] = useState(false);
 
   const isHighlighted = isDragOver || internalDragOver;
@@ -120,7 +120,8 @@ export function CategoryHeader({
 }
 
 // Icones par defaut pour les categories systeme
-export const CategoryIcons = {
+export const CategoryIcons: Record<string, string> = {
+  all: '\u{1F4AC}',
   pinned: '\u{1F4CC}',
   uncategorized: '\u{1F4C1}',
   archived: '\u{1F4E5}',

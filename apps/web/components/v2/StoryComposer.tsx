@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogHeader, DialogBody } from './Dialog';
 import { Button } from './Button';
+import { toast } from 'sonner';
+import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
+
+type MediaCategory = 'image' | 'video' | 'audio';
 
 interface StoryComposerProps {
   open: boolean;
@@ -18,12 +23,25 @@ interface StoryComposerProps {
     content?: string;
     storyEffects: Record<string, unknown>;
     visibility: string;
+    mediaIds?: string[];
   }) => void;
 }
 
 // ============================================================================
 // Constants
 // ============================================================================
+
+const MEDIA_LIMITS: Record<MediaCategory, number> = {
+  image: 5,
+  video: 2,
+  audio: 3,
+};
+
+const MEDIA_ACCEPT: Record<MediaCategory, string> = {
+  image: 'image/*',
+  video: 'video/*',
+  audio: 'audio/*',
+};
 
 const BACKGROUND_COLORS = [
   { id: 'terracotta', value: '#C4704B', label: 'Terracotta' },
@@ -68,6 +86,21 @@ function isGradient(bg: string): boolean {
   return bg.startsWith('linear-gradient');
 }
 
+function getMediaCategory(mimeType: string): MediaCategory | null {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return null;
+}
+
+function getCategoryLabel(category: MediaCategory): string {
+  switch (category) {
+    case 'image': return 'photo';
+    case 'video': return 'video';
+    case 'audio': return 'audio';
+  }
+}
+
 // ============================================================================
 // StoryComposer
 // ============================================================================
@@ -77,7 +110,56 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');
   const [content, setContent] = useState<string>('');
 
+  const token = useAuthStore(s => s.authToken);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    selectedFiles,
+    uploadedAttachments,
+    isUploading,
+    handleFilesSelected,
+    handleRemoveFile,
+    clearAttachments,
+  } = useAttachmentUpload({
+    token: token ?? undefined,
+    maxAttachments: MEDIA_LIMITS.image + MEDIA_LIMITS.video + MEDIA_LIMITS.audio,
+  });
+
+  const mediaCounts = useMemo(() => {
+    const counts: Record<MediaCategory, number> = { image: 0, video: 0, audio: 0 };
+    for (const file of selectedFiles) {
+      const cat = getMediaCategory(file.type);
+      if (cat) counts[cat]++;
+    }
+    return counts;
+  }, [selectedFiles]);
+
+  const handleMediaSelect = useCallback((category: MediaCategory, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const limit = MEDIA_LIMITS[category];
+    const current = mediaCounts[category];
+    const available = limit - current;
+
+    if (available <= 0) {
+      toast.error(`Limite atteinte : ${limit} ${getCategoryLabel(category)}s maximum`);
+      return;
+    }
+
+    const filesToAdd = Array.from(files).slice(0, available);
+    if (filesToAdd.length < files.length) {
+      toast.warning(
+        `Seuls ${filesToAdd.length} fichier(s) ajouté(s) (limite : ${limit} ${getCategoryLabel(category)}s)`
+      );
+    }
+
+    handleFilesSelected(filesToAdd);
+  }, [mediaCounts, handleFilesSelected]);
+
   const handlePublish = useCallback(() => {
+    const mediaIds = uploadedAttachments.map(att => att.id);
     onPublish({
       content: content || undefined,
       storyEffects: {
@@ -85,18 +167,23 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
         textStyle: selectedTextStyle,
       },
       visibility: 'public',
+      mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
     });
     setContent('');
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
-  }, [content, selectedBg, selectedTextStyle, onPublish]);
+    clearAttachments();
+  }, [content, selectedBg, selectedTextStyle, onPublish, uploadedAttachments, clearAttachments]);
 
   const handleClose = useCallback(() => {
     onClose();
     setContent('');
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
-  }, [onClose]);
+    clearAttachments();
+  }, [onClose, clearAttachments]);
+
+  const hasContent = content.trim().length > 0 || selectedFiles.length > 0;
 
   return (
     <Dialog open={open} onClose={handleClose} className="max-w-lg">
@@ -136,9 +223,9 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
           size="sm"
           variant="primary"
           onClick={handlePublish}
-          disabled={!content.trim()}
+          disabled={!hasContent || isUploading}
         >
-          Publier
+          {isUploading ? 'Upload...' : 'Publier'}
         </Button>
       </DialogHeader>
 
@@ -165,8 +252,132 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
           />
         </div>
 
+        {/* Media Preview */}
+        {selectedFiles.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {selectedFiles.map((file, index) => {
+                const category = getMediaCategory(file.type);
+                const isImage = category === 'image';
+                const isVideo = category === 'video';
+                const isAudio = category === 'audio';
+
+                return (
+                  <div
+                    key={`${file.name}-${file.lastModified}`}
+                    className="group relative rounded-lg overflow-hidden bg-[var(--gp-hover)]"
+                  >
+                    {isImage && (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="h-16 w-16 object-cover"
+                      />
+                    )}
+                    {isVideo && (
+                      <div className="flex h-16 w-16 items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--gp-text-secondary)]">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </div>
+                    )}
+                    {isAudio && (
+                      <div className="flex h-16 w-16 items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--gp-text-secondary)]">
+                          <path d="M9 18V5l12-2v13" />
+                          <circle cx="6" cy="18" r="3" />
+                          <circle cx="18" cy="16" r="3" />
+                        </svg>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(index)}
+                      className={cn(
+                        'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full',
+                        'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
+                        'transition-opacity duration-200'
+                      )}
+                      aria-label="Supprimer"
+                    >
+                      x
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-[var(--gp-text-tertiary)]">
+              {mediaCounts.image > 0 && `${mediaCounts.image}/${MEDIA_LIMITS.image} photos`}
+              {mediaCounts.image > 0 && (mediaCounts.video > 0 || mediaCounts.audio > 0) && ' · '}
+              {mediaCounts.video > 0 && `${mediaCounts.video}/${MEDIA_LIMITS.video} videos`}
+              {mediaCounts.video > 0 && mediaCounts.audio > 0 && ' · '}
+              {mediaCounts.audio > 0 && `${mediaCounts.audio}/${MEDIA_LIMITS.audio} audios`}
+            </p>
+          </div>
+        )}
+
         {/* Bottom Toolbar */}
         <div className="mt-4 space-y-3">
+          {/* Media Buttons */}
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={mediaCounts.image >= MEDIA_LIMITS.image}
+              className={cn(
+                'flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-300',
+                mediaCounts.image >= MEDIA_LIMITS.image
+                  ? 'bg-[var(--gp-hover)] text-[var(--gp-text-tertiary)] cursor-not-allowed'
+                  : 'bg-[var(--gp-hover)] text-[var(--gp-text-secondary)] hover:text-[var(--gp-text-primary)] hover:bg-[var(--gp-surface)]'
+              )}
+              title={`Photos (${mediaCounts.image}/${MEDIA_LIMITS.image})`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              {mediaCounts.image}/{MEDIA_LIMITS.image}
+            </button>
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              disabled={mediaCounts.video >= MEDIA_LIMITS.video}
+              className={cn(
+                'flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-300',
+                mediaCounts.video >= MEDIA_LIMITS.video
+                  ? 'bg-[var(--gp-hover)] text-[var(--gp-text-tertiary)] cursor-not-allowed'
+                  : 'bg-[var(--gp-hover)] text-[var(--gp-text-secondary)] hover:text-[var(--gp-text-primary)] hover:bg-[var(--gp-surface)]'
+              )}
+              title={`Videos (${mediaCounts.video}/${MEDIA_LIMITS.video})`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+              {mediaCounts.video}/{MEDIA_LIMITS.video}
+            </button>
+            <button
+              type="button"
+              onClick={() => audioInputRef.current?.click()}
+              disabled={mediaCounts.audio >= MEDIA_LIMITS.audio}
+              className={cn(
+                'flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-300',
+                mediaCounts.audio >= MEDIA_LIMITS.audio
+                  ? 'bg-[var(--gp-hover)] text-[var(--gp-text-tertiary)] cursor-not-allowed'
+                  : 'bg-[var(--gp-hover)] text-[var(--gp-text-secondary)] hover:text-[var(--gp-text-primary)] hover:bg-[var(--gp-surface)]'
+              )}
+              title={`Audios (${mediaCounts.audio}/${MEDIA_LIMITS.audio})`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              {mediaCounts.audio}/{MEDIA_LIMITS.audio}
+            </button>
+          </div>
+
           {/* Color Palette */}
           <div className="flex items-center justify-center gap-3">
             {BACKGROUND_COLORS.map((color) => (
@@ -209,6 +420,41 @@ function StoryComposer({ open, onClose, onPublish }: StoryComposerProps) {
             ))}
           </div>
         </div>
+
+        {/* Hidden file inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept={MEDIA_ACCEPT.image}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleMediaSelect('image', e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept={MEDIA_ACCEPT.video}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleMediaSelect('video', e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept={MEDIA_ACCEPT.audio}
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleMediaSelect('audio', e.target.files);
+            e.target.value = '';
+          }}
+        />
       </DialogBody>
     </Dialog>
   );

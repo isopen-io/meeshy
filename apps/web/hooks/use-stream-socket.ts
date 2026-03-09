@@ -256,7 +256,7 @@ export function useStreamSocket({
         createdAt: new Date(),
         lastActiveAt: new Date(),
         updatedAt: new Date()
-      })));
+      } as any)));
     }
   }, [conversationId, user, onActiveUsersUpdate]);
 

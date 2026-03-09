@@ -247,7 +247,7 @@ export function buildNotificationTitle(
       return t('titles.mentioned', { sender: actorName });
 
     case NotificationTypeEnum.MESSAGE_REACTION:
-      const emoji = notification.metadata?.reactionEmoji || '❤️';
+      const emoji = (notification.metadata as any)?.reactionEmoji || '❤️';
       return t('titles.reaction', { sender: actorName, emoji });
 
     case NotificationTypeEnum.CONTACT_REQUEST:
@@ -266,7 +266,7 @@ export function buildNotificationTitle(
       return t('titles.memberJoined', { title: conversationTitle });
 
     case NotificationTypeEnum.MISSED_CALL:
-      const callType = notification.metadata?.callType || 'video';
+      const callType = (notification.metadata as any)?.callType || 'video';
       return t('titles.missedCall', { type: callType });
 
     case NotificationTypeEnum.SYSTEM:
@@ -291,12 +291,12 @@ export function buildNotificationContent(
     notification.type === NotificationTypeEnum.MESSAGE_REACTION ||
     notification.type === 'reaction' as NotificationType
   ) {
-    return (notification.metadata?.messageContent as string) || '';
+    return ((notification.metadata as any)?.messageContent as string) || '';
   }
 
   // Le content est stocké dans le champ content (aperçu du message)
   if (notification.content) {
-    return formatMessagePreview(notification.content, notification.metadata?.attachments);
+    return formatMessagePreview(notification.content, (notification.metadata as any)?.attachments);
   }
 
   // Messages par défaut basés sur le type (si pas de content)
@@ -330,7 +330,7 @@ export function buildNotificationContent(
       return t('content.contactRequestMessage', { sender: actorName });
 
     case NotificationTypeEnum.NEW_CONVERSATION_GROUP:
-      const isMember = notification.metadata?.isMember;
+      const isMember = (notification.metadata as any)?.isMember;
       if (!isMember) {
         return t('content.notMemberHint');
       }

@@ -54,7 +54,7 @@ export const ParticipantsDisplay = memo(function ParticipantsDisplay({
         conversationId={conversation.id}
         participants={conversationParticipants}
         currentUser={currentUser}
-        isGroup={conversation.type !== 'direct'}
+        isGroup={(conversation.type as string) !== 'direct'}
         conversationType={conversation.type}
         typingUsers={typingUsers.map(u => ({ userId: u.userId, conversationId: u.conversationId }))}
         conversationTitle={customName}

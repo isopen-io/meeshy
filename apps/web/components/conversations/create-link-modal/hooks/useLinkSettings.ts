@@ -8,7 +8,7 @@ export function useLinkSettings() {
   const [linkTitle, setLinkTitle] = useState('');
   const [linkIdentifier, setLinkIdentifier] = useState('');
   const [description, setDescription] = useState('');
-  const [expirationDays, setExpirationDays] = useState(DEFAULT_LINK_SETTINGS.expirationDays);
+  const [expirationDays, setExpirationDays] = useState<number>(DEFAULT_LINK_SETTINGS.expirationDays);
   const [maxUses, setMaxUses] = useState<number | undefined>(DEFAULT_LINK_SETTINGS.maxUses);
   const [maxConcurrentUsers, setMaxConcurrentUsers] = useState<number | undefined>(
     DEFAULT_LINK_SETTINGS.maxConcurrentUsers
@@ -17,20 +17,20 @@ export function useLinkSettings() {
     DEFAULT_LINK_SETTINGS.maxUniqueSessions
   );
 
-  const [allowAnonymousMessages, setAllowAnonymousMessages] = useState(
+  const [allowAnonymousMessages, setAllowAnonymousMessages] = useState<boolean>(
     DEFAULT_LINK_SETTINGS.allowAnonymousMessages
   );
-  const [allowAnonymousFiles, setAllowAnonymousFiles] = useState(
+  const [allowAnonymousFiles, setAllowAnonymousFiles] = useState<boolean>(
     DEFAULT_LINK_SETTINGS.allowAnonymousFiles
   );
-  const [allowAnonymousImages, setAllowAnonymousImages] = useState(
+  const [allowAnonymousImages, setAllowAnonymousImages] = useState<boolean>(
     DEFAULT_LINK_SETTINGS.allowAnonymousImages
   );
-  const [allowViewHistory, setAllowViewHistory] = useState(DEFAULT_LINK_SETTINGS.allowViewHistory);
-  const [requireAccount, setRequireAccount] = useState(DEFAULT_LINK_SETTINGS.requireAccount);
-  const [requireNickname, setRequireNickname] = useState(DEFAULT_LINK_SETTINGS.requireNickname);
-  const [requireEmail, setRequireEmail] = useState(DEFAULT_LINK_SETTINGS.requireEmail);
-  const [requireBirthday, setRequireBirthday] = useState(DEFAULT_LINK_SETTINGS.requireBirthday);
+  const [allowViewHistory, setAllowViewHistory] = useState<boolean>(DEFAULT_LINK_SETTINGS.allowViewHistory);
+  const [requireAccount, setRequireAccount] = useState<boolean>(DEFAULT_LINK_SETTINGS.requireAccount);
+  const [requireNickname, setRequireNickname] = useState<boolean>(DEFAULT_LINK_SETTINGS.requireNickname);
+  const [requireEmail, setRequireEmail] = useState<boolean>(DEFAULT_LINK_SETTINGS.requireEmail);
+  const [requireBirthday, setRequireBirthday] = useState<boolean>(DEFAULT_LINK_SETTINGS.requireBirthday);
   const [allowedLanguages, setAllowedLanguages] = useState<string[]>(
     DEFAULT_LINK_SETTINGS.allowedLanguages
   );

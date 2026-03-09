@@ -13,7 +13,7 @@ export function getParticipantDisplayName(user: { displayName?: string; firstNam
 }
 
 export function getParticipantInitials(user: { displayName?: string; firstName?: string; lastName?: string; username: string }): string {
-  return getUserInitials(user);
+  return getUserInitials(user as any);
 }
 
 export function isParticipantModerator(role: string): boolean {

@@ -36,7 +36,7 @@ interface UseAudioPlaybackOptions {
 
 interface UseAudioPlaybackReturn {
   // Refs
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   animationFrameRef: React.MutableRefObject<number | null>;
 
   // État de lecture

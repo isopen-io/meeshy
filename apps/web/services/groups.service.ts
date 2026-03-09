@@ -129,7 +129,7 @@ class GroupsService {
 
     // Validation: minimum 2 caractères requis par l'API
     if (trimmedQuery.length < 2) {
-      return { data: [], status: 200 };
+      return { data: [], success: true } as any;
     }
 
     const params = { search: trimmedQuery, ...(excludeGroupId && { excludeGroup: excludeGroupId }) };

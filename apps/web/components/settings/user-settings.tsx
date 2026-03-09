@@ -394,10 +394,10 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.success(t('profile.username.success', 'Username modifié avec succès !'));
 
         // Mettre à jour l'utilisateur
-        const updatedUser: UserType = {
+        const updatedUser = {
           ...user,
           username: data.data.username
-        };
+        } as UserType;
         onUserUpdate(updatedUser);
 
         // Réinitialiser
@@ -526,11 +526,11 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.success(t('profile.phone.changed', 'Téléphone modifié avec succès !'));
 
         // Mettre à jour l'utilisateur
-        const updatedUser: UserType = {
+        const updatedUser = {
           ...user,
           phoneNumber: data.data.newPhoneNumber,
           phoneVerifiedAt: new Date()
-        };
+        } as UserType;
         onUserUpdate(updatedUser);
 
         // Réinitialiser
@@ -1638,6 +1638,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     email: user.email || '',
                     phoneNumber: user.phoneNumber || '',
                     bio: user.bio || '',
+                    systemLanguage: (user as any).systemLanguage || 'en',
+                    regionalLanguage: (user as any).regionalLanguage || '',
+                    customDestinationLanguage: (user as any).customDestinationLanguage || '',
                   });
                 }
               }}

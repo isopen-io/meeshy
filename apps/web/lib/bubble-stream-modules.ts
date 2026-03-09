@@ -3,9 +3,11 @@
  * Facilite les imports partout dans le projet
  */
 
-// Constants et types
+// Constants et types - use shared types as base, override with local types
 export * from '@meeshy/shared/types';
-export * from '@/types/bubble-stream';
+// BubbleStreamMessage and UserLanguageConfig are re-exported from shared types above
+// Local overrides from bubble-stream (excluding duplicates)
+export { type BubbleStreamMessageV2, type BubbleStreamPageProps, type LanguageChoice } from '@/types/bubble-stream';
 
 // Composants UI
 export { FoldableSection } from '@/components/ui/foldable-section';

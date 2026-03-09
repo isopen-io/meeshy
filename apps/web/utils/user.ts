@@ -1,6 +1,17 @@
 import { User, Participant } from '@/types';
 import { SUPPORTED_LANGUAGES } from '@/types';
 
+type ParticipantUser = {
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  systemLanguage?: string;
+  useCustomDestination?: boolean;
+  customDestinationLanguage?: string;
+  translateToRegionalLanguage?: boolean;
+  regionalLanguage?: string;
+};
+
 /**
  * Retourne le nom complet d'un utilisateur en utilisant firstName/lastName 
  * ou displayName/username en fallback
@@ -72,16 +83,17 @@ export function getUserFirstName(user: User | null | undefined): string {
  * Retourne le prénom d'un membre de thread
  */
 export function getThreadMemberFirstName(member: Participant): string {
-  if (member.user?.firstName) {
-    return member.user.firstName;
+  const user = member.user as ParticipantUser | undefined;
+  if (user?.firstName) {
+    return user.firstName;
   }
 
   if (member.displayName) {
     return member.displayName.split(' ')[0];
   }
 
-  if (member.user?.username) {
-    return member.user.username;
+  if (user?.username) {
+    return user.username;
   }
 
   return 'Utilisateur';
@@ -111,7 +123,8 @@ export function formatUserForConversation(user: User): string {
  */
 export function formatThreadMemberForConversation(member: Participant): string {
   const firstName = getThreadMemberFirstName(member);
-  const username = member.user?.username || member.displayName;
+  const user = member.user as ParticipantUser | undefined;
+  const username = user?.username || member.displayName;
   return `${firstName} (${username})`;
 }
 
@@ -162,11 +175,13 @@ export function formatConversationTitle(
       }
       
       const flag = getLanguageFlag(readingLanguage);
-      return `${flag} ${participant.user?.username || participant.displayName}`;
+      const pUser = participant.user as ParticipantUser | undefined;
+      return `${flag} ${pUser?.username || participant.displayName}`;
     }
 
     // Fallback si pas d'infos complètes
-    return `🌐 ${participant.user?.username || participant.displayName}`;
+    const pUser = participant.user as ParticipantUser | undefined;
+    return `🌐 ${pUser?.username || participant.displayName}`;
   });
   
   if (otherParticipants.length > 3) {
@@ -193,14 +208,14 @@ export function formatConversationTitleFromMembers(
   // Afficher les 3 premiers participants avec drapeau + username
   const displayParticipants = otherParticipants.slice(0, 3);
   const participantNames = displayParticipants.map(participant => {
-    const user = participant.user;
+    const user = participant.user as ParticipantUser | undefined;
 
     // Déterminer la langue de lecture selon les préférences de l'utilisateur
     let readingLanguage = participant.language || user?.systemLanguage || 'en';
 
     if (user?.useCustomDestination && user?.customDestinationLanguage) {
       readingLanguage = user.customDestinationLanguage;
-    } else if (user?.translateToRegionalLanguage) {
+    } else if (user?.translateToRegionalLanguage && user?.regionalLanguage) {
       readingLanguage = user.regionalLanguage;
     }
 

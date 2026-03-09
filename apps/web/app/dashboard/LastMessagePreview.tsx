@@ -54,9 +54,9 @@ export const LastMessagePreview = React.memo<LastMessagePreviewProps>(({
   const senderPrefix = sender ? (
     <span className="font-medium">
       {sender.displayName ||
-       sender.username ||
-       (sender.firstName && sender.lastName
-         ? `${sender.firstName} ${sender.lastName}`.trim()
+       (sender as any).username ||
+       ((sender as any).firstName && (sender as any).lastName
+         ? `${(sender as any).firstName} ${(sender as any).lastName}`.trim()
          : isAnonymous ? t('anonymous') || 'Anonyme' : 'Utilisateur')}
       {isAnonymous && ' (anonyme)'}
       :{' '}

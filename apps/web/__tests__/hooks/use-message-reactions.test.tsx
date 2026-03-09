@@ -44,14 +44,14 @@ jest.mock('@/hooks/useI18n', () => ({
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
 const mockEmit = jest.fn();
-const mockOnReactionAdded = jest.fn(() => jest.fn());
-const mockOnReactionRemoved = jest.fn(() => jest.fn());
+const mockOnReactionAdded = jest.fn((_cb: unknown) => jest.fn());
+const mockOnReactionRemoved = jest.fn((_cb: unknown) => jest.fn());
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockGetSocket(),
-    onReactionAdded: (cb: any) => mockOnReactionAdded(cb),
-    onReactionRemoved: (cb: any) => mockOnReactionRemoved(cb),
+    onReactionAdded: (cb: (data: unknown) => void) => mockOnReactionAdded(cb),
+    onReactionRemoved: (cb: (data: unknown) => void) => mockOnReactionRemoved(cb),
   },
 }));
 
@@ -617,7 +617,7 @@ describe('useMessageReactions', () => {
         await result.current.addReaction('thumbsup');
       });
 
-      expect(result.current.reactions[0].anonymousIds).toContain('anon-123');
+      expect(result.current.reactions[0].participantIds).toContain('anon-123');
     });
   });
 });

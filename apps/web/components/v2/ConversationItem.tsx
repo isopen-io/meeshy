@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import React, { memo } from 'react';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
@@ -80,8 +80,10 @@ export const ConversationItem = memo(function ConversationItem({
   onOptionsClick,
   onDragStart,
   className = '',
-}: ConversationItemProps): JSX.Element {
+}: ConversationItemProps): React.JSX.Element {
   const displayName = conversation.customName || conversation.name;
+
+  const noop = () => {};
 
   // Actions swipe gauche
   const leftActions: SwipeAction[] = [
@@ -90,28 +92,28 @@ export const ConversationItem = memo(function ConversationItem({
       icon: SwipeIcons.archive,
       label: 'Archiver',
       ...SwipeColors.archive,
-      onClick: onArchive,
+      onClick: onArchive ?? noop,
     },
     {
       id: 'delete',
       icon: SwipeIcons.delete,
       label: 'Supprimer',
       ...SwipeColors.delete,
-      onClick: onDelete,
+      onClick: onDelete ?? noop,
     },
     {
       id: 'read',
       icon: SwipeIcons.read,
       label: 'Lu',
       ...SwipeColors.read,
-      onClick: onMarkRead,
+      onClick: onMarkRead ?? noop,
     },
     {
       id: 'mute',
       icon: SwipeIcons.mute,
       label: conversation.isMuted ? 'Son' : 'Sourdine',
       ...SwipeColors.mute,
-      onClick: onMute,
+      onClick: onMute ?? noop,
     },
   ];
 
@@ -122,33 +124,33 @@ export const ConversationItem = memo(function ConversationItem({
       icon: SwipeIcons.pin,
       label: conversation.isPinned ? 'Desepingler' : 'Epingler',
       ...SwipeColors.pin,
-      onClick: onPin,
+      onClick: onPin ?? noop,
     },
     {
       id: 'important',
       icon: SwipeIcons.important,
       label: 'Important',
       ...SwipeColors.important,
-      onClick: onMarkImportant,
+      onClick: onMarkImportant ?? noop,
     },
     {
       id: 'tag',
       icon: SwipeIcons.tag,
       label: 'Tag',
       ...SwipeColors.tag,
-      onClick: onAddTag,
+      onClick: onAddTag ?? noop,
     },
     {
       id: 'call',
       icon: SwipeIcons.call,
       label: 'Appeler',
       ...SwipeColors.call,
-      onClick: onCall,
+      onClick: onCall ?? noop,
     },
   ];
 
   // Rendu du dernier message
-  function renderLastMessage(): JSX.Element {
+  function renderLastMessage(): React.JSX.Element {
     if (conversation.draft) {
       return (
         <span className="flex items-center gap-1">
@@ -357,7 +359,7 @@ export const ConversationItem = memo(function ConversationItem({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOptionsClick();
+                  onOptionsClick?.();
                 }}
                 className="p-1 rounded transition-colors duration-300 hover:bg-[var(--gp-hover)]"
                 style={{ color: 'var(--gp-text-muted)' }}

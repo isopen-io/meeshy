@@ -107,7 +107,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const grantVoiceCloningConsent = useCallback(async () => {
     try {
-      const payload: VoiceProfileConsentRequest = { enabled: true };
+      const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: true };
       const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(true);
@@ -122,7 +122,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const revokeVoiceCloningConsent = useCallback(async () => {
     try {
-      const payload: VoiceProfileConsentRequest = { enabled: false };
+      const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: false };
       const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(false);

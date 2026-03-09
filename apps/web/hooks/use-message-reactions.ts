@@ -150,8 +150,7 @@ export function useMessageReactions({
             {
               emoji,
               count: 1,
-              userIds: currentUserId && !isAnonymous ? [currentUserId] : [],
-              anonymousIds: isAnonymous && currentUserId ? [currentUserId] : [],
+              participantIds: currentUserId ? [currentUserId] : [],
               hasCurrentUser: true
             }
           ];
@@ -350,11 +349,8 @@ export function useMessageReactions({
       });
 
       // Mettre à jour userReactions si c'est nous
-      if (
-        (event.userId && event.userId === currentUserId && !isAnonymous) ||
-        (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
-      ) {
-        setUserReactions(prev => 
+      if (event.participantId && event.participantId === currentUserId) {
+        setUserReactions(prev =>
           prev.includes(event.emoji) ? prev : [...prev, event.emoji]
         );
       }
@@ -370,8 +366,8 @@ export function useMessageReactions({
           return prev.filter(r => r.emoji !== event.emoji);
         } else {
           // Mettre à jour le compteur
-          return prev.map(r => 
-            r.emoji === event.emoji 
+          return prev.map(r =>
+            r.emoji === event.emoji
               ? event.aggregation
               : r
           );
@@ -379,10 +375,7 @@ export function useMessageReactions({
       });
 
       // Mettre à jour userReactions si c'est nous
-      if (
-        (event.userId && event.userId === currentUserId && !isAnonymous) ||
-        (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
-      ) {
+      if (event.participantId && event.participantId === currentUserId) {
         setUserReactions(prev => prev.filter(e => e !== event.emoji));
       }
     };

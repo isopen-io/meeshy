@@ -63,8 +63,8 @@ jest.mock('sonner', () => ({
 
 // Test data
 const mockReactions: ReactionAggregation[] = [
-  { emoji: '👍', count: 5, userIds: ['user-1', 'user-2'], anonymousIds: [], hasCurrentUser: false },
-  { emoji: '❤️', count: 3, userIds: ['user-3'], anonymousIds: [], hasCurrentUser: true },
+  { emoji: '👍', count: 5, participantIds: ['user-1', 'user-2'], hasCurrentUser: false },
+  { emoji: '❤️', count: 3, participantIds: ['user-3'], hasCurrentUser: true },
 ];
 
 const mockReactionState = {

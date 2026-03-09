@@ -71,7 +71,7 @@ function QualityMetric({ label, value, unit = '', description, goodRange }: Qual
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{label}</span>
           {description && (
-            <Info className="h-4 w-4 text-muted-foreground" title={description} />
+            <Info className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
         <div className="flex items-center gap-2">

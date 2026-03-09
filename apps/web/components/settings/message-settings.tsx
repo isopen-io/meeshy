@@ -18,6 +18,7 @@ import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { MessagePreference } from '@meeshy/shared/types/preferences';
+import type { PreferenceCategory } from '@/types/preferences';
 
 export default function MessageSettings() {
   const { t } = useI18n('settings');
@@ -25,12 +26,24 @@ export default function MessageSettings() {
 
   // Hook usePreferences avec auto-save
   const {
-    preferences,
+    data: preferences,
     isLoading,
-    isSaving,
-    error,
-    updateField,
-  } = usePreferences<MessagePreference>('message');
+    isUpdating: isSaving,
+    error: queryError,
+    updatePreferences,
+  } = usePreferences('message' as PreferenceCategory) as unknown as {
+    data: MessagePreference | undefined;
+    isLoading: boolean;
+    isUpdating: boolean;
+    error: Error | null;
+    updatePreferences: (updates: Partial<MessagePreference>) => Promise<MessagePreference>;
+  };
+
+  const error = queryError?.message ?? null;
+
+  const updateField = <K extends keyof MessagePreference>(key: K, value: MessagePreference[K]) => {
+    updatePreferences({ [key]: value } as Partial<MessagePreference>);
+  };
 
   // Memoize loading state
   const LoadingState = useMemo(() => (

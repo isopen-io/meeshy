@@ -165,7 +165,7 @@ export function useVoiceRecording({
             confidence: transcriptSegmentsRef.current.length > 0
               ? transcriptSegmentsRef.current.reduce((acc, s) => acc + s.confidence, 0) / transcriptSegmentsRef.current.length
               : 0,
-            segments: transcriptSegmentsRef.current,
+            source: 'browser' as const,
             durationMs
           });
         }

@@ -26,7 +26,7 @@ function convertSocketAudioToUI(data: TranslatedAudioFromSocket): SocketIOTransl
     format: data.format,
     ttsModel: data.ttsModel,
     voiceModelId: data.voiceModelId,
-    segments: data.segments
+    segments: data.segments as any
   };
 }
 

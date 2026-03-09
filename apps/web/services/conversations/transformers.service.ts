@@ -263,7 +263,7 @@ export class TransformersService {
       isEncrypted: Boolean(att.isEncrypted),
 
       // ✅ V2: Transcription et translations - passés tels quels depuis la BD
-      transcription: att.transcription as AttachmentTranscription | undefined,
+      transcription: att.transcription as any,
       translations: att.translations as AttachmentTranslations | undefined,
     };
   });
@@ -385,7 +385,7 @@ export class TransformersService {
       encryptionMetadata: msg.encryptionMetadata as Record<string, unknown> | undefined,
       createdAt,
       updatedAt: new Date(String(msg.updatedAt)),
-      sender: finalSender,
+      sender: finalSender as any,
       translations,
       replyTo,
       attachments,

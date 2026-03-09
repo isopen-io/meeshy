@@ -117,10 +117,10 @@ test.describe('MessageComposer Animations - Performance', () => {
 
     // Get memory metrics
     const metrics = await page.evaluate(() => {
-      if (performance.memory) {
+      if ((performance as any).memory) {
         return {
-          usedJSHeapSize: performance.memory.usedJSHeapSize,
-          totalJSHeapSize: performance.memory.totalJSHeapSize,
+          usedJSHeapSize: (performance as any).memory.usedJSHeapSize,
+          totalJSHeapSize: (performance as any).memory.totalJSHeapSize,
         };
       }
       return null;

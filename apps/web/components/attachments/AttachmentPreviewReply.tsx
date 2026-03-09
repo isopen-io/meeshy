@@ -298,7 +298,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
       {/* Lightbox pour images */}
       {images.length > 0 && (
         <ImageLightbox
-          images={images}
+          images={images as any}
           initialIndex={imageLightboxIndex}
           isOpen={imageLiboxOpen}
           onClose={() => setImageLightboxOpen(false)}
@@ -332,7 +332,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
       {/* Lightbox pour vidéos */}
       {videos.length > 0 && (
         <VideoLightbox
-          videos={videos}
+          videos={videos as any}
           initialIndex={videoLightboxIndex}
           isOpen={videoLightboxOpen}
           onClose={() => setVideoLightboxOpen(false)}

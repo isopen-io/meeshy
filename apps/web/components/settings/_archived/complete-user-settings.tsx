@@ -13,13 +13,13 @@ import {
   Key,
   Mic
 } from 'lucide-react';
-import { UserSettings } from './user-settings';
+import { UserSettings } from '../user-settings';
 import { LanguageSettings } from '@/components/translation/language-settings';
-import { ThemeSettings } from './theme-settings';
-import { NotificationSettings } from './notification-settings';
-import { PrivacySettings } from './privacy-settings';
-import { EncryptionSettings } from './encryption-settings';
-import { AudioSettings } from './audio-settings';
+import { ThemeSettings } from '../theme-settings';
+import { NotificationSettings } from '../notification-settings';
+import { PrivacySettings } from '../privacy-settings';
+import { EncryptionSettings } from '../encryption-settings';
+import { AudioSettings } from '../audio-settings';
 import { useI18n } from '@/hooks/useI18n';
 
 interface CompleteUserSettingsProps {

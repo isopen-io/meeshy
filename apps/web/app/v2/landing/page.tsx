@@ -167,8 +167,7 @@ export default function V2LandingPage() {
                 languageCode="ja"
                 languageName="Japonais"
                 content="こんにちは！今日の会議の準備はできていますか？"
-                translation="Bonjour ! Es-tu prête pour la réunion d'aujourd'hui ?"
-                translationLanguage="français"
+                translations={[{ languageCode: 'fr', languageName: 'français', content: "Bonjour ! Es-tu prête pour la réunion d'aujourd'hui ?" }]}
                 sender="Yuki"
                 timestamp="10:32"
               />
@@ -177,16 +176,14 @@ export default function V2LandingPage() {
                 languageCode="fr"
                 languageName="Français"
                 content="Oui, tout est prêt ! J'ai terminé la présentation hier soir."
-                translation="はい、準備万端です！昨夜プレゼンを完成させました。"
-                translationLanguage="japonais"
+                translations={[{ languageCode: 'ja', languageName: 'japonais', content: "はい、準備万端です！昨夜プレゼンを完成させました。" }]}
                 timestamp="10:33"
               />
               <MessageBubble
                 languageCode="ja"
                 languageName="Japonais"
                 content="素晴らしい！楽しみにしています 🎉"
-                translation="Super ! J'ai hâte d'y être 🎉"
-                translationLanguage="français"
+                translations={[{ languageCode: 'fr', languageName: 'français', content: "Super ! J'ai hâte d'y être 🎉" }]}
                 sender="Yuki"
                 timestamp="10:34"
               />

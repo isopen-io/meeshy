@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
+
+/** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
+type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkId?: string };
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -66,8 +69,8 @@ export function ConversationParticipants({
 
 
   // Listes en ligne / hors-ligne (inclure l'utilisateur actuel)
-  const onlineAll = participants.filter(p => p.user.isOnline);
-  const offlineAll = participants.filter(p => !p.user.isOnline);
+  const onlineAll = participants.filter(p => (p.user as ParticipantUser)?.isOnline);
+  const offlineAll = participants.filter(p => !(p.user as ParticipantUser)?.isOnline);
   const recentActiveParticipants = onlineAll.slice(0, 3);
 
 
@@ -75,7 +78,7 @@ export function ConversationParticipants({
   // Obtenir les noms des utilisateurs qui tapent
   const typingUserNames = usersTypingInChat.map((typingUser: { userId: string; conversationId: string }) => {
     const participant = participants.find(p => p.userId === typingUser.userId);
-    return participant?.user.displayName || participant?.user.username || typingUser.userId;
+    return (participant?.user as ParticipantUser)?.displayName || (participant?.user as ParticipantUser)?.username || typingUser.userId;
   });
 
   const renderTypingMessage = () => {
@@ -141,11 +144,11 @@ export function ConversationParticipants({
             {/* Avatars des participants en ligne */}
             <div className="flex -space-x-2">
               {displayParticipants.map((participant, index) => {
-                const user = participant.user;
+                const user = participant.user as ParticipantUser;
                 const isAnonymous = isAnonymousParticipant(user);
-                const isCurrentUser = user.id === currentUser.id;
+                const isCurrentUser = user?.id === currentUser.id;
                 // Utiliser index pour garantir l'unicité même en cas de doublons dans les données
-                const uniqueKey = `${participant.userId || participant.user?.id || 'unknown'}-${index}`;
+                const uniqueKey = `${participant.userId || user?.id || 'unknown'}-${index}`;
 
                 const avatarContent = (
                   <>

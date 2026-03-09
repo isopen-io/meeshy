@@ -207,7 +207,7 @@ export async function compressVideo(
 
     // Lire le fichier compressé
     const data = await ffmpeg.readFile(outputFileName);
-    const compressedBlob = new Blob([data], { type: 'video/mp4' });
+    const compressedBlob = new Blob([data as BlobPart], { type: 'video/mp4' });
 
     // Nettoyer les fichiers temporaires
     try {

@@ -125,9 +125,9 @@ function getNotificationContent(notification: Notification): string {
       return 'Traduction terminee';
     case 'system':
     case 'maintenance':
-      return notification.content?.text || 'Notification systeme';
+      return notification.content || 'Notification systeme';
     default:
-      return notification.content?.text || 'Nouvelle notification';
+      return notification.content || 'Nouvelle notification';
   }
 }
 
@@ -140,8 +140,8 @@ function getActionUrl(notification: Notification): string | undefined {
   if (context?.conversationId) {
     return `/v2/chats?id=${context.conversationId}`;
   }
-  if (context?.communityId) {
-    return `/v2/communities/${context.communityId}`;
+  if (context?.commentId) {
+    return `/v2/communities/${context.commentId}`;
   }
   if (notification.actor?.id) {
     return `/v2/u/${notification.actor.username || notification.actor.id}`;
@@ -162,7 +162,7 @@ function transformToNotificationV2(notification: Notification): NotificationV2 {
     user: {
       id: actor?.id || 'system',
       name: actor?.displayName || actor?.username || 'Systeme',
-      avatar: actor?.avatarUrl,
+      avatar: actor?.avatar ?? undefined,
       languageCode: (actor as any)?.systemLanguage || 'fr',
     },
     content: getNotificationContent(notification),

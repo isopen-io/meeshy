@@ -29,7 +29,7 @@ class MeeshySocketIOService {
   private static instance: MeeshySocketIOService | null = null;
 
   // Delegate to orchestrator
-  private orchestrator: SocketIOOrchestrator;
+  private orchestrator!: SocketIOOrchestrator;
 
   constructor() {
     // CORRECTION CRITIQUE: Le constructeur ne doit s'exécuter QU'UNE SEULE FOIS
@@ -356,11 +356,11 @@ class MeeshySocketIOService {
       if (replyToSender) {
         replyToFinalSender = {
           id: String(replyToSender.id || 'unknown'),
-          username: String(replyToSender.username || 'Unknown'),
-          displayName: String(replyToSender.displayName || replyToSender.username || 'Unknown'),
-          firstName: String(replyToSender.firstName || ''),
-          lastName: String(replyToSender.lastName || ''),
-          email: String(replyToSender.email || ''),
+          username: String((replyToSender as any).username || 'Unknown'),
+          displayName: String(replyToSender.displayName || (replyToSender as any).username || 'Unknown'),
+          firstName: String((replyToSender as any).firstName || ''),
+          lastName: String((replyToSender as any).lastName || ''),
+          email: String((replyToSender as any).email || ''),
           phoneNumber: '',
           role: 'USER' as const,
           systemLanguage: String(replyToSender.systemLanguage || replyToSender.language || 'fr'),
@@ -375,7 +375,7 @@ class MeeshySocketIOService {
           lastActiveAt: new Date(),
           isActive: true,
           updatedAt: new Date()
-        };
+        } as any;
       } else {
         replyToFinalSender = {
           id: String(replyToMsg.senderId || 'unknown'),
@@ -414,7 +414,7 @@ class MeeshySocketIOService {
         translations: [],
         isEdited: false,
         updatedAt: new Date(replyToMsg.updatedAt || replyToMsg.createdAt),
-      };
+      } as unknown as Message;
     }
 
     // Définir le sender par défaut
@@ -499,7 +499,7 @@ class MeeshySocketIOService {
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
       validatedMentions: (socketMessage as any).validatedMentions || []
-    } as Message;
+    } as unknown as Message;
   }
 }
 

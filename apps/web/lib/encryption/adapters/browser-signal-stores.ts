@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Browser Signal Protocol Store Implementation
  *

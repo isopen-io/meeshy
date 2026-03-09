@@ -15,7 +15,7 @@ export function useHeaderActions(conversationId: string, t: (key: string) => str
       const uploadResult = await AttachmentService.uploadFiles([file]);
 
       if (uploadResult.success && uploadResult.attachments.length > 0) {
-        const imageUrl = uploadResult.attachments[0].url;
+        const imageUrl = (uploadResult.attachments[0] as any).url;
 
         await conversationsService.updateConversation(conversationId, {
           image: imageUrl,

@@ -324,7 +324,7 @@ export function RegisterFormWizard({
 
     await submitRegistration(formData, fullPhoneNumber, {
       validatePhoneField: async () => true, // Already validated by usePhoneValidation
-      validateSubmission,
+      validateSubmission: validateSubmission as () => { isHuman: boolean; botError: string },
       confirmPassword,
       acceptTerms,
     });

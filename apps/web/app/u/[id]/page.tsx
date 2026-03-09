@@ -82,7 +82,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     if (!userId) return;
     try {
       const response = await usersService.getUserProfile(userId);
-      setUser(response.data);
+      setUser(response.data ?? null);
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error(t('userNotFound'));
@@ -93,7 +93,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
     if (!userId) return;
     try {
       const response = await usersService.getUserStats(userId);
-      setStats(response.data);
+      setStats(response.data ?? null);
     } catch (error) {
       console.error('Error loading stats:', error);
     }

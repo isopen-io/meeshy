@@ -107,7 +107,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
           conversationId={conversation.id}
           participants={conversationParticipants}
           currentUser={currentUser}
-          isGroup={conversation.type !== 'direct'}
+          isGroup={(conversation.type as string) !== 'direct'}
           conversationType={conversation.type}
           userConversationRole={currentUserRole}
           memberCount={conversation.memberCount}

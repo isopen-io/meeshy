@@ -20,8 +20,5 @@ export { FontSelector } from './font-selector';
 export { LanguageSelector } from './language-selector';
 export { ThemeSettings } from './theme-settings';
 
-// Layout components
-export { SettingsLayout } from './settings-layout';
-
 // Example patterns (for reference/testing)
-export { examples as ApplicationSettingsExamples } from './ApplicationSettings.example';
+// export { examples as ApplicationSettingsExamples } from './ApplicationSettings.example';

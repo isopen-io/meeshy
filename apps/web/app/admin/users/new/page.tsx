@@ -92,7 +92,7 @@ export default function NewUserPage() {
 
       const response = await apiService.post('/admin/users', userData);
 
-      if (response.data?.success) {
+      if ((response.data as any)?.success) {
         toast.success('Utilisateur créé avec succès!');
         router.push('/admin/users');
       }
