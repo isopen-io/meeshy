@@ -530,6 +530,7 @@ export default function V2ChatsPage() {
                       content: t.content,
                     })) || []}
                     sender={!isSent ? (msg.sender as any)?.displayName || (msg.sender as any)?.username : undefined}
+                    senderUsername={!isSent ? (msg.sender as any)?.username : undefined}
                     timestamp={
                       new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                     }
