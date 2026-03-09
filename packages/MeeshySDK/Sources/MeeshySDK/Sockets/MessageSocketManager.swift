@@ -169,6 +169,23 @@ public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let summary: ReadStatusSummary
 }
 
+// MARK: - Participant Role Updated Event Data
+
+public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
+    public let id: String
+    public let role: String
+    public let displayName: String
+    public let userId: String?
+}
+
+public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let newRole: String
+    public let updatedBy: String
+    public let participant: ParticipantRoleUpdatedParticipantInfo
+}
+
 public struct MessageConsumedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -222,6 +239,7 @@ public protocol MessageSocketProviding: Sendable {
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
@@ -275,6 +293,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+
+    // Combine publishers — participant role
+    public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
 
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
@@ -661,6 +682,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageConsumedEvent.self, from: data) { [weak self] event in
                 self?.messageConsumed.send(event)
+            }
+        }
+
+        // --- Participant role events ---
+
+        socket.on("participant:role-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantRoleUpdatedEvent.self, from: data) { [weak self] event in
+                self?.participantRoleUpdated.send(event)
             }
         }
 

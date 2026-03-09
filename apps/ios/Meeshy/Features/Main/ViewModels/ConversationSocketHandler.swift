@@ -23,6 +23,7 @@ protocol ConversationSocketDelegate: AnyObject {
 
     func evictViewOnceMedia(message: Message)
     func markMessageAsConsumed(messageId: String)
+    func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
 }
@@ -305,6 +306,19 @@ final class ConversationSocketHandler {
                         break
                     }
                 }
+            }
+            .store(in: &cancellables)
+
+        // Participant role updated
+        socketManager.participantRoleUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let delegate = self?.delegate else { return }
+                delegate.handleParticipantRoleUpdated(
+                    participantId: event.participant.id,
+                    newRole: event.newRole
+                )
             }
             .store(in: &cancellables)
 

@@ -13,7 +13,7 @@ struct ConversationParticipant: Identifiable, Decodable {
     let lastName: String?
     let displayName: String?
     let avatar: String?
-    let conversationRole: String?
+    var conversationRole: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
     let joinedAt: Date?

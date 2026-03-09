@@ -102,6 +102,15 @@ struct ParticipantsView: View {
                 }
             }
             .task { await loadParticipants() }
+            .onReceive(
+                MessageSocketManager.shared.participantRoleUpdated
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { event in
+                if let idx = participants.firstIndex(where: { $0.id == event.participant.id }) {
+                    participants[idx].conversationRole = event.newRole.lowercased()
+                }
+            }
             .sheet(isPresented: $showAddSheet) {
                 AddParticipantSheet(
                     conversationId: conversationId,

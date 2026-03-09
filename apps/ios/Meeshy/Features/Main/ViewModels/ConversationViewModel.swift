@@ -1377,4 +1377,8 @@ class ConversationViewModel: ObservableObject {
 
 // MARK: - ConversationSocketDelegate Conformance
 
-extension ConversationViewModel: ConversationSocketDelegate {}
+extension ConversationViewModel: ConversationSocketDelegate {
+    func handleParticipantRoleUpdated(participantId: String, newRole: String) {
+        Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
+    }
+}
