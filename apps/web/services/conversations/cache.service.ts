@@ -6,12 +6,12 @@
 import type {
   Conversation,
   Message,
-  User,
 } from '@meeshy/shared/types';
 import type {
   ConversationsCache,
   MessagesCache,
   ParticipantsCache,
+  ConversationParticipantResponse,
 } from './types';
 
 /**
@@ -115,7 +115,7 @@ export class CacheService {
   /**
    * Récupère les participants du cache
    */
-  getParticipantsFromCache(cacheKey: string): User[] | null {
+  getParticipantsFromCache(cacheKey: string): ConversationParticipantResponse[] | null {
     if (this.isParticipantsCacheValid(cacheKey)) {
       return this.participantsCache.get(cacheKey)?.data || null;
     }
@@ -125,7 +125,7 @@ export class CacheService {
   /**
    * Met en cache les participants
    */
-  setParticipantsCache(cacheKey: string, participants: User[]): void {
+  setParticipantsCache(cacheKey: string, participants: ConversationParticipantResponse[]): void {
     this.participantsCache.set(cacheKey, {
       data: participants,
       timestamp: Date.now()

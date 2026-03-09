@@ -6,7 +6,6 @@
 import type {
   Conversation,
   Message,
-  User,
   PaginationMeta,
   CursorPaginationMeta,
   ConversationType,
@@ -162,7 +161,7 @@ export interface MessagesCache {
  * Cache de participants
  */
 export interface ParticipantsCache {
-  data: User[];
+  data: ConversationParticipantResponse[];
   timestamp: number;
 }
 

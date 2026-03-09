@@ -5,20 +5,15 @@
 
 import { apiService } from '../api.service';
 import { cacheService } from './cache.service';
-import type { User } from '@meeshy/shared/types';
 import type {
   ParticipantsFilters,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
 } from './types';
 
 interface PaginatedParticipantsResponse {
   success: boolean;
-  data: Array<User & {
-    isAnonymous?: boolean;
-    canSendMessages?: boolean;
-    canSendFiles?: boolean;
-    canSendImages?: boolean;
-  }>;
+  data: ConversationParticipantResponse[];
   pagination?: {
     nextCursor: string | null;
     hasMore: boolean;
@@ -35,7 +30,7 @@ export class ParticipantsService {
   async getParticipants(
     conversationId: string,
     filters?: ParticipantsFilters
-  ): Promise<User[]> {
+  ): Promise<ConversationParticipantResponse[]> {
     try {
       const params: Record<string, string> = {};
 
@@ -88,7 +83,7 @@ export class ParticipantsService {
     conversationId: string,
     searchQuery: string,
     limit: number = 50
-  ): Promise<User[]> {
+  ): Promise<ConversationParticipantResponse[]> {
     try {
       if (!searchQuery.trim()) {
         return [];
@@ -114,12 +109,7 @@ export class ParticipantsService {
    */
   async getAllParticipants(conversationId: string): Promise<AllParticipantsResponse> {
     try {
-      const allParticipants: Array<User & {
-        isAnonymous?: boolean;
-        canSendMessages?: boolean;
-        canSendFiles?: boolean;
-        canSendImages?: boolean;
-      }> = [];
+      const allParticipants: ConversationParticipantResponse[] = [];
 
       let cursor: string | null = null;
       let hasMore = true;
@@ -150,34 +140,12 @@ export class ParticipantsService {
         }
       }
 
-      const authenticatedParticipants: User[] = [];
-      const anonymousParticipants: Array<{
-        id: string;
-        username: string;
-        firstName: string;
-        lastName: string;
-        language: string;
-        isOnline: boolean;
-        joinedAt: string;
-        canSendMessages: boolean;
-        canSendFiles: boolean;
-        canSendImages: boolean;
-      }> = [];
+      const authenticatedParticipants: ConversationParticipantResponse[] = [];
+      const anonymousParticipants: ConversationParticipantResponse[] = [];
 
       allParticipants.forEach((participant) => {
         if (participant.isAnonymous) {
-          anonymousParticipants.push({
-            id: participant.id,
-            username: participant.username,
-            firstName: participant.firstName,
-            lastName: participant.lastName,
-            language: participant.systemLanguage || 'fr',
-            isOnline: participant.isOnline,
-            joinedAt: participant.createdAt ? new Date(participant.createdAt).toISOString() : new Date().toISOString(),
-            canSendMessages: participant.canSendMessages || false,
-            canSendFiles: participant.canSendFiles || false,
-            canSendImages: participant.canSendImages || false
-          });
+          anonymousParticipants.push(participant);
         } else {
           authenticatedParticipants.push(participant);
         }
