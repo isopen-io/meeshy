@@ -43,7 +43,6 @@ import { useI18n } from '@/hooks/useI18n';
 import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
-import type { Participant } from '@meeshy/shared/types/participant';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
@@ -182,7 +181,7 @@ export function ConversationParticipantsDrawer({
           userId: user.id,
           displayName: user.displayName || user.username,
           avatar: user.avatar,
-          role: (user as any).conversationRole || MemberRole.MEMBER,
+          role: MemberRole.MEMBER,
           language: 'en',
           permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
           isActive: true,

@@ -518,6 +518,7 @@ export interface ParticipantRoleUpdatedEventData {
   readonly userId: string;
   readonly newRole: string;
   readonly updatedBy: string;
+  /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
   readonly participant: {
     readonly id: string;
     readonly role: string;
