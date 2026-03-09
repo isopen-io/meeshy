@@ -177,7 +177,14 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Initiating call', { conversationId, userId, type });
 
-      const participantId = authRequest.authContext.participantId;
+      let participantId = authRequest.authContext.participantId;
+      if (!participantId && userId) {
+        const p = await prisma.participant.findFirst({
+          where: { userId, conversationId, isActive: true },
+          select: { id: true },
+        });
+        participantId = p?.id;
+      }
 
       const callSession = await callService.initiateCall({
         conversationId,
@@ -467,7 +474,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const endParticipantId = authRequest.authContext.participantId;
+      const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
 
       return reply.send({
@@ -607,12 +614,22 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Joining call', { callId, userId });
 
-      const joinParticipantId = authRequest.authContext.participantId;
+      let joinParticipantId = authRequest.authContext.participantId;
+      if (!joinParticipantId && userId) {
+        const call = await callService.getCallSession(callId);
+        if (call?.conversationId) {
+          const p = await prisma.participant.findFirst({
+            where: { userId, conversationId: call.conversationId, isActive: true },
+            select: { id: true },
+          });
+          joinParticipantId = p?.id;
+        }
+      }
       const callSession = await callService.joinCall({
         callId,
         userId,
         participantId: joinParticipantId,
-        settings
+        settings,
       });
 
       return reply.send({
@@ -770,11 +787,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const leaveParticipantId = authRequest.authContext.participantId;
+      const leaveParticipantId = authRequest.authContext.participantId || participantId;
       const callSession = await callService.leaveCall({
         callId,
         userId: participantId,
-        participantId: leaveParticipantId
+        participantId: leaveParticipantId,
       });
 
       return reply.send({

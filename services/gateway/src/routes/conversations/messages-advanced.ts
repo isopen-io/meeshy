@@ -1057,6 +1057,21 @@ export function registerMessagesAdvancedRoutes(
         });
       }
 
+      // Resolve participantId for the current user
+      const currentParticipant = isAnonymous
+        ? { id: authRequest.authContext.participantId }
+        : await prisma.participant.findFirst({
+            where: { userId, conversationId, isActive: true },
+            select: { id: true },
+          });
+
+      if (!currentParticipant?.id) {
+        return reply.status(403).send({
+          success: false,
+          error: 'You are not a participant of this conversation',
+        });
+      }
+
       // Use ReactionService to add the reaction
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(prisma);
@@ -1064,7 +1079,7 @@ export function registerMessagesAdvancedRoutes(
       const reaction = await reactionService.addReaction({
         messageId,
         emoji,
-        participantId: authRequest.authContext.participantId
+        participantId: currentParticipant.id,
       });
 
       if (!reaction) {
@@ -1080,7 +1095,7 @@ export function registerMessagesAdvancedRoutes(
           messageId,
           emoji,
           'add',
-          authRequest.authContext.participantId
+          currentParticipant.id,
         );
 
         if (socketIOHandler) {
@@ -1211,6 +1226,21 @@ export function registerMessagesAdvancedRoutes(
         });
       }
 
+      // Resolve participantId for the current user
+      const currentParticipant = isAnonymous
+        ? { id: authRequest.authContext.participantId }
+        : await prisma.participant.findFirst({
+            where: { userId, conversationId, isActive: true },
+            select: { id: true },
+          });
+
+      if (!currentParticipant?.id) {
+        return reply.status(403).send({
+          success: false,
+          error: 'You are not a participant of this conversation',
+        });
+      }
+
       // Use ReactionService to remove the reaction
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(prisma);
@@ -1218,7 +1248,7 @@ export function registerMessagesAdvancedRoutes(
       const removed = await reactionService.removeReaction({
         messageId,
         emoji,
-        participantId: authRequest.authContext.participantId
+        participantId: currentParticipant.id,
       });
 
       if (!removed) {
@@ -1234,7 +1264,7 @@ export function registerMessagesAdvancedRoutes(
           messageId,
           emoji,
           'remove',
-          authRequest.authContext.participantId
+          currentParticipant.id,
         );
 
         if (socketIOHandler) {
