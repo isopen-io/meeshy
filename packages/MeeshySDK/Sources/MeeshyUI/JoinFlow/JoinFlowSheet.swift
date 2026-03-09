@@ -65,14 +65,14 @@ public struct JoinFlowSheet: View {
                 .ignoresSafeArea()
 
             Circle()
-                .fill(Color(hex: "B24BF3").opacity(isDark ? 0.06 : 0.04))
+                .fill(MeeshyColors.indigo500.opacity(isDark ? 0.06 : 0.04))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -60, y: -120)
                 .ignoresSafeArea()
 
             Circle()
-                .fill(Color(hex: "4ECDC4").opacity(isDark ? 0.04 : 0.02))
+                .fill(MeeshyColors.indigo400.opacity(isDark ? 0.04 : 0.02))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: 100, y: 80)
@@ -115,7 +115,7 @@ public struct JoinFlowSheet: View {
 
             ProgressView()
                 .scaleEffect(1.2)
-                .tint(Color(hex: "4ECDC4"))
+                .tint(MeeshyColors.indigo400)
 
             Text("Chargement du lien...")
                 .font(.system(size: 15, weight: .medium))
@@ -134,12 +134,12 @@ public struct JoinFlowSheet: View {
 
             ZStack {
                 Circle()
-                    .fill(Color(hex: "2ECC71").opacity(0.15))
+                    .fill(MeeshyColors.success.opacity(0.15))
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 56))
-                    .foregroundColor(Color(hex: "2ECC71"))
+                    .foregroundColor(MeeshyColors.success)
             }
 
             Text("Bienvenue !")
@@ -169,13 +169,7 @@ public struct JoinFlowSheet: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        colors: [Color(hex: "2ECC71"), Color(hex: "4ECDC4")],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .background(MeeshyColors.brandGradient)
                 .cornerRadius(16)
             }
             .padding(.horizontal, 40)
@@ -193,12 +187,12 @@ public struct JoinFlowSheet: View {
 
             ZStack {
                 Circle()
-                    .fill(Color(hex: "FF6B6B").opacity(0.15))
+                    .fill(MeeshyColors.error.opacity(0.15))
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 48))
-                    .foregroundColor(Color(hex: "FF6B6B"))
+                    .foregroundColor(MeeshyColors.error)
             }
 
             Text("Lien indisponible")
@@ -219,12 +213,12 @@ public struct JoinFlowSheet: View {
                     Text("Reessayer")
                         .font(.system(size: 15, weight: .semibold))
                 }
-                .foregroundColor(Color(hex: "4ECDC4"))
+                .foregroundColor(MeeshyColors.indigo400)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .strokeBorder(Color(hex: "4ECDC4").opacity(0.4), lineWidth: 1.5)
+                        .strokeBorder(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1.5)
                 )
             }
             .padding(.top, 8)
