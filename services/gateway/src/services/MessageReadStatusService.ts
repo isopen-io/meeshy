@@ -557,7 +557,7 @@ export class MessageReadStatusService {
     } = {}
   ): Promise<{
     statuses: Array<{
-      userId: string;
+      participantId: string;
       username: string;
       avatar?: string | null;
       viewedAt: Date | null;
@@ -604,7 +604,7 @@ export class MessageReadStatusService {
 
       return {
         statuses: statuses.map((s) => ({
-          userId: s.participantId,
+          participantId: s.participantId,
           username: s.participant?.displayName || "Unknown",
           avatar: s.participant?.avatar,
           viewedAt: s.viewedAt,

@@ -220,10 +220,10 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     let exists = delegate.messages[idx].reactions.contains {
-                        $0.emoji == event.emoji && $0.participantId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.participantId
                     }
                     if !exists {
-                        let reaction = Reaction(messageId: event.messageId, participantId: event.userId, emoji: event.emoji)
+                        let reaction = Reaction(messageId: event.messageId, participantId: event.participantId, emoji: event.emoji)
                         delegate.messages[idx].reactions.append(reaction)
                     }
                 }
@@ -237,7 +237,7 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     delegate.messages[idx].reactions.removeAll {
-                        $0.emoji == event.emoji && $0.participantId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.participantId
                     }
                 }
             }
@@ -272,7 +272,7 @@ final class ConversationSocketHandler {
         // Read status updated (delivered / read) — uses summary counts
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
-            .filter { $0.participantId != userId }
+            .filter { $0.userId != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }

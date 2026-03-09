@@ -211,6 +211,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
               participantId: membership.id,
+              userId,
               type: 'read',
               updatedAt: new Date(),
               summary
@@ -289,6 +290,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId,
               participantId: membership.id,
+              userId,
               type: 'received',
               updatedAt: new Date(),
               summary

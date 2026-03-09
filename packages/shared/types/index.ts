@@ -805,6 +805,7 @@ export interface SendMessageRequest {
 // ===== RE-EXPORTS POUR RÉTROCOMPATIBILITÉ =====
 export type {
   SocketIOMessage,
+  SocketIOMessageSender,
   SocketIOUser as User,
   SocketIOResponse as SocketResponse,
   MessageTranslationCache as TranslationCache,

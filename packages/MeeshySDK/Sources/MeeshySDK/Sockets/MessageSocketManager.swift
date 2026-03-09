@@ -158,6 +158,7 @@ public struct ReadStatusSummary: Decodable, Sendable {
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let participantId: String
+    public let userId: String?
     public let type: String
     public let updatedAt: Date
     public let summary: ReadStatusSummary

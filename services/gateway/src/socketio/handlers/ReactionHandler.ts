@@ -321,31 +321,37 @@ export class ReactionHandler {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
-        content: true,
         senderId: true,
         conversationId: true,
-        conversation: {
-          select: { title: true }
-        }
       }
     });
 
-    if (!message || !message.senderId || message.senderId === reactorId) {
-      return; // Pas de notification si l'auteur réagit à son propre message
-    }
+    if (!message || !message.senderId) return;
+
+    // Résoudre senderId (Participant.id) → User.id pour la notification
+    const [authorParticipant, reactorParticipant] = await Promise.all([
+      this.prisma.participant.findUnique({
+        where: { id: message.senderId },
+        select: { userId: true }
+      }),
+      this.prisma.participant.findUnique({
+        where: { id: reactorId },
+        select: { userId: true }
+      })
+    ]);
+
+    const authorUserId = authorParticipant?.userId;
+    const reactorUserId = reactorParticipant?.userId;
+
+    if (!authorUserId || !reactorUserId || authorUserId === reactorUserId) return;
 
     this.notificationService
       .createReactionNotification({
-        messageAuthorId: message.senderId,
-        reactorId,
-        reactorUsername: '',
-        reactorAvatar: undefined,
-        emoji,
-        messageContent: message.content,
-        conversationId: message.conversationId,
-        conversationTitle: message.conversation.title || undefined,
+        messageAuthorId: authorUserId,
+        reactorUserId,
         messageId,
-        reactionId
+        conversationId: message.conversationId,
+        reactionEmoji: emoji,
       })
       .catch((error) => {
         console.error('❌ [REACTION_NOTIFICATION] Erreur création notification:', error);

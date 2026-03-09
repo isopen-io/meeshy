@@ -21,9 +21,15 @@ actor PendingStatusQueue {
         save(actions)
     }
 
+    private static let maxAge: TimeInterval = 24 * 60 * 60
+
     func flush() async {
-        let actions = load()
-        guard !actions.isEmpty else { return }
+        let now = Date()
+        let actions = load().filter { now.timeIntervalSince($0.timestamp) < Self.maxAge }
+        guard !actions.isEmpty else {
+            save([])
+            return
+        }
 
         var remaining: [PendingAction] = []
         for action in actions {

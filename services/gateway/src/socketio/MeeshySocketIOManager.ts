@@ -2755,23 +2755,33 @@ export class MeeshySocketIOManager {
 
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
-        // Créer une notification pour l'auteur du message (si ce n'est pas lui qui réagit)
-        // Ne notifier que les utilisateurs authentifiés (pas les anonymes)
-        const messageAuthorId = message.senderId;
-        const reactorId = !isAnonymous ? userId : null;
+        // Résoudre senderId (Participant.id) → User.id pour la notification
+        if (!isAnonymous && message.senderId) {
+          const [authorParticipant, reactorParticipant] = await Promise.all([
+            this.prisma.participant.findUnique({
+              where: { id: message.senderId },
+              select: { userId: true }
+            }),
+            this.prisma.participant.findUnique({
+              where: { id: participantId },
+              select: { userId: true }
+            })
+          ]);
 
-        if (messageAuthorId && reactorId && messageAuthorId !== reactorId) {
-          // Créer la notification de manière asynchrone sans bloquer
-          // Fire-and-forget pour éviter les timeouts
-          this.notificationService.createReactionNotification({
-            messageAuthorId,
-            reactorUserId: reactorId,
-            messageId: data.messageId,
-            conversationId: message.conversationId,
-            reactionEmoji: data.emoji,
-          }).catch((notifError) => {
-            logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
-          });
+          const authorUserId = authorParticipant?.userId;
+          const reactorUserId = reactorParticipant?.userId;
+
+          if (authorUserId && reactorUserId && authorUserId !== reactorUserId) {
+            this.notificationService.createReactionNotification({
+              messageAuthorId: authorUserId,
+              reactorUserId,
+              messageId: data.messageId,
+              conversationId: message.conversationId,
+              reactionEmoji: data.emoji,
+            }).catch((notifError) => {
+              logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
+            });
+          }
         }
 
       } else {

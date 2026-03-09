@@ -3,8 +3,8 @@
  * Remplace les anciens types WebSocket pour correspondre à la nouvelle architecture Socket.IO
  */
 
-// Import unified Participant
-import type { Participant } from './participant.js';
+// Import unified Participant types
+import type { ParticipantType } from './participant.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -773,6 +773,21 @@ export type MessageType = 'text' | 'image' | 'file' | 'audio' | 'video' | 'locat
 
 // ===== STRUCTURES DE DONNÉES =====
 
+/**
+ * Lightweight sender shape for Socket.IO message broadcasts.
+ * A subset of Participant — only the fields needed for display.
+ */
+export interface SocketIOMessageSender {
+  id: string;
+  displayName: string;
+  avatar?: string;
+  type?: ParticipantType;
+  userId?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
 export interface SocketIOMessage {
   id: string;
   conversationId: string;
@@ -787,7 +802,7 @@ export interface SocketIOMessage {
   replyToId?: string;
   createdAt: Date;
   updatedAt?: Date;
-  sender?: Participant;
+  sender?: SocketIOMessageSender;
 }
 
 export interface UserPermissions {
