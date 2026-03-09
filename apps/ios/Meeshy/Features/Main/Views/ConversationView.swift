@@ -695,6 +695,9 @@ struct ConversationView: View {
                 if scrollState.isNearBottom || lastMsg.isMe {
                     viewModel.markProgrammaticScroll()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { proxy.scrollTo(lastMsg.id, anchor: .bottom) }
+                    if scrollState.isNearBottom && !lastMsg.isMe {
+                        viewModel.markConversationAsRead()
+                    }
                 } else { scrollState.unreadBadgeCount += 1 }
             }
             .onChange(of: viewModel.isLoadingOlder) { wasLoading, isLoading in

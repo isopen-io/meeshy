@@ -974,6 +974,23 @@ class ConversationViewModel: ObservableObject {
         Task {
             try? await conversationService.markRead(conversationId: conversationId)
         }
+        markConversationAsRead()
+    }
+
+    func markConversationAsRead() {
+        let convId = conversationId
+        Task {
+            do {
+                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(convId)/mark-as-read",
+                    method: "POST"
+                )
+            } catch {
+                await PendingStatusQueue.shared.enqueue(.init(
+                    conversationId: convId, type: "read", timestamp: Date()
+                ))
+            }
+        }
     }
 
 
