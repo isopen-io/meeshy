@@ -18,7 +18,7 @@ enum DeepLinkDestination {
 
 enum DeepLinkParser {
 
-    private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me"]
+    private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
 
     /// Parse any URL into a deep link destination.
     ///
@@ -143,16 +143,6 @@ enum DeepLink: Equatable {
     case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
-
-    static func == (lhs: DeepLink, rhs: DeepLink) -> Bool {
-        switch (lhs, rhs) {
-        case (.joinLink(let a), .joinLink(let b)): return a == b
-        case (.chatLink(let a), .chatLink(let b)): return a == b
-        case (.magicLink(let a), .magicLink(let b)): return a == b
-        case (.conversation(let a), .conversation(let b)): return a == b
-        default: return false
-        }
-    }
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -163,7 +153,7 @@ final class DeepLinkRouter: ObservableObject {
 
     @Published var pendingDeepLink: DeepLink?
 
-    private init() {}
+    init() {}
 
     // MARK: - Universal Link Handling
 
