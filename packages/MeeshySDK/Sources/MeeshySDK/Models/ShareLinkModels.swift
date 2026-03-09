@@ -101,6 +101,8 @@ public struct AnonymousParticipant: Decodable, Sendable {
     public let canSendMessages: Bool
     public let canSendFiles: Bool
     public let canSendImages: Bool
+
+    public var displayName: String { username }
 }
 
 public struct JoinedConversation: Decodable {
