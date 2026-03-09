@@ -23,9 +23,14 @@ struct LoginView: View {
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
 
+    // Environment selector
+    @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
+    @State private var customHost: String = MeeshyConfig.shared.customHost
+    @State private var showCustomInput = false
+
     @FocusState private var focusedField: Field?
 
-    private enum Field { case username, password, accountPassword }
+    private enum Field { case username, password, accountPassword, customHost }
 
     private var isDark: Bool { theme.mode.isDark }
     private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
@@ -106,8 +111,12 @@ struct LoginView: View {
                 .bounceOnTap(scale: 0.94)
                 .accessibilityLabel("Creer un compte")
                 .accessibilityHint("Ouvre le formulaire d'inscription")
-                .padding(.bottom, MeeshySpacing.xxxl)
+                .padding(.bottom, MeeshySpacing.md)
                 .opacity(showFields ? 1 : 0)
+
+                environmentSelector
+                    .padding(.bottom, MeeshySpacing.xxxl)
+                    .opacity(showFields ? 1 : 0)
             }
         }
         .sheet(isPresented: $showForgotPassword) {
@@ -476,6 +485,87 @@ struct LoginView: View {
             avatarURL: account.avatarURL,
             enablePulse: false
         )
+    }
+
+    // MARK: - Environment Selector
+
+    private var environmentSelector: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
+                ForEach(MeeshyConfig.ServerEnvironment.allCases, id: \.rawValue) { env in
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selectedEnv = env
+                            showCustomInput = env == .custom
+                        }
+                        if env != .custom {
+                            MeeshyConfig.shared.applyEnvironment(env)
+                        }
+                    } label: {
+                        Text(env.label)
+                            .font(.system(size: 11, weight: selectedEnv == env ? .bold : .medium))
+                            .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(
+                                    selectedEnv == env
+                                        ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                        : AnyShapeStyle(theme.inputBackground)
+                                )
+                            )
+                    }
+                    .bounceOnTap(scale: 0.92)
+                }
+            }
+
+            if showCustomInput || selectedEnv == .custom {
+                HStack(spacing: MeeshySpacing.sm) {
+                    TextField("gate.example.com", text: $customHost)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .customHost)
+                        .foregroundColor(theme.textPrimary)
+                        .submitLabel(.done)
+                        .onSubmit { applyCustomHost() }
+
+                    Button {
+                        applyCustomHost()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(MeeshyColors.brandGradient)
+                            .font(.system(size: 18))
+                    }
+                    .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .bounceOnTap(scale: 0.90)
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(theme.inputBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                                .stroke(theme.inputBorder.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, MeeshySpacing.xxxl)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Text(MeeshyConfig.shared.serverOrigin)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(theme.textMuted.opacity(0.5))
+        }
+    }
+
+    private func applyCustomHost() {
+        let host = customHost.trimmingCharacters(in: .whitespaces)
+        guard !host.isEmpty else { return }
+        focusedField = nil
+        MeeshyConfig.shared.applyEnvironment(.custom, customHost: host)
     }
 
     // MARK: - Actions

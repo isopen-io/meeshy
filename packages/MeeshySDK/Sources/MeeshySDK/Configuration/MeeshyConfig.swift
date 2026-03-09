@@ -6,6 +6,33 @@ public final class MeeshyConfig: @unchecked Sendable {
     private static let remoteOrigin = "https://gate.meeshy.me"
     private static let localOrigin = "http://localhost:3000"
     private static let defaultApiPath = "/api/v1"
+    private static let environmentKey = "meeshy_selected_environment"
+    private static let customHostKey = "meeshy_custom_host"
+
+    public enum ServerEnvironment: String, CaseIterable, Sendable {
+        case production = "gate.meeshy.me"
+        case staging = "gate.staging.meeshy.me"
+        case localhost = "localhost:3000"
+        case custom = "custom"
+
+        public var label: String {
+            switch self {
+            case .production: return "Production"
+            case .staging: return "Staging"
+            case .localhost: return "Localhost"
+            case .custom: return "Custom"
+            }
+        }
+
+        public var origin: String {
+            switch self {
+            case .production: return "https://gate.meeshy.me"
+            case .staging: return "https://gate.staging.meeshy.me"
+            case .localhost: return "http://localhost:3000"
+            case .custom: return ""
+            }
+        }
+    }
 
     /// Full API base URL including version path (e.g. "https://gate.meeshy.me/api/v1")
     public var apiBaseURL: String = "\(remoteOrigin)\(defaultApiPath)"
@@ -73,5 +100,45 @@ public final class MeeshyConfig: @unchecked Sendable {
         let origin = local ? Self.localOrigin : Self.remoteOrigin
         let path = URL(string: apiBaseURL)?.path ?? Self.defaultApiPath
         apiBaseURL = origin + path
+    }
+
+    /// Currently selected environment, persisted in UserDefaults
+    public var selectedEnvironment: ServerEnvironment {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: Self.environmentKey),
+                  let env = ServerEnvironment(rawValue: raw) else { return .production }
+            return env
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.environmentKey)
+        }
+    }
+
+    /// Custom host string for the .custom environment
+    public var customHost: String {
+        get { UserDefaults.standard.string(forKey: Self.customHostKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: Self.customHostKey) }
+    }
+
+    /// Apply the selected environment, updating apiBaseURL
+    public func applyEnvironment(_ env: ServerEnvironment, customHost: String? = nil) {
+        selectedEnvironment = env
+        let origin: String
+        switch env {
+        case .custom:
+            let host = customHost ?? self.customHost
+            self.customHost = host
+            origin = host.hasPrefix("http") ? host : "https://\(host)"
+        default:
+            origin = env.origin
+        }
+        apiBaseURL = origin + Self.defaultApiPath
+    }
+
+    /// Restore the persisted environment on app launch
+    public func restoreEnvironment() {
+        let env = selectedEnvironment
+        guard env != .production else { return }
+        applyEnvironment(env)
     }
 }

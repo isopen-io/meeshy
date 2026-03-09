@@ -100,6 +100,7 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
+                    MeeshyConfig.shared.restoreEnvironment()
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
