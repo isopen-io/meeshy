@@ -842,7 +842,7 @@ class ConversationViewModel: ObservableObject {
     func deleteMessage(messageId: String) async {
         // Optimistic: mark as deleted locally
         if let idx = messageIndex(for: messageId) {
-            messages[idx].isDeleted = true
+            messages[idx].deletedAt = Date()
             messages[idx].content = ""
         }
 
@@ -851,7 +851,7 @@ class ConversationViewModel: ObservableObject {
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId) {
-                messages[idx].isDeleted = false
+                messages[idx].deletedAt = nil
             }
             self.error = error.localizedDescription
         }

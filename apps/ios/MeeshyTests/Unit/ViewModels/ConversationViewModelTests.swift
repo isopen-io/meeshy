@@ -122,14 +122,14 @@ final class ConversationViewModelTests: XCTestCase {
         reactions: [Reaction] = [],
         pinnedAt: Date? = nil,
         pinnedBy: String? = nil,
-        isDeleted: Bool = false
+        deletedAt: Date? = nil
     ) -> Message {
         Message(
             id: id,
             conversationId: testConversationId,
             senderId: senderId ?? testUserId,
             content: content,
-            isDeleted: isDeleted,
+            deletedAt: deletedAt,
             pinnedAt: pinnedAt,
             pinnedBy: pinnedBy,
             createdAt: Date(),

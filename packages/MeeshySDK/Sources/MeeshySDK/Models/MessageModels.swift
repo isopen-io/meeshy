@@ -94,7 +94,8 @@ public struct APIMessage: Decodable, Sendable {
     public let messageType: String?
     public let messageSource: String?
     public let isEdited: Bool?
-    public let isDeleted: Bool?
+    public let deletedAt: Date?
+    public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
     public let storyReplyToId: String?
     public let forwardedFromId: String?
@@ -261,7 +262,7 @@ extension APIMessage {
             id: id, conversationId: conversationId, senderId: senderId,
             content: content ?? "",
             originalLanguage: originalLanguage ?? "fr", messageType: msgType, messageSource: msgSource,
-            isEdited: isEdited ?? false, isDeleted: isDeleted ?? false, replyToId: replyToId,
+            isEdited: isEdited ?? false, deletedAt: deletedAt, replyToId: replyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             isViewOnce: isViewOnce ?? false, isBlurred: isBlurred ?? false,
             pinnedAt: pinnedAt.flatMap { ISO8601DateFormatter().date(from: $0) },

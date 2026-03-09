@@ -285,8 +285,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var messageSource: MessageSource = .user
     public var isEdited: Bool = false
     public var editedAt: Date?
-    public var isDeleted: Bool = false
     public var deletedAt: Date?
+    public var isDeleted: Bool { deletedAt != nil }
     public var replyToId: String?
     public var forwardedFromId: String?
     public var forwardedFromConversationId: String?
@@ -335,7 +335,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public init(id: String = UUID().uuidString, conversationId: String, senderId: String = "",
                 content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
-                isEdited: Bool = false, editedAt: Date? = nil, isDeleted: Bool = false, deletedAt: Date? = nil,
+                isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
                 replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
                 expiresAt: Date? = nil, isViewOnce: Bool = false, maxViewOnceCount: Int? = nil,
                 viewOnceCount: Int = 0, isBlurred: Bool = false, pinnedAt: Date? = nil, pinnedBy: String? = nil,
@@ -350,7 +350,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
-        self.isEdited = isEdited; self.editedAt = editedAt; self.isDeleted = isDeleted; self.deletedAt = deletedAt
+        self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
         self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.expiresAt = expiresAt; self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount

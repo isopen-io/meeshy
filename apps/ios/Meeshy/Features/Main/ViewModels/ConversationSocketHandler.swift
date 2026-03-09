@@ -207,7 +207,7 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[idx].isDeleted = true
+                    delegate.messages[idx].deletedAt = Date()
                     delegate.messages[idx].content = ""
                 }
             }
