@@ -8,6 +8,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
 
     var baseURL: String = "https://mock.api"
     var authToken: String?
+    var anonymousSessionToken: String?
 
     // MARK: - Stubbing
 
@@ -155,6 +156,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     func reset() {
         baseURL = "https://mock.api"
         authToken = nil
+        anonymousSessionToken = nil
         stubs.removeAll()
         errorToThrow = nil
         requestCount = 0

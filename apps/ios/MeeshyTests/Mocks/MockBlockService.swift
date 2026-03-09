@@ -2,9 +2,8 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-@MainActor
-final class MockBlockService: BlockServiceProviding {
-    nonisolated init() {}
+final class MockBlockService: BlockServiceProviding, @unchecked Sendable {
+    init() {}
 
     // MARK: - State
 

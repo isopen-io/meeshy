@@ -389,6 +389,7 @@ class ConversationViewModel: ObservableObject {
         unreadCount: Int = 0,
         isDirect: Bool = false,
         participantUserId: String? = nil,
+        anonymousSession: AnonymousSessionContext? = nil,
         authManager: AuthManaging = AuthManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
@@ -412,11 +413,16 @@ class ConversationViewModel: ObservableObject {
         )
         handler.delegate = self
         self.socketHandler = handler
+        if let session = anonymousSession {
+            APIClient.shared.anonymousSessionToken = session.sessionToken
+            MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
+        }
     }
 
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        APIClient.shared.anonymousSessionToken = nil
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)

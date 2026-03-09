@@ -39,6 +39,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     // MARK: - Call Tracking
 
     var connectCallCount = 0
+    var connectAnonymousTokens: [String] = []
     var disconnectCallCount = 0
     var joinConversationIds: [String] = []
     var leaveConversationIds: [String] = []
@@ -53,6 +54,13 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     // MARK: - Protocol Methods
 
     func connect() {
+        connectCallCount += 1
+        isConnected = true
+        connectionState = .connected
+    }
+
+    func connectAnonymous(sessionToken: String) {
+        connectAnonymousTokens.append(sessionToken)
         connectCallCount += 1
         isConnected = true
         connectionState = .connected
@@ -132,6 +140,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         connectionState = .disconnected
         activeConversationId = nil
         connectCallCount = 0
+        connectAnonymousTokens.removeAll()
         disconnectCallCount = 0
         joinConversationIds.removeAll()
         leaveConversationIds.removeAll()
