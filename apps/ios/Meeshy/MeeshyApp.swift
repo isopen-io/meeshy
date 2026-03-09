@@ -200,6 +200,9 @@ struct MeeshyApp: App {
     // MARK: - Guest Session Lifecycle
 
     private func dismissGuestSession() {
+        if let ctx = activeGuestSession?.context {
+            Task { try? await ShareLinkService.shared.leaveAnonymousSession(sessionToken: ctx.sessionToken) }
+        }
         if let id = activeGuestSession?.identifier {
             AnonymousSessionStore.delete(linkId: id)
         }

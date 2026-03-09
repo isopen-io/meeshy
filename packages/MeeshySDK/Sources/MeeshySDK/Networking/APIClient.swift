@@ -41,6 +41,11 @@ public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
     public let error: String?
 }
 
+private struct ErrorBody: Decodable {
+    let message: String?
+    let error: String?
+}
+
 // MARK: - API Errors
 
 public enum APIError: Error, LocalizedError {
@@ -193,7 +198,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             let statusCode = httpResponse.statusCode
 
             guard (200...299).contains(statusCode) else {
-                let errorMsg = try? decoder.decode(APIResponse<String>.self, from: data).error
+                let errBody = try? decoder.decode(ErrorBody.self, from: data)
+                let errorMsg = errBody?.message ?? errBody?.error
 
                 if statusCode == 401 {
                     Task { @MainActor in

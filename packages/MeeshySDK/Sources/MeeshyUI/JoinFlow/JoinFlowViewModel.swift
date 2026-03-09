@@ -50,13 +50,13 @@ public final class JoinFlowViewModel: ObservableObject {
             let info = try await shareLinkService.getLinkInfo(identifier: identifier)
             linkInfo = info
             phase = .preview
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
             let message: String
             switch error {
-            case .serverError(404, _):
+            case .server(404, _):
                 message = "Ce lien de conversation est introuvable"
-            case .serverError(410, _):
-                message = "Ce lien a expire ou n'est plus actif"
+            case .server(410, let msg):
+                message = msg
             default:
                 message = error.errorDescription ?? "Erreur inconnue"
             }
@@ -116,16 +116,18 @@ public final class JoinFlowViewModel: ObservableObject {
             let result = try await shareLinkService.joinAnonymously(linkId: info.linkId, request: request)
             joinResult = result
             phase = .success
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
             switch error {
-            case .serverError(409, let msg):
-                errorMessage = msg ?? "Ce nom d'utilisateur est deja pris"
-            case .serverError(403, let msg):
-                errorMessage = msg ?? "Acces refuse"
-            case .serverError(410, let msg):
-                errorMessage = msg ?? "Ce lien a expire"
-            case .serverError(429, _):
+            case .server(409, let msg):
+                errorMessage = msg
+            case .server(403, let msg):
+                errorMessage = msg
+            case .server(410, let msg):
+                errorMessage = msg
+            case .server(429, _):
                 errorMessage = "Trop d'utilisateurs connectes"
+            case .auth:
+                errorMessage = error.errorDescription
             default:
                 errorMessage = error.errorDescription ?? "Erreur lors de la connexion"
             }
