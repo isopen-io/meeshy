@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ConversationView } from '../../../components/conversations/ConversationView';
-import type { Conversation, User, Message, ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
+import type { Conversation, User, Message, Participant, UserRoleEnum } from '@meeshy/shared/types';
 
 // Mock utils
 jest.mock('@/utils/token-utils', () => ({
@@ -133,9 +133,45 @@ const mockMessages: Message[] = [
   } as Message,
 ];
 
-const mockParticipants: ThreadMember[] = [
-  { userId: 'user-1', user: mockCurrentUser as any, role: 'MEMBER' as any },
-  { userId: 'user-2', user: { id: 'user-2', username: 'john' } as any, role: 'MEMBER' as any },
+const defaultPermissions = {
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: true,
+  canSendAudios: true,
+  canSendLocations: true,
+  canSendLinks: true,
+};
+
+const mockParticipants: Participant[] = [
+  {
+    id: 'participant-1',
+    conversationId: 'conv-1',
+    type: 'user',
+    userId: 'user-1',
+    displayName: 'Test User',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
+    user: mockCurrentUser as any,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
+  {
+    id: 'participant-2',
+    conversationId: 'conv-1',
+    type: 'user',
+    userId: 'user-2',
+    displayName: 'john',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
+    user: { id: 'user-2', username: 'john' } as any,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
 ];
 
 const mockT = (key: string) => {

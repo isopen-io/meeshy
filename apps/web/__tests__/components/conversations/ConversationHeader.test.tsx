@@ -7,7 +7,7 @@ import { conversationsService } from '@/services/conversations.service';
 import { AttachmentService } from '@/services/attachmentService';
 import { useCallStore } from '@/stores/call-store';
 import { useUserStore } from '@/stores/user-store';
-import type { Conversation, SocketIOUser as User, ThreadMember } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser as User, Participant } from '@meeshy/shared/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
 // Mock services
@@ -190,28 +190,54 @@ const mockDirectConversation: Conversation = {
   type: 'direct',
 } as Conversation;
 
-const mockParticipants: ThreadMember[] = [
+const defaultPermissions = {
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: true,
+  canSendAudios: true,
+  canSendLocations: true,
+  canSendLinks: true,
+};
+
+const mockParticipants: Participant[] = [
   {
-    userId: 'user-1',
+    id: 'participant-1',
     conversationId: 'conv-1',
+    type: 'user',
+    userId: 'user-1',
+    displayName: 'Test User',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: {
       id: 'user-1',
       username: 'testuser',
       displayName: 'Test User',
     },
-    role: UserRoleEnum.USER,
-  } as ThreadMember,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
   {
-    userId: 'user-2',
+    id: 'participant-2',
     conversationId: 'conv-1',
+    type: 'user',
+    userId: 'user-2',
+    displayName: 'John Doe',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: {
       id: 'user-2',
       username: 'johnuser',
       displayName: 'John Doe',
       avatar: 'https://example.com/avatar.jpg',
     },
-    role: UserRoleEnum.USER,
-  } as ThreadMember,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
 ];
 
 const mockT = (key: string) => {

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ConversationParticipants } from '../../../components/conversations/conversation-participants';
-import type { ThreadMember, SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
+import type { Participant, SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
 
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
@@ -106,16 +106,41 @@ const mockCurrentUser: SocketIOUser = {
   role: 'USER' as any,
 } as SocketIOUser;
 
-const mockParticipants: ThreadMember[] = [
+const defaultPermissions = {
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: true,
+  canSendAudios: true,
+  canSendLocations: true,
+  canSendLinks: true,
+};
+
+const mockParticipants: Participant[] = [
   {
     id: 'participant-1',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-1',
+    displayName: 'Current User',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: mockCurrentUser,
-    role: 'MEMBER' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
   {
     id: 'participant-2',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-2',
+    displayName: 'John Doe',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: {
       id: 'user-2',
       username: 'john',
@@ -125,11 +150,19 @@ const mockParticipants: ThreadMember[] = [
       isOnline: true,
       avatar: 'https://example.com/john.jpg',
     } as any,
-    role: 'MEMBER' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
   {
     id: 'participant-3',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-3',
+    displayName: 'Jane Smith',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: false,
+    isActive: true,
     user: {
       id: 'user-3',
       username: 'jane',
@@ -138,8 +171,9 @@ const mockParticipants: ThreadMember[] = [
       lastName: 'Smith',
       isOnline: false,
     } as any,
-    role: 'CREATOR' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'creator',
+    joinedAt: new Date(),
+  } as Participant,
 ];
 
 describe('ConversationParticipants', () => {
@@ -226,14 +260,22 @@ describe('ConversationParticipants', () => {
         ...mockParticipants,
         {
           id: 'participant-4',
+          conversationId: 'conv-1',
+          type: 'user',
           userId: 'user-4',
+          displayName: 'Bob',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: {
             id: 'user-4',
             username: 'bob',
             displayName: 'Bob',
           } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(
@@ -301,16 +343,32 @@ describe('ConversationParticipants', () => {
         ...mockParticipants,
         {
           id: 'participant-4',
+          conversationId: 'conv-1',
+          type: 'user',
           userId: 'user-4',
+          displayName: 'Bob',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: { id: 'user-4', username: 'bob', displayName: 'Bob' } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
         {
           id: 'participant-5',
+          conversationId: 'conv-1',
+          type: 'user',
           userId: 'user-5',
+          displayName: 'Alice',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: { id: 'user-5', username: 'alice', displayName: 'Alice' } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(
@@ -341,15 +399,23 @@ describe('ConversationParticipants', () => {
         ...mockParticipants,
         {
           id: 'participant-anon',
+          conversationId: 'conv-1',
+          type: 'anonymous' as const,
           userId: 'anon-1',
+          displayName: 'Anonymous User',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: {
             id: 'anon-1',
             username: 'anonymous',
             displayName: 'Anonymous User',
-            sessionToken: 'some-token', // Anonymous marker
+            sessionToken: 'some-token',
           } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(
@@ -377,14 +443,22 @@ describe('ConversationParticipants', () => {
       const anonymousParticipants = [
         {
           id: 'participant-anon',
+          conversationId: 'conv-1',
+          type: 'anonymous' as const,
           userId: 'anon-1',
+          displayName: 'Anonymous User',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: {
             id: 'anon-1',
             displayName: 'Anonymous User',
             sessionToken: 'some-token',
           } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(
@@ -484,13 +558,21 @@ describe('ConversationParticipants', () => {
       const incompleteParticipants = [
         {
           id: 'participant-1',
+          conversationId: 'conv-1',
+          type: 'user' as const,
           userId: 'user-1',
+          displayName: 'user',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: {
             id: 'user-1',
             username: 'user',
           } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(

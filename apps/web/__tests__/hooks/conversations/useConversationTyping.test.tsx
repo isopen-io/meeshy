@@ -15,7 +15,7 @@
 
 import { renderHook, act } from '@testing-library/react';
 import { useConversationTyping } from '@/hooks/conversations/useConversationTyping';
-import type { ThreadMember } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types';
 
 // Use fake timers for timeout testing
 // Use real timers for async operations (promises, setTimeout, etc.)
@@ -25,11 +25,27 @@ describe('useConversationTyping', () => {
   const mockConversationId = 'conv-123';
   const mockCurrentUserId = 'user-123';
 
-  const mockParticipants: ThreadMember[] = [
+  const defaultPermissions = {
+    canSendMessages: true,
+    canSendFiles: true,
+    canSendImages: true,
+    canSendVideos: true,
+    canSendAudios: true,
+    canSendLocations: true,
+    canSendLinks: true,
+  };
+
+  const mockParticipants: Participant[] = [
     {
       id: 'member-1',
       conversationId: mockConversationId,
+      type: 'user',
       userId: 'user-456',
+      displayName: 'Other User',
+      language: 'fr',
+      permissions: defaultPermissions,
+      isOnline: true,
+      isActive: true,
       user: {
         id: 'user-456',
         username: 'otheruser',
@@ -37,22 +53,26 @@ describe('useConversationTyping', () => {
         firstName: 'Other',
         lastName: 'User',
       },
-      role: 'MEMBER',
+      role: 'member',
       joinedAt: new Date(),
-      isActive: true,
-    } as ThreadMember,
+    } as Participant,
     {
       id: 'member-2',
       conversationId: mockConversationId,
+      type: 'user',
       userId: 'user-789',
+      displayName: 'anotheruser',
+      language: 'fr',
+      permissions: defaultPermissions,
+      isOnline: true,
+      isActive: true,
       user: {
         id: 'user-789',
         username: 'anotheruser',
       },
-      role: 'MEMBER',
+      role: 'member',
       joinedAt: new Date(),
-      isActive: true,
-    } as ThreadMember,
+    } as Participant,
   ];
 
   const mockStartTyping = jest.fn();
@@ -125,14 +145,14 @@ describe('useConversationTyping', () => {
     });
 
     it('should use firstName + lastName when no displayName', () => {
-      const participantsWithoutDisplayName: ThreadMember[] = [
+      const participantsWithoutDisplayName: Participant[] = [
         {
           ...mockParticipants[0],
           user: {
             ...mockParticipants[0].user,
             displayName: undefined,
           },
-        } as ThreadMember,
+        } as Participant,
       ];
 
       const { result } = renderHook(() =>
@@ -575,14 +595,14 @@ describe('useConversationTyping', () => {
       );
 
       // Update participants with new display name
-      const updatedParticipants: ThreadMember[] = [
+      const updatedParticipants: Participant[] = [
         {
           ...mockParticipants[0],
           user: {
             ...mockParticipants[0].user,
             displayName: 'Updated Name',
           },
-        } as ThreadMember,
+        } as Participant,
       ];
 
       rerender({ participants: updatedParticipants });
@@ -620,16 +640,21 @@ describe('useConversationTyping', () => {
 
   describe('Edge Cases', () => {
     it('should handle participant without user object', () => {
-      const participantsWithoutUser: ThreadMember[] = [
+      const participantsWithoutUser: Participant[] = [
         {
           id: 'member-1',
           conversationId: mockConversationId,
+          type: 'user',
           userId: 'user-456',
-          user: undefined,
-          role: 'MEMBER',
-          joinedAt: new Date(),
+          displayName: 'User 456',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
           isActive: true,
-        } as ThreadMember,
+          user: undefined,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       const { result } = renderHook(() =>

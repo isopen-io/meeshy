@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { ConversationParticipantsDrawer } from '../../../components/conversations/conversation-participants-drawer';
 import { conversationsService } from '@/services/conversations.service';
 import { usersService } from '@/services/users.service';
-import type { ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
+import type { Participant, UserRoleEnum } from '@meeshy/shared/types';
 
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
@@ -185,22 +185,44 @@ const mockCurrentUser = {
   isOnline: true,
 };
 
-const mockParticipants: ThreadMember[] = [
+const defaultPermissions = {
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: true,
+  canSendAudios: true,
+  canSendLocations: true,
+  canSendLinks: true,
+};
+
+const mockParticipants: Participant[] = [
   {
     id: 'participant-1',
-    oderId: 'participant-1',
-    oderId: 'participant-1',
-    oderId: 'participant-1',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-1',
+    displayName: 'Current User',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: {
       ...mockCurrentUser,
       avatar: 'https://example.com/current.jpg',
     } as any,
-    role: 'ADMIN' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'admin',
+    joinedAt: new Date(),
+  } as Participant,
   {
     id: 'participant-2',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-2',
+    displayName: 'John Doe',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
     user: {
       id: 'user-2',
       username: 'john',
@@ -210,11 +232,19 @@ const mockParticipants: ThreadMember[] = [
       isOnline: true,
       avatar: 'https://example.com/john.jpg',
     } as any,
-    role: 'MEMBER' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'member',
+    joinedAt: new Date(),
+  } as Participant,
   {
     id: 'participant-3',
+    conversationId: 'conv-1',
+    type: 'user',
     userId: 'user-3',
+    displayName: 'Jane Smith',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: false,
+    isActive: true,
     user: {
       id: 'user-3',
       username: 'jane',
@@ -223,8 +253,9 @@ const mockParticipants: ThreadMember[] = [
       lastName: 'Smith',
       isOnline: false,
     } as any,
-    role: 'MODERATOR' as UserRoleEnum,
-  } as ThreadMember,
+    role: 'moderator',
+    joinedAt: new Date(),
+  } as Participant,
 ];
 
 describe('ConversationParticipantsDrawer', () => {
@@ -585,16 +616,24 @@ describe('ConversationParticipantsDrawer', () => {
         ...mockParticipants,
         {
           id: 'participant-anon',
+          conversationId: 'conv-1',
+          type: 'anonymous' as const,
           userId: 'anon-1',
+          displayName: 'Anonymous',
+          language: 'fr',
+          permissions: defaultPermissions,
+          isOnline: true,
+          isActive: true,
           user: {
             id: 'anon-1',
             username: 'anonymous',
             displayName: 'Anonymous',
-            sessionToken: 'token', // Marks as anonymous
+            sessionToken: 'token',
             isOnline: true,
           } as any,
-          role: 'MEMBER' as UserRoleEnum,
-        } as ThreadMember,
+          role: 'member',
+          joinedAt: new Date(),
+        } as Participant,
       ];
 
       render(
@@ -652,15 +691,23 @@ describe('ConversationParticipantsDrawer', () => {
     it('should show 99+ for large participant counts', () => {
       const manyParticipants = Array.from({ length: 150 }, (_, i) => ({
         id: `participant-${i}`,
+        conversationId: 'conv-1',
+        type: 'user' as const,
         userId: `user-${i}`,
+        displayName: `User ${i}`,
+        language: 'fr',
+        permissions: defaultPermissions,
+        isOnline: i % 2 === 0,
+        isActive: true,
         user: {
           id: `user-${i}`,
           username: `user${i}`,
           displayName: `User ${i}`,
           isOnline: i % 2 === 0,
         } as any,
-        role: 'MEMBER' as UserRoleEnum,
-      } as ThreadMember));
+        role: 'member',
+        joinedAt: new Date(),
+      } as Participant));
 
       render(
         <ConversationParticipantsDrawer
