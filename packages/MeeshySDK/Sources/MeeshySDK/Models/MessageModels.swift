@@ -7,6 +7,10 @@ public struct APIMessageSender: Decodable, Sendable {
     public let username: String
     public let displayName: String?
     public let avatar: String?
+    public let type: String?
+    public let userId: String?
+    public let firstName: String?
+    public let lastName: String?
 }
 
 public struct APIAttachmentTranscription: Decodable, Sendable {
