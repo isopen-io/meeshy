@@ -46,19 +46,18 @@ struct MeeshyApp: App {
                 }
                 .fullScreenCover(isPresented: .init(
                     get: { activeGuestSession != nil && !authManager.isAuthenticated },
-                    set: { if !$0 { activeGuestSession = nil } }
+                    set: { if !$0 { dismissGuestSession() } }
                 )) {
                     if let guestSession = activeGuestSession {
                         GuestConversationContainer(
                             session: guestSession,
                             onSessionCreated: { ctx in
-                                AnonymousSessionStore.save(ctx)
+                                if !AnonymousSessionStore.save(ctx) {
+                                    toastManager.showError("Impossible de sauvegarder la session")
+                                }
                                 activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
                             },
-                            onDismiss: {
-                                AnonymousSessionStore.delete(linkId: guestSession.identifier)
-                                activeGuestSession = nil
-                            }
+                            onDismiss: { dismissGuestSession() }
                         )
                     }
                 }
@@ -198,18 +197,24 @@ struct MeeshyApp: App {
         }
     }
 
+    // MARK: - Guest Session Lifecycle
+
+    private func dismissGuestSession() {
+        if let id = activeGuestSession?.identifier {
+            AnonymousSessionStore.delete(linkId: id)
+        }
+        activeGuestSession = nil
+    }
+
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)
 
     private func handleGuestDeepLink(_ link: DeepLink?) {
         guard let link else { return }
         guard !authManager.isAuthenticated else { return }
         switch link {
-        case .joinLink(let id):
+        case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
-            let _ = deepLinkRouter.consumePendingDeepLink()
-        case .chatLink(let id):
-            activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
-            let _ = deepLinkRouter.consumePendingDeepLink()
+            deepLinkRouter.consumePendingDeepLink()
         default:
             break
         }

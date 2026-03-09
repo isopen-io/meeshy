@@ -239,6 +239,7 @@ final class DeepLinkRouter: ObservableObject {
 
     // MARK: - Consume
 
+    @discardableResult
     func consumePendingDeepLink() -> DeepLink? {
         let link = pendingDeepLink
         pendingDeepLink = nil
