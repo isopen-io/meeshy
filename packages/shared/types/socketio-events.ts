@@ -510,6 +510,23 @@ export interface LocationLiveStoppedEventData {
 }
 
 /**
+ * Données pour l'événement de mise à jour du rôle d'un participant
+ * Émis lorsqu'un admin/modérateur modifie le rôle d'un participant dans une conversation
+ */
+export interface ParticipantRoleUpdatedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly newRole: string;
+  readonly updatedBy: string;
+  readonly participant: {
+    readonly id: string;
+    readonly role: string;
+    readonly displayName: string;
+    readonly userId: string | null;
+  };
+}
+
+/**
  * Données pour l'événement de mise à jour des traductions d'un textObject de story.
  * Émis après que le pipeline ZMQ a traduit un textObject de storyEffects.
  */
@@ -553,6 +570,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
+  [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
