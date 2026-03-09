@@ -199,20 +199,29 @@ public struct ImageFullscreen: View {
                 .aspectRatio(contentMode: .fit)
                 .scaleEffect(scale)
                 .offset(offset)
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { scale = $0 }
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { value in scale = value.magnification }
                         .onEnded { _ in
                             withAnimation(.spring()) {
                                 scale = max(1, min(5, scale))
                             }
                         }
                 )
-                .gesture(
+                .simultaneousGesture(
                     DragGesture()
-                        .onChanged { offset = $0.translation }
+                        .onChanged { value in
+                            if scale <= 1.05 {
+                                offset = value.translation
+                            } else {
+                                offset = CGSize(
+                                    width: value.translation.width / scale,
+                                    height: value.translation.height / scale
+                                )
+                            }
+                        }
                         .onEnded { value in
-                            if abs(value.translation.height) > 200 {
+                            if scale <= 1.05 && abs(value.translation.height) > 200 {
                                 dismiss()
                             } else {
                                 withAnimation(.spring()) { offset = .zero }

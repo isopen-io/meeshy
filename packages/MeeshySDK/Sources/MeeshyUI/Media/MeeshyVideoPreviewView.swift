@@ -139,7 +139,7 @@ public struct MeeshyVideoPreviewView: View {
         case .post:
             VStack(spacing: 0) {
                 videoPlayerView
-                    .frame(maxHeight: 350)
+                    .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, 16)
 
@@ -154,8 +154,9 @@ public struct MeeshyVideoPreviewView: View {
 
         case .message:
             videoPlayerView
-                .frame(maxWidth: 240, maxHeight: 200)
+                .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 20)
 
         case .avatar:
             videoPlayerView
@@ -172,17 +173,31 @@ public struct MeeshyVideoPreviewView: View {
     @ViewBuilder
     private var videoPlayerView: some View {
         if let player {
-            VideoPlayer(player: player)
-                .disabled(true)
-                .onTapGesture {
-                    if isPlaying {
-                        player.pause()
-                        isPlaying = false
-                    } else {
-                        player.play()
-                        isPlaying = true
+            ZStack {
+                VideoPlayer(player: player)
+                    .allowsHitTesting(false)
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if isPlaying {
+                            player.pause()
+                            isPlaying = false
+                        } else {
+                            player.play()
+                            isPlaying = true
+                        }
+                        HapticFeedback.light()
                     }
+
+                if !isPlaying {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.4), radius: 6)
+                        .allowsHitTesting(false)
                 }
+            }
         } else {
             Rectangle()
                 .fill(.white.opacity(0.05))
