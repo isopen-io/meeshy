@@ -461,12 +461,31 @@ struct ParticipantsView: View {
         defer { isLoading = false }
 
         do {
-            let response: ParticipantsResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants?limit=100"
-            )
-            if response.success {
-                participants = response.data
+            var allParticipants: [ConversationParticipant] = []
+            var cursor: String? = nil
+            var hasMore = true
+
+            while hasMore {
+                var endpoint = "/conversations/\(conversationId)/participants?limit=100"
+                if let cursor {
+                    endpoint += "&cursor=\(cursor)"
+                }
+
+                let response: ParticipantsResponse = try await APIClient.shared.request(
+                    endpoint: endpoint
+                )
+                if response.success {
+                    allParticipants.append(contentsOf: response.data)
+                }
+
+                hasMore = response.pagination?.hasMore ?? false
+                cursor = response.pagination?.nextCursor
+
+                // Safety: max 1000
+                if allParticipants.count >= 1000 { break }
             }
+
+            participants = allParticipants
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")
         }

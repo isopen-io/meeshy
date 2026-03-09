@@ -31,9 +31,16 @@ private extension String {
 
 // MARK: - Participants Response
 
+struct ParticipantsPagination: Decodable {
+    let nextCursor: String?
+    let hasMore: Bool
+    let totalCount: Int?
+}
+
 struct ParticipantsResponse: Decodable {
     let success: Bool
     let data: [ConversationParticipant]
+    let pagination: ParticipantsPagination?
 }
 
 // MARK: - ConversationInfoSheet
@@ -912,12 +919,30 @@ struct ConversationInfoSheet: View {
         defer { isLoadingParticipants = false }
 
         do {
-            let response: ParticipantsResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversation.id)/participants?limit=100"
-            )
-            if response.success {
-                participants = response.data
+            var allParticipants: [ConversationParticipant] = []
+            var cursor: String? = nil
+            var hasMore = true
+
+            while hasMore {
+                var endpoint = "/conversations/\(conversation.id)/participants?limit=100"
+                if let cursor {
+                    endpoint += "&cursor=\(cursor)"
+                }
+
+                let response: ParticipantsResponse = try await APIClient.shared.request(
+                    endpoint: endpoint
+                )
+                if response.success {
+                    allParticipants.append(contentsOf: response.data)
+                }
+
+                hasMore = response.pagination?.hasMore ?? false
+                cursor = response.pagination?.nextCursor
+
+                if allParticipants.count >= 1000 { break }
             }
+
+            participants = allParticipants
         } catch {
             // Silently fail — show empty
         }
