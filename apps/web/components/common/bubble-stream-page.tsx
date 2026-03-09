@@ -576,7 +576,7 @@ export function BubbleStreamPage({
                 usedLanguages={usedLanguages}
                 isMobile={isMobile}
                 conversationType="public"
-                userRole={getUserModerationRole()}
+                userRole={getUserModerationRole() as any}
                 conversationId={normalizedConversationId || conversationId}
                 isAnonymous={isAnonymousMode}
                 currentAnonymousUserId={isAnonymousMode ? user.id : undefined}

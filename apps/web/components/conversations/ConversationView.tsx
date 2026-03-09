@@ -180,6 +180,19 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     // Normaliser le type de conversation
     const conversationType = normalizeConversationType(conversation.type);
 
+    // Rôle effectif : max(rôle global, rôle conversation)
+    const currentParticipant = participants.find(p => p.userId === currentUser.id);
+    const conversationRole = (currentParticipant?.role as string) || '';
+    const globalRole = (currentUser.role as string) || 'USER';
+    const PRIVILEGE_LEVELS: Record<string, number> = {
+      BIGBOSS: 100, ADMIN: 80, CREATOR: 70, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10, MEMBER: 10,
+    };
+    const convRoleUpper = conversationRole.toUpperCase();
+    const globalRoleUpper = globalRole.toUpperCase();
+    const effectiveRole = (PRIVILEGE_LEVELS[convRoleUpper] || 0) > (PRIVILEGE_LEVELS[globalRoleUpper] || 0)
+      ? convRoleUpper
+      : globalRoleUpper;
+
     // Token pour les attachments
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;
 
@@ -252,7 +265,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             isMobile={isMobile}
             conversationType={conversationType}
             scrollContainerRef={scrollContainerRef}
-            userRole={currentUser.role as UserRoleEnum}
+            userRole={effectiveRole as UserRoleEnum}
             conversationId={conversation.id}
             addTranslatingState={addTranslatingState}
             isTranslating={isTranslating}
@@ -295,7 +308,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             choices={languageChoices}
             onAttachmentsChange={onAttachmentsChange}
             token={token}
-            userRole={currentUser.role}
+            userRole={effectiveRole}
             conversationId={conversation.id}
           />
         </div>
