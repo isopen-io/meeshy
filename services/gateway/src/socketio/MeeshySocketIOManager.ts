@@ -930,6 +930,11 @@ export class MeeshySocketIOManager {
         this._handleTypingStop(socket, data);
       });
 
+      // Heartbeat pour présence
+      socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
+        this._handleHeartbeat(socket);
+      });
+
       // ===== ÉVÉNEMENTS DE RÉACTIONS =====
       
       // Ajouter une réaction
@@ -2130,6 +2135,28 @@ export class MeeshySocketIOManager {
       }
     } catch (error) {
       logger.error('❌ [STATUS] Erreur lors du broadcast du statut', error);
+    }
+  }
+
+  private async _handleHeartbeat(socket: any) {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+
+    try {
+      const result = this._getConnectedUser(userIdOrToken);
+      if (!result) return;
+      const { user: connectedUser, realUserId: userId } = result;
+
+      this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
+
+      if (!connectedUser.isAnonymous) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { lastActiveAt: new Date() }
+        });
+      }
+    } catch {
+      // Silent - heartbeat failure is not critical
     }
   }
 
