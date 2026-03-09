@@ -215,6 +215,10 @@ export {
   isMemberAdmin,
   isMemberModerator,
   isMemberCreator,
+  // Unified role resolution
+  getEffectiveRole,
+  getEffectiveRoleLevel,
+  hasModeratorPrivileges,
   // Aliases de compatibilité (deprecated)
   hasMinimumConversationRole,
   isConversationMemberRole,

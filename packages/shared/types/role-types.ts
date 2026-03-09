@@ -134,6 +134,63 @@ export function hasMinimumMemberRole(
   return userLevel >= requiredLevel;
 }
 
+// ============================================================================
+// UNIFIED ROLE RESOLUTION - Echelle unifiee global + member
+// ============================================================================
+
+/**
+ * Echelle unifiee pour comparer roles globaux et roles member.
+ * Permet de calculer le role effectif = max(global, member).
+ */
+const UNIFIED_ROLE_LEVELS: Record<string, number> = {
+  BIGBOSS: 100,
+  ADMIN: 80,
+  CREATOR: 70,
+  MODERATOR: 60,
+  AUDIT: 40,
+  ANALYST: 30,
+  MEMBER: 10,
+  USER: 10,
+};
+
+/**
+ * Retourne le role effectif = max(globalRole, memberRole) sur une echelle unifiee.
+ * Le resultat est toujours UPPERCASE.
+ */
+export function getEffectiveRole(
+  globalRole: string,
+  memberRole: string | undefined | null,
+): string {
+  const globalUpper = (globalRole || 'USER').toUpperCase();
+  const memberUpper = (memberRole || '').toUpperCase();
+  const globalLevel = UNIFIED_ROLE_LEVELS[globalUpper] || 0;
+  const memberLevel = UNIFIED_ROLE_LEVELS[memberUpper] || 0;
+  return memberLevel > globalLevel ? memberUpper : globalUpper;
+}
+
+/**
+ * Retourne le niveau numerique du role effectif.
+ */
+export function getEffectiveRoleLevel(
+  globalRole: string,
+  memberRole: string | undefined | null,
+): number {
+  const globalUpper = (globalRole || 'USER').toUpperCase();
+  const memberUpper = (memberRole || '').toUpperCase();
+  const globalLevel = UNIFIED_ROLE_LEVELS[globalUpper] || 0;
+  const memberLevel = UNIFIED_ROLE_LEVELS[memberUpper] || 0;
+  return Math.max(globalLevel, memberLevel);
+}
+
+/**
+ * Verifie si un role effectif (global ou member, any case) a des privileges de moderation.
+ * Seuil: >= MODERATOR (60) sur l'echelle unifiee.
+ */
+export function hasModeratorPrivileges(effectiveRole: string): boolean {
+  const level = UNIFIED_ROLE_LEVELS[effectiveRole.toUpperCase()] || 0;
+  return level >= UNIFIED_ROLE_LEVELS.MODERATOR;
+}
+
 // Aliases de compatibilité (à supprimer progressivement)
 /** @deprecated Utilisez hasMinimumMemberRole à la place */
 export const hasMinimumConversationRole = hasMinimumMemberRole;
