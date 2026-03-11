@@ -182,6 +182,8 @@ struct ThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .transition(.opacity)
+                    .accessibilityLabel(String(localized: "Erreur d'envoi", defaultValue: "Send error"))
+                    .accessibilityValue(sendError)
             }
 
             HStack(spacing: 10) {
@@ -210,13 +212,13 @@ struct ThreadView: View {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(
-                                replyText.trimmingCharacters(in: .whitespaces).isEmpty
+                                replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? theme.textMuted
                                     : Color(hex: accentColor)
                             )
                     }
                 }
-                .disabled(isSending || replyText.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(isSending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(.horizontal, 16)
         }
@@ -245,6 +247,8 @@ struct ThreadView: View {
         let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
+        let savedText = replyText
+        replyText = ""
         isSending = true
         sendError = nil
 
@@ -255,10 +259,10 @@ struct ThreadView: View {
                     conversationId: conversationId,
                     request: request
                 )
-                replyText = ""
                 isSending = false
                 await loadReplies()
             } catch {
+                replyText = savedText
                 sendError = error.localizedDescription
                 isSending = false
             }
