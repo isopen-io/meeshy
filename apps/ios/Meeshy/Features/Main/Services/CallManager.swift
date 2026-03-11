@@ -179,7 +179,7 @@ final class CallManager: ObservableObject {
     func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: RTCSessionDescription) {
         guard callState == .idle else {
             Logger.calls.warning("Rejecting incoming call: already busy")
-            emitCallReject(callId: callId, toUserId: fromUserId, reason: "busy")
+            emitCallReject(callId: callId, toUserId: fromUserId)
             return
         }
 
@@ -261,7 +261,7 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
-        emitCallReject(callId: callId, toUserId: userId, reason: "declined")
+        emitCallReject(callId: callId, toUserId: userId)
 
         if let uuid = activeCallUUID {
             let endAction = CXEndCallAction(call: uuid)
@@ -474,7 +474,7 @@ final class CallManager: ObservableObject {
         )
     }
 
-    private nonisolated func emitCallReject(callId: String, toUserId: String, reason: String) {
+    private nonisolated func emitCallReject(callId: String, toUserId: String) {
         MessageSocketManager.shared.emitCallLeave(callId: callId)
     }
 
@@ -539,16 +539,6 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         Logger.calls.info("CallKit audio session deactivated")
     }
-}
-
-// MARK: - Notification Names for Call Signaling (Legacy, kept for compatibility)
-
-extension Notification.Name {
-    static let callOfferReceived = Notification.Name("callOfferReceived")
-    static let callAnswerReceived = Notification.Name("callAnswerReceived")
-    static let callICECandidateReceived = Notification.Name("callICECandidateReceived")
-    static let callRejectReceived = Notification.Name("callRejectReceived")
-    static let callEndReceived = Notification.Name("callEndReceived")
 }
 
 // MARK: - Logger Extension

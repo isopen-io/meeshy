@@ -36,6 +36,18 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
+    let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
+    let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
+    let callEnded = PassthroughSubject<CallEndData, Never>()
+    let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
+    let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
+    let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
+    let callError = PassthroughSubject<CallErrorData, Never>()
+    let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
+    let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
+    let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
+    let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
 
     // MARK: - Call Tracking
 
@@ -51,6 +63,14 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var liveLocationStartPayloads: [LiveLocationStartPayload] = []
     var liveLocationUpdatePayloads: [LiveLocationUpdatePayload] = []
     var liveLocationStopConversationIds: [String] = []
+    var sendWithAttachmentsCallCount = 0
+    var callInitiateCallCount = 0
+    var callJoinCallCount = 0
+    var callLeaveCallCount = 0
+    var callSignalCallCount = 0
+    var callToggleAudioCallCount = 0
+    var callToggleVideoCallCount = 0
+    var callEndCallCount = 0
 
     // MARK: - Protocol Methods
 
@@ -109,6 +129,38 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationStopConversationIds.append(conversationId)
     }
 
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, isEncrypted: Bool) {
+        sendWithAttachmentsCallCount += 1
+    }
+
+    func emitCallInitiate(conversationId: String, isVideo: Bool) {
+        callInitiateCallCount += 1
+    }
+
+    func emitCallJoin(callId: String) {
+        callJoinCallCount += 1
+    }
+
+    func emitCallLeave(callId: String) {
+        callLeaveCallCount += 1
+    }
+
+    func emitCallSignal(callId: String, type: String, payload: [String: String]) {
+        callSignalCallCount += 1
+    }
+
+    func emitCallToggleAudio(callId: String, enabled: Bool) {
+        callToggleAudioCallCount += 1
+    }
+
+    func emitCallToggleVideo(callId: String, enabled: Bool) {
+        callToggleVideoCallCount += 1
+    }
+
+    func emitCallEnd(callId: String) {
+        callEndCallCount += 1
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateMessage(_ message: APIMessage) {
@@ -152,5 +204,13 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationStartPayloads.removeAll()
         liveLocationUpdatePayloads.removeAll()
         liveLocationStopConversationIds.removeAll()
+        sendWithAttachmentsCallCount = 0
+        callInitiateCallCount = 0
+        callJoinCallCount = 0
+        callLeaveCallCount = 0
+        callSignalCallCount = 0
+        callToggleAudioCallCount = 0
+        callToggleVideoCallCount = 0
+        callEndCallCount = 0
     }
 }

@@ -649,12 +649,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     public func emitCallSignal(callId: String, type: String, payload: [String: String]) {
-        var data: [String: Any] = ["callId": callId, "signal": ["type": type] as [String: Any]]
-        if var signal = data["signal"] as? [String: Any] {
-            for (key, value) in payload { signal[key] = value }
-            data["signal"] = signal
-        }
-        socket?.emit("call:signal", data)
+        var signal: [String: Any] = ["type": type]
+        for (key, value) in payload { signal[key] = value }
+        socket?.emit("call:signal", ["callId": callId, "signal": signal])
     }
 
     public func emitCallToggleAudio(callId: String, enabled: Bool) {
