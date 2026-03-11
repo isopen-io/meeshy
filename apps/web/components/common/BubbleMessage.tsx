@@ -103,13 +103,15 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   } = useMessageView(message.id);
 
   // Déterminer si c'est notre message
+  // sender.id = Participant record ID, sender.userId = User ID, sender.user.id = User ID
   const isOwnMessage = useMemo(() => {
     if (!currentUser) return false;
     if (isAnonymous && currentAnonymousUserId) {
       return message.sender?.id === currentAnonymousUserId;
     }
-    return message.sender?.id === currentUser.id;
-  }, [message.sender?.id, currentUser, isAnonymous, currentAnonymousUserId]);
+    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id;
+    return senderUserId === currentUser.id;
+  }, [message.sender, currentUser, isAnonymous, currentAnonymousUserId]);
 
   // Permissions
   const canEdit = useMemo(() => {

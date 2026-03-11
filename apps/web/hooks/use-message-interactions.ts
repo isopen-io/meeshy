@@ -42,11 +42,13 @@ export function useMessageInteractions({
   t,
 }: UseMessageInteractionsProps) {
   // Détermine si c'est le message de l'utilisateur connecté
+  // senderId is a Participant ID; use sender.userId or sender.user.id for User ID comparison
   const isOwnMessage = useMemo(() => {
+    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id;
     return Boolean(isAnonymous
       ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
-      : (currentUserId && message.senderId === currentUserId));
-  }, [isAnonymous, currentAnonymousUserId, currentUserId, message.senderId]);
+      : (currentUserId && senderUserId === currentUserId));
+  }, [isAnonymous, currentAnonymousUserId, currentUserId, message.sender, message.senderId]);
 
   // Permissions de modification (edit)
   const canModifyMessage = useCallback(() => {
