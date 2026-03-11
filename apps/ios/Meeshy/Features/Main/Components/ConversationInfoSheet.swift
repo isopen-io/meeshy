@@ -910,7 +910,7 @@ struct ConversationInfoSheet: View {
         do {
             let fetched = try await ParticipantCacheManager.shared.loadFirstPage(
                 for: conversation.id,
-                forceRefresh: await ParticipantCacheManager.shared.isStale(for: conversation.id)
+                forceRefresh: await ParticipantCacheManager.shared.isExpired(for: conversation.id)
             )
             participants = fetched
             hasMoreParticipants = await ParticipantCacheManager.shared.hasMore(for: conversation.id)

@@ -99,6 +99,7 @@ services/translator/models/*
 */**/logs
 */**/cache
 !packages/MeeshySDK/Sources/MeeshySDK/Cache/
+!packages/MeeshySDK/Tests/MeeshySDKTests/Cache/
 # Logs
 *.log
 logs/
