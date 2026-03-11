@@ -6,6 +6,7 @@ public struct CommunityMembersView: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     public var onInvite: (() -> Void)? = nil
+    @State private var showInviteSheet = false
 
     public init(communityId: String, onInvite: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityMembersViewModel(communityId: communityId))
@@ -37,7 +38,11 @@ public struct CommunityMembersView: View {
             ToolbarItem(placement: .primaryAction) {
                 if viewModel.canInvite {
                     Button {
-                        onInvite?()
+                        if let onInvite {
+                            onInvite()
+                        } else {
+                            showInviteSheet = true
+                        }
                     } label: {
                         Image(systemName: "person.badge.plus")
                             .foregroundColor(Color(hex: "A855F7"))
@@ -47,6 +52,10 @@ public struct CommunityMembersView: View {
         }
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadIfNeeded() }
+        .sheet(isPresented: $showInviteSheet) {
+            CommunityInviteView(communityId: viewModel.communityId)
+                .onDisappear { Task { await viewModel.refresh() } }
+        }
     }
 
     private var memberList: some View {
@@ -202,14 +211,17 @@ final class CommunityMembersViewModel: ObservableObject {
     @Published var isCurrentUserAdmin = false
 
     let communityId: String
-    var canInvite: Bool { isCurrentUserAdmin }
+    @Published var isMember = false
+    var canInvite: Bool { isMember }
 
     private var hasLoaded = false
     private var currentOffset = 0
     private let pageSize = 30
+    private let service: CommunityServiceProviding
 
-    init(communityId: String) {
+    init(communityId: String, service: CommunityServiceProviding = CommunityService.shared) {
         self.communityId = communityId
+        self.service = service
     }
 
     func loadIfNeeded() async {
@@ -233,7 +245,7 @@ final class CommunityMembersViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let response = try await CommunityService.shared.getMembers(
+            let response = try await service.getMembers(
                 communityId: communityId,
                 offset: append ? currentOffset : 0,
                 limit: pageSize
@@ -250,9 +262,9 @@ final class CommunityMembersViewModel: ObservableObject {
             hasLoaded = true
 
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            isCurrentUserAdmin = members.contains {
-                $0.userId == currentUserId && $0.communityRole.hasMinimumRole(.admin)
-            }
+            let currentMember = members.first { $0.userId == currentUserId }
+            isMember = currentMember != nil
+            isCurrentUserAdmin = currentMember?.communityRole.hasMinimumRole(.admin) ?? false
         } catch {
             print("[CommunityMembersVM] Error loading: \(error)")
         }
@@ -260,7 +272,7 @@ final class CommunityMembersViewModel: ObservableObject {
 
     func updateRole(memberId: String, role: CommunityRole) async {
         do {
-            _ = try await CommunityService.shared.updateMemberRole(
+            _ = try await service.updateMemberRole(
                 communityId: communityId,
                 memberId: memberId,
                 role: role
@@ -273,7 +285,7 @@ final class CommunityMembersViewModel: ObservableObject {
 
     func removeMember(userId: String) async {
         do {
-            try await CommunityService.shared.removeMember(communityId: communityId, userId: userId)
+            try await service.removeMember(communityId: communityId, userId: userId)
             members.removeAll { $0.userId == userId }
         } catch {
             print("[CommunityMembersVM] Error removing member: \(error)")
