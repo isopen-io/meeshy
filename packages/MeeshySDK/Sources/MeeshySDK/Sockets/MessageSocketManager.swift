@@ -178,6 +178,11 @@ public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
     public let userId: String?
 }
 
+public struct ConversationParticipationEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+}
+
 public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let userId: String
@@ -330,6 +335,8 @@ public protocol MessageSocketProviding: Sendable {
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
+    var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
@@ -404,6 +411,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+
+    // Combine publishers — conversation participation
+    public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
+    public let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
 
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
@@ -873,6 +884,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageConsumedEvent.self, from: data) { [weak self] event in
                 self?.messageConsumed.send(event)
+            }
+        }
+
+        // --- Conversation participation events ---
+
+        socket.on("conversation:joined") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationParticipationEvent.self, from: data) { [weak self] event in
+                self?.conversationJoined.send(event)
+            }
+        }
+
+        socket.on("conversation:left") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationParticipationEvent.self, from: data) { [weak self] event in
+                self?.conversationLeft.send(event)
             }
         }
 

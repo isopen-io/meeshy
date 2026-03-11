@@ -74,6 +74,7 @@ public struct APIConversation: Decodable, Sendable {
     public let unreadCount: Int?
     public let updatedAt: Date?
     public let encryptionMode: String?
+    public let currentUserRole: String?
     public let createdAt: Date
 }
 
@@ -102,7 +103,7 @@ extension APIConversation {
         }()
 
         let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
-        let currentRole = participants?.first(where: { $0.userId == currentUserId })?.role
+        let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
         let tags: [MeeshyConversationTag] = (prefs?.tags ?? []).enumerated().map { index, tagName in

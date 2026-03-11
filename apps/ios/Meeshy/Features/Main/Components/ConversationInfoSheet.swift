@@ -939,30 +939,19 @@ struct ConversationInfoSheet: View {
         defer { isLoadingParticipants = false }
 
         do {
-            var allParticipants: [ConversationParticipant] = []
-            var cursor: String? = nil
-            var hasMore = true
+            let cached = await ParticipantCacheManager.shared.cachedParticipants(for: conversation.id)
+            let isStale = await ParticipantCacheManager.shared.isStale(for: conversation.id)
 
-            while hasMore {
-                var endpoint = "/conversations/\(conversation.id)/participants?limit=100"
-                if let cursor {
-                    endpoint += "&cursor=\(cursor)"
-                }
-
-                let response: ParticipantsResponse = try await APIClient.shared.request(
-                    endpoint: endpoint
-                )
-                if response.success {
-                    allParticipants.append(contentsOf: response.data)
-                }
-
-                hasMore = response.pagination?.hasMore ?? false
-                cursor = response.pagination?.nextCursor
-
-                if allParticipants.count >= 1000 { break }
+            if !cached.isEmpty && !isStale {
+                participants = cached.map { $0.toConversationParticipant() }
+                return
             }
 
-            participants = allParticipants
+            let fetched = try await ParticipantCacheManager.shared.loadFirstPage(
+                for: conversation.id,
+                forceRefresh: isStale
+            )
+            participants = fetched.map { $0.toConversationParticipant() }
         } catch {
             // Silently fail — show empty
         }

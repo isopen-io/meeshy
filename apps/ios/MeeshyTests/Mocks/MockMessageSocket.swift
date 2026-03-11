@@ -23,6 +23,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
+    let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
     let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
     let locationShared = PassthroughSubject<LocationSharedEvent, Never>()

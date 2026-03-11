@@ -95,6 +95,44 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let lastActiveAt: Date?
     public let user: APIConversationUser?
 
+    public init(
+        id: String,
+        conversationId: String,
+        type: ParticipantType,
+        userId: String?,
+        displayName: String,
+        avatar: String?,
+        role: String,
+        language: String,
+        permissions: ParticipantPermissions,
+        isActive: Bool,
+        isOnline: Bool?,
+        joinedAt: Date,
+        leftAt: Date?,
+        bannedAt: Date?,
+        nickname: String?,
+        lastActiveAt: Date?,
+        user: APIConversationUser?
+    ) {
+        self.id = id
+        self.conversationId = conversationId
+        self.type = type
+        self.userId = userId
+        self.displayName = displayName
+        self.avatar = avatar
+        self.role = role
+        self.language = language
+        self.permissions = permissions
+        self.isActive = isActive
+        self.isOnline = isOnline
+        self.joinedAt = joinedAt
+        self.leftAt = leftAt
+        self.bannedAt = bannedAt
+        self.nickname = nickname
+        self.lastActiveAt = lastActiveAt
+        self.user = user
+    }
+
     public var name: String { nickname ?? displayName }
     public var resolvedAvatar: String? { avatar ?? user?.resolvedAvatar }
 }

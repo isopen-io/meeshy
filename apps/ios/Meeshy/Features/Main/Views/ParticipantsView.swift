@@ -22,6 +22,8 @@ struct ParticipantsView: View {
     @State private var roleChangeTarget: (userId: String, newRole: String)?
     @State private var confirmLeave = false
     @State private var errorMessage: String?
+    @State private var isLoadingMore = false
+    @State private var hasMore = true
 
     private var accent: Color { Color(hex: accentColor) }
 
@@ -109,6 +111,33 @@ struct ParticipantsView: View {
             ) { event in
                 if let idx = participants.firstIndex(where: { $0.id == event.participant.id }) {
                     participants[idx].conversationRole = event.newRole.lowercased()
+                }
+                Task {
+                    await ParticipantCacheManager.shared.updateRole(
+                        conversationId: conversationId,
+                        participantId: event.participant.id,
+                        newRole: event.newRole
+                    )
+                }
+            }
+            .onReceive(
+                MessageSocketManager.shared.conversationJoined
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task {
+                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
+                    await loadParticipants()
+                }
+            }
+            .onReceive(
+                MessageSocketManager.shared.conversationLeft
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { event in
+                participants.removeAll { $0.userId == event.userId }
+                Task {
+                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -207,6 +236,9 @@ struct ParticipantsView: View {
             LazyVStack(spacing: 0) {
                 ForEach(participants) { participant in
                     participantRow(participant)
+                        .onAppear {
+                            Task { await loadMoreIfNeeded(currentItem: participant) }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if canRemoveParticipant(participant) {
                                 Button(role: .destructive) {
@@ -219,6 +251,15 @@ struct ParticipantsView: View {
                         .contextMenu {
                             contextMenuItems(for: participant)
                         }
+                }
+
+                if isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
                 }
             }
         }
@@ -482,9 +523,9 @@ struct ParticipantsView: View {
         do {
             var allParticipants: [ConversationParticipant] = []
             var cursor: String? = nil
-            var hasMore = true
+            var hasMorePages = true
 
-            while hasMore {
+            while hasMorePages {
                 let response = try await ConversationService.shared.getParticipants(
                     conversationId: conversationId,
                     limit: 100,
@@ -494,7 +535,7 @@ struct ParticipantsView: View {
                     allParticipants.append(contentsOf: response.data.map { $0.toConversationParticipant() })
                 }
 
-                hasMore = response.pagination?.hasMore ?? false
+                hasMorePages = response.pagination?.hasMore ?? false
                 cursor = response.pagination?.nextCursor
 
                 if allParticipants.count >= 1000 { break }
@@ -506,6 +547,22 @@ struct ParticipantsView: View {
         }
     }
 
+    private func loadMoreIfNeeded(currentItem: ConversationParticipant) async {
+        guard hasMore, !isLoadingMore else { return }
+        guard currentItem.id == participants.last?.id else { return }
+
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        do {
+            let allFetched = try await ParticipantCacheManager.shared.loadNextPage(for: conversationId)
+            participants = allFetched.map { $0.toConversationParticipant() }
+            hasMore = await ParticipantCacheManager.shared.hasMore(for: conversationId)
+        } catch {
+            Logger.participants.error("Failed to load more: \(error.localizedDescription)")
+        }
+    }
+
     private func removeParticipant(userId: String) async {
         do {
             try await ConversationService.shared.removeParticipant(
@@ -513,7 +570,12 @@ struct ParticipantsView: View {
                 participantId: userId
             )
             HapticFeedback.success()
+            let removedId = participants.first(where: { $0.id == userId })?.id ?? userId
             participants.removeAll { $0.id == userId }
+            await ParticipantCacheManager.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: removedId
+            )
         } catch {
             Logger.participants.error("Failed to remove participant: \(error.localizedDescription)")
             HapticFeedback.error()
@@ -529,7 +591,14 @@ struct ParticipantsView: View {
                 role: newRole
             )
             HapticFeedback.success()
-            await loadParticipants()
+            if let idx = participants.firstIndex(where: { $0.id == userId }) {
+                participants[idx].conversationRole = newRole.lowercased()
+            }
+            await ParticipantCacheManager.shared.updateRole(
+                conversationId: conversationId,
+                participantId: userId,
+                newRole: newRole
+            )
         } catch {
             Logger.participants.error("Failed to change role: \(error.localizedDescription)")
             HapticFeedback.error()
