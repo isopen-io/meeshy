@@ -109,6 +109,23 @@ public final class AuthService: @unchecked Sendable {
         return response.data
     }
 
+    // MARK: - Change Password
+
+    public func changePassword(currentPassword: String, newPassword: String) async throws {
+        struct Body: Encodable {
+            let currentPassword: String
+            let newPassword: String
+        }
+        let body = Body(currentPassword: currentPassword, newPassword: newPassword)
+        let data = try JSONEncoder().encode(body)
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/users/me/password", method: "PATCH", body: data
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
+        }
+    }
+
     // MARK: - Me
 
     public func me() async throws -> MeeshyUser {
