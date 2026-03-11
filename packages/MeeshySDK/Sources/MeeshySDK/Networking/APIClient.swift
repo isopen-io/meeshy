@@ -19,6 +19,13 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: CursorPagination?
     public let error: String?
+
+    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?) {
+        self.success = success
+        self.data = data
+        self.pagination = pagination
+        self.error = error
+    }
 }
 
 public struct CursorPagination: Decodable, Sendable {

@@ -157,6 +157,16 @@ struct ParticipantsView: View {
             } message: {
                 Text("Vous ne pourrez plus voir les messages de ce groupe.")
             }
+            .alert(String(localized: "Erreur", defaultValue: "Erreur"), isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                if let errorMessage {
+                    Text(errorMessage)
+                }
+            }
         }
         .withStatusBubble()
     }
@@ -369,12 +379,12 @@ struct ParticipantsView: View {
                 Text("Quitter le groupe")
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "FF6B6B"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(theme.mode.isDark ? 0.12 : 0.08))
             )
         }
         .padding(.horizontal, 20)
@@ -475,22 +485,18 @@ struct ParticipantsView: View {
             var hasMore = true
 
             while hasMore {
-                var endpoint = "/conversations/\(conversationId)/participants?limit=100"
-                if let cursor {
-                    endpoint += "&cursor=\(cursor)"
-                }
-
-                let response: ParticipantsResponse = try await APIClient.shared.request(
-                    endpoint: endpoint
+                let response = try await ConversationService.shared.getParticipants(
+                    conversationId: conversationId,
+                    limit: 100,
+                    cursor: cursor
                 )
                 if response.success {
-                    allParticipants.append(contentsOf: response.data)
+                    allParticipants.append(contentsOf: response.data.map { $0.toConversationParticipant() })
                 }
 
                 hasMore = response.pagination?.hasMore ?? false
                 cursor = response.pagination?.nextCursor
 
-                // Safety: max 1000
                 if allParticipants.count >= 1000 { break }
             }
 
@@ -502,9 +508,9 @@ struct ParticipantsView: View {
 
     private func removeParticipant(userId: String) async {
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)",
-                method: "DELETE"
+            try await ConversationService.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: userId
             )
             HapticFeedback.success()
             participants.removeAll { $0.id == userId }
@@ -516,13 +522,11 @@ struct ParticipantsView: View {
     }
 
     private func changeRole(userId: String, newRole: String) async {
-        struct RoleBody: Encodable { let role: String }
         do {
-            let body = try JSONEncoder().encode(RoleBody(role: newRole))
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)/role",
-                method: "PATCH",
-                body: body
+            try await ConversationService.shared.updateParticipantRole(
+                conversationId: conversationId,
+                participantId: userId,
+                role: newRole
             )
             HapticFeedback.success()
             await loadParticipants()
@@ -533,11 +537,10 @@ struct ParticipantsView: View {
     }
 
     private func leaveGroup() async {
-        let userId = currentUserId
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)",
-                method: "DELETE"
+            try await ConversationService.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: currentUserId
             )
             HapticFeedback.success()
             dismiss()

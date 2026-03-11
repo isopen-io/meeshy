@@ -43,6 +43,26 @@ struct ParticipantsResponse: Decodable {
     let pagination: ParticipantsPagination?
 }
 
+// MARK: - APIParticipant Conversion
+
+extension APIParticipant {
+    func toConversationParticipant() -> ConversationParticipant {
+        ConversationParticipant(
+            id: userId ?? id,
+            userId: userId,
+            username: user?.username,
+            firstName: user?.firstName,
+            lastName: user?.lastName,
+            displayName: displayName,
+            avatar: resolvedAvatar,
+            conversationRole: role,
+            isOnline: isOnline,
+            lastActiveAt: lastActiveAt,
+            joinedAt: joinedAt
+        )
+    }
+}
+
 // MARK: - ConversationInfoSheet
 
 struct ConversationInfoSheet: View {
