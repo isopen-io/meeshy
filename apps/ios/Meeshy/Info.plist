@@ -39,65 +39,31 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>localhost</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-			</dict>
-			<key>smpdev.local</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-			</dict>
-			<key>smpdev02.local</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-			</dict>
-		</dict>
 	</dict>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>Meeshy can share your music activity with friends if you choose to enable this feature.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Meeshy can add event reminders to your calendar for scheduled meetings and calls.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Meeshy needs access to your contacts to help you connect with friends on the platform.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Meeshy uses local network access for peer-to-peer connections and local device discovery.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Meeshy needs continuous location access to enable real-time location sharing features.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Meeshy uses your location to share your current location with contacts and find nearby friends.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meeshy needs access to your microphone for voice messages, video calls, and audio recording.</string>
-	<key>NSMotionUsageDescription</key>
-	<string>Meeshy uses motion data to enhance AR features and interactive experiences.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Meeshy needs permission to save photos and videos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Meeshy needs access to your photo library to share photos and videos with your contacts.</string>
-	<key>NSRemindersUsageDescription</key>
-	<string>Meeshy can create reminders for important messages and events.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This helps us provide you with personalized content and better ad experiences.</string>
+	<key>NSVoIPUsageDescription</key>
+	<string>Meeshy uses VoIP to enable real-time voice and video calls with your contacts.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -122,20 +88,15 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>processing</string>
-		<string>picture-in-picture</string>
-		<string>location</string>
-	</array>
-	<key>UIDeviceFamily</key>
-	<array>
-		<string>1</string>
-		<string>2</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<false/>
 	<key>UILaunchScreen</key>
 	<dict>
+		<key>UIColorName</key>
+		<string>AccentColor</string>
 		<key>UIImageName</key>
-		<string>LaunchImage</string>
+		<string>MeeshyLogo</string>
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>

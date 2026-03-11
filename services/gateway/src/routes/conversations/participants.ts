@@ -77,7 +77,8 @@ export function registerParticipantsRoutes(
               nullable: true,
               properties: {
                 nextCursor: { type: 'string', nullable: true, description: 'Cursor for next page' },
-                hasMore: { type: 'boolean', description: 'Whether there are more results' }
+                hasMore: { type: 'boolean', description: 'Whether there are more results' },
+                totalCount: { type: 'integer', nullable: true, description: 'Total number of participants' }
               }
             }
           }

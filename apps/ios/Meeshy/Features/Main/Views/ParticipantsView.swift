@@ -113,7 +113,7 @@ struct ParticipantsView: View {
                     participants[idx].conversationRole = event.newRole.lowercased()
                 }
                 Task {
-                    await ParticipantCacheManager.shared.updateRole(
+                    await ParticipantCache.shared.updateRole(
                         conversationId: conversationId,
                         participantId: event.participant.id,
                         newRole: event.newRole
@@ -126,7 +126,7 @@ struct ParticipantsView: View {
                     .receive(on: DispatchQueue.main)
             ) { _ in
                 Task {
-                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
+                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
                     await loadParticipants()
                 }
             }
@@ -137,7 +137,7 @@ struct ParticipantsView: View {
             ) { event in
                 participants.removeAll { $0.userId == event.userId }
                 Task {
-                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
+                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -521,27 +521,12 @@ struct ParticipantsView: View {
         defer { isLoading = false }
 
         do {
-            var allParticipants: [ConversationParticipant] = []
-            var cursor: String? = nil
-            var hasMorePages = true
-
-            while hasMorePages {
-                let response = try await ConversationService.shared.getParticipants(
-                    conversationId: conversationId,
-                    limit: 100,
-                    cursor: cursor
-                )
-                if response.success {
-                    allParticipants.append(contentsOf: response.data.map { $0.toConversationParticipant() })
-                }
-
-                hasMorePages = response.pagination?.hasMore ?? false
-                cursor = response.pagination?.nextCursor
-
-                if allParticipants.count >= 1000 { break }
-            }
-
-            participants = allParticipants
+            let fetched = try await ParticipantCache.shared.loadFirstPage(
+                for: conversationId,
+                forceRefresh: true
+            )
+            participants = fetched
+            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")
         }
@@ -555,9 +540,9 @@ struct ParticipantsView: View {
         defer { isLoadingMore = false }
 
         do {
-            let allFetched = try await ParticipantCacheManager.shared.loadNextPage(for: conversationId)
-            participants = allFetched.map { $0.toConversationParticipant() }
-            hasMore = await ParticipantCacheManager.shared.hasMore(for: conversationId)
+            let allFetched = try await ParticipantCache.shared.loadNextPage(for: conversationId)
+            participants = allFetched
+            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
         } catch {
             Logger.participants.error("Failed to load more: \(error.localizedDescription)")
         }
@@ -570,11 +555,10 @@ struct ParticipantsView: View {
                 participantId: userId
             )
             HapticFeedback.success()
-            let removedId = participants.first(where: { $0.id == userId })?.id ?? userId
-            participants.removeAll { $0.id == userId }
-            await ParticipantCacheManager.shared.removeParticipant(
+            participants.removeAll { $0.id == userId || $0.userId == userId }
+            await ParticipantCache.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: removedId
+                participantId: userId
             )
         } catch {
             Logger.participants.error("Failed to remove participant: \(error.localizedDescription)")
@@ -594,7 +578,7 @@ struct ParticipantsView: View {
             if let idx = participants.firstIndex(where: { $0.id == userId }) {
                 participants[idx].conversationRole = newRole.lowercased()
             }
-            await ParticipantCacheManager.shared.updateRole(
+            await ParticipantCache.shared.updateRole(
                 conversationId: conversationId,
                 participantId: userId,
                 newRole: newRole
