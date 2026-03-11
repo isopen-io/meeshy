@@ -127,20 +127,22 @@ export function registerSearchRoutes(
         ? await readStatusService.getUnreadCountsForConversations(userParticipantIds, conversationIds)
         : new Map<string, number>();
 
-      // Transformer les conversations pour garantir qu'un titre existe toujours
+      // Transformer les conversations pour garantir qu'un titre existe (sauf DMs)
       const conversationsWithTitle = conversations.map((conversation) => {
-        const displayTitle = conversation.title && conversation.title.trim() !== ''
-          ? conversation.title
-          : generateDefaultConversationTitle(
-              conversation.participants.map((m: any) => ({
-                id: m.userId,
-                displayName: m.user?.displayName,
-                username: m.user?.username,
-                firstName: m.user?.firstName,
-                lastName: m.user?.lastName
-              })),
-              userId
-            );
+        const displayTitle = (conversation as any).type === 'direct'
+          ? (conversation.title || null)
+          : (conversation.title && conversation.title.trim() !== ''
+              ? conversation.title
+              : generateDefaultConversationTitle(
+                  conversation.participants.map((m: any) => ({
+                    id: m.userId,
+                    displayName: m.user?.displayName,
+                    username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName
+                  })),
+                  userId
+                ));
 
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
