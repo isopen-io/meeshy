@@ -409,105 +409,77 @@ final class CallManager: ObservableObject {
     // MARK: - Socket.IO Signaling
 
     private func setupSocketListeners() {
-        // Listen for incoming call events from MessageSocketManager
-        // The socket events use the pattern: call:offer, call:answer, call:ice-candidate, call:reject, call:end
         let socket = MessageSocketManager.shared
 
-        NotificationCenter.default.publisher(for: .callOfferReceived)
+        socket.callOfferReceived
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let data = notification.userInfo,
-                      let callId = data["callId"] as? String,
-                      let fromUserId = data["fromUserId"] as? String,
-                      let fromUsername = data["fromUsername"] as? String,
-                      let isVideo = data["isVideo"] as? Bool,
-                      let sdpDict = data["sdp"] as? [String: Any],
-                      let sdp = RTCSessionDescription.from(dictionary: sdpDict) else { return }
-                self?.handleIncomingOffer(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, sdp: sdp)
+            .sink { [weak self] event in
+                let isVideo = event.mode == "video" || event.mode == nil
+                guard let sdp = RTCSessionDescription(type: .offer, sdp: "") as RTCSessionDescription? else { return }
+                self?.handleIncomingOffer(
+                    callId: event.callId,
+                    fromUserId: event.initiator.userId,
+                    fromUsername: event.initiator.username,
+                    isVideo: isVideo,
+                    sdp: sdp
+                )
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .callAnswerReceived)
+        socket.callAnswerReceived
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let data = notification.userInfo,
-                      let callId = data["callId"] as? String,
-                      let sdpDict = data["sdp"] as? [String: Any],
-                      let sdp = RTCSessionDescription.from(dictionary: sdpDict) else { return }
-                self?.handleRemoteAnswer(callId: callId, sdp: sdp)
+            .sink { [weak self] event in
+                guard let sdpString = event.signal.sdp else { return }
+                let sdp = RTCSessionDescription(type: .answer, sdp: sdpString)
+                self?.handleRemoteAnswer(callId: event.callId, sdp: sdp)
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .callICECandidateReceived)
+        socket.callICECandidateReceived
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let data = notification.userInfo,
-                      let callId = data["callId"] as? String,
-                      let candidateDict = data["candidate"] as? [String: Any],
-                      let candidate = RTCIceCandidate.from(dictionary: candidateDict) else { return }
-                self?.handleRemoteICECandidate(callId: callId, candidate: candidate)
+            .sink { [weak self] event in
+                guard let candidateString = event.signal.candidate else { return }
+                let candidate = RTCIceCandidate(
+                    sdp: candidateString,
+                    sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
+                    sdpMid: event.signal.sdpMid
+                )
+                self?.handleRemoteICECandidate(callId: event.callId, candidate: candidate)
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: .callRejectReceived)
+        socket.callEnded
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let data = notification.userInfo,
-                      let callId = data["callId"] as? String else { return }
-                self?.handleRemoteReject(callId: callId)
+            .sink { [weak self] event in
+                self?.handleRemoteEnd(callId: event.callId)
             }
             .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .callEndReceived)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let data = notification.userInfo,
-                      let callId = data["callId"] as? String else { return }
-                self?.handleRemoteEnd(callId: callId)
-            }
-            .store(in: &cancellables)
-
-        // Register socket event handlers on MessageSocketManager
-        // These are forwarded via NotificationCenter to stay decoupled
-        _ = socket
     }
 
     // MARK: - Socket Emit Helpers
 
     private nonisolated func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: RTCSessionDescription) {
-        let payload: [String: Any] = [
-            "callId": callId,
-            "toUserId": toUserId,
-            "isVideo": isVideo,
-            "sdp": sdp.toDictionary()
-        ]
-        NotificationCenter.default.post(name: .callEmitOffer, object: nil, userInfo: payload)
+        MessageSocketManager.shared.emitCallSignal(
+            callId: callId,
+            type: "offer",
+            payload: ["sdp": sdp.sdp, "to": toUserId]
+        )
     }
 
     private nonisolated func emitCallAnswer(callId: String, toUserId: String, sdp: RTCSessionDescription) {
-        let payload: [String: Any] = [
-            "callId": callId,
-            "toUserId": toUserId,
-            "sdp": sdp.toDictionary()
-        ]
-        NotificationCenter.default.post(name: .callEmitAnswer, object: nil, userInfo: payload)
+        MessageSocketManager.shared.emitCallSignal(
+            callId: callId,
+            type: "answer",
+            payload: ["sdp": sdp.sdp, "to": toUserId]
+        )
     }
 
     private nonisolated func emitCallReject(callId: String, toUserId: String, reason: String) {
-        let payload: [String: Any] = [
-            "callId": callId,
-            "toUserId": toUserId,
-            "reason": reason
-        ]
-        NotificationCenter.default.post(name: .callEmitReject, object: nil, userInfo: payload)
+        MessageSocketManager.shared.emitCallLeave(callId: callId)
     }
 
     private nonisolated func emitCallEnd(callId: String, toUserId: String) {
-        let payload: [String: Any] = [
-            "callId": callId,
-            "toUserId": toUserId
-        ]
-        NotificationCenter.default.post(name: .callEmitEnd, object: nil, userInfo: payload)
+        MessageSocketManager.shared.emitCallEnd(callId: callId)
     }
 
     // MARK: - Duration Formatting
@@ -569,21 +541,14 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 }
 
-// MARK: - Notification Names for Call Signaling
+// MARK: - Notification Names for Call Signaling (Legacy, kept for compatibility)
 
 extension Notification.Name {
-    // Incoming from socket
     static let callOfferReceived = Notification.Name("callOfferReceived")
     static let callAnswerReceived = Notification.Name("callAnswerReceived")
     static let callICECandidateReceived = Notification.Name("callICECandidateReceived")
     static let callRejectReceived = Notification.Name("callRejectReceived")
     static let callEndReceived = Notification.Name("callEndReceived")
-
-    // Outgoing to socket
-    static let callEmitOffer = Notification.Name("callEmitOffer")
-    static let callEmitAnswer = Notification.Name("callEmitAnswer")
-    static let callEmitReject = Notification.Name("callEmitReject")
-    static let callEmitEnd = Notification.Name("callEmitEnd")
 }
 
 // MARK: - Logger Extension

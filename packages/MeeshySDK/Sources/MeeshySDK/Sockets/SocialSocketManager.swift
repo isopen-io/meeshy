@@ -180,6 +180,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    private var heartbeatTimer: Timer?
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -225,6 +226,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func disconnect() {
+        stopHeartbeat()
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -232,6 +234,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         connectionState = .disconnected
         reconnectAttempt = 0
         hadPreviousConnection = false
+    }
+
+    // MARK: - Heartbeat
+
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.socket?.emit("heartbeat")
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
 
     // MARK: - Client Events
@@ -257,12 +273,14 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 self.isConnected = true
                 self.connectionState = .connected
             }
+            self.startHeartbeat()
             self.subscribeFeed()
             Logger.socket.info("SocialSocket connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             guard let self else { return }
+            self.stopHeartbeat()
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
