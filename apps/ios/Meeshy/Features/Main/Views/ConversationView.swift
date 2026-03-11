@@ -498,6 +498,34 @@ struct ConversationView: View {
             .zIndex(98)
             .allowsHitTesting(false)
 
+            // Error banner
+            if let error = viewModel.error {
+                VStack {
+                    Color.clear.frame(height: composerState.showOptions ? 72 : 56)
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text(error)
+                            .font(.caption)
+                            .lineLimit(2)
+                        Spacer()
+                        Button {
+                            viewModel.error = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.easeInOut, value: viewModel.error)
+                    Spacer()
+                }
+                .zIndex(97)
+            }
+
             // Status bar gradient — from very top edge of screen through status bar
             VStack(spacing: 0) {
                 LinearGradient(

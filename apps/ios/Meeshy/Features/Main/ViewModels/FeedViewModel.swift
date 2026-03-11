@@ -59,15 +59,12 @@ class FeedViewModel: ObservableObject {
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
             } else {
-                error = response.error ?? "Failed to load feed"
-                fallbackToSampleData()
+                error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
             }
         } catch let apiError as APIError {
             error = apiError.localizedDescription
-            fallbackToSampleData()
         } catch {
             self.error = error.localizedDescription
-            fallbackToSampleData()
         }
 
         isLoading = false
@@ -406,11 +403,6 @@ class FeedViewModel: ObservableObject {
         socialSocket.unsubscribeFeed()
     }
 
-    // MARK: - Fallback (disabled — real API only)
-
-    private func fallbackToSampleData() {
-        // No-op: sample data disabled, show empty state instead
-    }
 }
 
 // MARK: - AnyCodable helper for flexible decoding
