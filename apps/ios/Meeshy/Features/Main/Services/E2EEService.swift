@@ -1,101 +1,76 @@
 import Foundation
 import CryptoKit
-import Security
 import MeeshySDK
+import os
 
-/// Gère les opérations cryptographiques de base pour le chiffrement E2EE.
-/// Utilise CryptoKit (Curve25519) pour l'échange de clés (X25519) et les signatures (Ed25519).
 public final class E2EEService: @unchecked Sendable {
     public static let shared = E2EEService()
 
-    // Key identifiers
-    private let identityKeyIdentifier = "com.meeshy.e2ee.identityKey"
-    private let signedPreKeyIdentifier = "com.meeshy.e2ee.signedPreKey"
-    private let signingKeyIdentifier = "com.meeshy.e2ee.signingKey"
+    private let identityKeyIdentifier = "me.meeshy.e2ee.identityKey"
+    private let signedPreKeyIdentifier = "me.meeshy.e2ee.signedPreKey"
+    private let signingKeyIdentifier = "me.meeshy.e2ee.signingKey"
+    private let otpkPrefix = "me.meeshy.e2ee.otpk."
 
-    private init() {}
+    private let keychain = KeychainManager.shared
+
+    private init() {
+        Self.migrateOldKeychainPrefix()
+    }
+
+    // MARK: - Old Prefix Migration
+
+    private static let migrationKey = "me.meeshy.e2ee.migrated.v1"
+
+    private static func migrateOldKeychainPrefix() {
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        let oldKeys = [
+            "com.meeshy.e2ee.identityKey",
+            "com.meeshy.e2ee.signedPreKey",
+            "com.meeshy.e2ee.signingKey",
+            "com.meeshy.e2ee.otpk.1"
+        ]
+        for key in oldKeys {
+            KeychainManager.shared.delete(forKey: key)
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+    }
 
     // MARK: - Keychain helpers for Curve25519 keys
 
     private func saveCurve25519Key(_ key: Curve25519.KeyAgreement.PrivateKey, identifier: String) throws {
-        let keyData = key.rawRepresentation
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: identifier,
-            kSecValueData as String: keyData,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        ]
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw E2EError.keychainError(status)
-        }
+        try keychain.save(key.rawRepresentation.base64EncodedString(), forKey: identifier)
     }
 
     private func loadCurve25519Key(identifier: String) throws -> Curve25519.KeyAgreement.PrivateKey {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: identifier,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let keyData = item as? Data else {
-            throw E2EError.keychainError(status)
+        guard let base64 = keychain.load(forKey: identifier),
+              let data = Data(base64Encoded: base64) else {
+            throw E2EError.keyNotFound(identifier)
         }
-        return try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: keyData)
+        return try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data)
     }
 
     private func curve25519KeyExists(identifier: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: identifier,
-            kSecReturnData as String: false,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+        keychain.load(forKey: identifier) != nil
     }
 
     // MARK: - Keychain helpers for Curve25519 Signing key
 
     private func saveCurve25519SigningKey(_ key: Curve25519.Signing.PrivateKey, identifier: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: identifier,
-            kSecValueData as String: key.rawRepresentation,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        ]
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else { throw E2EError.keychainError(status) }
+        try keychain.save(key.rawRepresentation.base64EncodedString(), forKey: identifier)
     }
 
     private func loadCurve25519SigningKey(identifier: String) throws -> Curve25519.Signing.PrivateKey {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: identifier,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let keyData = item as? Data else { throw E2EError.keychainError(status) }
-        return try Curve25519.Signing.PrivateKey(rawRepresentation: keyData)
+        guard let base64 = keychain.load(forKey: identifier),
+              let data = Data(base64Encoded: base64) else {
+            throw E2EError.keyNotFound(identifier)
+        }
+        return try Curve25519.Signing.PrivateKey(rawRepresentation: data)
     }
 
     private func signingKeyExists() -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: signingKeyIdentifier,
-            kSecReturnData as String: false,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+        keychain.load(forKey: signingKeyIdentifier) != nil
     }
 
-    /// Récupère la clé de signature dédiée (Ed25519), la génère si absente.
-    /// Séparée de la clé d'accord (Curve25519 X25519) pour éviter la réutilisation de matériau cryptographique.
     public func getOrGenerateSigningKey() throws -> Curve25519.Signing.PrivateKey {
         if signingKeyExists() {
             return try loadCurve25519SigningKey(identifier: signingKeyIdentifier)
@@ -105,8 +80,14 @@ public final class E2EEService: @unchecked Sendable {
         return key
     }
 
-    private enum E2EError: Error {
-        case keychainError(OSStatus)
+    private enum E2EError: LocalizedError {
+        case keyNotFound(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .keyNotFound(let id): return "E2EE key not found: \(id)"
+            }
+        }
     }
 
     // MARK: - Identity Key Management
@@ -150,6 +131,25 @@ public final class E2EEService: @unchecked Sendable {
         return try signingKey.signature(for: data)
     }
 
+    // MARK: - Stable ID Persistence
+
+    private static func getOrCreateStableId(key: String) -> Int {
+        if let base64 = KeychainManager.shared.load(forKey: key),
+           let data = Data(base64Encoded: base64),
+           data.count >= 4 {
+            return Int(data.withUnsafeBytes { $0.load(as: Int32.self) })
+        }
+        let newId = Int.random(in: 1...65535)
+        var value = Int32(newId)
+        let data = Data(bytes: &value, count: 4)
+        do {
+            try KeychainManager.shared.save(data.base64EncodedString(), forKey: key)
+        } catch {
+            Logger.e2ee.error("Failed to persist stable ID for \(key): \(error)")
+        }
+        return newId
+    }
+
     // MARK: - Bundle Generation
 
     /// Génère le "Bundle" cryptographique à uploader sur le serveur.
@@ -163,22 +163,38 @@ public final class E2EEService: @unchecked Sendable {
         let signature = try signData(data: signedPrePublic)
 
         let preKey = Curve25519.KeyAgreement.PrivateKey()
-        try saveCurve25519Key(preKey, identifier: "com.meeshy.e2ee.otpk.1")
+        try saveCurve25519Key(preKey, identifier: otpkPrefix + "1")
         let preKeyPublic = preKey.publicKey.rawRepresentation
+
+        let registrationId = Self.getOrCreateStableId(key: "me.meeshy.e2ee.registrationId")
+        let preKeyId = Self.getOrCreateStableId(key: "me.meeshy.e2ee.preKeyId")
+        let signedPreKeyId = Self.getOrCreateStableId(key: "me.meeshy.e2ee.signedPreKeyId")
 
         return E2EAPI.BackendPreKeyBundle(
             identityKey: identityPublic.base64EncodedString(),
-            registrationId: Int.random(in: 1...16380),
+            registrationId: registrationId,
             deviceId: 1,
-            preKeyId: Int.random(in: 1...16777215),
+            preKeyId: preKeyId,
             preKeyPublic: preKeyPublic.base64EncodedString(),
-            signedPreKeyId: Int.random(in: 1...16777215),
+            signedPreKeyId: signedPreKeyId,
             signedPreKeyPublic: signedPrePublic.base64EncodedString(),
             signedPreKeySignature: signature.base64EncodedString(),
             kyberPreKeyId: nil,
             kyberPreKeyPublic: nil,
             kyberPreKeySignature: nil
         )
+    }
+
+    // MARK: - Key Cleanup
+
+    public func clearAllKeys() {
+        keychain.delete(forKey: identityKeyIdentifier)
+        keychain.delete(forKey: signedPreKeyIdentifier)
+        keychain.delete(forKey: signingKeyIdentifier)
+        keychain.delete(forKey: otpkPrefix + "1")
+        keychain.delete(forKey: "me.meeshy.e2ee.registrationId")
+        keychain.delete(forKey: "me.meeshy.e2ee.preKeyId")
+        keychain.delete(forKey: "me.meeshy.e2ee.signedPreKeyId")
     }
 
     // MARK: - Ciphering Basics (AES-GCM)
@@ -210,4 +226,8 @@ public final class E2EEService: @unchecked Sendable {
             outputByteCount: 32
         )
     }
+}
+
+private extension Logger {
+    static let e2ee = Logger(subsystem: "me.meeshy.app", category: "e2ee")
 }
