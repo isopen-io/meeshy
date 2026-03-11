@@ -276,6 +276,7 @@ class FeedViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
+        guard cancellables.isEmpty else { return }
         socialSocket.connect()
 
         // --- post:created ---

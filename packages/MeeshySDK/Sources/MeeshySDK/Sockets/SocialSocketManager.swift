@@ -182,15 +182,25 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
 
+    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
+    // Safe to share: options are set once during init and never mutated after.
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = iso.date(from: dateStr) { return date }
-            iso.formatOptions = [.withInternetDateTime]
-            if let date = iso.date(from: dateStr) { return date }
+            if let date = SocialSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = SocialSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
     }
@@ -438,13 +448,15 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // --- Post translation events ---
 
         socket.on("post:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
+            guard let self else { return }
+            self.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.postTranslationUpdated.send(payload)
             }
         }
 
         socket.on("comment:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
+            guard let self else { return }
+            self.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.commentTranslationUpdated.send(payload)
             }
         }

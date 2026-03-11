@@ -188,6 +188,8 @@ class StatusViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
+        guard cancellables.isEmpty else { return }
+
         socialSocket.statusCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
@@ -218,13 +220,6 @@ class StatusViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        socialSocket.statusReacted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] data in
-                // Could update reaction counts on the status if needed
-                _ = self // suppress unused warning
-            }
-            .store(in: &cancellables)
     }
 
     // MARK: - React to Status

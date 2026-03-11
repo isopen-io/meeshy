@@ -58,6 +58,9 @@ struct StatusBarView: View {
             .padding(.vertical, 6)
         }
         .frame(height: 50)
+        .popover(item: $selectedPopover) { entry in
+            statusPopover(entry)
+        }
     }
 
     // MARK: - My Status Pill
@@ -78,9 +81,6 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: 20)
             .breathingGlow(color: Color(hex: status.avatarColor), intensity: 0.4)
-        }
-        .popover(item: $selectedPopover) { entry in
-            statusPopover(entry)
         }
     }
 
@@ -124,9 +124,6 @@ struct StatusBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .glassCard(cornerRadius: 20)
-        }
-        .popover(item: $selectedPopover) { entry in
-            statusPopover(entry)
         }
     }
 
