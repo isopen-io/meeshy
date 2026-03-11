@@ -122,6 +122,7 @@ model User {
   // Security & verification fields (DateTime? non-null = vérifié/activé)
   emailVerifiedAt         DateTime?
   emailVerificationToken  String? // Token de vérification email (hash SHA-256)
+  emailVerificationCode   String? // Code OTP 6 chiffres pour vérification mobile
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)

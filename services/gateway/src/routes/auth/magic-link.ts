@@ -246,11 +246,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
-      const { token, email } = validatedData;
+      const { token, code, email } = validatedData;
 
-      logger.info(`[AUTH] Tentative de vérification email pour email=${email}`);
+      logger.info(`[AUTH] Tentative de vérification email pour email=${email} (method=${code ? 'code' : 'token'})`);
 
-      const result = await authService.verifyEmail(token, email);
+      const result = code
+        ? await authService.verifyEmail(code, email, true)
+        : await authService.verifyEmail(token!, email, false);
 
       if (!result.success) {
         logger.warn(`[AUTH] ❌ Échec de vérification email result.error=${result.error}`);

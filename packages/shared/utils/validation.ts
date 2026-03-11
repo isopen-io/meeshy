@@ -326,11 +326,15 @@ export const AuthSchemas = {
     sessionToken: z.string().optional(),
   }),
 
-  // Verify email
+  // Verify email (token from link OR 6-digit code from mobile)
   verifyEmail: z.object({
-    token: z.string().min(1),
+    token: z.string().min(1).optional(),
+    code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
     email: z.string().email(),
-  }),
+  }).refine(
+    (data) => !!data.token || !!data.code,
+    { message: 'Either token or code must be provided' }
+  ),
 
   // Resend verification
   resendVerification: z.object({
