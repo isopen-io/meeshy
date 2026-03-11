@@ -179,6 +179,28 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         }
     }
 
+    // MARK: - Email Verification
+
+    public func verifyEmail(token: String) async throws {
+        struct VerifyEmailBody: Encodable { let token: String }
+        let body = try JSONEncoder().encode(VerifyEmailBody(token: token))
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/auth/email/verify", method: "POST", body: body
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Verification failed")
+        }
+    }
+
+    public func resendEmailVerification() async throws {
+        let response: SimpleAPIResponse = try await api.request(
+            endpoint: "/auth/email/resend-verification", method: "POST"
+        )
+        guard response.success else {
+            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Resend failed")
+        }
+    }
+
     // MARK: - Me
 
     public func me() async throws -> MeeshyUser {

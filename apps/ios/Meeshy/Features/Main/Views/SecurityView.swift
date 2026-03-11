@@ -43,7 +43,7 @@ struct SecurityView: View {
     @State private var phoneVerifying = false
     @State private var phoneError: String?
 
-    private let accentColor = "3498DB"
+    private let accentColor = "60A5FA"
 
     private var user: MeeshyUser? { authManager.currentUser }
 
@@ -185,14 +185,14 @@ struct SecurityView: View {
 
     private var passwordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Mot de passe", icon: "lock.fill", color: "9B59B6")
+            sectionHeader(title: "Mot de passe", icon: "lock.fill", color: "6366F1")
 
             Button {
                 HapticFeedback.light()
                 showChangePassword = true
             } label: {
                 HStack(spacing: 12) {
-                    fieldIcon("key.fill", color: "9B59B6")
+                    fieldIcon("key.fill", color: "6366F1")
 
                     Text("Changer le mot de passe")
                         .font(.system(size: 14, weight: .medium))
@@ -207,7 +207,7 @@ struct SecurityView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
-            .background(sectionBackground(tint: "9B59B6"))
+            .background(sectionBackground(tint: "6366F1"))
         }
     }
 
@@ -275,7 +275,7 @@ struct SecurityView: View {
                                     Text("Vérifier")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                             }
@@ -290,7 +290,7 @@ struct SecurityView: View {
                 if let emailError {
                     Text(emailError)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
                 }
@@ -362,10 +362,10 @@ struct SecurityView: View {
             HStack(spacing: 8) {
                 Image(systemName: "envelope.badge.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
                 Text("Email de verification envoye")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
 
@@ -446,7 +446,7 @@ struct SecurityView: View {
                                     Text("Vérifier")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                             }
@@ -461,7 +461,7 @@ struct SecurityView: View {
                 if let phoneError {
                     Text(phoneError)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
                 }
@@ -531,10 +531,10 @@ struct SecurityView: View {
             HStack(spacing: 8) {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
                 Text("Code envoye par SMS")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
 
@@ -614,7 +614,7 @@ struct SecurityView: View {
                             .foregroundColor(theme.textMuted)
                         Text(hasMasterPIN ? "Configuré" : "Non configuré")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(hasMasterPIN ? Color(hex: "4ADE80") : theme.textMuted)
+                            .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
                     }
 
                     Spacer()
@@ -631,7 +631,7 @@ struct SecurityView: View {
                             }
                             Image(systemName: "checkmark.shield.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                         }
                     }
                 }
@@ -689,7 +689,7 @@ struct SecurityView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(Capsule().fill(Color(hex: "F97316")))
+                                .background(Capsule().fill(MeeshyColors.warning))
                             }
                         }
 
@@ -704,10 +704,10 @@ struct SecurityView: View {
                                     Text("Supprimer")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "EF4444"))
+                                .foregroundColor(MeeshyColors.error)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(Capsule().fill(Color(hex: "EF4444").opacity(0.10)))
+                                .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
                             }
                         }
                     }
@@ -872,7 +872,8 @@ struct SecurityView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(verified ? Color(hex: "4ADE80") : Color(hex: "F59E0B")))
+            .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
+            .accessibilityLabel(verified ? "Verifie" : "Non verifie")
     }
 
     // MARK: - Actions
@@ -935,10 +936,10 @@ struct SecurityView: View {
         resendTimer?.invalidate()
         resendTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             Task { @MainActor in
-                self.resendCooldown -= 1
-                if self.resendCooldown <= 0 {
-                    self.resendTimer?.invalidate()
-                    self.resendTimer = nil
+                resendCooldown -= 1
+                if resendCooldown <= 0 {
+                    resendTimer?.invalidate()
+                    resendTimer = nil
                 }
             }
         }

@@ -80,12 +80,16 @@ public final class E2EEService: @unchecked Sendable {
         return key
     }
 
-    private enum E2EError: LocalizedError {
+    enum E2EError: LocalizedError {
         case keyNotFound(String)
+        case encryptionFailed
+        case invalidBase64Payload
 
         var errorDescription: String? {
             switch self {
             case .keyNotFound(let id): return "E2EE key not found: \(id)"
+            case .encryptionFailed: return "Encryption failed: no combined data produced"
+            case .invalidBase64Payload: return "Invalid base64 payload from backend"
             }
         }
     }
@@ -203,7 +207,7 @@ public final class E2EEService: @unchecked Sendable {
     public func encrypt(message: Data, symmetricKey: SymmetricKey) throws -> Data {
         let sealedBox = try AES.GCM.seal(message, using: symmetricKey)
         guard let combined = sealedBox.combined else {
-            throw NSError(domain: "E2EE", code: 1, userInfo: [NSLocalizedDescriptionKey: "Erreur de chiffrement (pas de combined data)"])
+            throw E2EError.encryptionFailed
         }
         return combined
     }

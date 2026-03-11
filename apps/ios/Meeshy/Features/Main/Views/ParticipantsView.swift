@@ -488,11 +488,25 @@ struct ParticipantsView: View {
     private func roleBadgeColor(_ role: String) -> Color {
         let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
         switch memberRole {
-        case .creator, .admin: return Color(hex: "A855F7")
-        case .moderator: return Color(hex: "08D9D6")
-        case .member: return Color(hex: "6B7280")
+        case .creator, .admin: return MeeshyColors.indigo500
+        case .moderator: return MeeshyColors.indigo400
+        case .member: return MeeshyColors.indigo300
         }
     }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd MMM"
+        return formatter
+    }()
+
+    private static let shortDateYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd MMM yy"
+        return formatter
+    }()
 
     private func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
@@ -500,18 +514,14 @@ struct ParticipantsView: View {
         if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
         if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
         if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter.string(from: date)
+        return Self.shortDateFormatter.string(from: date)
     }
 
     private func shortDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
         let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
-        return formatter.string(from: date)
+        return isSameYear
+            ? Self.shortDateFormatter.string(from: date)
+            : Self.shortDateYearFormatter.string(from: date)
     }
 
     // MARK: - API Calls

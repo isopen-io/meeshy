@@ -7,9 +7,7 @@ public protocol CommunityServiceProviding: Sendable {
     func search(query: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunitySearchResult]>
     func get(communityId: String) async throws -> APICommunity
     func create(name: String, identifier: String?, description: String?, isPrivate: Bool) async throws -> APICommunity
-    func update(communityId: String, name: String?, identifier: String?,
-                description: String?, isPrivate: Bool?,
-                avatar: String?, banner: String?) async throws -> APICommunity
+    func update(communityId: String, name: String?, identifier: String?, description: String?, isPrivate: Bool?, avatar: String?, banner: String?) async throws -> APICommunity
     func delete(communityId: String) async throws
     func getMembers(communityId: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunityMember]>
     func addMember(communityId: String, userId: String, role: CommunityRole) async throws -> APICommunityMember

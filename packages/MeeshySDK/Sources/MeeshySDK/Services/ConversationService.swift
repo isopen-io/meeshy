@@ -65,7 +65,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     }
 
     public func deleteForMe(conversationId: String) async throws {
-        let _ = try await api.delete(
+        let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/conversations/\(conversationId)/delete-for-me"
         )
     }

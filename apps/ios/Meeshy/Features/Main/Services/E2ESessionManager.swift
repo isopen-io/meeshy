@@ -6,6 +6,18 @@ import os
 public actor SessionManager {
     public static let shared = SessionManager()
 
+    enum SessionError: LocalizedError {
+        case invalidBase64Payload
+        case missingSession
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidBase64Payload: return "Invalid base64 payload from backend"
+            case .missingSession: return "Session not initialized and senderIdentityPublic missing"
+            }
+        }
+    }
+
     private let keychainPrefix = "me.meeshy.e2ee.session."
     private let peerListKey = "me.meeshy.e2ee.knownPeers"
 
@@ -75,7 +87,7 @@ public actor SessionManager {
         let myIdentityKey = try E2EEService.shared.getOrGenerateIdentityKey()
 
         guard let signedPreKeyData = Data(base64Encoded: bundle.signedPreKeyPublic) else {
-            throw NSError(domain: "E2EE", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 payload from backend"])
+            throw SessionError.invalidBase64Payload
         }
 
         // MVP: Double Ratchet simplifé via un ECDH unique pour générer la session.
@@ -118,7 +130,7 @@ public actor SessionManager {
         } else if let pubKey = senderIdentity {
             sessionKey = try deriveSessionFromIncoming(senderId: userId, senderIdentityPublic: pubKey)
         } else {
-            throw NSError(domain: "E2EE", code: 2, userInfo: [NSLocalizedDescriptionKey: "Session non initialisée et senderIdentityPublic manquante."])
+            throw SessionError.missingSession
         }
 
         return try E2EEService.shared.decrypt(combinedData: ciphertext, symmetricKey: sessionKey)

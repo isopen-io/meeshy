@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 public struct CommunityMembersView: View {
     @StateObject private var viewModel: CommunityMembersViewModel
@@ -19,7 +20,7 @@ public struct CommunityMembersView: View {
 
             if viewModel.isLoading && viewModel.members.isEmpty {
                 ProgressView()
-                    .tint(Color(hex: "FF2E63"))
+                    .tint(MeeshyColors.indigo500)
             } else if viewModel.members.isEmpty {
                 EmptyStateView(
                     icon: "person.3",
@@ -45,7 +46,7 @@ public struct CommunityMembersView: View {
                         }
                     } label: {
                         Image(systemName: "person.badge.plus")
-                            .foregroundColor(Color(hex: "A855F7"))
+                            .foregroundColor(MeeshyColors.indigo500)
                     }
                 }
             }
@@ -88,7 +89,7 @@ public struct CommunityMembersView: View {
 
                 if viewModel.hasMore {
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.indigo500)
                         .padding()
                         .task { await viewModel.loadMore() }
                 }
@@ -193,9 +194,9 @@ struct MemberRow: View {
 
     private var roleColor: Color {
         switch member.communityRole {
-        case .creator: return Color(hex: "F59E0B")
-        case .admin: return Color(hex: "FF2E63")
-        case .moderator: return Color(hex: "A855F7")
+        case .creator: return MeeshyColors.warning
+        case .admin: return MeeshyColors.error
+        case .moderator: return MeeshyColors.indigo500
         case .member: return theme.textMuted
         }
     }
@@ -266,7 +267,7 @@ final class CommunityMembersViewModel: ObservableObject {
             isMember = currentMember != nil
             isCurrentUserAdmin = currentMember?.communityRole.hasMinimumRole(.admin) ?? false
         } catch {
-            print("[CommunityMembersVM] Error loading: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error loading: \(error)")
         }
     }
 
@@ -279,7 +280,7 @@ final class CommunityMembersViewModel: ObservableObject {
             )
             await refresh()
         } catch {
-            print("[CommunityMembersVM] Error updating role: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error updating role: \(error)")
         }
     }
 
@@ -288,7 +289,13 @@ final class CommunityMembersViewModel: ObservableObject {
             try await service.removeMember(communityId: communityId, userId: userId)
             members.removeAll { $0.userId == userId }
         } catch {
-            print("[CommunityMembersVM] Error removing member: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error removing member: \(error)")
         }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let community = Logger(subsystem: "me.meeshy.sdk", category: "community")
 }

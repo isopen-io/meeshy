@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 public struct CommunityInviteView: View {
     @StateObject private var viewModel: CommunityInviteViewModel
@@ -58,7 +59,7 @@ public struct CommunityInviteView: View {
         Group {
             if viewModel.isSearching {
                 ProgressView()
-                    .tint(MeeshyColors.error)
+                    .tint(MeeshyColors.indigo500)
                     .frame(maxHeight: .infinity)
             } else if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
                 EmptyStateView(
@@ -191,7 +192,7 @@ final class CommunityInviteViewModel: ObservableObject {
         do {
             searchResults = try await userService.searchUsers(query: searchText, limit: 20, offset: 0)
         } catch {
-            print("[CommunityInviteVM] Search error: \(error)")
+            Logger.community.error("[CommunityInviteVM] Search error: \(error)")
         }
     }
 
@@ -206,7 +207,13 @@ final class CommunityInviteViewModel: ObservableObject {
                 recentlyInvited.append(user)
             }
         } catch {
-            print("[CommunityInviteVM] Invite error: \(error)")
+            Logger.community.error("[CommunityInviteVM] Invite error: \(error)")
         }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let community = Logger(subsystem: "me.meeshy.sdk", category: "community")
 }
