@@ -602,6 +602,55 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - changePassword
+
+    func testChangePasswordSuccess() async throws {
+        let response = SimpleAPIResponse(success: true, message: "Password changed", error: nil)
+        mock.stub("/users/me/password", result: response)
+
+        try await service.changePassword(currentPassword: "oldPass", newPassword: "newPass123")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/me/password")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+    }
+
+    func testChangePasswordThrowsOnFailure() async {
+        let response = SimpleAPIResponse(success: false, message: nil, error: "Current password is incorrect")
+        mock.stub("/users/me/password", result: response)
+
+        do {
+            try await service.changePassword(currentPassword: "wrong", newPassword: "newPass123")
+            XCTFail("Expected error to be thrown")
+        } catch let error as MeeshyError {
+            if case .server(_, let msg) = error {
+                XCTAssertEqual(msg, "Current password is incorrect")
+            } else {
+                XCTFail("Expected MeeshyError.server, got \(error)")
+            }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
+        }
+    }
+
+    func testChangePasswordThrowsWithDefaultMessage() async {
+        let response = SimpleAPIResponse(success: false, message: nil, error: nil)
+        mock.stub("/users/me/password", result: response)
+
+        do {
+            try await service.changePassword(currentPassword: "old", newPassword: "new")
+            XCTFail("Expected error to be thrown")
+        } catch let error as MeeshyError {
+            if case .server(_, let msg) = error {
+                XCTAssertEqual(msg, "Erreur inconnue")
+            } else {
+                XCTFail("Expected MeeshyError.server, got \(error)")
+            }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
+        }
+    }
+
     // MARK: - logout
 
     func testLogoutCallsCorrectEndpoint() async {

@@ -322,20 +322,9 @@ struct ChangePasswordView: View {
 
         Task {
             do {
-                struct ChangePasswordBody: Encodable {
-                    let currentPassword: String
-                    let newPassword: String
-                }
-
-                let body = ChangePasswordBody(
+                try await AuthService.shared.changePassword(
                     currentPassword: currentPassword,
                     newPassword: newPassword
-                )
-
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
-                    endpoint: "/users/me/password",
-                    method: "PATCH",
-                    body: try JSONEncoder().encode(body)
                 )
 
                 HapticFeedback.success()
@@ -351,6 +340,13 @@ struct ChangePasswordView: View {
                     errorMessage = "Mot de passe actuel incorrect"
                 default:
                     errorMessage = error.errorDescription
+                }
+            } catch let error as MeeshyError {
+                HapticFeedback.error()
+                if case .server(_, let msg) = error {
+                    errorMessage = msg
+                } else {
+                    errorMessage = error.localizedDescription
                 }
             } catch {
                 HapticFeedback.error()
