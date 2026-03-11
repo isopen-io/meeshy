@@ -200,6 +200,8 @@
 		WDMGR001B001B001B00002 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDMGR001A001A001A00001 /* WidgetDataManager.swift */; };
 		WP3500000000002F35 /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WP3500000000001F35 /* WidgetPreviewView.swift */; };
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
+		07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */; };
+		EVVM001B001B001B001B0002 /* EmailVerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -445,6 +447,8 @@
 		WDMGR001A001A001A00001 /* WidgetDataManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetDataManager.swift; sourceTree = "<group>"; };
 		WP3500000000001F35 /* WidgetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreviewView.swift; sourceTree = "<group>"; };
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
+		F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationView.swift; sourceTree = "<group>"; };
+		EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -707,8 +711,26 @@
 			isa = PBXGroup;
 			children = (
 				D228B0D1B6B950E7D7B2CA3D /* Onboarding */,
+				EVVM002A002A002A002A0003 /* ViewModels */,
+				C395E797B0169D22E56C0983 /* Views */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		EVVM002A002A002A002A0003 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				EVVM001A001A001A001A0001 /* EmailVerificationViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		C395E797B0169D22E56C0983 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		B5D82DF7CB3102A810AE6A49 /* ViewModels */ = {
@@ -1177,6 +1199,8 @@
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
 				2D6AD43B267CD9FA109110AF /* OnboardingStepViews.swift in Sources */,
 				D143407BBF8B39883209BCFD /* OnboardingFlowView.swift in Sources */,
+				07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */,
+				EVVM001B001B001B001B0002 /* EmailVerificationViewModel.swift in Sources */,
 				7FCC2F965C3421351E49E5E0 /* UserStatsView.swift in Sources */,
 				00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */,
 				771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */,

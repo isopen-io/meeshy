@@ -129,6 +129,35 @@ public struct VerifyPhoneResponse: Decodable {
     public let phoneTransferToken: String?
 }
 
+// MARK: - Email Verification
+
+public struct VerifyEmailRequest: Encodable {
+    public let code: String
+
+    public init(code: String) {
+        self.code = code
+    }
+}
+
+public struct VerifyEmailCodeRequest: Encodable {
+    public let code: String
+    public let email: String
+
+    public init(code: String, email: String) {
+        self.code = code
+        self.email = email
+    }
+}
+
+public struct ResendVerificationRequest: Encodable {
+    public let email: String
+
+    public init(email: String) {
+        self.email = email
+    }
+}
+
+
 // MARK: - Availability Check
 
 public struct AvailabilityResponse: Decodable {
