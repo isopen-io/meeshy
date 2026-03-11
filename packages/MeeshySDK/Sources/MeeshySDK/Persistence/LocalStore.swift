@@ -4,6 +4,7 @@ import GRDB
 
 // MARK: - Local Store
 
+@available(*, deprecated, message: "Use ConversationCacheManager, MessageCacheManager, or ParticipantCacheManager instead")
 public actor LocalStore {
     public static let shared = LocalStore()
 
