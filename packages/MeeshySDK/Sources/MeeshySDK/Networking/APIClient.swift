@@ -1,4 +1,29 @@
 import Foundation
+import Security
+
+// MARK: - Certificate Pinning
+
+final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge
+    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        guard let serverTrust = challenge.protectionSpace.serverTrust,
+              challenge.protectionSpace.host == "gate.meeshy.me" else {
+            return (.performDefaultHandling, nil)
+        }
+
+        let policies = [SecPolicyCreateSSL(true, "gate.meeshy.me" as CFString)]
+        SecTrustSetPolicies(serverTrust, policies as CFArray)
+
+        var error: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            return (.cancelAuthenticationChallenge, nil)
+        }
+
+        return (.useCredential, URLCredential(trust: serverTrust))
+    }
+}
 
 // MARK: - API Response Types
 
@@ -140,7 +165,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: config)
+        self.session = URLSession(
+            configuration: config,
+            delegate: CertificatePinningDelegate(),
+            delegateQueue: nil
+        )
 
         self.decoder = JSONDecoder()
         self.decoder.dateDecodingStrategy = .custom { decoder in

@@ -2233,7 +2233,7 @@ export function registerMessagesRoutes(
             conversationId,
             deletedAt: null,
             NOT: { content: { contains: queryLower, mode: 'insensitive' } },
-            translations: { not: null },
+            translations: { not: { equals: null } },
             ...(cursor ? { createdAt: whereClause.createdAt } : {})
           },
           select: messageSelect,

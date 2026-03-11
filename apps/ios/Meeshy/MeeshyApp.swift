@@ -53,7 +53,7 @@ struct MeeshyApp: App {
                             session: guestSession,
                             onSessionCreated: { ctx in
                                 if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError("Impossible de sauvegarder la session")
+                                    toastManager.showError(String(localized: "Impossible de sauvegarder la session", defaultValue: "Impossible de sauvegarder la session"))
                                 }
                                 activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
                             },
@@ -191,7 +191,7 @@ struct MeeshyApp: App {
                         object: conversation
                     )
                 } catch {
-                    toastManager.showError("Impossible d'ouvrir la conversation")
+                    toastManager.showError(String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation"))
                 }
                 pushManager.clearPendingNotification()
             }
@@ -234,9 +234,9 @@ struct MeeshyApp: App {
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
-                toastManager.showSuccess("Connexion reussie !")
+                toastManager.showSuccess(String(localized: "Connexion reussie !", defaultValue: "Connexion r\u{00E9}ussie !"))
             } else {
-                toastManager.showError(authManager.errorMessage ?? "Lien invalide ou expire")
+                toastManager.showError(authManager.errorMessage ?? String(localized: "Lien invalide ou expire", defaultValue: "Lien invalide ou expir\u{00E9}"))
             }
         }
     }
@@ -281,13 +281,13 @@ struct SplashScreen: View {
             // Animated gradient background
             LinearGradient(
                 colors: isDark ? [
-                    Color(hex: "0a0a14"),
-                    Color(hex: "18141E"),
-                    Color(hex: "0d1520")
+                    Color(hex: "09090B"),
+                    Color(hex: "13111C"),
+                    MeeshyColors.indigo950
                 ] : [
-                    Color(hex: "FAF8F5"),
-                    Color(hex: "F5F0EA"),
-                    Color(hex: "F8F6F2")
+                    Color(hex: "FFFFFF"),
+                    Color(hex: "F8F7FF"),
+                    MeeshyColors.indigo50
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -297,21 +297,21 @@ struct SplashScreen: View {
 
             // Ambient orbs
             Circle()
-                .fill(Color(hex: "2A9D8F").opacity(isDark ? 0.15 : 0.10))
+                .fill(MeeshyColors.indigo600.opacity(isDark ? 0.15 : 0.10))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: -80, y: -200)
                 .scaleEffect(glowPulse ? 1.3 : 0.8)
 
             Circle()
-                .fill(Color(hex: "E76F51").opacity(isDark ? 0.12 : 0.08))
+                .fill(MeeshyColors.indigo400.opacity(isDark ? 0.12 : 0.08))
                 .frame(width: 160, height: 160)
                 .blur(radius: 50)
                 .offset(x: 90, y: 180)
                 .scaleEffect(glowPulse ? 1.2 : 0.9)
 
             Circle()
-                .fill(Color(hex: "B24BF3").opacity(isDark ? 0.10 : 0.06))
+                .fill(MeeshyColors.indigo800.opacity(isDark ? 0.10 : 0.06))
                 .frame(width: 120, height: 120)
                 .blur(radius: 40)
                 .offset(x: 60, y: -80)
@@ -321,7 +321,7 @@ struct SplashScreen: View {
                 Spacer()
 
                 // Animated Logo
-                AnimatedLogoView(color: isDark ? .white : Color(hex: "1C1917"), lineWidth: 10, continuous: false)
+                AnimatedLogoView(color: isDark ? .white : MeeshyColors.indigo950, lineWidth: 10, continuous: false)
                     .frame(width: 120, height: 120)
                     .opacity(showLogo ? 1 : 0)
                     .scaleEffect(showLogo ? 1 : 0.5)
@@ -332,12 +332,12 @@ struct SplashScreen: View {
                     .font(.system(size: 46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6"), Color(hex: "A855F7")],
+                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
+                    .shadow(color: MeeshyColors.indigo500.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .fixedSize()
                     .frame(height: 80)
                     .opacity(showTitle ? 1 : 0)
@@ -345,7 +345,7 @@ struct SplashScreen: View {
                     .padding(.bottom, 8)
 
                 // Tagline
-                Text("Break the language barrier")
+                Text(String(localized: "Break the language barrier", defaultValue: "Break the language barrier"))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)

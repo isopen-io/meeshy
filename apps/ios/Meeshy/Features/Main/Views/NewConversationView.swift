@@ -17,7 +17,7 @@ struct NewConversationView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var errorMessage: String?
 
-    private let accentColor = "4ECDC4"
+    private let accentColor = "818CF8"
 
     var isGroupMode: Bool { selectedUsers.count > 1 }
 
@@ -49,12 +49,12 @@ struct NewConversationView: View {
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(MeeshyColors.indigo400)
             }
 
             Spacer()
 
-            Text("Nouvelle conversation")
+            Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -67,11 +67,11 @@ struct NewConversationView: View {
                 } label: {
                     if isCreating {
                         ProgressView()
-                            .tint(Color(hex: accentColor))
+                            .tint(MeeshyColors.indigo400)
                     } else {
-                        Text("Créer")
+                        Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
                 .disabled(isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
@@ -91,7 +91,7 @@ struct NewConversationView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
 
-            TextField("Nom du groupe", text: $groupTitle)
+            TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
@@ -99,10 +99,10 @@ struct NewConversationView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(theme.surfaceGradient(tint: "9B59B6"))
+                .fill(theme.surfaceGradient(tint: "4338CA"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(theme.border(tint: "9B59B6"), lineWidth: 1)
+                        .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
@@ -159,10 +159,10 @@ struct NewConversationView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(hex: accentColor).opacity(0.12))
+                .fill(MeeshyColors.indigo400.opacity(0.12))
                 .overlay(
                     Capsule()
-                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
                 )
         )
         .transition(.scale.combined(with: .opacity))
@@ -176,7 +176,7 @@ struct NewConversationView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un utilisateur...", text: $searchQuery)
+            TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -234,7 +234,7 @@ struct NewConversationView: View {
                 .font(.system(size: 36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
 
-            Text("Aucun utilisateur trouvé")
+            Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -280,26 +280,26 @@ struct NewConversationView: View {
 
                 if user.isOnline == true {
                     Circle()
-                        .fill(Color(hex: "2ECC71"))
+                        .fill(MeeshyColors.success)
                         .frame(width: 8, height: 8)
                 }
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundColor(isSelected ? Color(hex: accentColor) : theme.textMuted.opacity(0.4))
+                    .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(isSelected
-                        ? AnyShapeStyle(Color(hex: accentColor).opacity(0.08))
+                        ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.08))
                         : AnyShapeStyle(theme.surfaceGradient(tint: userColor))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(
-                                isSelected ? AnyShapeStyle(Color(hex: accentColor).opacity(0.3)) : AnyShapeStyle(theme.border(tint: userColor)),
+                                isSelected ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.3)) : AnyShapeStyle(theme.border(tint: userColor)),
                                 lineWidth: 1
                             )
                     )
@@ -394,7 +394,7 @@ struct NewConversationView: View {
                 await MainActor.run {
                     HapticFeedback.error()
                     isCreating = false
-                    errorMessage = "Impossible de créer la conversation"
+                    errorMessage = String(localized: "Impossible de creer la conversation", defaultValue: "Impossible de cr\u{00E9}er la conversation")
                 }
             }
         }

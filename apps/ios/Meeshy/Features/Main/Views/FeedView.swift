@@ -42,6 +42,13 @@ struct FeedView: View {
 
     private var posts: [FeedPost] { viewModel.posts }
 
+    private var newPostsBannerText: String {
+        let count = viewModel.newPostsCount
+        let label = count > 1
+            ? String(localized: "nouveaux posts", defaultValue: "nouveaux posts")
+            : String(localized: "nouveau post", defaultValue: "nouveau post")
+        return "\(count) \(label)"
+    }
 
     var body: some View {
         ZStack {
@@ -100,7 +107,7 @@ struct FeedView: View {
                 HapticFeedback.light()
             }) {
                 HStack {
-                    Text("Partager quelque chose avec le monde...")
+                    Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
                         .font(.system(size: 14))
                         .foregroundColor(theme.textMuted)
                     Spacer()
@@ -119,10 +126,81 @@ struct FeedView: View {
             .buttonStyle(PlainButtonStyle())
 
             // Add content button (+)
-            Button(action: {
-                // TODO: Show attachment picker
-                HapticFeedback.light()
-            }) {
+            Menu {
+                Button {
+                    pendingAttachmentType = "photo"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showPhotoPicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Photo ou video", defaultValue: "Photo ou vid\u{00E9}o"),
+                        systemImage: "photo.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "camera"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showCamera = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Appareil photo", defaultValue: "Appareil photo"),
+                        systemImage: "camera.fill"
+                    )
+                }
+
+                Button {
+                    showAudioComposer = true
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Enregistrement audio", defaultValue: "Enregistrement audio"),
+                        systemImage: "mic.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "file"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showFilePicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Fichier", defaultValue: "Fichier"),
+                        systemImage: "doc.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "location"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showLocationPicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Position", defaultValue: "Position"),
+                        systemImage: "location.fill"
+                    )
+                }
+            } label: {
                 ZStack {
                     Circle()
                         .fill(
@@ -140,7 +218,7 @@ struct FeedView: View {
                         .foregroundColor(.white)
                 }
             }
-            .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(String(localized: "Ajouter du contenu", defaultValue: "Ajouter du contenu"))
         }
         .padding(16)
         .background(
@@ -272,7 +350,7 @@ struct FeedView: View {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 12, weight: .bold))
 
-                            Text("\(viewModel.newPostsCount) nouveau\(viewModel.newPostsCount > 1 ? "x" : "") post\(viewModel.newPostsCount > 1 ? "s" : "")")
+                            Text(newPostsBannerText)
                                 .font(.system(size: 14, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -337,14 +415,14 @@ struct FeedView: View {
                             composerText = ""
                         }
                     } label: {
-                        Text("Annuler")
+                        Text(String(localized: "Annuler", defaultValue: "Annuler"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
-                    Text("Nouveau post")
+                    Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
@@ -358,7 +436,7 @@ struct FeedView: View {
                                 .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
-                            Text("Publier")
+                            Text(String(localized: "Publier", defaultValue: "Publier"))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
@@ -389,25 +467,25 @@ struct FeedView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Moi")
+                        Text(String(localized: "Moi", defaultValue: "Moi"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
                             Button { postVisibility = "PUBLIC" } label: {
-                                Label("Public", systemImage: "globe")
+                                Label(String(localized: "Public", defaultValue: "Public"), systemImage: "globe")
                             }
                             Button { postVisibility = "FRIENDS" } label: {
-                                Label("Amis", systemImage: "person.2")
+                                Label(String(localized: "Amis", defaultValue: "Amis"), systemImage: "person.2")
                             }
                             Button { postVisibility = "PRIVATE" } label: {
-                                Label("Priv\u{00E9}", systemImage: "lock")
+                                Label(String(localized: "Prive", defaultValue: "Priv\u{00E9}"), systemImage: "lock")
                             }
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
                                     .font(.system(size: 10))
-                                Text(postVisibility == "PUBLIC" ? "Public" : postVisibility == "FRIENDS" ? "Amis" : "Priv\u{00E9}")
+                                Text(postVisibility == "PUBLIC" ? String(localized: "Public", defaultValue: "Public") : postVisibility == "FRIENDS" ? String(localized: "Amis", defaultValue: "Amis") : String(localized: "Prive", defaultValue: "Priv\u{00E9}"))
                                     .font(.system(size: 12))
                             }
                             .foregroundColor(theme.textMuted)
@@ -422,7 +500,7 @@ struct FeedView: View {
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
-                        Text("Qu'avez-vous en t\u{00EA}te ?")
+                        Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
                             .font(.system(size: 17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
@@ -467,37 +545,37 @@ struct FeedView: View {
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "4ECDC4"))
                     }
-                    .accessibilityLabel("Ajouter une photo")
+                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "FF6B6B"))
                     }
-                    .accessibilityLabel("Prendre une photo")
+                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button {} label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
-                    .accessibilityLabel("Ajouter un emoji")
+                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
-                    .accessibilityLabel("Joindre un fichier")
+                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "2ECC71"))
                     }
-                    .accessibilityLabel("Partager la position")
+                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "FF2E63"))
                     }
-                    .accessibilityLabel("Enregistrer un audio")
+                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
                 }

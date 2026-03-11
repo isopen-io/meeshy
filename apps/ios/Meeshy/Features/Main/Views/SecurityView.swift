@@ -9,6 +9,7 @@ struct SecurityView: View {
     @ObservedObject private var authManager = AuthManager.shared
 
     @State private var showChangePassword = false
+    @State private var showActiveSessions = false
 
     // 2FA
     @State private var twoFactorEnabled = false
@@ -43,7 +44,7 @@ struct SecurityView: View {
     @State private var phoneVerifying = false
     @State private var phoneError: String?
 
-    private let accentColor = "60A5FA"
+    private let accentColor = "6366F1"
 
     private var user: MeeshyUser? { authManager.currentUser }
 
@@ -147,7 +148,7 @@ struct SecurityView: View {
                     Text("Retour")
                         .font(.system(size: 15, weight: .medium))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.indigo500)
             }
 
             Spacer()
@@ -174,6 +175,7 @@ struct SecurityView: View {
                 emailSection
                 phoneSection
                 conversationLockSection
+                activeSessionsSection
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -258,7 +260,7 @@ struct SecurityView: View {
                                 Text("Modifier")
                                     .font(.system(size: 13, weight: .semibold))
                             }
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundColor(MeeshyColors.indigo500)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                         }
@@ -345,8 +347,8 @@ struct SecurityView: View {
                     .background(
                         Capsule().fill(
                             newEmail.contains("@") && !emailLoading
-                                ? Color(hex: accentColor)
-                                : Color(hex: accentColor).opacity(0.4)
+                                ? MeeshyColors.indigo500
+                                : MeeshyColors.indigo500.opacity(0.4)
                         )
                     )
                 }
@@ -375,7 +377,7 @@ struct SecurityView: View {
             } label: {
                 Text(resendCooldown > 0 ? "Renvoyer (\(resendCooldown)s)" : "Renvoyer l'email")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(resendCooldown > 0 ? theme.textMuted : Color(hex: accentColor))
+                    .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
             .disabled(resendCooldown > 0)
             .padding(.bottom, 10)
@@ -386,11 +388,11 @@ struct SecurityView: View {
 
     private var phoneSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Telephone", icon: "phone.fill", color: "4ECDC4")
+            sectionHeader(title: "Telephone", icon: "phone.fill", color: "818CF8")
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    fieldIcon("phone.fill", color: "4ECDC4")
+                    fieldIcon("phone.fill", color: "818CF8")
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Telephone actuel")
@@ -429,7 +431,7 @@ struct SecurityView: View {
                                 Text("Modifier")
                                     .font(.system(size: 13, weight: .semibold))
                             }
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.indigo400)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                         }
@@ -466,14 +468,14 @@ struct SecurityView: View {
                         .padding(.bottom, 10)
                 }
             }
-            .background(sectionBackground(tint: "4ECDC4"))
+            .background(sectionBackground(tint: "818CF8"))
         }
     }
 
     private var phoneEditContent: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                fieldIcon("phone.badge.plus", color: "4ECDC4")
+                fieldIcon("phone.badge.plus", color: "818CF8")
 
                 TextField("+33 6 12 34 56 78", text: $newPhone)
                     .font(.system(size: 14, weight: .medium))
@@ -514,8 +516,8 @@ struct SecurityView: View {
                     .background(
                         Capsule().fill(
                             newPhone.count >= 6 && !phoneLoading
-                                ? Color(hex: "4ECDC4")
-                                : Color(hex: "4ECDC4").opacity(0.4)
+                                ? MeeshyColors.indigo400
+                                : MeeshyColors.indigo400.opacity(0.4)
                         )
                     )
                 }
@@ -539,7 +541,7 @@ struct SecurityView: View {
             .padding(.horizontal, 14)
 
             HStack(spacing: 12) {
-                fieldIcon("number", color: "4ECDC4")
+                fieldIcon("number", color: "818CF8")
 
                 TextField("Code a 6 chiffres", text: $phoneCode)
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
@@ -582,8 +584,8 @@ struct SecurityView: View {
                     .background(
                         Capsule().fill(
                             phoneCode.count == 6 && !phoneVerifying
-                                ? Color(hex: "4ECDC4")
-                                : Color(hex: "4ECDC4").opacity(0.4)
+                                ? MeeshyColors.indigo400
+                                : MeeshyColors.indigo400.opacity(0.4)
                         )
                     )
                 }
@@ -599,7 +601,7 @@ struct SecurityView: View {
     private var conversationLockSection: some View {
         let hasMasterPIN = lockManager.masterPinConfigured
         let lockedCount = lockManager.lockedConversationIds.count
-        let lockColor = "FF6B6B"
+        let lockColor = "F87171"
         return VStack(alignment: .leading, spacing: 8) {
             sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)
 
@@ -624,10 +626,10 @@ struct SecurityView: View {
                             if lockedCount > 0 {
                                 Text("\(lockedCount) verrou(s)")
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Color(hex: lockColor))
+                                    .foregroundColor(MeeshyColors.error)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Capsule().fill(Color(hex: lockColor).opacity(0.15)))
+                                    .background(Capsule().fill(MeeshyColors.error.opacity(0.15)))
                             }
                             Image(systemName: "checkmark.shield.fill")
                                 .font(.system(size: 16))
@@ -655,7 +657,7 @@ struct SecurityView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .background(
-                                Capsule().fill(Color(hex: lockColor))
+                                Capsule().fill(MeeshyColors.error)
                             )
                         }
                     } else {
@@ -669,10 +671,10 @@ struct SecurityView: View {
                                 Text("Modifier")
                                     .font(.system(size: 13, weight: .semibold))
                             }
-                            .foregroundColor(Color(hex: lockColor))
+                            .foregroundColor(MeeshyColors.error)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(Capsule().fill(Color(hex: lockColor).opacity(0.12)))
+                            .background(Capsule().fill(MeeshyColors.error.opacity(0.12)))
                         }
 
                         if lockedCount > 0 {
@@ -828,6 +830,40 @@ struct SecurityView: View {
                 }
             }
             .background(sectionBackground(tint: tfaColor))
+        }
+    }
+
+    // MARK: - Active Sessions Section
+
+    private var activeSessionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: "818CF8")
+
+            Button {
+                HapticFeedback.light()
+                showActiveSessions = true
+            } label: {
+                HStack(spacing: 12) {
+                    fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
+
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Gerer les sessions actives"))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .background(sectionBackground(tint: "818CF8"))
+        }
+        .sheet(isPresented: $showActiveSessions) {
+            ActiveSessionsView()
+                .environmentObject(theme)
         }
     }
 

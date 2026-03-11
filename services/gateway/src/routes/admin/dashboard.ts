@@ -69,7 +69,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       // 5. Statistiques des traductions (compte des messages qui ont été traduits)
       const totalTranslations = await fastify.prisma.message.count({
         where: {
-          translations: { not: null }
+          translations: { not: { equals: null } }
         }
       });
 

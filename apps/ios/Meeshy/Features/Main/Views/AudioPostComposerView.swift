@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Audio Post Composer
 
@@ -40,7 +41,7 @@ struct AudioPostComposerView: View {
                     if let error = transcriptionError {
                         Text(error)
                             .font(.system(size: 14))
-                            .foregroundColor(.red)
+                            .foregroundColor(MeeshyColors.error)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
                     }
@@ -55,11 +56,11 @@ struct AudioPostComposerView: View {
                 }
                 .padding(.bottom, 32)
             }
-            .navigationTitle("Post audio")
+            .navigationTitle(String(localized: "Post audio", defaultValue: "Post audio"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Annuler") {
+                    Button(String(localized: "Annuler", defaultValue: "Annuler")) {
                         audioRecorder.cancelRecording()
                         dismiss()
                     }
@@ -73,12 +74,11 @@ struct AudioPostComposerView: View {
 
     private var recordingSection: some View {
         VStack(spacing: 20) {
-            // Waveform / mic indicator
             ZStack {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63").opacity(0.15), Color(hex: "FF2E63").opacity(0.05)],
+                            colors: [MeeshyColors.error.opacity(0.15), MeeshyColors.error.opacity(0.05)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -90,30 +90,29 @@ struct AudioPostComposerView: View {
                         .frame(width: 100, height: 60)
                 } else if phase == .transcribing {
                     ProgressView()
-                        .tint(Color(hex: "FF2E63"))
+                        .tint(MeeshyColors.error)
                         .scaleEffect(1.4)
                 } else {
                     Image(systemName: phase == .preview ? "checkmark.circle.fill" : "mic.fill")
                         .font(.system(size: 48))
                         .foregroundColor(
                             phase == .preview
-                                ? Color(hex: "2ECC71")
-                                : Color(hex: "FF2E63")
+                                ? MeeshyColors.success
+                                : MeeshyColors.error
                         )
                 }
             }
 
-            // Duration
             if audioRecorder.isRecording || phase == .preview {
                 Text(formattedDuration)
                     .font(.system(size: 32, weight: .light, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
             } else if phase == .transcribing {
-                Text("Transcription en cours...")
+                Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
                     .font(.system(size: 15))
                     .foregroundColor(theme.textSecondary)
             } else {
-                Text("Appuyez pour enregistrer")
+                Text(String(localized: "Appuyez pour enregistrer", defaultValue: "Appuyez pour enregistrer"))
                     .font(.system(size: 15))
                     .foregroundColor(theme.textSecondary)
             }
@@ -127,17 +126,19 @@ struct AudioPostComposerView: View {
             HStack {
                 Image(systemName: "text.bubble.fill")
                     .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "4ECDC4"))
-                Text("Transcription")
+                    .foregroundColor(MeeshyColors.indigo300)
+                Text(String(localized: "Transcription", defaultValue: "Transcription"))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.indigo300)
                 Spacer()
                 Text(t.language)
                     .font(.system(size: 12))
                     .foregroundColor(theme.textMuted)
             }
 
-            Text(t.text.isEmpty ? "Aucune transcription disponible." : t.text)
+            Text(t.text.isEmpty
+                 ? String(localized: "Aucune transcription disponible.", defaultValue: "Aucune transcription disponible.")
+                 : t.text)
                 .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -145,10 +146,10 @@ struct AudioPostComposerView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                .fill(theme.surfaceGradient(tint: "A5B4FC"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "4ECDC4").opacity(0.25), lineWidth: 1)
+                        .stroke(MeeshyColors.indigo300.opacity(0.25), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 24)
@@ -160,48 +161,42 @@ struct AudioPostComposerView: View {
     private var actionBar: some View {
         HStack(spacing: 24) {
             if phase == .preview {
-                // Re-record
                 Button(action: resetToIdle) {
-                    Label("Refaire", systemImage: "arrow.counterclockwise")
+                    Label(
+                        String(localized: "Refaire", defaultValue: "Refaire"),
+                        systemImage: "arrow.counterclockwise"
+                    )
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
 
                 Spacer()
 
-                // Publish
                 Button(action: publish) {
-                    Text("Publier")
+                    Text(String(localized: "Publier", defaultValue: "Publier"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 14)
                         .background(
                             Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: 12, y: 4)
+                                .fill(MeeshyColors.brandGradient)
+                                .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 12, y: 4)
                         )
                 }
             } else {
                 Spacer()
 
-                // Record / Stop button
                 Button(action: toggleRecording) {
                     ZStack {
                         Circle()
                             .fill(
                                 audioRecorder.isRecording
                                     ? Color.red
-                                    : Color(hex: "FF2E63")
+                                    : MeeshyColors.error
                             )
                             .frame(width: 72, height: 72)
-                            .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 16, y: 6)
+                            .shadow(color: MeeshyColors.error.opacity(0.5), radius: 16, y: 6)
 
                         if audioRecorder.isRecording {
                             RoundedRectangle(cornerRadius: 4)
@@ -214,7 +209,11 @@ struct AudioPostComposerView: View {
                         }
                     }
                 }
-                .accessibilityLabel(audioRecorder.isRecording ? "Arrêter l'enregistrement" : "Démarrer l'enregistrement")
+                .accessibilityLabel(
+                    audioRecorder.isRecording
+                        ? String(localized: "Arreter l'enregistrement", defaultValue: "Arr\u{00EA}ter l'enregistrement")
+                        : String(localized: "Demarrer l'enregistrement", defaultValue: "D\u{00E9}marrer l'enregistrement")
+                )
                 .disabled(phase == .transcribing)
 
                 Spacer()
@@ -274,7 +273,10 @@ struct AudioPostComposerView: View {
                 }
             } catch {
                 await MainActor.run {
-                    transcriptionError = "Transcription indisponible : \(error.localizedDescription)"
+                    transcriptionError = String(
+                        localized: "Transcription indisponible",
+                        defaultValue: "Transcription indisponible : \(error.localizedDescription)"
+                    )
                     phase = .preview
                 }
             }
@@ -324,7 +326,7 @@ private struct WaveformView: View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(levels.indices, id: \.self) { i in
                 Capsule()
-                    .fill(Color(hex: "FF2E63"))
+                    .fill(MeeshyColors.error)
                     .frame(width: 4, height: max(4, levels[i] * 56))
                     .animation(.easeInOut(duration: 0.08), value: levels[i])
             }
