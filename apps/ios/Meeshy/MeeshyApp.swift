@@ -281,13 +281,13 @@ struct SplashScreen: View {
             // Animated gradient background
             LinearGradient(
                 colors: isDark ? [
-                    Color(hex: "0a0a14"),
-                    Color(hex: "18141E"),
-                    Color(hex: "0d1520")
+                    Color(hex: "09090B"),
+                    Color(hex: "13111C"),
+                    MeeshyColors.indigo950
                 ] : [
-                    Color(hex: "FAF8F5"),
-                    Color(hex: "F5F0EA"),
-                    Color(hex: "F8F6F2")
+                    Color(hex: "FFFFFF"),
+                    Color(hex: "F8F7FF"),
+                    MeeshyColors.indigo50
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -297,21 +297,21 @@ struct SplashScreen: View {
 
             // Ambient orbs
             Circle()
-                .fill(Color(hex: "2A9D8F").opacity(isDark ? 0.15 : 0.10))
+                .fill(MeeshyColors.indigo600.opacity(isDark ? 0.15 : 0.10))
                 .frame(width: 200, height: 200)
                 .blur(radius: 60)
                 .offset(x: -80, y: -200)
                 .scaleEffect(glowPulse ? 1.3 : 0.8)
 
             Circle()
-                .fill(Color(hex: "E76F51").opacity(isDark ? 0.12 : 0.08))
+                .fill(MeeshyColors.indigo400.opacity(isDark ? 0.12 : 0.08))
                 .frame(width: 160, height: 160)
                 .blur(radius: 50)
                 .offset(x: 90, y: 180)
                 .scaleEffect(glowPulse ? 1.2 : 0.9)
 
             Circle()
-                .fill(Color(hex: "B24BF3").opacity(isDark ? 0.10 : 0.06))
+                .fill(MeeshyColors.indigo800.opacity(isDark ? 0.10 : 0.06))
                 .frame(width: 120, height: 120)
                 .blur(radius: 40)
                 .offset(x: 60, y: -80)
@@ -321,7 +321,7 @@ struct SplashScreen: View {
                 Spacer()
 
                 // Animated Logo
-                AnimatedLogoView(color: isDark ? .white : Color(hex: "1C1917"), lineWidth: 10, continuous: false)
+                AnimatedLogoView(color: isDark ? .white : MeeshyColors.indigo950, lineWidth: 10, continuous: false)
                     .frame(width: 120, height: 120)
                     .opacity(showLogo ? 1 : 0)
                     .scaleEffect(showLogo ? 1 : 0.5)
@@ -332,12 +332,12 @@ struct SplashScreen: View {
                     .font(.system(size: 46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6"), Color(hex: "A855F7")],
+                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
+                    .shadow(color: MeeshyColors.indigo500.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .fixedSize()
                     .frame(height: 80)
                     .opacity(showTitle ? 1 : 0)

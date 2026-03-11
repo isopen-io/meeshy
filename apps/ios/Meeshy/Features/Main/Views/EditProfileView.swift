@@ -18,7 +18,7 @@ struct EditProfileView: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "818CF8"
     private let bioMaxLength = 300
 
     private var user: MeeshyUser? { authManager.currentUser }
@@ -66,7 +66,7 @@ struct EditProfileView: View {
                     Text("Retour")
                         .font(.system(size: 15, weight: .medium))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.indigo400)
             }
 
             Spacer()
@@ -113,14 +113,14 @@ struct EditProfileView: View {
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .stroke(Color(hex: accentColor).opacity(0.4), lineWidth: 2)
+                                .stroke(MeeshyColors.indigo400.opacity(0.4), lineWidth: 2)
                         )
                 } else {
                     MeeshyAvatar(
                         name: user?.displayName ?? user?.username ?? "?",
                         mode: .custom(100),
                         accentColor: accentColor,
-                        secondaryColor: "4ECDC4",
+                        secondaryColor: "6366F1",
                         avatarURL: user?.avatar
                     )
                 }
@@ -137,7 +137,7 @@ struct EditProfileView: View {
                         .frame(width: 30, height: 30)
                         .background(
                             Circle()
-                                .fill(Color(hex: accentColor))
+                                .fill(MeeshyColors.indigo400)
                         )
                         .overlay(
                             Circle()
@@ -150,7 +150,7 @@ struct EditProfileView: View {
                 HStack(spacing: 6) {
                     ProgressView()
                         .scaleEffect(0.8)
-                        .tint(Color(hex: accentColor))
+                        .tint(MeeshyColors.indigo400)
                     Text("Envoi de la photo...")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
@@ -190,11 +190,11 @@ struct EditProfileView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "text.quote")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: accentColor).opacity(0.12))
+                        .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
                 .padding(.top, 2)
 
@@ -217,7 +217,7 @@ struct EditProfileView: View {
                     Spacer()
                     Text("\(bio.count)/\(bioMaxLength)")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(bio.count >= bioMaxLength ? Color(hex: "EF4444") : theme.textMuted)
+                        .foregroundColor(bio.count >= bioMaxLength ? MeeshyColors.error : theme.textMuted)
                 }
             }
 
@@ -231,30 +231,30 @@ struct EditProfileView: View {
 
     private var readOnlySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Compte", icon: "lock.fill", color: "9B59B6")
+            sectionHeader(title: "Compte", icon: "lock.fill", color: "4338CA")
 
             VStack(spacing: 0) {
                 if let email = user?.email {
-                    readOnlyRow(icon: "envelope.fill", title: "Email", value: email, color: "9B59B6")
+                    readOnlyRow(icon: "envelope.fill", title: "Email", value: email, color: "4338CA")
                 }
 
                 if let phone = user?.phoneNumber {
-                    readOnlyRow(icon: "phone.fill", title: "Telephone", value: phone, color: "9B59B6")
+                    readOnlyRow(icon: "phone.fill", title: "Telephone", value: phone, color: "4338CA")
                 }
 
                 readOnlyRow(
                     icon: "at",
                     title: "Nom d'utilisateur",
                     value: "@\(user?.username ?? "—")",
-                    color: "9B59B6"
+                    color: "4338CA"
                 )
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: "9B59B6"))
+                    .fill(theme.surfaceGradient(tint: "4338CA"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: "9B59B6"), lineWidth: 1)
+                            .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
                     )
             )
         }
@@ -267,7 +267,7 @@ struct EditProfileView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "EF4444"))
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
             }
@@ -292,8 +292,8 @@ struct EditProfileView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(
                             hasChanges && !isSaving
-                                ? Color(hex: accentColor)
-                                : Color(hex: accentColor).opacity(0.4)
+                                ? MeeshyColors.indigo400
+                                : MeeshyColors.indigo400.opacity(0.4)
                         )
                 )
             }
@@ -307,7 +307,7 @@ struct EditProfileView: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
-                .foregroundColor(Color(hex: "4ADE80"))
+                .foregroundColor(MeeshyColors.success)
 
             Text("Profil mis a jour")
                 .font(.system(size: 16, weight: .semibold))
@@ -319,7 +319,7 @@ struct EditProfileView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color(hex: "4ADE80").opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
                 )
         )
         .transition(.scale.combined(with: .opacity))
@@ -349,11 +349,11 @@ struct EditProfileView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: accentColor).opacity(0.12))
+                        .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
