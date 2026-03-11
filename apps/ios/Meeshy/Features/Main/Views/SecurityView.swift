@@ -9,6 +9,7 @@ struct SecurityView: View {
     @ObservedObject private var authManager = AuthManager.shared
 
     @State private var showChangePassword = false
+    @State private var showActiveSessions = false
 
     // 2FA
     @State private var twoFactorEnabled = false
@@ -174,6 +175,7 @@ struct SecurityView: View {
                 emailSection
                 phoneSection
                 conversationLockSection
+                activeSessionsSection
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -828,6 +830,40 @@ struct SecurityView: View {
                 }
             }
             .background(sectionBackground(tint: tfaColor))
+        }
+    }
+
+    // MARK: - Active Sessions Section
+
+    private var activeSessionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: "818CF8")
+
+            Button {
+                HapticFeedback.light()
+                showActiveSessions = true
+            } label: {
+                HStack(spacing: 12) {
+                    fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
+
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Gerer les sessions actives"))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .background(sectionBackground(tint: "818CF8"))
+        }
+        .sheet(isPresented: $showActiveSessions) {
+            ActiveSessionsView()
+                .environmentObject(theme)
         }
     }
 

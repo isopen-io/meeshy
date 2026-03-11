@@ -77,6 +77,7 @@
 		AACC00220033FF01 /* AudioRecorderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC00220033EE01 /* AudioRecorderManager.swift */; };
 		ABEF9530C003C1159F8B9049 /* ConversationSocketHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBFCC5061B469FCAB2CE547 /* ConversationSocketHandlerTests.swift */; };
 		ABTV002A002A002A002A0002 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTV001A001A001A001A0001 /* AboutView.swift */; };
+		ACSV002A002A002A002A0002 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
 		BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */; };
@@ -322,6 +323,7 @@
 		AACC00220033EE01 /* AudioRecorderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderManager.swift; sourceTree = "<group>"; };
 		AB514257655035123C7AD2F8 /* ConversationView+Composer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+Composer.swift"; sourceTree = "<group>"; };
 		ABTV001A001A001A001A0001 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveSessionsView.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
 		B3E242276EB00910AF9B59F7 /* ConversationListViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationListViewModelTests.swift; sourceTree = "<group>"; };
@@ -602,6 +604,7 @@
 				CHPW001A001A001A001A0001 /* ChangePasswordView.swift */,
 				SECV001A001A001A001A0001 /* SecurityView.swift */,
 				ABTV001A001A001A001A0001 /* AboutView.swift */,
+				ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */,
 				PPOL001A001A001A001A0001 /* PrivacyPolicyView.swift */,
 				TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */,
 				LICV001A001A001A001A0001 /* LicensesView.swift */,
@@ -1081,6 +1084,7 @@
 				CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */,
 				SECV002A002A002A002A0002 /* SecurityView.swift in Sources */,
 				ABTV002A002A002A002A0002 /* AboutView.swift in Sources */,
+				ACSV002A002A002A002A0002 /* ActiveSessionsView.swift in Sources */,
 				PPOL002A002A002A002A0002 /* PrivacyPolicyView.swift in Sources */,
 				TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */,
 				LICV002A002A002A002A0002 /* LicensesView.swift in Sources */,
