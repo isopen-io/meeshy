@@ -532,8 +532,7 @@ struct ParticipantsView: View {
 
         do {
             let fetched = try await ParticipantCacheManager.shared.loadFirstPage(
-                for: conversationId,
-                forceRefresh: true
+                for: conversationId
             )
             participants = fetched
             hasMore = await ParticipantCacheManager.shared.hasMore(for: conversationId)
