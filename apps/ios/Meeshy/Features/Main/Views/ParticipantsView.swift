@@ -15,7 +15,7 @@ struct ParticipantsView: View {
     @ObservedObject private var presenceManager = PresenceManager.shared
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
-    @State private var participants: [ConversationParticipant] = []
+    @State private var participants: [PaginatedParticipant] = []
     @State private var isLoading = false
     @State private var showAddSheet = false
     @State private var confirmRemoveUserId: String?
@@ -109,13 +109,13 @@ struct ParticipantsView: View {
                     .filter { $0.conversationId == conversationId }
                     .receive(on: DispatchQueue.main)
             ) { event in
-                if let idx = participants.firstIndex(where: { $0.id == event.participant.id }) {
+                if let idx = participants.firstIndex(where: { $0.id == event.participant.id || $0.userId == event.userId }) {
                     participants[idx].conversationRole = event.newRole.lowercased()
                 }
                 Task {
-                    await ParticipantCache.shared.updateRole(
+                    await ParticipantCacheManager.shared.updateRole(
                         conversationId: conversationId,
-                        participantId: event.participant.id,
+                        userId: event.userId,
                         newRole: event.newRole
                     )
                 }
@@ -126,7 +126,7 @@ struct ParticipantsView: View {
                     .receive(on: DispatchQueue.main)
             ) { _ in
                 Task {
-                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
+                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
                     await loadParticipants()
                 }
             }
@@ -137,7 +137,7 @@ struct ParticipantsView: View {
             ) { event in
                 participants.removeAll { $0.userId == event.userId }
                 Task {
-                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
+                    await ParticipantCacheManager.shared.invalidate(conversationId: conversationId)
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -242,7 +242,7 @@ struct ParticipantsView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if canRemoveParticipant(participant) {
                                 Button(role: .destructive) {
-                                    confirmRemoveUserId = participant.id
+                                    confirmRemoveUserId = participant.userId ?? participant.id
                                 } label: {
                                     Label("Retirer", systemImage: "person.badge.minus")
                                 }
@@ -267,7 +267,7 @@ struct ParticipantsView: View {
 
     // MARK: - Participant Row
 
-    private func participantRow(_ participant: ConversationParticipant) -> some View {
+    private func participantRow(_ participant: PaginatedParticipant) -> some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
         let presence = presenceManager.presenceState(for: participant.id)
@@ -337,7 +337,7 @@ struct ParticipantsView: View {
     // MARK: - Context Menu
 
     @ViewBuilder
-    private func contextMenuItems(for participant: ConversationParticipant) -> some View {
+    private func contextMenuItems(for participant: PaginatedParticipant) -> some View {
         let isCurrentUser = participant.id == currentUserId
         let targetRole = MemberRole(rawValue: participant.conversationRole?.lowercased() ?? "member") ?? .member
 
@@ -346,28 +346,28 @@ struct ParticipantsView: View {
                 // Créateur : peut gérer tout le monde (MEMBER, MODERATOR, ADMIN)
                 if targetRole == .member {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Promouvoir Moderateur", systemImage: "shield.fill")
                     }
                 }
                 if targetRole != .admin {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                     } label: {
                         Label("Promouvoir Admin", systemImage: "crown.fill")
                     }
                 }
                 if targetRole == .admin {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Retrograder en Moderateur", systemImage: "shield")
                     }
                 }
                 if targetRole == .moderator || targetRole == .admin {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
                         Label("Retrograder en Membre", systemImage: "person.fill")
                     }
@@ -377,19 +377,19 @@ struct ParticipantsView: View {
                 // Admin : peut gérer MEMBER et MODERATOR uniquement (pas les autres admins)
                 if targetRole == .member {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Promouvoir Moderateur", systemImage: "shield.fill")
                     }
                 }
                 Button {
-                    roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
+                    roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                 } label: {
                     Label("Promouvoir Admin", systemImage: "crown.fill")
                 }
                 if targetRole == .moderator {
                     Button {
-                        roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
+                        roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
                         Label("Retrograder en Membre", systemImage: "person.fill")
                     }
@@ -400,7 +400,7 @@ struct ParticipantsView: View {
 
         if canRemoveParticipant(participant) {
             Button(role: .destructive) {
-                confirmRemoveUserId = participant.id
+                confirmRemoveUserId = participant.userId ?? participant.id
             } label: {
                 Label("Retirer du groupe", systemImage: "person.badge.minus")
             }
@@ -466,7 +466,7 @@ struct ParticipantsView: View {
 
     // MARK: - Permission Helpers
 
-    private func canRemoveParticipant(_ participant: ConversationParticipant) -> Bool {
+    private func canRemoveParticipant(_ participant: PaginatedParticipant) -> Bool {
         let isCurrentUser = participant.id == currentUserId
         guard !isCurrentUser else { return false }
 
@@ -531,18 +531,18 @@ struct ParticipantsView: View {
         defer { isLoading = false }
 
         do {
-            let fetched = try await ParticipantCache.shared.loadFirstPage(
+            let fetched = try await ParticipantCacheManager.shared.loadFirstPage(
                 for: conversationId,
                 forceRefresh: true
             )
             participants = fetched
-            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
+            hasMore = await ParticipantCacheManager.shared.hasMore(for: conversationId)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")
         }
     }
 
-    private func loadMoreIfNeeded(currentItem: ConversationParticipant) async {
+    private func loadMoreIfNeeded(currentItem: PaginatedParticipant) async {
         guard hasMore, !isLoadingMore else { return }
         guard currentItem.id == participants.last?.id else { return }
 
@@ -550,9 +550,9 @@ struct ParticipantsView: View {
         defer { isLoadingMore = false }
 
         do {
-            let allFetched = try await ParticipantCache.shared.loadNextPage(for: conversationId)
+            let allFetched = try await ParticipantCacheManager.shared.loadNextPage(for: conversationId)
             participants = allFetched
-            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
+            hasMore = await ParticipantCacheManager.shared.hasMore(for: conversationId)
         } catch {
             Logger.participants.error("Failed to load more: \(error.localizedDescription)")
         }
@@ -566,9 +566,9 @@ struct ParticipantsView: View {
             )
             HapticFeedback.success()
             participants.removeAll { $0.id == userId || $0.userId == userId }
-            await ParticipantCache.shared.removeParticipant(
+            await ParticipantCacheManager.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: userId
+                userId: userId
             )
         } catch {
             Logger.participants.error("Failed to remove participant: \(error.localizedDescription)")
@@ -585,12 +585,12 @@ struct ParticipantsView: View {
                 role: newRole
             )
             HapticFeedback.success()
-            if let idx = participants.firstIndex(where: { $0.id == userId }) {
+            if let idx = participants.firstIndex(where: { $0.id == userId || $0.userId == userId }) {
                 participants[idx].conversationRole = newRole.lowercased()
             }
-            await ParticipantCache.shared.updateRole(
+            await ParticipantCacheManager.shared.updateRole(
                 conversationId: conversationId,
-                participantId: userId,
+                userId: userId,
                 newRole: newRole
             )
         } catch {

@@ -74,7 +74,44 @@ public struct AnonymousSessionResponse: Decodable, Sendable {
     public let profile: AnonymousProfile
 }
 
-// MARK: - API Participant (REST response model)
+// MARK: - Paginated Participant (GET /conversations/:id/participants response)
+
+public struct PaginatedParticipant: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let userId: String?
+    public let username: String?
+    public let firstName: String?
+    public let lastName: String?
+    public let displayName: String?
+    public let avatar: String?
+    public var conversationRole: String?
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+    public let joinedAt: Date?
+    public let isActive: Bool?
+
+    public var name: String {
+        displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? username ?? "?"
+    }
+}
+
+public struct PaginatedParticipantsResponse: Decodable, Sendable {
+    public let success: Bool
+    public let data: [PaginatedParticipant]
+    public let pagination: PaginatedParticipantsPagination?
+}
+
+public struct PaginatedParticipantsPagination: Decodable, Sendable {
+    public let nextCursor: String?
+    public let hasMore: Bool
+    public let totalCount: Int?
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+// MARK: - API Participant (REST response model — embedded in conversation responses)
 
 public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let id: String
