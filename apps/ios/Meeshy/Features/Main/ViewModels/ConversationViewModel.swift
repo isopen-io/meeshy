@@ -459,7 +459,7 @@ class ConversationViewModel: ObservableObject {
 
         // Show cached messages immediately while fetching from API
         if messages.isEmpty {
-            let cached = await LocalStore.shared.loadMessages(for: conversationId)
+            let cached = await MessageCacheManager.shared.loadMessages(for: conversationId)
             if !cached.isEmpty {
                 messages = cached
             }
@@ -495,7 +495,7 @@ class ConversationViewModel: ObservableObject {
             // Update cache in background
             let conversationId = self.conversationId
             Task.detached(priority: .utility) { [messages] in
-                await LocalStore.shared.saveMessages(messages, for: conversationId)
+                await MessageCacheManager.shared.saveMessages(messages, for: conversationId)
             }
         } catch {
             self.error = error.localizedDescription
