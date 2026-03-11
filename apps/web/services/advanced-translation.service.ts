@@ -274,8 +274,8 @@ class AdvancedTranslationService extends EventEmitter {
     
     // Trier par priorité
     requests.sort((a, b) => {
-      const priorityOrder = { high: 3, normal: 2, low: 1 };
-      return priorityOrder[b.priority] - priorityOrder[a.priority];
+      const priorityOrder: Record<string, number> = { high: 3, normal: 2, low: 1 };
+      return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
     });
 
     const batch: TranslationBatch = {

@@ -54,8 +54,8 @@ const mockClearAllAuthData = jest.fn();
 
 jest.mock('@/utils/auth', () => ({
   checkAuthStatus: () => mockCheckAuthStatus(),
-  canAccessProtectedRoute: (state: any) => mockCanAccessProtectedRoute(state),
-  canAccessSharedConversation: (state: any) => mockCanAccessSharedConversation(state),
+  canAccessProtectedRoute: (...args: any[]) => (mockCanAccessProtectedRoute as any)(...args),
+  canAccessSharedConversation: (...args: any[]) => (mockCanAccessSharedConversation as any)(...args),
   redirectToAuth: () => mockRedirectToAuth(),
   redirectToHome: () => mockRedirectToHome(),
   clearAllAuthData: () => mockClearAllAuthData(),
@@ -210,7 +210,7 @@ describe('useAuth', () => {
 
       // Use login to set authenticated state (bypasses cache)
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       expect(result.current.isAuthenticated).toBe(true);
@@ -260,7 +260,7 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth());
 
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       expect(result.current.isAuthenticated).toBe(true);
@@ -273,7 +273,7 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth());
 
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       expect(mockSetCredentials).toHaveBeenCalledWith(mockUser, mockToken);
@@ -283,7 +283,7 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth());
 
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       expect(mockSetUser).toHaveBeenCalledWith(mockUser);
@@ -297,7 +297,7 @@ describe('useAuth', () => {
 
       // First login
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       expect(result.current.isAuthenticated).toBe(true);
@@ -316,7 +316,7 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth());
 
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       act(() => {
@@ -330,7 +330,7 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth());
 
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       act(() => {
@@ -458,7 +458,7 @@ describe('useAuth', () => {
 
       // Login first
       act(() => {
-        result.current.login(mockUser, mockToken);
+        result.current.login(mockUser as any, mockToken);
       });
 
       // Force logout

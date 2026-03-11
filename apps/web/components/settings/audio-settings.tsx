@@ -51,12 +51,19 @@ export const AudioSettings = memo(function AudioSettings() {
 
   // Use the new preferences hook
   const {
-    preferences,
+    data: preferencesData,
     isLoading,
-    isSaving,
+    isUpdating: isSaving,
     error,
-    updateField,
-  } = usePreferences<AudioPreference>('audio');
+    updatePreferences,
+  } = usePreferences('audio');
+
+  const preferences = preferencesData as any;
+
+  const updateField = <K extends string>(field: K, value: unknown, _options?: { skipOptimistic?: boolean; skipToast?: boolean }) => {
+    updatePreferences({ [field]: value } as any);
+    return Promise.resolve(true);
+  };
 
   // Memoize loading state
   const LoadingState = useMemo(() => (
@@ -74,7 +81,7 @@ export const AudioSettings = memo(function AudioSettings() {
   const ErrorState = useMemo(() => (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{error?.message}</AlertDescription>
     </Alert>
   ), [error]);
 

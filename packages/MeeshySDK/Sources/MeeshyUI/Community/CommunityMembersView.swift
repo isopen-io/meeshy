@@ -1,11 +1,13 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 public struct CommunityMembersView: View {
     @StateObject private var viewModel: CommunityMembersViewModel
     @ObservedObject private var theme = ThemeManager.shared
 
     public var onInvite: (() -> Void)? = nil
+    @State private var showInviteSheet = false
 
     public init(communityId: String, onInvite: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityMembersViewModel(communityId: communityId))
@@ -18,7 +20,7 @@ public struct CommunityMembersView: View {
 
             if viewModel.isLoading && viewModel.members.isEmpty {
                 ProgressView()
-                    .tint(Color(hex: "FF2E63"))
+                    .tint(MeeshyColors.indigo500)
             } else if viewModel.members.isEmpty {
                 EmptyStateView(
                     icon: "person.3",
@@ -37,22 +39,30 @@ public struct CommunityMembersView: View {
             ToolbarItem(placement: .primaryAction) {
                 if viewModel.canInvite {
                     Button {
-                        onInvite?()
+                        if let onInvite {
+                            onInvite()
+                        } else {
+                            showInviteSheet = true
+                        }
                     } label: {
                         Image(systemName: "person.badge.plus")
-                            .foregroundColor(Color(hex: "A855F7"))
+                            .foregroundColor(MeeshyColors.indigo500)
                     }
                 }
             }
         }
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadIfNeeded() }
+        .sheet(isPresented: $showInviteSheet) {
+            CommunityInviteView(communityId: viewModel.communityId)
+                .onDisappear { Task { await viewModel.refresh() } }
+        }
     }
 
     private var memberList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(groupedMembers.keys.sorted(by: { $0.hierarchy > $1.hierarchy }), id: \.self) { role in
+                ForEach(groupedMembers.keys.sorted(by: { $0.level > $1.level }), id: \.self) { role in
                     if let members = groupedMembers[role] {
                         Section {
                             ForEach(members) { member in
@@ -79,7 +89,7 @@ public struct CommunityMembersView: View {
 
                 if viewModel.hasMore {
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.indigo500)
                         .padding()
                         .task { await viewModel.loadMore() }
                 }
@@ -184,8 +194,9 @@ struct MemberRow: View {
 
     private var roleColor: Color {
         switch member.communityRole {
-        case .admin: return Color(hex: "FF2E63")
-        case .moderator: return Color(hex: "A855F7")
+        case .creator: return MeeshyColors.warning
+        case .admin: return MeeshyColors.error
+        case .moderator: return MeeshyColors.indigo500
         case .member: return theme.textMuted
         }
     }
@@ -201,14 +212,17 @@ final class CommunityMembersViewModel: ObservableObject {
     @Published var isCurrentUserAdmin = false
 
     let communityId: String
-    var canInvite: Bool { isCurrentUserAdmin }
+    @Published var isMember = false
+    var canInvite: Bool { isMember }
 
     private var hasLoaded = false
     private var currentOffset = 0
     private let pageSize = 30
+    private let service: CommunityServiceProviding
 
-    init(communityId: String) {
+    init(communityId: String, service: CommunityServiceProviding = CommunityService.shared) {
         self.communityId = communityId
+        self.service = service
     }
 
     func loadIfNeeded() async {
@@ -232,7 +246,7 @@ final class CommunityMembersViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let response = try await CommunityService.shared.getMembers(
+            let response = try await service.getMembers(
                 communityId: communityId,
                 offset: append ? currentOffset : 0,
                 limit: pageSize
@@ -249,33 +263,39 @@ final class CommunityMembersViewModel: ObservableObject {
             hasLoaded = true
 
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            isCurrentUserAdmin = members.contains {
-                $0.userId == currentUserId && $0.communityRole == .admin
-            }
+            let currentMember = members.first { $0.userId == currentUserId }
+            isMember = currentMember != nil
+            isCurrentUserAdmin = currentMember?.communityRole.hasMinimumRole(.admin) ?? false
         } catch {
-            print("[CommunityMembersVM] Error loading: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error loading: \(error)")
         }
     }
 
     func updateRole(memberId: String, role: CommunityRole) async {
         do {
-            _ = try await CommunityService.shared.updateMemberRole(
+            _ = try await service.updateMemberRole(
                 communityId: communityId,
                 memberId: memberId,
                 role: role
             )
             await refresh()
         } catch {
-            print("[CommunityMembersVM] Error updating role: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error updating role: \(error)")
         }
     }
 
     func removeMember(userId: String) async {
         do {
-            try await CommunityService.shared.removeMember(communityId: communityId, userId: userId)
+            try await service.removeMember(communityId: communityId, userId: userId)
             members.removeAll { $0.userId == userId }
         } catch {
-            print("[CommunityMembersVM] Error removing member: \(error)")
+            Logger.community.error("[CommunityMembersVM] Error removing member: \(error)")
         }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let community = Logger(subsystem: "me.meeshy.sdk", category: "community")
 }

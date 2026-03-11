@@ -75,8 +75,8 @@ jest.mock('@/hooks/use-accessibility', () => ({
 const mockEncryptionData = {
   encryptionPreference: 'optional' as const,
   hasSignalKeys: false,
-  signalRegistrationId: null,
-  lastKeyRotation: null,
+  signalRegistrationId: null as any,
+  lastKeyRotation: null as any,
   localSettings: {
     autoEncryptNewConversations: true,
     showEncryptionStatus: true,
@@ -178,7 +178,7 @@ describe('EncryptionSettings', () => {
 
     it('affiche "Cles actives" quand hasSignalKeys est true', () => {
       mockEncryptionData.hasSignalKeys = true;
-      mockEncryptionData.signalRegistrationId = 12345;
+      mockEncryptionData.signalRegistrationId = 12345 as any;
 
       render(<EncryptionSettings />);
 
@@ -197,7 +197,7 @@ describe('EncryptionSettings', () => {
 
     it('affiche la date de derniere rotation si disponible', () => {
       mockEncryptionData.hasSignalKeys = true;
-      mockEncryptionData.lastKeyRotation = '2024-01-15T10:30:00Z';
+      mockEncryptionData.lastKeyRotation = '2024-01-15T10:30:00Z' as any;
 
       render(<EncryptionSettings />);
 

@@ -236,15 +236,16 @@ export function VoiceProfileSettings() {
         { timeout: TIMEOUT_VOICE_PROFILE }
       );
 
-      if (response.success) {
+      if (response.success && response.data) {
         toast.success(t('voiceProfile.create.success', 'Profil vocal créé avec succès'));
 
         // Save voice previews to IndexedDB if available
-        if (response.data.voicePreviews && response.data.voicePreviews.length > 0 && response.data.userId) {
+        const data = response.data;
+        if (data.voicePreviews && data.voicePreviews.length > 0 && data.userId) {
           await saveVoicePreviewsToStorage(
-            response.data.userId,
-            response.data.voicePreviews,
-            response.data.version
+            data.userId,
+            data.voicePreviews,
+            data.version
           );
         }
 

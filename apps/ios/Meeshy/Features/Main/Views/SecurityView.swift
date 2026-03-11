@@ -10,6 +10,14 @@ struct SecurityView: View {
 
     @State private var showChangePassword = false
 
+    // 2FA
+    @State private var twoFactorEnabled = false
+    @State private var twoFactorLoading = false
+    @State private var showTwoFactorSetupSheet = false
+    @State private var showTwoFactorDisableSheet = false
+    @State private var showBackupCodesSheet = false
+    @State private var twoFactorError: String?
+
     // Conversation lock PIN
     @ObservedObject private var lockManager = ConversationLockManager.shared
     @State private var showPinSetupSheet = false
@@ -35,7 +43,7 @@ struct SecurityView: View {
     @State private var phoneVerifying = false
     @State private var phoneError: String?
 
-    private let accentColor = "3498DB"
+    private let accentColor = "60A5FA"
 
     private var user: MeeshyUser? { authManager.currentUser }
 
@@ -91,11 +99,38 @@ struct SecurityView: View {
             )
             .environmentObject(theme)
         }
+        .sheet(isPresented: $showTwoFactorSetupSheet) {
+            TwoFactorSetupSheet(
+                onComplete: {
+                    showTwoFactorSetupSheet = false
+                    loadTwoFactorStatus()
+                },
+                onCancel: { showTwoFactorSetupSheet = false }
+            )
+            .environmentObject(theme)
+        }
+        .sheet(isPresented: $showTwoFactorDisableSheet) {
+            TwoFactorDisableSheet(
+                onComplete: {
+                    showTwoFactorDisableSheet = false
+                    loadTwoFactorStatus()
+                },
+                onCancel: { showTwoFactorDisableSheet = false }
+            )
+            .environmentObject(theme)
+        }
+        .sheet(isPresented: $showBackupCodesSheet) {
+            TwoFactorBackupCodesSheet(
+                onDismiss: { showBackupCodesSheet = false }
+            )
+            .environmentObject(theme)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active, emailSent {
                 Task { await authManager.checkExistingSession() }
             }
         }
+        .onAppear { loadTwoFactorStatus() }
     }
 
     // MARK: - Header
@@ -135,6 +170,7 @@ struct SecurityView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 passwordSection
+                twoFactorSection
                 emailSection
                 phoneSection
                 conversationLockSection
@@ -149,14 +185,14 @@ struct SecurityView: View {
 
     private var passwordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Mot de passe", icon: "lock.fill", color: "9B59B6")
+            sectionHeader(title: "Mot de passe", icon: "lock.fill", color: "6366F1")
 
             Button {
                 HapticFeedback.light()
                 showChangePassword = true
             } label: {
                 HStack(spacing: 12) {
-                    fieldIcon("key.fill", color: "9B59B6")
+                    fieldIcon("key.fill", color: "6366F1")
 
                     Text("Changer le mot de passe")
                         .font(.system(size: 14, weight: .medium))
@@ -171,7 +207,7 @@ struct SecurityView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
-            .background(sectionBackground(tint: "9B59B6"))
+            .background(sectionBackground(tint: "6366F1"))
         }
     }
 
@@ -239,7 +275,7 @@ struct SecurityView: View {
                                     Text("Vérifier")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                             }
@@ -254,7 +290,7 @@ struct SecurityView: View {
                 if let emailError {
                     Text(emailError)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
                 }
@@ -326,10 +362,10 @@ struct SecurityView: View {
             HStack(spacing: 8) {
                 Image(systemName: "envelope.badge.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
                 Text("Email de verification envoye")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
 
@@ -410,7 +446,7 @@ struct SecurityView: View {
                                     Text("Vérifier")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
                             }
@@ -425,7 +461,7 @@ struct SecurityView: View {
                 if let phoneError {
                     Text(phoneError)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
                 }
@@ -495,10 +531,10 @@ struct SecurityView: View {
             HStack(spacing: 8) {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
                 Text("Code envoye par SMS")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "4ADE80"))
+                    .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
 
@@ -578,7 +614,7 @@ struct SecurityView: View {
                             .foregroundColor(theme.textMuted)
                         Text(hasMasterPIN ? "Configuré" : "Non configuré")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(hasMasterPIN ? Color(hex: "4ADE80") : theme.textMuted)
+                            .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
                     }
 
                     Spacer()
@@ -595,7 +631,7 @@ struct SecurityView: View {
                             }
                             Image(systemName: "checkmark.shield.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "4ADE80"))
+                                .foregroundColor(MeeshyColors.success)
                         }
                     }
                 }
@@ -653,7 +689,7 @@ struct SecurityView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(Capsule().fill(Color(hex: "F97316")))
+                                .background(Capsule().fill(MeeshyColors.warning))
                             }
                         }
 
@@ -668,10 +704,10 @@ struct SecurityView: View {
                                     Text("Supprimer")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: "EF4444"))
+                                .foregroundColor(MeeshyColors.error)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(Capsule().fill(Color(hex: "EF4444").opacity(0.10)))
+                                .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
                             }
                         }
                     }
@@ -680,6 +716,118 @@ struct SecurityView: View {
                 .padding(.bottom, 10)
             }
             .background(sectionBackground(tint: lockColor))
+        }
+    }
+
+    // MARK: - Two-Factor Authentication Section
+
+    private var twoFactorSection: some View {
+        let tfaColor = "6366F1"
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(
+                title: String(localized: "2fa_section_title", defaultValue: "Authentification a deux facteurs"),
+                icon: "shield.lefthalf.filled",
+                color: tfaColor
+            )
+
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    fieldIcon("shield.lefthalf.filled", color: tfaColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "2fa_status_label", defaultValue: "Statut 2FA"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+
+                        if twoFactorLoading {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Text(twoFactorEnabled
+                                 ? String(localized: "2fa_enabled", defaultValue: "Active")
+                                 : String(localized: "2fa_disabled", defaultValue: "Desactive"))
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(twoFactorEnabled ? MeeshyColors.success : theme.textMuted)
+                        }
+                    }
+
+                    Spacer()
+
+                    if twoFactorEnabled {
+                        Text(String(localized: "2fa_badge_active", defaultValue: "Active"))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(MeeshyColors.success))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+
+                HStack(spacing: 10) {
+                    if twoFactorEnabled {
+                        Button {
+                            HapticFeedback.light()
+                            showBackupCodesSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "key.fill")
+                                    .font(.system(size: 12))
+                                Text(String(localized: "2fa_backup_codes_button", defaultValue: "Codes de secours"))
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(MeeshyColors.indigo500)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.12)))
+                        }
+
+                        Button {
+                            HapticFeedback.medium()
+                            showTwoFactorDisableSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "shield.slash.fill")
+                                    .font(.system(size: 12))
+                                Text(String(localized: "2fa_disable_button", defaultValue: "Desactiver"))
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(MeeshyColors.error)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
+                        }
+                    } else {
+                        Button {
+                            HapticFeedback.medium()
+                            showTwoFactorSetupSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "shield.lefthalf.filled.badge.checkmark")
+                                    .font(.system(size: 12))
+                                Text(String(localized: "2fa_enable_button", defaultValue: "Activer 2FA"))
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(MeeshyColors.indigo500))
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+
+                if let twoFactorError {
+                    Text(twoFactorError)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
+            }
+            .background(sectionBackground(tint: tfaColor))
         }
     }
 
@@ -724,10 +872,25 @@ struct SecurityView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(verified ? Color(hex: "4ADE80") : Color(hex: "F59E0B")))
+            .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
+            .accessibilityLabel(verified ? "Verifie" : "Non verifie")
     }
 
     // MARK: - Actions
+
+    private func loadTwoFactorStatus() {
+        twoFactorLoading = true
+        twoFactorError = nil
+        Task {
+            do {
+                let status = try await TwoFactorService.shared.getStatus()
+                twoFactorEnabled = status.enabled
+            } catch {
+                twoFactorError = String(localized: "2fa_status_error", defaultValue: "Impossible de charger le statut 2FA")
+            }
+            twoFactorLoading = false
+        }
+    }
 
     private func submitEmailChange() {
         emailLoading = true
@@ -773,10 +936,10 @@ struct SecurityView: View {
         resendTimer?.invalidate()
         resendTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             Task { @MainActor in
-                self.resendCooldown -= 1
-                if self.resendCooldown <= 0 {
-                    self.resendTimer?.invalidate()
-                    self.resendTimer = nil
+                resendCooldown -= 1
+                if resendCooldown <= 0 {
+                    resendTimer?.invalidate()
+                    resendTimer = nil
                 }
             }
         }
@@ -830,6 +993,689 @@ struct SecurityView: View {
                 phoneError = "Une erreur est survenue"
             }
             phoneVerifying = false
+        }
+    }
+}
+
+// MARK: - Two-Factor Setup Sheet
+
+private struct TwoFactorSetupSheet: View {
+    @EnvironmentObject private var theme: ThemeManager
+
+    let onComplete: () -> Void
+    let onCancel: () -> Void
+
+    private enum SetupStep {
+        case loading
+        case showSecret(TwoFactorSetup)
+        case enterCode(TwoFactorSetup)
+        case showBackupCodes([String])
+        case error(String)
+    }
+
+    @State private var step: SetupStep = .loading
+    @State private var verificationCode = ""
+    @State private var verifying = false
+    @State private var codeError: String?
+    @State private var copiedKey = false
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        switch step {
+                        case .loading:
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(.top, 60)
+
+                        case .showSecret(let setup):
+                            secretView(setup)
+
+                        case .enterCode(let setup):
+                            codeEntryView(setup)
+
+                        case .showBackupCodes(let codes):
+                            backupCodesView(codes)
+
+                        case .error(let message):
+                            errorView(message)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
+            }
+            .navigationTitle(String(localized: "2fa_setup_title", defaultValue: "Configurer 2FA"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "2fa_cancel", defaultValue: "Annuler")) {
+                        onCancel()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+        .onAppear { initiateSetup() }
+    }
+
+    private func secretView(_ setup: TwoFactorSetup) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "qrcode")
+                .font(.system(size: 80))
+                .foregroundColor(tfaColor)
+                .padding(.top, 20)
+
+            Text(String(localized: "2fa_scan_instruction", defaultValue: "Scannez ce QR code avec votre application d'authentification"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+
+            if let base64String = setup.qrCodeDataUrl.components(separatedBy: ",").last,
+               let data = Data(base64Encoded: base64String),
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .background(Color.white)
+                    .cornerRadius(12)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 40))
+                    .foregroundColor(MeeshyColors.warning)
+                    .frame(width: 200, height: 200)
+            }
+
+            VStack(spacing: 8) {
+                Text(String(localized: "2fa_manual_entry_label", defaultValue: "Ou entrez cette cle manuellement :"))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+
+                HStack(spacing: 8) {
+                    Text(setup.otpauthUrl)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    Button {
+                        UIPasteboard.general.string = setup.otpauthUrl
+                        HapticFeedback.light()
+                        copiedKey = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            copiedKey = false
+                        }
+                    } label: {
+                        Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(copiedKey ? MeeshyColors.success : tfaColor)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(tfaColor.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            }
+
+            Button {
+                HapticFeedback.medium()
+                withAnimation { step = .enterCode(setup) }
+            } label: {
+                Text(String(localized: "2fa_next_button", defaultValue: "Suivant"))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(tfaColor))
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private func codeEntryView(_ setup: TwoFactorSetup) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 50))
+                .foregroundColor(tfaColor)
+                .padding(.top, 20)
+
+            Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code a 6 chiffres affiche dans votre application"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+
+            TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
+                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .foregroundColor(theme.textPrimary)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(tfaColor.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                        )
+                )
+                .onChange(of: verificationCode) { _, newValue in
+                    verificationCode = String(newValue.prefix(6).filter(\.isNumber))
+                }
+
+            if let codeError {
+                Text(codeError)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(MeeshyColors.error)
+            }
+
+            Button {
+                HapticFeedback.medium()
+                submitVerification()
+            } label: {
+                HStack(spacing: 8) {
+                    if verifying {
+                        ProgressView().scaleEffect(0.7).tint(.white)
+                    }
+                    Text(String(localized: "2fa_verify_button", defaultValue: "Verifier et activer"))
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule().fill(
+                        verificationCode.count == 6 && !verifying
+                            ? tfaColor
+                            : tfaColor.opacity(0.4)
+                    )
+                )
+            }
+            .disabled(verificationCode.count != 6 || verifying)
+
+            Button {
+                HapticFeedback.light()
+                withAnimation { step = .showSecret(setup) }
+            } label: {
+                Text(String(localized: "2fa_back_to_qr", defaultValue: "Retour au QR code"))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(tfaColor)
+            }
+        }
+    }
+
+    private func backupCodesView(_ codes: [String]) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.shield.fill")
+                .font(.system(size: 50))
+                .foregroundColor(MeeshyColors.success)
+                .padding(.top, 20)
+
+            Text(String(localized: "2fa_activated_title", defaultValue: "2FA active avec succes !"))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Text(String(localized: "2fa_backup_codes_instruction", defaultValue: "Conservez ces codes de secours dans un endroit sur. Chaque code ne peut etre utilise qu'une seule fois."))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+
+            backupCodesList(codes)
+
+            Button {
+                UIPasteboard.general.string = codes.joined(separator: "\n")
+                HapticFeedback.success()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.doc.fill")
+                        .font(.system(size: 13))
+                    Text(String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(tfaColor)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule().fill(tfaColor.opacity(0.12))
+                )
+            }
+
+            Button {
+                HapticFeedback.medium()
+                onComplete()
+            } label: {
+                Text(String(localized: "2fa_done_button", defaultValue: "Terminer"))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(tfaColor))
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func backupCodesList(_ codes: [String]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(codes, id: \.self) { code in
+                Text(code)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(tfaColor.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(tfaColor.opacity(0.15), lineWidth: 1)
+                            )
+                    )
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 50))
+                .foregroundColor(MeeshyColors.error)
+                .padding(.top, 40)
+
+            Text(message)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                HapticFeedback.light()
+                initiateSetup()
+            } label: {
+                Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(tfaColor)
+            }
+        }
+    }
+
+    private func initiateSetup() {
+        step = .loading
+        Task {
+            do {
+                let setup = try await TwoFactorService.shared.setup()
+                step = .showSecret(setup)
+            } catch {
+                step = .error(String(localized: "2fa_setup_error", defaultValue: "Impossible de demarrer la configuration 2FA"))
+            }
+        }
+    }
+
+    private func submitVerification() {
+        verifying = true
+        codeError = nil
+        Task {
+            do {
+                let result = try await TwoFactorService.shared.enable(code: verificationCode)
+                HapticFeedback.success()
+                withAnimation { step = .showBackupCodes(result.backupCodes) }
+            } catch let error as APIError {
+                HapticFeedback.error()
+                switch error {
+                case .serverError(400, _):
+                    codeError = String(localized: "2fa_invalid_code", defaultValue: "Code invalide. Verifiez et reessayez.")
+                default:
+                    codeError = error.errorDescription
+                }
+            } catch {
+                HapticFeedback.error()
+                codeError = String(localized: "2fa_verification_error", defaultValue: "Une erreur est survenue")
+            }
+            verifying = false
+        }
+    }
+}
+
+// MARK: - Two-Factor Disable Sheet
+
+private struct TwoFactorDisableSheet: View {
+    @EnvironmentObject private var theme: ThemeManager
+
+    let onComplete: () -> Void
+    let onCancel: () -> Void
+
+    @State private var disableCode = ""
+    @State private var disablePassword = ""
+    @State private var disabling = false
+    @State private var disableError: String?
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                VStack(spacing: 20) {
+                    Image(systemName: "shield.slash.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(MeeshyColors.error)
+                        .padding(.top, 40)
+
+                    Text(String(localized: "2fa_disable_title", defaultValue: "Desactiver l'authentification a deux facteurs"))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(String(localized: "2fa_disable_warning", defaultValue: "Votre compte sera moins securise sans 2FA. Entrez votre mot de passe et votre code pour confirmer."))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+
+                    SecureField(String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"), text: $disablePassword)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(MeeshyColors.error.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, 16)
+
+                    TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $disableCode)
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .keyboardType(.numberPad)
+                        .foregroundColor(theme.textPrimary)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(MeeshyColors.error.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, 16)
+                        .onChange(of: disableCode) { _, newValue in
+                            disableCode = String(newValue.prefix(6).filter(\.isNumber))
+                        }
+
+                    if let disableError {
+                        Text(disableError)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(MeeshyColors.error)
+                    }
+
+                    Button {
+                        HapticFeedback.medium()
+                        submitDisable()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if disabling {
+                                ProgressView().scaleEffect(0.7).tint(.white)
+                            }
+                            Text(String(localized: "2fa_confirm_disable", defaultValue: "Confirmer la desactivation"))
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule().fill(
+                                disableCode.count == 6 && !disablePassword.isEmpty && !disabling
+                                    ? MeeshyColors.error
+                                    : MeeshyColors.error.opacity(0.4)
+                            )
+                        )
+                    }
+                    .disabled(disableCode.count != 6 || disablePassword.isEmpty || disabling)
+                    .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+            }
+            .navigationTitle(String(localized: "2fa_disable_nav_title", defaultValue: "Desactiver 2FA"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "2fa_cancel", defaultValue: "Annuler")) {
+                        onCancel()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+    }
+
+    private func submitDisable() {
+        disabling = true
+        disableError = nil
+        Task {
+            do {
+                try await TwoFactorService.shared.disable(code: disableCode, password: disablePassword)
+                HapticFeedback.success()
+                onComplete()
+            } catch let error as APIError {
+                HapticFeedback.error()
+                switch error {
+                case .serverError(400, _):
+                    disableError = String(localized: "2fa_invalid_code", defaultValue: "Code invalide. Verifiez et reessayez.")
+                default:
+                    disableError = error.errorDescription
+                }
+            } catch {
+                HapticFeedback.error()
+                disableError = String(localized: "2fa_disable_error", defaultValue: "Une erreur est survenue")
+            }
+            disabling = false
+        }
+    }
+}
+
+// MARK: - Two-Factor Backup Codes Sheet
+
+private struct TwoFactorBackupCodesSheet: View {
+    @EnvironmentObject private var theme: ThemeManager
+
+    let onDismiss: () -> Void
+
+    @State private var verificationCode = ""
+    @State private var codes: [String] = []
+    @State private var loading = false
+    @State private var codeSubmitted = false
+    @State private var error: String?
+
+    private let tfaColor = MeeshyColors.indigo500
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundGradient.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        if !codeSubmitted {
+                            codeEntryStep
+                        } else if loading {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(.top, 60)
+                        } else if let error {
+                            VStack(spacing: 12) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(MeeshyColors.error)
+                                    .padding(.top, 40)
+
+                                Text(error)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(theme.textSecondary)
+
+                                Button {
+                                    HapticFeedback.light()
+                                    codeSubmitted = false
+                                    verificationCode = ""
+                                    self.error = nil
+                                } label: {
+                                    Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(tfaColor)
+                                }
+                            }
+                        } else {
+                            Image(systemName: "key.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(tfaColor)
+                                .padding(.top, 20)
+
+                            Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les precedents. Conservez-les en lieu sur."))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                                ForEach(codes, id: \.self) { code in
+                                    Text(code)
+                                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                        .foregroundColor(theme.textPrimary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(tfaColor.opacity(0.06))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(tfaColor.opacity(0.15), lineWidth: 1)
+                                                )
+                                        )
+                                }
+                            }
+                            .padding(.horizontal, 8)
+
+                            Button {
+                                UIPasteboard.general.string = codes.joined(separator: "\n")
+                                HapticFeedback.success()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "doc.on.doc.fill")
+                                        .font(.system(size: 13))
+                                    Text(String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundColor(tfaColor)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(
+                                    Capsule().fill(tfaColor.opacity(0.12))
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
+            }
+            .navigationTitle(String(localized: "2fa_backup_codes_title", defaultValue: "Codes de secours"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "2fa_close", defaultValue: "Fermer")) {
+                        onDismiss()
+                    }
+                    .foregroundColor(tfaColor)
+                }
+            }
+        }
+    }
+
+    private var codeEntryStep: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 50))
+                .foregroundColor(tfaColor)
+                .padding(.top, 40)
+
+            Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour generer de nouveaux codes de secours"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+
+            TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
+                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .foregroundColor(theme.textPrimary)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(tfaColor.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(tfaColor.opacity(0.2), lineWidth: 1)
+                        )
+                )
+                .onChange(of: verificationCode) { _, newValue in
+                    verificationCode = String(newValue.prefix(6).filter(\.isNumber))
+                }
+
+            Button {
+                HapticFeedback.medium()
+                loadCodes()
+            } label: {
+                Text(String(localized: "2fa_generate_codes", defaultValue: "Generer les codes"))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule().fill(
+                            verificationCode.count == 6
+                                ? tfaColor
+                                : tfaColor.opacity(0.4)
+                        )
+                    )
+            }
+            .disabled(verificationCode.count != 6)
+        }
+    }
+
+    private func loadCodes() {
+        loading = true
+        error = nil
+        codeSubmitted = true
+        Task {
+            do {
+                let result = try await TwoFactorService.shared.getBackupCodes(code: verificationCode)
+                codes = result.backupCodes
+            } catch {
+                self.error = String(localized: "2fa_backup_codes_error", defaultValue: "Impossible de charger les codes de secours")
+            }
+            loading = false
         }
     }
 }

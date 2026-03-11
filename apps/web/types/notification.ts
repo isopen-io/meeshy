@@ -59,6 +59,16 @@ export {
 
 // ===== FRONTEND-SPECIFIC TYPES =====
 
+/**
+ * Options de pagination pour les requêtes de notifications
+ */
+export type NotificationPaginationOptions = {
+  offset?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+};
+
 // Re-import for local use
 import type {
   Notification,

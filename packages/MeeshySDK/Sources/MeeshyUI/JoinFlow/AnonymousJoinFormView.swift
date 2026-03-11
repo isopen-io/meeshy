@@ -46,7 +46,7 @@ public struct AnonymousJoinFormView: View {
                         Text("Retour")
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.indigo400)
                 }
 
                 Spacer()
@@ -168,7 +168,7 @@ public struct AnonymousJoinFormView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(focusedField == field ? Color(hex: "4ECDC4") : .secondary)
+                .foregroundStyle(focusedField == field ? MeeshyColors.indigo400 : .secondary)
                 .frame(width: 20)
 
             TextField(placeholder, text: text)
@@ -187,7 +187,7 @@ public struct AnonymousJoinFormView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(
-                    focusedField == field ? Color(hex: "4ECDC4").opacity(0.6) : Color.clear,
+                    focusedField == field ? MeeshyColors.indigo400.opacity(0.6) : Color.clear,
                     lineWidth: 1
                 )
         )
@@ -198,7 +198,7 @@ public struct AnonymousJoinFormView: View {
     private var birthdayPicker: some View {
         HStack(spacing: 12) {
             Image(systemName: "gift.fill")
-                .foregroundStyle(Color(hex: "9B59B6"))
+                .foregroundStyle(MeeshyColors.indigo600)
                 .frame(width: 20)
 
             DatePicker(
@@ -223,7 +223,7 @@ public struct AnonymousJoinFormView: View {
     private var languagePicker: some View {
         HStack(spacing: 12) {
             Image(systemName: "globe")
-                .foregroundStyle(Color(hex: "3498DB"))
+                .foregroundStyle(MeeshyColors.info)
                 .frame(width: 20)
 
             Text("Langue")
@@ -248,7 +248,7 @@ public struct AnonymousJoinFormView: View {
                 Text("日本語").tag("ja")
                 Text("한국어").tag("ko")
             }
-            .tint(Color(hex: "4ECDC4"))
+            .tint(MeeshyColors.indigo400)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -265,16 +265,16 @@ public struct AnonymousJoinFormView: View {
         if let error = viewModel.errorMessage {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(Color(hex: "FF6B6B"))
+                    .foregroundColor(MeeshyColors.error)
                 Text(error)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: "FF6B6B"))
+                    .foregroundColor(MeeshyColors.error)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
             )
         }
     }
@@ -300,17 +300,21 @@ public struct AnonymousJoinFormView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                LinearGradient(
-                    colors: viewModel.isFormValid
-                        ? [Color(hex: "B24BF3"), Color(hex: "4ECDC4")]
-                        : [Color.gray.opacity(0.4), Color.gray.opacity(0.3)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                Group {
+                    if viewModel.isFormValid {
+                        MeeshyColors.brandGradient
+                    } else {
+                        LinearGradient(
+                            colors: [Color.gray.opacity(0.4), Color.gray.opacity(0.3)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                }
             )
             .cornerRadius(16)
             .shadow(
-                color: viewModel.isFormValid ? Color(hex: "B24BF3").opacity(0.3) : .clear,
+                color: viewModel.isFormValid ? MeeshyColors.indigo500.opacity(0.3) : .clear,
                 radius: 12, x: 0, y: 6
             )
         }

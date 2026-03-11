@@ -262,23 +262,13 @@ export function useProfileV2(options: UseProfileV2Options = {}): ProfileV2Return
         throw new Error('Cannot update other user profile');
       }
 
-      const updateData: UpdateUserDto = {};
-
-      if (data.displayName !== undefined) {
-        updateData.displayName = data.displayName;
-      }
-      if (data.bio !== undefined) {
-        updateData.bio = data.bio;
-      }
-      if (data.avatar !== undefined) {
-        updateData.avatar = data.avatar;
-      }
-      if (data.systemLanguage !== undefined) {
-        updateData.systemLanguage = data.systemLanguage;
-      }
-      if (data.regionalLanguage !== undefined) {
-        updateData.regionalLanguage = data.regionalLanguage;
-      }
+      const updateData: UpdateUserDto = {
+        ...(data.displayName !== undefined && { displayName: data.displayName }),
+        ...(data.bio !== undefined && { bio: data.bio }),
+        ...(data.avatar !== undefined && { avatar: data.avatar }),
+        ...(data.systemLanguage !== undefined && { systemLanguage: data.systemLanguage }),
+        ...(data.regionalLanguage !== undefined && { regionalLanguage: data.regionalLanguage }),
+      };
 
       await updateMutation.mutateAsync(updateData);
     },

@@ -15,17 +15,22 @@ public struct MessageDeletedEvent: Decodable, Sendable {
     }
 }
 
-public struct ReactionUpdateEvent: Decodable, Sendable {
-    public let messageId: String
+public struct ReactionAggregationEvent: Decodable, Sendable {
     public let emoji: String
     public let count: Int
-    public let userId: String?
-    public let conversationId: String?
+    public let participantIds: [String]?
+    public let hasCurrentUser: Bool?
+}
 
-    public init(messageId: String, emoji: String, count: Int, userId: String? = nil, conversationId: String? = nil) {
-        self.messageId = messageId; self.emoji = emoji; self.count = count
-        self.userId = userId; self.conversationId = conversationId
-    }
+public struct ReactionUpdateEvent: Decodable, Sendable {
+    public let messageId: String
+    public let participantId: String?
+    public let emoji: String
+    public let action: String?
+    public let aggregation: ReactionAggregationEvent?
+    public let timestamp: String?
+
+    public var count: Int { aggregation?.count ?? 0 }
 }
 
 public struct TypingEvent: Decodable, Sendable {
@@ -149,11 +154,41 @@ public struct AudioTranslationEvent: Decodable, Sendable {
     public let processingTimeMs: Int?
 }
 
+public struct ReadStatusSummary: Decodable, Sendable {
+    public let totalMembers: Int
+    public let deliveredCount: Int
+    public let readCount: Int
+}
+
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
-    public let type: String // "read" or "received"
+    public let participantId: String
+    public let userId: String?
+    public let type: String
     public let updatedAt: Date
+    public let summary: ReadStatusSummary
+}
+
+// MARK: - Participant Role Updated Event Data
+
+public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
+    public let id: String
+    public let role: String
+    public let displayName: String
+    public let userId: String?
+}
+
+public struct ConversationParticipationEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+}
+
+public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let userId: String
+    public let newRole: String
+    public let updatedBy: String
+    public let participant: ParticipantRoleUpdatedParticipantInfo
 }
 
 public struct MessageConsumedEvent: Decodable, Sendable {
@@ -163,6 +198,97 @@ public struct MessageConsumedEvent: Decodable, Sendable {
     public let viewOnceCount: Int
     public let maxViewOnceCount: Int
     public let isFullyConsumed: Bool
+}
+
+// MARK: - Call Signaling Event Data
+
+public struct CallOfferData: Decodable, Sendable {
+    public let callId: String
+    public let conversationId: String
+    public let mode: String?
+    public let initiator: CallInitiatorInfo
+
+    public struct CallInitiatorInfo: Decodable, Sendable {
+        public let userId: String
+        public let username: String
+        public let avatar: String?
+    }
+}
+
+public struct CallAnswerData: Decodable, Sendable {
+    public let callId: String
+    public let signal: CallSignalPayload
+}
+
+public struct CallSignalPayload: Decodable, Sendable {
+    public let type: String
+    public let sdp: String?
+    public let candidate: String?
+    public let sdpMLineIndex: Int?
+    public let sdpMid: String?
+    public let from: String?
+    public let to: String?
+}
+
+public struct CallICECandidateData: Decodable, Sendable {
+    public let callId: String
+    public let signal: CallSignalPayload
+}
+
+public struct CallEndData: Decodable, Sendable {
+    public let callId: String
+    public let duration: Int?
+    public let endedBy: String?
+}
+
+public struct CallParticipantData: Decodable, Sendable {
+    public let callId: String
+    public let participantId: String?
+    public let userId: String?
+    public let mode: String?
+}
+
+public struct CallMediaToggleData: Decodable, Sendable {
+    public let callId: String
+    public let participantId: String?
+    public let mediaType: String
+    public let enabled: Bool
+}
+
+public struct CallErrorData: Decodable, Sendable {
+    public let code: String?
+    public let message: String?
+}
+
+// MARK: - Reaction Sync Event Data
+
+public struct ReactionSyncEvent: Decodable, Sendable {
+    public let messageId: String
+    public let reactions: [ReactionAggregationEvent]
+    public let totalCount: Int?
+    public let userReactions: [String]?
+}
+
+// MARK: - System Message Event Data
+
+public struct SystemMessageEvent: Decodable, Sendable {
+    public let type: String
+    public let content: String
+}
+
+// MARK: - Attachment Status Event Data
+
+public struct AttachmentStatusEvent: Decodable, Sendable {
+    public let attachmentId: String
+    public let status: String
+}
+
+// MARK: - Mention Event Data
+
+public struct MentionCreatedEvent: Decodable, Sendable {
+    public let messageId: String?
+    public let conversationId: String?
+    public let userId: String?
 }
 
 // MARK: - Notification Socket Event Data
@@ -209,6 +335,9 @@ public protocol MessageSocketProviding: Sendable {
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
+    var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
+    var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
@@ -221,10 +350,23 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
+    var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
+    var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
+    var callEnded: PassthroughSubject<CallEndData, Never> { get }
+    var callParticipantJoined: PassthroughSubject<CallParticipantData, Never> { get }
+    var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
+    var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
+    var callError: PassthroughSubject<CallErrorData, Never> { get }
+    var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
+    var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
+    var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusEvent, Never> { get }
+    var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
     var activeConversationId: String? { get set }
     func connect()
+    func connectAnonymous(sessionToken: String)
     func disconnect()
     func joinConversation(_ conversationId: String)
     func leaveConversation(_ conversationId: String)
@@ -235,6 +377,14 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, isEncrypted: Bool)
+    func emitCallInitiate(conversationId: String, isVideo: Bool)
+    func emitCallJoin(callId: String)
+    func emitCallLeave(callId: String)
+    func emitCallSignal(callId: String, type: String, payload: [String: String])
+    func emitCallToggleAudio(callId: String, enabled: Bool)
+    func emitCallToggleVideo(callId: String, enabled: Bool)
+    func emitCallEnd(callId: String)
 }
 
 // MARK: - Message Socket Manager
@@ -262,6 +412,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
 
+    // Combine publishers — conversation participation
+    public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
+    public let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()
+
+    // Combine publishers — participant role
+    public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
+
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
@@ -286,6 +443,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
 
+    // Combine publishers — call signaling
+    public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
+    public let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
+    public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
+    public let callEnded = PassthroughSubject<CallEndData, Never>()
+    public let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
+    public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
+    public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
+    public let callError = PassthroughSubject<CallErrorData, Never>()
+
+    // Combine publishers — reactions sync, system, attachments, mentions
+    public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
+    public let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
+    public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusEvent, Never>()
+    public let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
+
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
 
@@ -298,16 +471,27 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    private var heartbeatTimer: Timer?
+
+    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
+    // Safe to share: options are set once during init and never mutated after.
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = iso.date(from: dateStr) { return date }
-            iso.formatOptions = [.withInternetDateTime]
-            if let date = iso.date(from: dateStr) { return date }
+            if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
     }
@@ -342,7 +526,31 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.connect()
     }
 
+    public func connectAnonymous(sessionToken: String) {
+        disconnect()
+
+        guard let url = SocketConfig.baseURL else { return }
+
+        DispatchQueue.main.async { self.connectionState = .connecting }
+
+        manager = SocketManager(socketURL: url, config: [
+            .log(false),
+            .compress,
+            .extraHeaders(["X-Session-Token": sessionToken]),
+            .forceWebsockets(true),
+            .reconnects(true),
+            .reconnectWait(1),
+            .reconnectWaitMax(16),
+            .reconnectAttempts(-1),
+        ])
+
+        socket = manager?.defaultSocket
+        setupEventHandlers()
+        socket?.connect()
+    }
+
     public func disconnect() {
+        stopHeartbeat()
         joinedConversations.removeAll()
         activeConversationId = nil
         socket?.disconnect()
@@ -352,6 +560,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         connectionState = .disconnected
         reconnectAttempt = 0
         hadPreviousConnection = false
+    }
+
+    // MARK: - Heartbeat
+
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.socket?.emit("heartbeat")
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
 
     // MARK: - Room Management
@@ -411,6 +633,60 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("location:live-stop", ["conversationId": conversationId])
     }
 
+    // MARK: - Send With Attachments
+
+    public func sendWithAttachments(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        isEncrypted: Bool = false
+    ) {
+        var payload: [String: Any] = [
+            "conversationId": conversationId,
+            "attachmentIds": attachmentIds,
+            "isEncrypted": isEncrypted
+        ]
+        if let content, !content.isEmpty { payload["content"] = content }
+        if let replyToId { payload["replyToId"] = replyToId }
+        socket?.emit("message:send-with-attachments", payload)
+    }
+
+    // MARK: - Call Signaling Emission
+
+    public func emitCallInitiate(conversationId: String, isVideo: Bool) {
+        socket?.emit("call:initiate", [
+            "conversationId": conversationId,
+            "type": isVideo ? "video" : "audio"
+        ])
+    }
+
+    public func emitCallJoin(callId: String) {
+        socket?.emit("call:join", ["callId": callId])
+    }
+
+    public func emitCallLeave(callId: String) {
+        socket?.emit("call:leave", ["callId": callId])
+    }
+
+    public func emitCallSignal(callId: String, type: String, payload: [String: String]) {
+        var signal: [String: Any] = ["type": type]
+        for (key, value) in payload { signal[key] = value }
+        socket?.emit("call:signal", ["callId": callId, "signal": signal])
+    }
+
+    public func emitCallToggleAudio(callId: String, enabled: Bool) {
+        socket?.emit("call:toggle-audio", ["callId": callId, "enabled": enabled])
+    }
+
+    public func emitCallToggleVideo(callId: String, enabled: Bool) {
+        socket?.emit("call:toggle-video", ["callId": callId, "enabled": enabled])
+    }
+
+    public func emitCallEnd(callId: String) {
+        socket?.emit("call:end", ["callId": callId])
+    }
+
     // MARK: - Event Handlers
 
     private func setupEventHandlers() {
@@ -426,6 +702,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 self.isConnected = true
                 self.connectionState = .connected
             }
+
+            self.startHeartbeat()
 
             // Re-join all tracked conversations
             // Priority: active conversation first for fastest UX
@@ -446,6 +724,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             guard let self else { return }
+            self.stopHeartbeat()
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
@@ -608,6 +887,31 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // --- Conversation participation events ---
+
+        socket.on("conversation:joined") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationParticipationEvent.self, from: data) { [weak self] event in
+                self?.conversationJoined.send(event)
+            }
+        }
+
+        socket.on("conversation:left") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationParticipationEvent.self, from: data) { [weak self] event in
+                self?.conversationLeft.send(event)
+            }
+        }
+
+        // --- Participant role events ---
+
+        socket.on("participant:role-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantRoleUpdatedEvent.self, from: data) { [weak self] event in
+                self?.participantRoleUpdated.send(event)
+            }
+        }
+
         // --- Location events ---
 
         socket.on("location:shared") { [weak self] data, _ in
@@ -644,6 +948,106 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
                 self?.notificationReceived.send(event)
+            }
+        }
+
+        // --- Call signaling events ---
+
+        socket.on("call:initiated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallOfferData.self, from: data) { [weak self] event in
+                self?.callOfferReceived.send(event)
+            }
+        }
+
+        socket.on("call:signal") { [weak self] data, _ in
+            guard let self else { return }
+            guard let first = data.first as? [String: Any],
+                  let signalDict = first["signal"] as? [String: Any],
+                  let signalType = signalDict["type"] as? String else { return }
+
+            switch signalType {
+            case "answer":
+                self.decode(CallAnswerData.self, from: data) { [weak self] event in
+                    self?.callAnswerReceived.send(event)
+                }
+            case "ice-candidate":
+                self.decode(CallICECandidateData.self, from: data) { [weak self] event in
+                    self?.callICECandidateReceived.send(event)
+                }
+            default:
+                Logger.socket.info("Unknown call signal type: \(signalType)")
+            }
+        }
+
+        socket.on("call:ended") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallEndData.self, from: data) { [weak self] event in
+                self?.callEnded.send(event)
+            }
+        }
+
+        socket.on("call:participant-joined") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallParticipantData.self, from: data) { [weak self] event in
+                self?.callParticipantJoined.send(event)
+            }
+        }
+
+        socket.on("call:participant-left") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallParticipantData.self, from: data) { [weak self] event in
+                self?.callParticipantLeft.send(event)
+            }
+        }
+
+        socket.on("call:media-toggled") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallMediaToggleData.self, from: data) { [weak self] event in
+                self?.callMediaToggled.send(event)
+            }
+        }
+
+        socket.on("call:error") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallErrorData.self, from: data) { [weak self] event in
+                self?.callError.send(event)
+            }
+        }
+
+        // --- Reaction sync events ---
+
+        socket.on("reaction:sync") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ReactionSyncEvent.self, from: data) { [weak self] event in
+                self?.reactionSynced.send(event)
+            }
+        }
+
+        // --- System message events ---
+
+        socket.on("system:message") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SystemMessageEvent.self, from: data) { [weak self] event in
+                self?.systemMessageReceived.send(event)
+            }
+        }
+
+        // --- Attachment status events ---
+
+        socket.on("attachment-status:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AttachmentStatusEvent.self, from: data) { [weak self] event in
+                self?.attachmentStatusUpdated.send(event)
+            }
+        }
+
+        // --- Mention events ---
+
+        socket.on("mention:created") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MentionCreatedEvent.self, from: data) { [weak self] event in
+                self?.mentionCreated.send(event)
             }
         }
     }

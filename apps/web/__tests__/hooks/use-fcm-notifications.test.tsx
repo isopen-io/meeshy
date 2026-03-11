@@ -56,8 +56,8 @@ const mockDelete = jest.fn(() => Promise.resolve(true));
 
 jest.mock('@/services/push-token.service', () => ({
   pushTokenService: {
-    sync: (token: string) => mockSync(token),
-    delete: (token: string) => mockDelete(token),
+    sync: (...args: any[]) => (mockSync as any)(...args),
+    delete: (...args: any[]) => (mockDelete as any)(...args),
   },
 }));
 
@@ -66,7 +66,7 @@ const mockSwRegister = jest.fn(() => Promise.resolve(true));
 
 jest.mock('@/utils/service-worker-registration', () => ({
   swRegistration: {
-    register: (path: string) => mockSwRegister(path),
+    register: (...args: any[]) => (mockSwRegister as any)(...args),
   },
 }));
 
@@ -209,7 +209,7 @@ describe('useFCMNotifications', () => {
 
     it('should detect iOS', async () => {
       mockIsIOS.mockReturnValue(true);
-      mockGetCapabilities.mockReturnValue({ canPush: true });
+      mockGetCapabilities.mockReturnValue({ canPush: true } as any);
 
       const { result } = renderHook(() => useFCMNotifications());
 

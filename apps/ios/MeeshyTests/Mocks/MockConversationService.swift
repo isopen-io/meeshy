@@ -26,10 +26,12 @@ final class MockConversationService: ConversationServiceProviding {
     var deleteResult: Result<Void, Error> = .success(())
     var markReadResult: Result<Void, Error> = .success(())
     var markUnreadResult: Result<Void, Error> = .success(())
-    var getParticipantsResult: Result<[APIParticipant], Error> = .success(
-        JSONStub.decode("[]")
+    var getParticipantsResult: Result<PaginatedAPIResponse<[APIParticipant]>, Error> = .success(
+        PaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
     var deleteForMeResult: Result<Void, Error> = .success(())
+    var removeParticipantResult: Result<Void, Error> = .success(())
+    var updateParticipantRoleResult: Result<Void, Error> = .success(())
     var listSharedWithResult: Result<[APIConversation], Error> = .success(
         JSONStub.decode("[]")
     )
@@ -64,6 +66,15 @@ final class MockConversationService: ConversationServiceProviding {
 
     var deleteForMeCallCount = 0
     var lastDeleteForMeConversationId: String?
+
+    var removeParticipantCallCount = 0
+    var lastRemoveParticipantConversationId: String?
+    var lastRemoveParticipantParticipantId: String?
+
+    var updateParticipantRoleCallCount = 0
+    var lastUpdateParticipantRoleConversationId: String?
+    var lastUpdateParticipantRoleParticipantId: String?
+    var lastUpdateParticipantRoleRole: String?
 
     var listSharedWithCallCount = 0
     var lastListSharedWithUserId: String?
@@ -123,7 +134,7 @@ final class MockConversationService: ConversationServiceProviding {
         try await MainActor.run { try markUnreadResult.get() }
     }
 
-    nonisolated func getParticipants(conversationId: String, limit: Int) async throws -> [APIParticipant] {
+    nonisolated func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> {
         await MainActor.run {
             getParticipantsCallCount += 1
             lastGetParticipantsConversationId = conversationId
@@ -138,6 +149,25 @@ final class MockConversationService: ConversationServiceProviding {
             lastDeleteForMeConversationId = conversationId
         }
         try await MainActor.run { try deleteForMeResult.get() }
+    }
+
+    nonisolated func removeParticipant(conversationId: String, participantId: String) async throws {
+        await MainActor.run {
+            removeParticipantCallCount += 1
+            lastRemoveParticipantConversationId = conversationId
+            lastRemoveParticipantParticipantId = participantId
+        }
+        try await MainActor.run { try removeParticipantResult.get() }
+    }
+
+    nonisolated func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {
+        await MainActor.run {
+            updateParticipantRoleCallCount += 1
+            lastUpdateParticipantRoleConversationId = conversationId
+            lastUpdateParticipantRoleParticipantId = participantId
+            lastUpdateParticipantRoleRole = role
+        }
+        try await MainActor.run { try updateParticipantRoleResult.get() }
     }
 
     nonisolated func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] {
@@ -172,6 +202,13 @@ final class MockConversationService: ConversationServiceProviding {
         lastGetParticipantsLimit = nil
         deleteForMeCallCount = 0
         lastDeleteForMeConversationId = nil
+        removeParticipantCallCount = 0
+        lastRemoveParticipantConversationId = nil
+        lastRemoveParticipantParticipantId = nil
+        updateParticipantRoleCallCount = 0
+        lastUpdateParticipantRoleConversationId = nil
+        lastUpdateParticipantRoleParticipantId = nil
+        lastUpdateParticipantRoleRole = nil
         listSharedWithCallCount = 0
         lastListSharedWithUserId = nil
         lastListSharedWithLimit = nil

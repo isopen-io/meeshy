@@ -283,7 +283,7 @@ describe('useUserStatsQuery', () => {
     });
 
     expect(mockGetUserStats).toHaveBeenCalledWith('user-1');
-    expect(result.current.data?.messageCount).toBe(150);
+    expect((result.current.data as any)?.messageCount).toBe(150);
   });
 });
 
@@ -304,7 +304,7 @@ describe('useDashboardStatsQuery', () => {
     });
 
     expect(result.current.data).toEqual(mockDashboardStats);
-    expect(result.current.data?.totalConversations).toBe(25);
+    expect((result.current.data as any)?.totalConversations).toBe(25);
   });
 
   it('should handle error state', async () => {

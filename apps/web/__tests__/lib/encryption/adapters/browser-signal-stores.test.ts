@@ -354,7 +354,7 @@ describe('Browser Signal Stores Module', () => {
       const { BrowserIdentityKeyStore } = await import(
         '../../../../lib/encryption/adapters/browser-signal-stores'
       );
-      const { IdentityKeyPair } = await import('@signalapp/libsignal-client');
+      const { IdentityKeyPair } = await import('@signalapp/libsignal-client' as any);
 
       const store = new BrowserIdentityKeyStore('user-123', 12345);
 
@@ -372,7 +372,7 @@ describe('Browser Signal Stores Module', () => {
         '../../../../lib/encryption/adapters/browser-signal-stores'
       );
       const { ProtocolAddress, PublicKey, Direction } = await import(
-        '@signalapp/libsignal-client'
+        '@signalapp/libsignal-client' as any
       );
 
       const store = new BrowserIdentityKeyStore('user-123', 12345);

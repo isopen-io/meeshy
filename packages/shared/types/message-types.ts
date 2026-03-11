@@ -17,23 +17,35 @@ export type TranslationModel = 'basic' | 'medium' | 'premium';
 
 /**
  * Statuts de traduction dans l'UI
+ * Named UITranslationStatus to avoid conflict with TranslationStatus in status-types.ts
  */
-export type TranslationStatus = 'pending' | 'translating' | 'completed' | 'failed';
+export type UITranslationStatus = 'pending' | 'translating' | 'completed' | 'failed';
 
 /**
  * Type de base pour toutes les réponses de traduction
+ * Aligned with schema.prisma MessageTranslation
+ * Canonical definition - includes encryption fields for secure conversations
  */
 export interface MessageTranslation {
   readonly id: string;
   readonly messageId: string;
-  readonly sourceLanguage: string;
   readonly targetLanguage: string;
   readonly translatedContent: string;
   readonly translationModel: TranslationModel;
-  readonly cacheKey: string;
   readonly confidenceScore?: number;
   readonly createdAt: Date;
-  readonly cached: boolean;
+  readonly updatedAt?: Date;
+
+  // Encryption fields for secure conversations (server/hybrid modes)
+  readonly isEncrypted?: boolean;
+  readonly encryptionKeyId?: string;
+  readonly encryptionIv?: string;
+  readonly encryptionAuthTag?: string;
+
+  // Derived/optional fields
+  readonly sourceLanguage?: string;
+  readonly cached?: boolean;
+  readonly cacheKey?: string;
 }
 
 /**
@@ -89,7 +101,6 @@ export interface GatewayMessage {
   // ===== ÉDITION/SUPPRESSION =====
   readonly isEdited: boolean;
   readonly editedAt?: Date;
-  readonly isDeleted: boolean;
   readonly deletedAt?: Date;
 
   // ===== REPLY/FORWARD =====
@@ -192,7 +203,7 @@ export interface MessageAttachment {
 export interface UITranslationState {
   readonly language: string;           // Langue cible
   readonly content: string;           // Contenu traduit
-  readonly status: TranslationStatus;
+  readonly status: UITranslationStatus;
   readonly timestamp: Date;
   readonly confidence?: number;       // Score de confiance 0-1
   readonly model?: TranslationModel;
@@ -230,7 +241,7 @@ export interface UIMessage extends GatewayMessage {
   readonly uiTranslations: readonly UITranslationState[];
   
   // États de traduction en cours par langue
-  readonly translatingLanguages: Set<string>;
+  readonly translatingLanguages: readonly string[];
   
   // Affichage actuel
   readonly currentDisplayLanguage: string;
@@ -279,13 +290,13 @@ export function gatewayToUIMessage(
     timestamp: t.createdAt,
     confidence: t.confidenceScore,
     model: t.translationModel,
-    fromCache: t.cached
+    fromCache: t.cached ?? false
   }));
 
   return {
     ...gatewayMessage,
     uiTranslations,
-    translatingLanguages: new Set(),
+    translatingLanguages: [],
     currentDisplayLanguage: userLanguage,
     showingOriginal: gatewayMessage.originalLanguage === userLanguage,
     originalContent: gatewayMessage.content,
@@ -303,13 +314,14 @@ export function addTranslatingState(
   message: UIMessage,
   targetLanguage: string
 ): UIMessage {
-  const translatingLanguages = new Set(message.translatingLanguages);
-  translatingLanguages.add(targetLanguage);
+  const translatingLanguages = message.translatingLanguages.includes(targetLanguage)
+    ? message.translatingLanguages
+    : [...message.translatingLanguages, targetLanguage];
 
   // Ajouter ou mettre à jour l'état UI
   const uiTranslations = [...message.uiTranslations];
   const existingIndex = uiTranslations.findIndex(t => t.language === targetLanguage);
-  
+
   if (existingIndex >= 0) {
     const existing = uiTranslations[existingIndex];
     if (existing) {
@@ -361,8 +373,7 @@ export function updateTranslationResult(
   targetLanguage: string,
   result: TranslationResult
 ): UIMessage {
-  const translatingLanguages = new Set(message.translatingLanguages);
-  translatingLanguages.delete(targetLanguage);
+  const translatingLanguages = message.translatingLanguages.filter(l => l !== targetLanguage);
 
   const uiTranslations = message.uiTranslations.map(t => {
     if (t.language === targetLanguage) {
@@ -406,7 +417,7 @@ export function getDisplayContent(message: UIMessage): string {
  * Vérifie si une traduction est en cours pour une langue
  */
 export function isTranslating(message: UIMessage, targetLanguage: string): boolean {
-  return message.translatingLanguages.has(targetLanguage);
+  return message.translatingLanguages.includes(targetLanguage);
 }
 
 /**

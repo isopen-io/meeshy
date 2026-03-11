@@ -362,10 +362,10 @@ export const MessageComposer = forwardRef<
               }}
             >
               {attachment.type === 'voice' && (
-                <MicIcon className="w-4 h-4" style={{ color: 'var(--gp-terracotta)' } as React.CSSProperties} />
+                <span style={{ color: 'var(--gp-terracotta)' }}><MicIcon className="w-4 h-4" /></span>
               )}
               {attachment.type === 'location' && (
-                <LocationIcon className="w-4 h-4" style={{ color: 'var(--gp-deep-teal)' } as React.CSSProperties} />
+                <span style={{ color: 'var(--gp-deep-teal)' }}><LocationIcon className="w-4 h-4" /></span>
               )}
               {attachment.type === 'image' && <span>🖼️</span>}
               {attachment.type === 'file' && <AttachmentIcon className="w-4 h-4" />}

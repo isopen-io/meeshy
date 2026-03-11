@@ -18,10 +18,13 @@ public final class SharedAVPlayerManager: ObservableObject {
     @Published public var activeURL: String = ""
     @Published public var isPipActive = false
 
+    public var attachmentId: String?
+
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
     private var pipController: AVPictureInPictureController?
     private var pipDelegate: PipDelegate?
+    private var watchStartTime: Date?
 
     private init() {}
 
@@ -54,9 +57,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.play()
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
+        if watchStartTime == nil { watchStartTime = Date() }
     }
 
     public func pause() {
+        reportWatchProgress(complete: false)
         player?.pause()
         isPlaying = false
     }
@@ -126,6 +131,30 @@ public final class SharedAVPlayerManager: ObservableObject {
         isPipActive = false
     }
 
+    // MARK: - Watch Progress Reporting
+
+    private func reportWatchProgress(complete: Bool) {
+        guard let attId = attachmentId else { return }
+        guard let start = watchStartTime else { return }
+        let watchedSeconds = Date().timeIntervalSince(start)
+        guard complete || watchedSeconds >= 3 else { return }
+        let positionMs = Int(currentTime * 1000)
+        let totalDurationMs = Int(duration * 1000)
+
+        Task {
+            let body = AttachmentStatusBody(
+                action: "watched",
+                playPositionMs: positionMs,
+                durationMs: totalDurationMs,
+                complete: complete
+            )
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                endpoint: "/attachments/\(attId)/status",
+                body: body
+            )
+        }
+    }
+
     // MARK: - Observers
 
     private func setupObservers(for player: AVPlayer) {
@@ -159,6 +188,8 @@ public final class SharedAVPlayerManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                self.reportWatchProgress(complete: true)
+                self.watchStartTime = nil
                 self.isPlaying = false
                 self.seek(to: 0)
             }
@@ -179,6 +210,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         currentTime = 0
         duration = 0
         playbackSpeed = .x1_0
+        watchStartTime = nil
+        attachmentId = nil
         pipController = nil
         pipDelegate = nil
     }

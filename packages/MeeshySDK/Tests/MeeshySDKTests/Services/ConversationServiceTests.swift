@@ -145,14 +145,14 @@ final class ConversationServiceTests: XCTestCase {
 
     func testGetParticipantsReturnsParticipantList() async throws {
         let participant = makeParticipant()
-        let response = APIResponse(success: true, data: [participant], error: nil)
+        let response = PaginatedAPIResponse(success: true, data: [participant], pagination: nil, error: nil)
         mock.stub("/conversations/conv1/participants", result: response)
 
         let result = try await service.getParticipants(conversationId: "conv1")
 
-        XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result[0].userId, "user1")
-        XCTAssertEqual(result[0].role, "MEMBER")
+        XCTAssertEqual(result.data.count, 1)
+        XCTAssertEqual(result.data[0].userId, "user1")
+        XCTAssertEqual(result.data[0].role, "MEMBER")
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv1/participants")
         XCTAssertEqual(mock.lastRequest?.method, "GET")

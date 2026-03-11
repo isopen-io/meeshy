@@ -8,6 +8,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+// @ts-ignore - module may not exist yet
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 
 // === MOCKS DES DÉPENDANCES BAS-NIVEAU ===

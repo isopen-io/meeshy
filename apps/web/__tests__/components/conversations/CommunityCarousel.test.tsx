@@ -54,7 +54,7 @@ const mockConversations: Conversation[] = [
     communityId: 'community-1',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  } as Conversation,
+  } as unknown as Conversation,
   {
     id: 'conv-2',
     title: 'Conversation 2',
@@ -62,7 +62,7 @@ const mockConversations: Conversation[] = [
     communityId: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  } as Conversation,
+  } as unknown as Conversation,
   {
     id: 'conv-3',
     title: 'Conversation 3',
@@ -70,7 +70,7 @@ const mockConversations: Conversation[] = [
     communityId: 'community-2',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  } as Conversation,
+  } as unknown as Conversation,
 ];
 
 const mockCommunities = [
@@ -78,20 +78,20 @@ const mockCommunities = [
     id: 'community-1',
     name: 'Test Community 1',
     avatar: 'https://example.com/avatar1.jpg',
-    _count: { members: 10, Conversation: 5 },
+    _count: { members: 10, conversations: 5 },
   },
   {
     id: 'community-2',
     name: 'Test Community 2',
     avatar: null,
-    _count: { members: 25, Conversation: 3 },
+    _count: { members: 25, conversations: 3 },
   },
 ];
 
 const mockPreferencesMap = new Map<string, UserConversationPreferences>([
-  ['conv-1', { conversationId: 'conv-1', isArchived: false, reaction: null } as UserConversationPreferences],
-  ['conv-2', { conversationId: 'conv-2', isArchived: true, reaction: null } as UserConversationPreferences],
-  ['conv-3', { conversationId: 'conv-3', isArchived: false, reaction: 'heart' } as UserConversationPreferences],
+  ['conv-1', { conversationId: 'conv-1', isArchived: false, reaction: null } as unknown as UserConversationPreferences],
+  ['conv-2', { conversationId: 'conv-2', isArchived: true, reaction: null } as unknown as UserConversationPreferences],
+  ['conv-3', { conversationId: 'conv-3', isArchived: false, reaction: 'heart' } as unknown as UserConversationPreferences],
 ]);
 
 const mockT = (key: string) => {
@@ -161,8 +161,8 @@ describe('CommunityCarousel', () => {
 
     it('should not show Favorites card when no conversations have reactions', async () => {
       const noReactionsMap = new Map<string, UserConversationPreferences>([
-        ['conv-1', { conversationId: 'conv-1', isArchived: false, reaction: null } as UserConversationPreferences],
-        ['conv-2', { conversationId: 'conv-2', isArchived: false, reaction: null } as UserConversationPreferences],
+        ['conv-1', { conversationId: 'conv-1', isArchived: false, reaction: null } as unknown as UserConversationPreferences],
+        ['conv-2', { conversationId: 'conv-2', isArchived: false, reaction: null } as unknown as UserConversationPreferences],
       ]);
 
       render(

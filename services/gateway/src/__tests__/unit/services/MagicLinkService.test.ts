@@ -888,7 +888,7 @@ describe('MagicLinkService - Security Tests', () => {
     });
   });
 
-  it('should enforce token expiry of 1 minute', async () => {
+  it('should enforce token expiry of 10 minutes', async () => {
     mockPrisma.user.findFirst.mockResolvedValue(mockUser);
 
     const beforeRequest = Date.now();
@@ -898,9 +898,9 @@ describe('MagicLinkService - Security Tests', () => {
     const createCall = mockPrisma.magicLinkToken.create.mock.calls[0][0];
     const expiresAt = new Date(createCall.data.expiresAt).getTime();
 
-    // Token should expire in approximately 1 minute (60000ms)
-    const expectedMinExpiry = beforeRequest + 60 * 1000;
-    const expectedMaxExpiry = afterRequest + 60 * 1000;
+    // Token should expire in approximately 10 minutes (600000ms)
+    const expectedMinExpiry = beforeRequest + 10 * 60 * 1000;
+    const expectedMaxExpiry = afterRequest + 10 * 60 * 1000;
 
     expect(expiresAt).toBeGreaterThanOrEqual(expectedMinExpiry - 100);
     expect(expiresAt).toBeLessThanOrEqual(expectedMaxExpiry + 100);

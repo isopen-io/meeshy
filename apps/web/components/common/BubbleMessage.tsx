@@ -15,6 +15,7 @@ import { EditMessageView } from './bubble-message/EditMessageView';
 import { DeleteConfirmationView } from './bubble-message/DeleteConfirmationView';
 import { ReportMessageView } from './bubble-message/ReportMessageView';
 import { formatRelativeDate } from '@/utils/date-format';
+import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 
 interface BubbleMessageProps {
   message: Message & {
@@ -43,7 +44,7 @@ interface BubbleMessageProps {
   isTranslating?: boolean;
   translationError?: string;
   conversationType?: ConversationType;
-  userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
+  userRole?: string;
   conversationId?: string;
   isAnonymous?: boolean;
   currentAnonymousUserId?: string;
@@ -113,13 +114,13 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   // Permissions
   const canEdit = useMemo(() => {
     if (isOwnMessage) return true;
-    if (userRole && ['MODERATOR', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(userRole)) return true;
+    if (userRole && hasModeratorPrivileges(userRole)) return true;
     return false;
   }, [isOwnMessage, userRole]);
 
   const canDelete = useMemo(() => {
     if (isOwnMessage) return true;
-    if (userRole && ['MODERATOR', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(userRole)) return true;
+    if (userRole && hasModeratorPrivileges(userRole)) return true;
     return false;
   }, [isOwnMessage, userRole]);
 
@@ -229,7 +230,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           isTranslating={isTranslating}
           translationError={translationError}
           conversationType={conversationType}
-          userRole={userRole}
+          userRole={userRole as any}
           conversationId={conversationId}
           isAnonymous={isAnonymous}
           currentAnonymousUserId={currentAnonymousUserId}

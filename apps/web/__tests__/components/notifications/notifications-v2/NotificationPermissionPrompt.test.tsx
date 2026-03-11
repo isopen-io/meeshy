@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// @ts-expect-error module may not exist yet
 import { NotificationPermissionPrompt } from '@/components/notifications/notifications-v2/NotificationPermissionPrompt';
 
 // Mock FCM manager

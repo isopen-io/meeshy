@@ -19,6 +19,13 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: CursorPagination?
     public let error: String?
+
+    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?) {
+        self.success = success
+        self.data = data
+        self.pagination = pagination
+        self.error = error
+    }
 }
 
 public struct CursorPagination: Decodable, Sendable {
@@ -39,6 +46,11 @@ public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: OffsetPagination?
     public let error: String?
+}
+
+private struct ErrorBody: Decodable {
+    let message: String?
+    let error: String?
 }
 
 // MARK: - API Errors
@@ -68,6 +80,7 @@ public enum APIError: Error, LocalizedError {
 public protocol APIClientProviding: Sendable {
     var baseURL: String { get }
     var authToken: String? { get set }
+    var anonymousSessionToken: String? { get set }
     func request<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T
     func paginatedRequest<T: Decodable>(endpoint: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
     func offsetPaginatedRequest<T: Decodable>(endpoint: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
@@ -121,6 +134,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     private let decoder: JSONDecoder
 
     public var authToken: String?
+    public var anonymousSessionToken: String?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -172,6 +186,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
         if let token = authToken {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else if let token = anonymousSessionToken {
+            urlRequest.setValue(token, forHTTPHeaderField: "X-Session-Token")
         }
 
         if let body {
@@ -189,7 +205,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             let statusCode = httpResponse.statusCode
 
             guard (200...299).contains(statusCode) else {
-                let errorMsg = try? decoder.decode(APIResponse<String>.self, from: data).error
+                let errBody = try? decoder.decode(ErrorBody.self, from: data)
+                let errorMsg = errBody?.message ?? errBody?.error
 
                 if statusCode == 401 {
                     Task { @MainActor in

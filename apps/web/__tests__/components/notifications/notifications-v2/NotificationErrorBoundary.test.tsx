@@ -6,11 +6,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  NotificationErrorBoundary,
-  withNotificationErrorBoundary,
-  NotificationErrorFallback,
-} from '@/components/notifications/notifications-v2/NotificationErrorBoundary';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { NotificationErrorBoundary, withNotificationErrorBoundary, NotificationErrorFallback } = require('@/components/notifications/notifications-v2/NotificationErrorBoundary');
 
 // Mock fetch for error logging
 global.fetch = jest.fn(() =>
@@ -56,7 +53,7 @@ describe('NotificationErrorBoundary', () => {
 
   afterEach(() => {
     console.error = originalConsoleError;
-    process.env.NODE_ENV = originalNodeEnv;
+    (process.env as any).NODE_ENV =originalNodeEnv;
   });
 
   describe('Normal Rendering', () => {
@@ -304,7 +301,7 @@ describe('NotificationErrorBoundary', () => {
 
   describe('Development Error Details', () => {
     it('should show error details in development mode', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
 
       render(
         <NotificationErrorBoundary>
@@ -318,7 +315,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should show error message in details', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
 
       render(
         <NotificationErrorBoundary>
@@ -334,7 +331,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should not show error details in production mode', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV ='production';
 
       render(
         <NotificationErrorBoundary>
@@ -348,7 +345,7 @@ describe('NotificationErrorBoundary', () => {
 
   describe('Error Logging', () => {
     it('should log error to console in development', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
 
       render(
         <NotificationErrorBoundary>
@@ -360,7 +357,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should not send error to backend in development', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV ='development';
 
       render(
         <NotificationErrorBoundary>
@@ -372,7 +369,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should send error to backend in production', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV ='production';
 
       render(
         <NotificationErrorBoundary>
@@ -392,7 +389,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should include error details in backend log', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV ='production';
 
       render(
         <NotificationErrorBoundary>
@@ -414,7 +411,7 @@ describe('NotificationErrorBoundary', () => {
     });
 
     it('should handle backend logging failure gracefully', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV ='production';
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       // Should not throw
@@ -496,7 +493,7 @@ describe('withNotificationErrorBoundary HOC', () => {
   });
 
   it('should preserve component displayName', () => {
-    TestComponent.displayName = 'MyTestComponent';
+    (TestComponent as any).displayName = 'MyTestComponent';
     const WrappedComponent = withNotificationErrorBoundary(TestComponent);
 
     // The wrapped component should work correctly
@@ -631,7 +628,7 @@ describe('Edge Cases', () => {
       throw new Error(longMessage);
     };
 
-    process.env.NODE_ENV = 'development';
+    (process.env as any).NODE_ENV ='development';
 
     render(
       <NotificationErrorBoundary>

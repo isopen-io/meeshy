@@ -200,7 +200,7 @@ export function useAttachmentUpload({
           }
         );
 
-        const attachments = response.attachments || response.data?.attachments;
+        const attachments = response.attachments || (response as any).data?.attachments;
         if (response.success && attachments) {
           allUploadedAttachments.push(...attachments);
         }
@@ -353,7 +353,7 @@ export function useAttachmentUpload({
         );
 
         // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
-        const attachments = response.attachments || response.data?.attachments;
+        const attachments = response.attachments || (response as any).data?.attachments;
         if (response.success && attachments) {
           console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
           setUploadedAttachments(prev => [...prev, ...attachments]);

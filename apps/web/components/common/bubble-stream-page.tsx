@@ -192,7 +192,7 @@ export function BubbleStreamPage({
     trendingHashtags,
   } = useStreamUI({
     messages,
-    messagesContainerRef,
+    messagesContainerRef: messagesContainerRef as React.RefObject<HTMLDivElement>,
   });
 
   // Fonction pour dédoublonner les utilisateurs actifs
@@ -235,7 +235,7 @@ export function BubbleStreamPage({
       conversationIdentifier: conversationId,
       willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
-      messageSender: message.sender?.username || message.sender?.displayName,
+      messageSender: (message.sender as any)?.username || message.sender?.displayName,
       attachments: message.attachments,
       attachmentCount: message.attachments?.length ?? 0,
       messageType: message.messageType,

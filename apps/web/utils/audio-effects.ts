@@ -197,7 +197,7 @@ export class VoiceCoderProcessor implements AudioEffectProcessor {
       if (!this.pitchDetector) return;
 
       // Get audio data
-      this.analyser.getFloatTimeDomainData(this.detectionBuffer);
+      this.analyser.getFloatTimeDomainData(this.detectionBuffer as Float32Array<ArrayBuffer>);
 
       // Detect pitch
       const [frequency, clarity] = this.pitchDetector.findPitch(
@@ -643,12 +643,12 @@ export function createAudioEffectProcessor(
  * NOTE: Sons prédéfinis désactivés temporairement car les fichiers n'existent pas encore
  * Les utilisateurs peuvent charger leurs propres fichiers audio via le composant AudioEffectsPanel
  */
-export const BACK_SOUNDS = [
+export const BACK_SOUNDS: readonly { id: string; name: string; url: string }[] = [
   // { id: 'ambient-1', name: 'Ambient Space', url: '/sounds/ambient-space.mp3' },
   // { id: 'lofi-1', name: 'Lo-Fi Chill', url: '/sounds/lofi-chill.mp3' },
   // { id: 'nature-1', name: 'Forest Rain', url: '/sounds/forest-rain.mp3' },
   // { id: 'beats-1', name: 'Light Beats', url: '/sounds/light-beats.mp3' },
-] as const;
+];
 
 /**
  * Voice Coder Presets - Professional configurations for Perfect Voice

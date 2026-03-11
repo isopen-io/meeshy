@@ -359,6 +359,25 @@ struct StoryCanvasView: View {
                     }
                 }
                 .selectionGlow(viewModel.selectedElementId == obj.id)
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.selectedElementId == obj.id {
+                        Button {
+                            onEditMedia?(obj.id)
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(MeeshyColors.brandGradient)
+                                        .shadow(color: .black.opacity(0.3), radius: 3)
+                                )
+                        }
+                        .offset(x: 6, y: -6)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
                 .canvasContextMenu(
                     elementId: obj.id,
                     elementType: obj.mediaType == "video" ? .video : .image,

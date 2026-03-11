@@ -14,6 +14,7 @@ export interface VideoAttachmentProps {
   canDelete: boolean;
   onOpenLightbox: (attachment: Attachment) => void;
   onDeleteClick: (attachment: Attachment, event: React.MouseEvent) => void;
+  isOwnMessage?: boolean;
 }
 
 export const VideoAttachment = React.memo(function VideoAttachment({
@@ -21,6 +22,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
   canDelete,
   onOpenLightbox,
   onDeleteClick,
+  isOwnMessage,
 }: VideoAttachmentProps) {
   const handleOpenLightbox = useCallback(() => {
     onOpenLightbox(attachment);
@@ -54,6 +56,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
       <VideoPlayer
         attachment={videoAttachment as any}
         onOpenLightbox={handleOpenLightbox}
+        isOwnMessage={isOwnMessage}
       />
       {canDelete && (
         <button

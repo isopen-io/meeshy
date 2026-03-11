@@ -545,7 +545,7 @@ final class CommunityDetailViewModel: ObservableObject {
     @Published var isMember = false
     @Published var isCreator = false
     @Published var isAdmin = false
-    @Published var currentUserRole: CommunityRole = .member
+    @Published var currentUserRole: MemberRole = .member
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -577,7 +577,7 @@ final class CommunityDetailViewModel: ObservableObject {
                 currentUserRole = .admin
             }
 
-            isAdmin = currentUserRole == .admin || isCreator
+            isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator
 
             if isMember {
                 conversations = try await CommunityService.shared.getConversations(communityId: communityId)

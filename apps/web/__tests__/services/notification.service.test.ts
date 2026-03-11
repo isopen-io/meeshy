@@ -136,7 +136,7 @@ describe('NotificationService - Structure Groupée V2', () => {
       const minimalNotification = {
         id: 'notif_minimal',
         userId: 'user_123',
-        type: NotificationTypeEnum.SYSTEM_ANNOUNCEMENT,
+        type: (NotificationTypeEnum as any).SYSTEM_ANNOUNCEMENT,
         content: 'System message',
         // Le backend envoie les champs à la racine
         isRead: false,

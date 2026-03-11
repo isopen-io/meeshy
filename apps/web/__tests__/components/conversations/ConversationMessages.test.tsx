@@ -79,7 +79,7 @@ const mockMessages: Message[] = [
     createdAt: new Date().toISOString(),
     conversationId: 'conv-1',
     sender: { id: 'user-2', username: 'john', displayName: 'John' },
-  } as Message,
+  } as any,
   {
     id: 'msg-2',
     content: 'How are you?',
@@ -87,7 +87,7 @@ const mockMessages: Message[] = [
     createdAt: new Date().toISOString(),
     conversationId: 'conv-1',
     sender: { id: 'user-1', username: 'testuser', displayName: 'Test User' },
-  } as Message,
+  } as any,
   {
     id: 'msg-3',
     content: 'Great!',
@@ -95,7 +95,7 @@ const mockMessages: Message[] = [
     createdAt: new Date().toISOString(),
     conversationId: 'conv-1',
     sender: { id: 'user-2', username: 'john', displayName: 'John' },
-  } as Message,
+  } as any,
 ];
 
 const mockT = (key: string) => {

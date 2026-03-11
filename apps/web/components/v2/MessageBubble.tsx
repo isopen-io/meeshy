@@ -1,6 +1,7 @@
 'use client';
 
 import { HTMLAttributes, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { getLanguageColor, theme } from './theme';
 import { GhostIcon } from './GhostBadge';
@@ -27,6 +28,8 @@ export interface MessageBubbleProps extends HTMLAttributes<HTMLDivElement> {
   timestamp?: string;
   /** Sender name */
   sender?: string;
+  /** Sender username for profile link */
+  senderUsername?: string;
   /** Sender avatar URL */
   senderAvatar?: string;
   /** Whether the sender is anonymous (shows ghost icon) */
@@ -58,6 +61,7 @@ export function MessageBubble({
   translations = [],
   timestamp,
   sender,
+  senderUsername,
   senderAvatar,
   isAnonymous = false,
   onTranslationSelect,
@@ -117,36 +121,43 @@ export function MessageBubble({
       {...props}
     >
       {/* Avatar (for received messages) */}
-      {!isSent && sender && (
-        <div className="flex-shrink-0 relative">
-          {senderAvatar ? (
-            <img
-              src={senderAvatar}
-              alt={sender}
-              width={32}
-              height={32}
-              loading="eager"
-              className="w-8 h-8 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white transition-colors duration-300"
-              style={{ background: langColor }}
-            >
-              {sender.charAt(0).toUpperCase()}
-            </div>
-          )}
-          {/* Ghost badge for anonymous users */}
-          {isAnonymous && (
-            <div
-              className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center transition-colors duration-300"
-              style={{ background: 'var(--gp-parchment)', border: '1.5px solid var(--gp-text-muted)' }}
-            >
-              <GhostIcon className="w-2.5 h-2.5" />
-            </div>
-          )}
-        </div>
-      )}
+      {!isSent && sender && (() => {
+        const avatarContent = (
+          <div className="flex-shrink-0 relative">
+            {senderAvatar ? (
+              <img
+                src={senderAvatar}
+                alt={sender}
+                width={32}
+                height={32}
+                loading="eager"
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white transition-colors duration-300"
+                style={{ background: langColor }}
+              >
+                {sender.charAt(0).toUpperCase()}
+              </div>
+            )}
+            {/* Ghost badge for anonymous users */}
+            {isAnonymous && (
+              <div
+                className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center transition-colors duration-300"
+                style={{ background: 'var(--gp-parchment)', border: '1.5px solid var(--gp-text-muted)' }}
+              >
+                <GhostIcon className="w-2.5 h-2.5" />
+              </div>
+            )}
+          </div>
+        );
+        return senderUsername ? (
+          <Link href={`/u/${senderUsername}`} onClick={(e) => e.stopPropagation()}>
+            {avatarContent}
+          </Link>
+        ) : avatarContent;
+      })()}
 
       {/* Message bubble */}
       <div
@@ -161,9 +172,19 @@ export function MessageBubble({
         <div className={cn('flex items-center justify-between gap-2 mb-2', isSent && 'flex-row-reverse')}>
           {/* Sender name (received messages only) */}
           {sender && !isSent && (
-            <span className="text-xs font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
-              {sender}
-            </span>
+            senderUsername ? (
+              <Link
+                href={`/u/${senderUsername}`}
+                className="text-xs font-semibold text-[var(--gp-text-primary)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300 cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {sender}
+              </Link>
+            ) : (
+              <span className="text-xs font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
+                {sender}
+              </span>
+            )
           )}
 
           {/* Language selector */}

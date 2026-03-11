@@ -60,7 +60,7 @@ export function AccountRecoveryModal({
 
   const submission = useRecoverySubmission({
     setIsLoading: flow.setIsLoading,
-    setError: flow.setError,
+    setError: (error: string | null | undefined) => flow.setError(error ?? null),
     setStep: flow.setStep,
     setStoredEmail: flow.setStoredEmail,
     setPhoneResetTokenId: flow.setPhoneResetTokenId,

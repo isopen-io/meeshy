@@ -112,8 +112,8 @@ export function EncryptionSettings() {
         // Refresh user data to get updated Signal keys
         const userResponse = await apiService.get('/auth/me');
 
-        if (userResponse.success && userResponse.data?.data?.user) {
-          useAuthStore.getState().setUser(userResponse.data.data.user);
+        if (userResponse.success && (userResponse.data as any)?.data?.user) {
+          useAuthStore.getState().setUser((userResponse.data as any).data.user);
         }
 
         toast.success(t('encryption.status.keysGenerated'));

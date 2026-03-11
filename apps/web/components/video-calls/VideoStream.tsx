@@ -34,7 +34,7 @@ export function VideoStream({
 }: VideoStreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [showDisconnected, setShowDisconnected] = React.useState(false);
-  const removeTimeoutRef = useRef<NodeJS.Timeout>();
+  const removeTimeoutRef = useRef<NodeJS.Timeout>(undefined);
 
   useEffect(() => {
     if (videoRef.current && stream) {

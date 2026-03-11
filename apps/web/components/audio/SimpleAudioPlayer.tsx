@@ -35,6 +35,7 @@ interface SimpleAudioPlayerProps {
   initialTranscription?: { text: string; language: string; confidence?: number; segments?: any[] };
   initialTranslations?: Record<string, any>; // Structure BD: { "en": { transcription: "...", url: "...", ... }, ... }
   className?: string;
+  isOwnMessage?: boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   initialTranscription,
   initialTranslations,
   className = '',
+  isOwnMessage,
 }) => {
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
@@ -126,6 +128,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     // Utiliser la durée de l'audio traduit si disponible, sinon celle de l'original
     attachmentDuration: currentAudioDuration ?? (attachment.duration ? attachment.duration / 1000 : undefined),
     mimeType: attachment.mimeType,
+    isOwnMessage,
   });
 
   // Hook d'analyse des effets
@@ -220,7 +223,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
             onPlaybackRateChange={handlePlaybackRateChange}
             selectedLanguage={selectedLanguage}
             setSelectedLanguage={setSelectedLanguage}
-            translatedAudios={translatedAudios}
+            translatedAudios={translatedAudios as any}
             isLanguageDropdownOpen={isLanguageDropdownOpen}
             setIsLanguageDropdownOpen={setIsLanguageDropdownOpen}
             transcription={transcription}
@@ -323,6 +326,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
 export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   attachment,
   className = '',
+  isOwnMessage,
 }) => {
   const attachmentDuration = attachment.duration ? attachment.duration / 1000 : undefined;
 
@@ -339,6 +343,7 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     attachmentId: attachment.id,
     attachmentDuration,
     mimeType: attachment.mimeType,
+    isOwnMessage,
   });
 
   const formatDuration = (seconds: number): string => {

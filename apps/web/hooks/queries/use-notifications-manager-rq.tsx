@@ -64,7 +64,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
   // Extraire les notifications depuis les pages
   const notifications = notificationsData?.pages.flatMap(
-    page => page.notifications ?? []
+    page => page?.notifications ?? []
   ) ?? [];
 
   // Détecter si mobile une seule fois au montage

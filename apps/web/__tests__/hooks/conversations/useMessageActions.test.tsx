@@ -58,10 +58,10 @@ describe('useMessageActions', () => {
       originalLanguage: 'en',
       createdAt: new Date(),
       attachments: [
-        { id: 'att-1', mimeType: 'image/png', url: 'http://example.com/1.png' } as Attachment,
-        { id: 'att-2', mimeType: 'application/pdf', url: 'http://example.com/doc.pdf' } as Attachment,
+        { id: 'att-1', mimeType: 'image/png', url: 'http://example.com/1.png' } as unknown as Attachment,
+        { id: 'att-2', mimeType: 'application/pdf', url: 'http://example.com/doc.pdf' } as unknown as Attachment,
       ],
-    } as Message,
+    } as unknown as Message,
     {
       id: 'msg-2',
       conversationId: mockConversationId,
@@ -70,9 +70,9 @@ describe('useMessageActions', () => {
       originalLanguage: 'fr',
       createdAt: new Date(),
       attachments: [
-        { id: 'att-3', mimeType: 'image/jpeg', url: 'http://example.com/2.jpg' } as Attachment,
+        { id: 'att-3', mimeType: 'image/jpeg', url: 'http://example.com/2.jpg' } as unknown as Attachment,
       ],
-    } as Message,
+    } as unknown as Message,
     {
       id: 'msg-3',
       conversationId: mockConversationId,
@@ -81,7 +81,7 @@ describe('useMessageActions', () => {
       originalLanguage: 'en',
       createdAt: new Date(),
       attachments: [],
-    } as Message,
+    } as unknown as Message,
   ];
 
   const mockUpdateMessage = jest.fn();
@@ -120,7 +120,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', 'Updated content');
+        await result.current.handleEditMessage('msg-1', 'Updated content', mockSelectedLanguage);
       });
 
       expect(mockUpdateMessage).toHaveBeenCalledWith('msg-1', expect.any(Function));
@@ -141,7 +141,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', 'New content');
+        await result.current.handleEditMessage('msg-1', 'New content', mockSelectedLanguage);
       });
 
       expect(mockEditMessage).toHaveBeenCalledWith(
@@ -158,7 +158,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', 'New content');
+        await result.current.handleEditMessage('msg-1', 'New content', mockSelectedLanguage);
       });
 
       expect(mockToastSuccess).toHaveBeenCalledWith('messages.messageEdited');
@@ -170,7 +170,8 @@ describe('useMessageActions', () => {
       await act(async () => {
         await result.current.handleEditMessage(
           'msg-1',
-          '<script>alert("xss")</script>Safe content'
+          '<script>alert("xss")</script>Safe content',
+          mockSelectedLanguage
         );
       });
 
@@ -188,7 +189,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', '   ');
+        await result.current.handleEditMessage('msg-1', '   ', mockSelectedLanguage);
       });
 
       expect(mockToastError).toHaveBeenCalledWith('messages.contentRequired');
@@ -199,7 +200,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook({ conversationId: null });
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', 'New content');
+        await result.current.handleEditMessage('msg-1', 'New content', mockSelectedLanguage);
       });
 
       expect(mockUpdateMessage).not.toHaveBeenCalled();
@@ -213,7 +214,7 @@ describe('useMessageActions', () => {
 
       await expect(
         act(async () => {
-          await result.current.handleEditMessage('msg-1', 'New content');
+          await result.current.handleEditMessage('msg-1', 'New content', mockSelectedLanguage);
         })
       ).rejects.toThrow();
 
@@ -403,9 +404,9 @@ describe('useMessageActions', () => {
           conversationId: mockConversationId,
           content: 'Text only',
           attachments: [
-            { id: 'att-1', mimeType: 'application/pdf' } as Attachment,
+            { id: 'att-1', mimeType: 'application/pdf' } as unknown as Attachment,
           ],
-        } as Message,
+        } as unknown as Message,
       ];
 
       const { result } = renderMessageActionsHook({
@@ -422,7 +423,7 @@ describe('useMessageActions', () => {
           conversationId: mockConversationId,
           content: 'No attachments',
           attachments: undefined,
-        } as Message,
+        } as unknown as Message,
       ];
 
       const { result } = renderMessageActionsHook({
@@ -467,9 +468,9 @@ describe('useMessageActions', () => {
           conversationId: mockConversationId,
           content: 'New',
           attachments: [
-            { id: 'att-4', mimeType: 'image/gif' } as Attachment,
+            { id: 'att-4', mimeType: 'image/gif' } as unknown as Attachment,
           ],
-        } as Message,
+        } as unknown as Message,
       ];
 
       rerender({ messages: newMessages });
@@ -515,8 +516,8 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        const p1 = result.current.handleEditMessage('msg-1', 'Edit 1');
-        const p2 = result.current.handleEditMessage('msg-2', 'Edit 2');
+        const p1 = result.current.handleEditMessage('msg-1', 'Edit 1', mockSelectedLanguage);
+        const p2 = result.current.handleEditMessage('msg-2', 'Edit 2', mockSelectedLanguage);
         await Promise.all([p1, p2]);
       });
 
@@ -532,7 +533,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook({ t: customT });
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', '');
+        await result.current.handleEditMessage('msg-1', '', mockSelectedLanguage);
       });
 
       expect(mockToastError).toHaveBeenCalledWith('Content is required!');
@@ -542,7 +543,7 @@ describe('useMessageActions', () => {
       const { result } = renderMessageActionsHook();
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', 'Hello & "world" <test>');
+        await result.current.handleEditMessage('msg-1', 'Hello & "world" <test>', mockSelectedLanguage);
       });
 
       expect(mockEditMessage).toHaveBeenCalledWith(
@@ -560,7 +561,7 @@ describe('useMessageActions', () => {
       const unicodeContent = 'Hello! Just testing.';
 
       await act(async () => {
-        await result.current.handleEditMessage('msg-1', unicodeContent);
+        await result.current.handleEditMessage('msg-1', unicodeContent, mockSelectedLanguage);
       });
 
       expect(mockEditMessage).toHaveBeenCalledWith(

@@ -76,7 +76,7 @@ jest.mock('@/lib/react-query/query-keys', () => ({
 }));
 
 // Test data
-const createMockMessage = (id: string, content: string, conversationId = 'conv-1'): Message => ({
+const createMockMessage = (id: string, content: string, conversationId = 'conv-1') => ({
   id,
   content,
   conversationId,
@@ -85,7 +85,6 @@ const createMockMessage = (id: string, content: string, conversationId = 'conv-1
   messageType: 'text',
   messageSource: 'user',
   isEdited: false,
-  isDeleted: false,
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   sender: {
@@ -98,15 +97,13 @@ const createMockMessage = (id: string, content: string, conversationId = 'conv-1
     phoneNumber: '',
     role: 'USER',
     permissions: {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageGroups: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
+      canSendMessages: true,
+      canSendFiles: true,
+      canSendImages: true,
+      canSendVideos: true,
+      canSendAudios: true,
+      canSendLocations: true,
+      canSendLinks: true,
     },
     systemLanguage: 'en',
     regionalLanguage: 'en',
@@ -121,14 +118,14 @@ const createMockMessage = (id: string, content: string, conversationId = 'conv-1
     updatedAt: new Date(),
   },
   translations: [],
-});
+}) as any as Message;
 
 const mockMessages = [
   createMockMessage('msg-1', 'Hello'),
   createMockMessage('msg-2', 'World'),
 ];
 
-const mockConversation: Conversation = {
+const mockConversation = {
   id: 'conv-1',
   title: 'Test Conversation',
   type: 'direct',
@@ -139,7 +136,9 @@ const mockConversation: Conversation = {
   updatedAt: new Date('2024-01-01'),
   lastMessageAt: new Date('2024-01-01'),
   unreadCount: 0,
-};
+  isActive: true,
+  memberCount: 0,
+} as Conversation;
 
 // Helper to create a wrapper with QueryClient
 function createWrapperWithClient() {
@@ -379,7 +378,7 @@ describe('useSocketCacheSync', () => {
 
       renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
 
-      const translationEvent: TranslationEvent = {
+      const translationEvent = {
         messageId: 'msg-1',
         conversationId: 'conv-1',
         translations: [
@@ -395,7 +394,7 @@ describe('useSocketCacheSync', () => {
             cached: false,
           },
         ],
-      };
+      } as any as TranslationEvent;
 
       act(() => {
         translationCallback?.(translationEvent);
@@ -420,11 +419,11 @@ describe('useSocketCacheSync', () => {
       // No conversationId
       renderHook(() => useSocketCacheSync(), { wrapper });
 
-      const translationEvent: TranslationEvent = {
+      const translationEvent = {
         messageId: 'msg-1',
         conversationId: 'conv-1',
         translations: [],
-      };
+      } as any as TranslationEvent;
 
       act(() => {
         translationCallback?.(translationEvent);

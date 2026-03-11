@@ -6,7 +6,6 @@
 import type {
   Conversation,
   Message,
-  User,
   PaginationMeta,
   CursorPaginationMeta,
   ConversationType,
@@ -65,22 +64,56 @@ export interface GetMessagesResponse {
 }
 
 /**
+ * Participant response matching backend GET /conversations/:id/participants
+ * Unified shape for both authenticated and anonymous participants
+ */
+export interface ConversationParticipantResponse {
+  id: string;
+  participantId: string;
+  userId: string | null;
+  type: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  avatar: string | null;
+  email: string;
+  role: string;
+  conversationRole: string;
+  joinedAt: string;
+  isOnline: boolean;
+  lastActiveAt: string | null;
+  isActive: boolean;
+  isAnonymous: boolean;
+  systemLanguage: string;
+  regionalLanguage: string;
+  customDestinationLanguage: string;
+  autoTranslateEnabled: boolean;
+  canSendMessages: boolean;
+  canSendFiles: boolean;
+  canSendImages: boolean;
+  createdAt: string;
+  updatedAt: string;
+  permissions: {
+    canAccessAdmin: boolean;
+    canManageUsers: boolean;
+    canManageGroups: boolean;
+    canManageConversations: boolean;
+    canViewAnalytics: boolean;
+    canModerateContent: boolean;
+    canViewAuditLogs: boolean;
+    canManageNotifications: boolean;
+    canManageTranslations: boolean;
+  };
+}
+
+/**
  * Tous les participants (authentifiés et anonymes)
  */
 export interface AllParticipantsResponse {
-  authenticatedParticipants: User[];
-  anonymousParticipants: Array<{
-    id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    language: string;
-    isOnline: boolean;
-    joinedAt: string;
-    canSendMessages: boolean;
-    canSendFiles: boolean;
-    canSendImages: boolean;
-  }>;
+  authenticatedParticipants: ConversationParticipantResponse[];
+  anonymousParticipants: ConversationParticipantResponse[];
+  totalCount?: number;
 }
 
 /**
@@ -129,7 +162,7 @@ export interface MessagesCache {
  * Cache de participants
  */
 export interface ParticipantsCache {
-  data: User[];
+  data: ConversationParticipantResponse[];
   timestamp: number;
 }
 
@@ -145,7 +178,7 @@ export interface BackendMessageData {
   messageType?: unknown;
   messageSource?: unknown;
   isEdited?: unknown;
-  isDeleted?: unknown;
+  deletedAt?: unknown;
   isViewOnce?: unknown;
   viewOnceCount?: unknown;
   isBlurred?: unknown;

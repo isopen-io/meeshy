@@ -12,6 +12,8 @@ struct ThreadView: View {
     @State private var replyText = ""
     @State private var replies: [MeeshyMessage] = []
     @State private var isLoading = false
+    @State private var isSending = false
+    @State private var sendError: String?
 
     private var accentColor: String {
         parentMessage.senderColor ?? "4ECDC4"
@@ -172,35 +174,54 @@ struct ThreadView: View {
     // MARK: - Composer
 
     private var composerBar: some View {
-        HStack(spacing: 10) {
-            TextField("Repondre...", text: $replyText)
-                .font(.system(size: 14))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(theme.surfaceGradient(tint: accentColor))
-                        .overlay(
-                            Capsule()
-                                .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                        )
-                )
-
-            Button {
-                HapticFeedback.light()
-                sendReply()
-            } label: {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(
-                        replyText.trimmingCharacters(in: .whitespaces).isEmpty
-                            ? theme.textMuted
-                            : Color(hex: accentColor)
-                    )
+        VStack(spacing: 4) {
+            if let sendError {
+                Text(sendError)
+                    .font(.system(size: 11))
+                    .foregroundColor(MeeshyColors.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .transition(.opacity)
+                    .accessibilityLabel(String(localized: "Erreur d'envoi", defaultValue: "Send error"))
+                    .accessibilityValue(sendError)
             }
-            .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty)
+
+            HStack(spacing: 10) {
+                TextField("Repondre...", text: $replyText)
+                    .font(.system(size: 14))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(theme.surfaceGradient(tint: accentColor))
+                            .overlay(
+                                Capsule()
+                                    .stroke(theme.border(tint: accentColor), lineWidth: 1)
+                            )
+                    )
+                    .disabled(isSending)
+
+                Button {
+                    HapticFeedback.light()
+                    sendReply()
+                } label: {
+                    if isSending {
+                        ProgressView()
+                            .tint(Color(hex: accentColor))
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(
+                                replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? theme.textMuted
+                                    : Color(hex: accentColor)
+                            )
+                    }
+                }
+                .disabled(isSending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(theme.mode.isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
     }
@@ -223,21 +244,28 @@ struct ThreadView: View {
     }
 
     private func sendReply() {
-        guard !replyText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let content = replyText
+        let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        let savedText = replyText
         replyText = ""
+        isSending = true
+        sendError = nil
 
         Task {
             do {
-                let body = SendMessageRequest(content: content, replyToId: parentMessage.id)
-                let bodyData = try JSONEncoder().encode(body)
-                let _: APIResponse<SendMessageResponseData> = try await APIClient.shared.request(
-                    endpoint: "/conversations/\(conversationId)/messages",
-                    method: "POST",
-                    body: bodyData
+                let request = SendMessageRequest(content: text, replyToId: parentMessage.id)
+                _ = try await MessageService.shared.send(
+                    conversationId: conversationId,
+                    request: request
                 )
+                isSending = false
                 await loadReplies()
-            } catch {}
+            } catch {
+                replyText = savedText
+                sendError = error.localizedDescription
+                isSending = false
+            }
         }
     }
 }

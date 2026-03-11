@@ -17,9 +17,11 @@ import { MessageComposer } from '@/components/common/message-composer';
 import { ConnectionStatusIndicator } from './connection-status-indicator';
 import { FailedMessageBanner } from '@/components/messages/failed-message-banner';
 import { getAuthToken } from '@/utils/token-utils';
-import type { Conversation, ThreadMember, UserRoleEnum, Message, User } from '@meeshy/shared/types';
+import type { Conversation, Message, User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 import type { LanguageChoice } from '@/types/bubble-stream';
+import { getEffectiveRole } from '@meeshy/shared/types/role-types';
 
 // Types pour les indicateurs de frappe
 interface TypingIndicator {
@@ -39,7 +41,7 @@ interface ConversationViewProps {
   conversation: Conversation;
   currentUser: User;
   messages: Message[];
-  participants: ThreadMember[];
+  participants: Participant[];
 
   // État UI
   isMobile: boolean;
@@ -180,6 +182,12 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     // Normaliser le type de conversation
     const conversationType = normalizeConversationType(conversation.type);
 
+    // Rôle effectif : max(rôle global, rôle conversation)
+    const currentParticipant = participants.find(p => p.userId === currentUser.id);
+    const conversationRole = currentParticipant?.role || '';
+    const globalRole = currentUser.role || 'USER';
+    const effectiveRole = getEffectiveRole(globalRole, conversationRole);
+
     // Token pour les attachments
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;
 
@@ -252,7 +260,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             isMobile={isMobile}
             conversationType={conversationType}
             scrollContainerRef={scrollContainerRef}
-            userRole={currentUser.role as UserRoleEnum}
+            userRole={effectiveRole}
             conversationId={conversation.id}
             addTranslatingState={addTranslatingState}
             isTranslating={isTranslating}
@@ -295,7 +303,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             choices={languageChoices}
             onAttachmentsChange={onAttachmentsChange}
             token={token}
-            userRole={currentUser.role}
+            userRole={effectiveRole}
             conversationId={conversation.id}
           />
         </div>

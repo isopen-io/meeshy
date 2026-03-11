@@ -106,8 +106,8 @@ export function InviteUserModal({
       const results = await Promise.all(invitePromises);
 
       // Vérifier les résultats
-      const successfulInvites = results.filter(r => r.data.success);
-      const failedInvites = results.filter(r => !r.data.success);
+      const successfulInvites = results.filter(r => (r.data as any)?.success);
+      const failedInvites = results.filter(r => !(r.data as any)?.success);
 
       if (successfulInvites.length > 0) {
         toast.success(`${successfulInvites.length} utilisateur(s) invité(s) avec succès`);

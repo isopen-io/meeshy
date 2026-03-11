@@ -28,20 +28,24 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePreferences } from '@/hooks/use-preferences';
-import type { DocumentPreference } from '@meeshy/shared/types/preferences';
-
 export function DocumentSettings() {
   const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
 
   // Hook usePreferences avec auto-save
   const {
-    preferences,
+    data: preferencesData,
     isLoading,
-    isSaving,
+    isUpdating: isSaving,
     error,
-    updateField,
-  } = usePreferences<DocumentPreference>('document');
+    updatePreferences,
+  } = usePreferences('accessibility');
+
+  const preferences = preferencesData as any;
+
+  const updateField = <K extends string>(field: K, value: unknown) => {
+    updatePreferences({ [field]: value } as any);
+  };
 
   // Memoize loading state
   const LoadingState = useMemo(() => (
@@ -59,7 +63,7 @@ export function DocumentSettings() {
   const ErrorState = useMemo(() => (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{error?.message}</AlertDescription>
     </Alert>
   ), [error]);
 

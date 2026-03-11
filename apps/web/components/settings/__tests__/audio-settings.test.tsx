@@ -3,6 +3,7 @@
  * Tests for the refactored AudioSettings using usePreferences hook
  */
 
+import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AudioSettings } from '../audio-settings';
@@ -11,7 +12,7 @@ import type { AudioPreference } from '@meeshy/shared/types/preferences';
 
 // Mock the usePreferences hook
 jest.mock('@/hooks/use-preferences');
-const mockUsePreferences = usePreferences as jest.MockedFunction<typeof usePreferences>;
+const mockUsePreferences = usePreferences as jest.MockedFunction<(...args: any[]) => any>;
 
 // Mock next/dynamic
 jest.mock('next/dynamic', () => ({

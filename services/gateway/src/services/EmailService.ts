@@ -57,6 +57,7 @@ export interface EmailVerificationData {
   to: string;
   name: string;
   verificationLink: string;
+  verificationCode?: string;
   expiryHours: number;
   language?: string;
 }
@@ -819,8 +820,15 @@ export class EmailService {
     const t = this.getTranslations(data.language);
     const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p><div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    const codeBlockHtml = data.verificationCode
+      ? `<div style="text-align:center;margin:20px 0"><p style="font-size:14px;color:#666;margin-bottom:8px">${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}:</p><div style="display:inline-block;padding:12px 24px;background:#f4f4f5;border-radius:8px;font-size:32px;font-weight:bold;letter-spacing:8px;font-family:monospace;color:#1e1b4b">${data.verificationCode}</div></div>`
+      : '';
+    const codeBlockText = data.verificationCode
+      ? `\n\n${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}: ${data.verificationCode}`
+      : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }

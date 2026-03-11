@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 export interface CommunityItem {
   id: string;
@@ -31,7 +31,7 @@ export interface CommunityCarouselProps {
 }
 
 // Icone pour "Toutes les conversations"
-function AllIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Element {
+function AllIcon({ className = 'w-6 h-6' }: { className?: string }): React.JSX.Element {
   return (
     <svg
       className={className}
@@ -49,7 +49,7 @@ function AllIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Element
 }
 
 // Icone pour "Archives"
-function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Element {
+function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }): React.JSX.Element {
   return (
     <svg
       className={className}
@@ -68,7 +68,7 @@ function ArchiveIcon({ className = 'w-6 h-6' }: { className?: string }): JSX.Ele
 }
 
 // Icone membres
-function MembersIcon({ className = 'w-3 h-3' }: { className?: string }): JSX.Element {
+function MembersIcon({ className = 'w-3 h-3' }: { className?: string }): React.JSX.Element {
   return (
     <svg
       className={className}
@@ -81,7 +81,7 @@ function MembersIcon({ className = 'w-3 h-3' }: { className?: string }): JSX.Ele
 }
 
 // Icone conversations
-function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }): JSX.Element {
+function ChatsIcon({ className = 'w-3 h-3' }: { className?: string }): React.JSX.Element {
   return (
     <svg
       className={className}
@@ -126,7 +126,7 @@ function CommunityCard({
   isSpecial = false,
   isSelected = false,
   onClick,
-}: CommunityCardProps): JSX.Element {
+}: CommunityCardProps): React.JSX.Element {
   return (
     <button
       onClick={onClick}
@@ -140,7 +140,6 @@ function CommunityCard({
       style={{
         width: isSpecial ? '100px' : '140px',
         height: isSpecial ? '80px' : '100px',
-        ringColor: isSelected ? color : undefined,
         boxShadow: 'var(--gp-shadow-sm)',
       }}
     >
@@ -272,7 +271,7 @@ export function CommunityCarousel({
   archivedConversations = 0,
   selectedId = null,
   className = '',
-}: CommunityCarouselProps): JSX.Element | null {
+}: CommunityCarouselProps): React.JSX.Element | null {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
 

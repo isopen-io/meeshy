@@ -52,10 +52,13 @@ export type MessageTransport = 'websocket' | 'rest' | 'api';
  */
 export type MessageAttachmentType = 'image' | 'file' | 'audio' | 'video' | 'link';
 
+// TranslationModelType replaced by TranslationModel from message-types.ts
+import type { TranslationModel } from './message-types.js';
+
 /**
- * Modèle de traduction
+ * @deprecated Use TranslationModel from message-types.ts instead
  */
-export type TranslationModelType = 'basic' | 'medium' | 'premium';
+export type TranslationModelType = TranslationModel;
 
 /**
  * Préférences de traduction pour un message

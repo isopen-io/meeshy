@@ -291,7 +291,7 @@ describe('ConversationsService', () => {
 
   describe('updateConversation', () => {
     it('should update conversation', async () => {
-      const updateData = {
+      const updateData: any = {
         name: 'Updated Conversation Name',
       };
 

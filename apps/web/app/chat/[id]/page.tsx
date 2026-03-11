@@ -192,7 +192,7 @@ export default function ChatLinkPage() {
             createdAt: new Date(),
             updatedAt: new Date()
           }] : []),
-          ...(conversationData.members || conversationData.participants || []).map((member: any) => ({
+          ...((conversationData as any).members || (conversationData as any).participants || []).map((member: any) => ({
             id: member.user.id,
             username: member.user.username,
             firstName: member.user.firstName,

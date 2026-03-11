@@ -119,7 +119,7 @@ jest.mock('@/utils/date-format', () => ({
 
 // === HELPERS ===
 
-const createMockMessage = (overrides = {}) => ({
+const createMockMessage = (overrides = {}): any => ({
   id: 'msg-123',
   content: 'Hello World',
   originalContent: 'Hello World',
@@ -136,7 +136,7 @@ const createMockMessage = (overrides = {}) => ({
   ...overrides,
 });
 
-const createMockUser = (overrides = {}) => ({
+const createMockUser = (overrides = {}): any => ({
   id: 'user-456',
   firstName: 'John',
   lastName: 'Doe',

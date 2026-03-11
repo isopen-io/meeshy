@@ -58,7 +58,7 @@ export function useNotificationCountsQuery() {
     queryKey: [...queryKeys.notifications.all, 'counts'],
     queryFn: async () => {
       const response = await NotificationService.getCounts();
-      return response.data?.counts;
+      return response.data;
     },
     // staleTime: Infinity (Socket.IO gère les mises à jour)
   });

@@ -11,7 +11,7 @@ import { User, UserRole, UserPermissions, ROLE_HIERARCHY, UserRoleEnum } from '@
 // Mock user-adapter
 jest.mock('@/utils/user-adapter', () => ({
   getDefaultPermissions: jest.fn((role: string) => {
-    const permissions: Record<string, UserPermissions> = {
+    const permissions: Record<string, any> = {
       BIGBOSS: {
         canAccessAdmin: true,
         canManageUsers: true,
@@ -102,11 +102,7 @@ describe('PermissionsService', () => {
       canViewAnalytics: false,
       canViewAuditLogs: false,
       canManageTranslations: false,
-      canSendMessages: true,
-      canCreateGroups: false,
-      canUploadFiles: true,
-      canUseVoice: true,
-    },
+    } as any,
     ...overrides,
   });
 
@@ -374,7 +370,7 @@ describe('PermissionsService', () => {
         canAccessAdmin: true, // USER shouldn't have this
         canManageUsers: false,
         canSendMessages: true,
-      } as UserPermissions;
+      } as any;
 
       expect(PermissionsService.validatePermissions('USER' as UserRole, permissions)).toBe(false);
     });

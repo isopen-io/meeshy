@@ -24,7 +24,7 @@ interface UseLazyImageReturn {
   /**
    * Ref à attacher à l'élément img
    */
-  ref: React.RefObject<HTMLImageElement>;
+  ref: React.RefObject<HTMLImageElement | null>;
   /**
    * URL de l'image à utiliser (placeholder ou vraie image)
    */

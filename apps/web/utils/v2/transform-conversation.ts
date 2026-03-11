@@ -103,7 +103,7 @@ export function transformToConversationItem(
   }
 
   // Check if online (direct conversations only)
-  const isOnline = !isGroup && otherMembers.some((m) => onlineUserIds.has(m.userId));
+  const isOnline = !isGroup && otherMembers.some((m) => m.userId && onlineUserIds.has(m.userId));
 
   // Transform lastMessage
   const lastMessage = conversation.lastMessage;
@@ -122,13 +122,19 @@ export function transformToConversationItem(
       };
 
   // Check if someone is typing
-  const isTyping = otherMembers.some((m) => typingUserIds.has(m.userId));
+  const isTyping = otherMembers.some((m) => m.userId && typingUserIds.has(m.userId));
 
   // Check for anonymous participants
   const hasAnonymousParticipants = participants.some((m) => m.type === 'anonymous');
 
   // Get user preferences if available
-  const userPrefs = conversation.userPreferences;
+  const userPrefs = conversation.userPreferences as {
+    isPinned?: boolean;
+    isImportant?: boolean;
+    isMuted?: boolean;
+    categoryId?: string;
+    draft?: string;
+  } | undefined;
 
   return {
     id: conversation.id,

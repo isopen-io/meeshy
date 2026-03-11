@@ -244,7 +244,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                         )}
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 leading-snug">
-                        {message.originalContent || message.content}
+                        {(message as any).originalContent || message.content}
                       </p>
                     </div>
                   </button>

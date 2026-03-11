@@ -538,8 +538,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           conversation: {
             include: {
               participants: {
-                where: { userId: userId },
-                select: { userId: true }
+                where: { userId: userId, isActive: true },
+                select: { id: true, userId: true }
               }
             }
           }
@@ -553,8 +553,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         });
       }
 
+      const participant = message.conversation.participants[0];
+
       // Ne pas marquer ses propres messages comme lus
-      if (message.senderId === userId) {
+      if (message.senderId === participant.id) {
         return reply.status(400).send({
           success: false,
           error: 'Vous ne pouvez pas marquer vos propres messages comme lus'
@@ -569,11 +571,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
         const readStatusService = new MessageReadStatusService(prisma);
 
-        // Marquer tous les messages de la conversation comme lus
+        // Marquer tous les messages de la conversation comme lus (participantId, pas userId)
         await readStatusService.markMessagesAsRead(
-          userId,
+          participant.id,
           message.conversationId,
-          messageId  // Utiliser ce message comme curseur
+          messageId
         );
 
         // Diffuser le statut de lecture via Socket.IO
@@ -583,6 +585,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             const room = ROOMS.conversation(message.conversationId);
             (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
               conversationId: message.conversationId,
+              participantId: participant.id,
               userId,
               type: 'read',
               updatedAt: new Date()
@@ -668,8 +671,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         isEdited: message.isEdited,
         editedAt: message.editedAt,
         createdAt: message.createdAt,
-        deletedAt: message.deletedAt,
-        isDeleted: message.deletedAt !== null
+        deletedAt: message.deletedAt
       };
 
       return reply.send({

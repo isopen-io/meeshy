@@ -128,7 +128,7 @@ describe('socket-validator', () => {
       const result = validateNotificationEvent(notification);
 
       expect(result.success).toBe(true);
-      expect(result.data?.createdAt).toBeInstanceOf(Date);
+      expect((result.data as any)?.createdAt).toBeInstanceOf(Date);
     });
 
     it('should accept Date object for createdAt', () => {

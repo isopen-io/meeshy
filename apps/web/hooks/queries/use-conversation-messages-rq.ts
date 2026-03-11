@@ -13,6 +13,7 @@ import { useCallback, useMemo, useRef, useEffect } from 'react';
 import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
+import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import type { Message, User } from '@meeshy/shared/types';
 
@@ -329,6 +330,22 @@ export function useConversationMessagesRQ(
       return () => clearTimeout(timer);
     }
   }, [messages.length, isLoading, scrollDirection]);
+
+  // Fetch initial read status summary when conversation messages load
+  // Calls mark-as-received to trigger a socket event with the real summary counts
+  const hasLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!conversationId || !currentUser || isLoading || messages.length === 0) return;
+    // Resolve real ObjectId from loaded messages (conversationId param may be an identifier/slug)
+    const resolvedId = messages[0]?.conversationId ?? conversationId;
+    if (hasLoadedRef.current === resolvedId) return;
+    if (!/^[a-f\d]{24}$/i.test(resolvedId)) return;
+    hasLoadedRef.current = resolvedId;
+
+    // Mark-as-received triggers a read-status:updated socket event with summary
+    apiService.post(`/conversations/${resolvedId}/mark-as-received`)
+      .catch(() => {}); // Non-critical
+  }, [conversationId, currentUser, isLoading, messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fill if container not full enough
   useEffect(() => {

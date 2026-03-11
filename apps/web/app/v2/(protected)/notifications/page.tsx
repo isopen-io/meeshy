@@ -110,7 +110,7 @@ export default function V2NotificationsPage() {
         hideNotificationButton
         titleBadge={
           unreadCount > 0 ? (
-            <Badge variant="primary" size="sm">
+            <Badge variant="terracotta" size="sm">
               {unreadCount}
             </Badge>
           ) : undefined

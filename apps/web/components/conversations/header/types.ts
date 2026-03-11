@@ -1,15 +1,15 @@
 import type {
   Conversation,
   SocketIOUser as User,
-  ThreadMember
 } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import type { UserStatus } from '@/lib/user-status';
 
 export interface ConversationHeaderProps {
   conversation: Conversation;
   currentUser: User;
-  conversationParticipants: ThreadMember[];
+  conversationParticipants: Participant[];
   typingUsers: Array<{ userId: string; username: string; conversationId: string; timestamp: number }>;
   isMobile: boolean;
   onBackToList: () => void;

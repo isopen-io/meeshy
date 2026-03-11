@@ -6,6 +6,7 @@ import type { Message } from '@meeshy/shared/types/conversation';
 import type { ConversationType } from '@meeshy/shared/types';
 import { formatFullDate } from '@/utils/date-format';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 
 interface UseMessageInteractionsProps {
   message: Partial<Message> & { id: string; content: string; createdAt: Date | string; senderId?: string; };
@@ -14,7 +15,7 @@ interface UseMessageInteractionsProps {
   isAnonymous?: boolean;
   conversationId?: string;
   conversationType?: ConversationType;
-  userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
+  userRole?: string;
   onEnterReactionMode?: () => void;
   onEnterEditMode?: () => void;
   onEnterDeleteMode?: () => void;
@@ -51,7 +52,7 @@ export function useMessageInteractions({
   const canModifyMessage = useCallback(() => {
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
-    const hasSpecialPrivileges = ['MODERATOR', 'MODO', 'ADMIN', 'CREATOR', 'BIGBOSS'].includes(userRole);
+    const hasSpecialPrivileges = hasModeratorPrivileges(userRole);
 
     if (messageAge > twentyFourHoursInMs && !hasSpecialPrivileges) {
       return false;
@@ -70,7 +71,7 @@ export function useMessageInteractions({
   const canDeleteMessage = useCallback(() => {
     if (onEnterDeleteMode) return true;
 
-    if (['BIGBOSS', 'ADMIN', 'MODERATOR', 'MODO'].includes(userRole)) return true;
+    if (hasModeratorPrivileges(userRole)) return true;
 
     const messageAge = Date.now() - new Date(message.createdAt).getTime();
     const twelveHours = 12 * 60 * 60 * 1000;
@@ -153,7 +154,7 @@ export function useMessageInteractions({
     } else {
       const newContent = prompt(t('editMessagePrompt'), message.content);
       if (newContent && newContent.trim() !== message.content) {
-        await onEditMessage?.(message.id, newContent.trim(), message.originalLanguage);
+        await onEditMessage?.(message.id, newContent.trim(), message.originalLanguage || '');
       }
     }
   }, [onEnterEditMode, onEditMessage, message.id, message.content, t]);

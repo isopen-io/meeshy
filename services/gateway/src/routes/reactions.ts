@@ -134,13 +134,34 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const actualUserId = !isAnonymous ? userId : undefined;
       const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
 
-      // Ajouter la réaction
-      const participantId = authRequest.authContext.participantId;
+      // Résoudre le participantId
+      let participantId = authRequest.authContext.participantId;
+
+      if (!participantId && !isAnonymous && userId) {
+        const msg = await prisma.message.findUnique({
+          where: { id: messageId },
+          select: { conversationId: true },
+        });
+        if (msg) {
+          const participant = await prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true },
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        return reply.status(403).send({
+          success: false,
+          error: 'You are not a participant of this conversation',
+        });
+      }
 
       const reaction = await reactionService.addReaction({
         messageId,
         emoji,
-        participantId
+        participantId,
       });
 
       if (!reaction) {
@@ -278,13 +299,34 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const actualUserId = !isAnonymous ? userId : undefined;
       const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
 
-      // Supprimer la réaction
-      const removeParticipantId = authRequest.authContext.participantId;
+      // Résoudre le participantId
+      let removeParticipantId = authRequest.authContext.participantId;
+
+      if (!removeParticipantId && !isAnonymous && userId) {
+        const msg = await prisma.message.findUnique({
+          where: { id: messageId },
+          select: { conversationId: true },
+        });
+        if (msg) {
+          const participant = await prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true },
+          });
+          removeParticipantId = participant?.id;
+        }
+      }
+
+      if (!removeParticipantId) {
+        return reply.status(403).send({
+          success: false,
+          error: 'You are not a participant of this conversation',
+        });
+      }
 
       const removed = await reactionService.removeReaction({
         messageId,
         emoji: decodedEmoji,
-        participantId: removeParticipantId
+        participantId: removeParticipantId,
       });
 
       if (!removed) {
@@ -445,10 +487,20 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Résoudre le participantId courant
+      let currentParticipantId = authRequest.authContext.participantId;
+      if (!currentParticipantId && !isAnonymous && userId) {
+        const participant = await prisma.participant.findFirst({
+          where: { userId, conversationId: message.conversationId, isActive: true },
+          select: { id: true },
+        });
+        currentParticipantId = participant?.id;
+      }
+
       // Récupérer les réactions avec agrégation
       const reactions = await reactionService.getMessageReactions({
         messageId,
-        currentParticipantId: authRequest.authContext.participantId
+        currentParticipantId,
       });
 
       return reply.send({

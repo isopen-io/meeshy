@@ -11,11 +11,13 @@ import { SimpleAudioPlayer } from '@/components/audio/SimpleAudioPlayer';
 export interface AudioAttachmentProps {
   attachment: Attachment;
   messageId?: string;
+  isOwnMessage?: boolean;
 }
 
 export const AudioAttachment = React.memo(function AudioAttachment({
   attachment,
   messageId,
+  isOwnMessage,
 }: AudioAttachmentProps) {
 
   // Extraire la transcription audio si elle existe
@@ -86,6 +88,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
       messageId={messageId || attachment.messageId}
       initialTranscription={initialTranscription}
       initialTranslations={initialTranslations}
+      isOwnMessage={isOwnMessage}
     />
   );
 });

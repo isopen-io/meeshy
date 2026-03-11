@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { messageService } from '@/services/message.service';
 import { useReplyStore } from '@/stores/reply-store';
 import type { Message, User } from '@meeshy/shared/types';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { getEffectiveRole } from '@meeshy/shared/types/role-types';
 
 interface UseStreamMessagesOptions {
   conversationId: string;
@@ -27,6 +27,7 @@ interface UseStreamMessagesOptions {
   messageComposerRef: React.RefObject<any>;
   t: (key: string, params?: Record<string, string>) => string;
   tCommon: (key: string) => string;
+  conversationRole?: string;
 }
 
 interface UseStreamMessagesReturn {
@@ -37,7 +38,7 @@ interface UseStreamMessagesReturn {
   handleNavigateToMessage: (messageId: string) => Promise<void>;
 
   // Rôle de modération
-  getUserModerationRole: () => UserRoleEnum;
+  getUserModerationRole: () => string;
 }
 
 /**
@@ -53,6 +54,7 @@ export function useStreamMessages({
   messageComposerRef,
   t,
   tCommon,
+  conversationRole,
 }: UseStreamMessagesOptions): UseStreamMessagesReturn {
 
   // Éditer un message
@@ -179,20 +181,11 @@ export function useStreamMessages({
     toast.error(tCommon('messages.messageNotFound'));
   }, [tCommon, messages, hasMore, loadMore]);
 
-  // Obtenir le rôle de modération
-  const getUserModerationRole = useCallback((): UserRoleEnum => {
-    const role = (user.role as UserRoleEnum) ?? UserRoleEnum.USER;
-
-    if (
-      role === UserRoleEnum.ADMIN ||
-      role === UserRoleEnum.BIGBOSS ||
-      role === UserRoleEnum.MODERATOR
-    ) {
-      return role;
-    }
-
-    return role;
-  }, [user.role]);
+  // Obtenir le rôle effectif (max entre rôle global et rôle conversation)
+  const getUserModerationRole = useCallback(
+    (): string => getEffectiveRole(user.role as string, conversationRole),
+    [user.role, conversationRole],
+  );
 
   return {
     handleEditMessage,

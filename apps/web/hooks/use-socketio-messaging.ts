@@ -122,7 +122,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onTranslation) {
       const unsub = meeshySocketIOService.onTranslation((data: TranslationEvent) => {
-        onTranslation(data.messageId, data.translations);
+        onTranslation(data.messageId, [...data.translations]);
       });
       unsubscribers.push(unsub);
     }

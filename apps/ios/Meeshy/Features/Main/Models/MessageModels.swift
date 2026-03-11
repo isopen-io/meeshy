@@ -149,7 +149,7 @@ extension APIMessage {
             messageType: msgType,
             messageSource: msgSource,
             isEdited: isEdited ?? false,
-            isDeleted: isDeleted ?? false,
+            deletedAt: deletedAt,
             replyToId: replyToId,
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,

@@ -44,6 +44,7 @@ const DEFAULT_PREFERENCES: MessagePreference = {
   draftExpirationDays: 30,
   defaultFontSize: 'medium',
   defaultTextAlign: 'left',
+  maxCharacterLimit: 10000,
   autoTranslateIncoming: false,
   autoTranslateLanguages: []
 };

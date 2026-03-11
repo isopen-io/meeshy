@@ -208,12 +208,12 @@ class FCMManager {
         icon: data.icon || notificationConfig.defaultNotificationOptions.icon,
         badge:
           data.badge || notificationConfig.defaultNotificationOptions.badge,
-        image: image,
         data: data,
         tag: data.tag || notificationConfig.defaultNotificationOptions.tag,
         vibrate: notificationConfig.defaultNotificationOptions.vibrate,
         requireInteraction:
           notificationConfig.defaultNotificationOptions.requireInteraction,
+        ...(image ? { image } as any : {}),
       });
 
       this.log('Local notification shown');

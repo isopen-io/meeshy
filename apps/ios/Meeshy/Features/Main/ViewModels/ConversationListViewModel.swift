@@ -20,6 +20,7 @@ class ConversationListViewModel: ObservableObject {
     @Published var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    @Published var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
@@ -190,12 +191,31 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // New message → update last message preview + bump to top
+        // New message → update last message preview + bump to top + global mark-as-received
         messageSocket.messageReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
                 invalidateCache()
+
+                // Global mark-as-received for ALL incoming messages from other users
+                let userId = self.currentUserId
+                if apiMsg.senderId != userId {
+                    let msgConvId = apiMsg.conversationId
+                    Task {
+                        do {
+                            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                                endpoint: "/conversations/\(msgConvId)/mark-as-received",
+                                method: "POST"
+                            )
+                        } catch {
+                            await PendingStatusQueue.shared.enqueue(.init(
+                                conversationId: msgConvId, type: "received", timestamp: Date()
+                            ))
+                        }
+                    }
+                }
+
                 let convId = apiMsg.conversationId
                 guard let idx = self.convIndex(for: convId) else { return }
 
@@ -613,6 +633,23 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Message Prefetch
+
+    func loadPreviewMessages(for conversationId: String) async {
+        guard previewMessages[conversationId] == nil else { return }
+        let cached = await LocalStore.shared.loadMessages(for: conversationId)
+        if !cached.isEmpty {
+            previewMessages[conversationId] = Array(cached.suffix(5))
+            return
+        }
+        do {
+            let response = try await messageService.list(
+                conversationId: conversationId, offset: 0, limit: 5, includeReplies: false
+            )
+            let userId = currentUserId
+            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            previewMessages[conversationId] = msgs
+        } catch { }
+    }
 
     private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
         let toFetch = Array(apiConversations.prefix(20))

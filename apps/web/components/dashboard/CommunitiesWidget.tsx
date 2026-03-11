@@ -9,7 +9,8 @@ interface Community {
   name: string;
   description?: string;
   isPrivate?: boolean;
-  members: Array<{ id: string }>;
+  members?: Array<{ id: string }>;
+  memberCount?: number;
 }
 
 interface CommunitiesWidgetProps {
@@ -78,7 +79,7 @@ export function CommunitiesWidget({
                       className="text-xs dark:border-gray-600 dark:text-gray-300"
                     >
                       {t('communities.membersCount', {
-                        count: community.members.length.toString(),
+                        count: (community.memberCount ?? community.members?.length ?? 0).toString(),
                       })}
                     </Badge>
                   </div>

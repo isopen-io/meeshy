@@ -29,7 +29,20 @@ export * from './auth';
 export * from './conversations';
 export * from './groups';
 export * from './translation';
-export * from './settings';
+export {
+  ApplicationSettings,
+  NotificationSettings,
+  PrivacySettings,
+  EncryptionSettings,
+  AudioSettings,
+  VoiceProfileSettings,
+  PasswordSettings,
+  VideoSettings,
+  DocumentSettings,
+  MediaSettings,
+  FontSelector,
+  ThemeSettings,
+} from './settings';
 export * from './notifications';
 
 export { NotFoundPage } from './not-found-page';

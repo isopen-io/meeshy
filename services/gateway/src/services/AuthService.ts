@@ -554,8 +554,9 @@ export class AuthService {
       const BCRYPT_COST = 12;
       const hashedPassword = await bcrypt.hash(data.password, BCRYPT_COST);
 
-      // Generate email verification token (24h expiry)
+      // Generate email verification token + OTP code (24h expiry)
       const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
+      const verificationCode = this.generatePhoneCode();
       const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
@@ -579,6 +580,7 @@ export class AuthService {
           lastActiveAt: new Date(),
           // Email verification fields
           emailVerificationToken: verificationTokenHash,
+          emailVerificationCode: verificationCode,
           emailVerificationExpiry: verificationExpiry,
           // Registration context (captured once at signup)
           registrationIp: requestContext?.ip || null,
@@ -602,6 +604,7 @@ export class AuthService {
           to: normalizedEmail,
           name: normalizedDisplayName,
           verificationLink,
+          verificationCode,
           expiryHours: tokenExpiryHours,
           language: data.systemLanguage || 'fr'
         });
@@ -772,11 +775,10 @@ export class AuthService {
   }
 
   /**
-   * Verify email with token
+   * Verify email with token (from email link) or 6-digit code (from mobile app)
    */
-  async verifyEmail(token: string, email: string): Promise<{ success: boolean; error?: string; alreadyVerified?: boolean; verifiedAt?: Date }> {
+  async verifyEmail(tokenOrCode: string, email: string, isCode: boolean = false): Promise<{ success: boolean; error?: string; alreadyVerified?: boolean; verifiedAt?: Date }> {
     try {
-      const hashedToken = this.hashToken(token);
       const normalizedEmail = email.trim().toLowerCase();
 
       // First, check if user exists with this email
@@ -789,6 +791,7 @@ export class AuthService {
           email: true,
           emailVerifiedAt: true,
           emailVerificationToken: true,
+          emailVerificationCode: true,
           emailVerificationExpiry: true
         }
       });
@@ -803,7 +806,47 @@ export class AuthService {
         };
       }
 
-      // Find user with matching token and email
+      if (isCode) {
+        // OTP code verification (mobile flow)
+        const user = await this.prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            emailVerificationCode: tokenOrCode,
+            emailVerificationExpiry: { gt: new Date() }
+          }
+        });
+
+        if (!user) {
+          const expiredUser = await this.prisma.user.findFirst({
+            where: {
+              email: { equals: normalizedEmail, mode: 'insensitive' },
+              emailVerificationCode: tokenOrCode
+            }
+          });
+
+          if (expiredUser) {
+            return { success: false, error: 'Le code de vérification a expiré. Veuillez en demander un nouveau.' };
+          }
+          return { success: false, error: 'Code de vérification invalide.' };
+        }
+
+        const now = new Date();
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            emailVerifiedAt: now,
+            emailVerificationToken: null,
+            emailVerificationCode: null,
+            emailVerificationExpiry: null
+          }
+        });
+
+        logger.info(`[AUTH_SERVICE] ✅ Email vérifié par code OTP pour user.email=${user.email}`);
+        return { success: true, verifiedAt: now };
+      }
+
+      // Token verification (email link flow)
+      const hashedToken = this.hashToken(tokenOrCode);
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -813,7 +856,6 @@ export class AuthService {
       });
 
       if (!user) {
-        // Check if token expired
         const expiredUser = await this.prisma.user.findFirst({
           where: {
             email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -827,13 +869,13 @@ export class AuthService {
         return { success: false, error: 'Lien de vérification invalide.' };
       }
 
-      // Update user as verified
       const now = new Date();
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           emailVerifiedAt: now,
           emailVerificationToken: null,
+          emailVerificationCode: null,
           emailVerificationExpiry: null
         }
       });
@@ -881,16 +923,18 @@ export class AuthService {
         return { success: false, error: 'Cette adresse email est déjà vérifiée.' };
       }
 
-      // Generate new token
+      // Generate new token + OTP code
       const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
+      const verificationCode = this.generatePhoneCode();
       const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600;
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
-      // Update user with new token
+      // Update user with new token + code
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           emailVerificationToken: verificationTokenHash,
+          emailVerificationCode: verificationCode,
           emailVerificationExpiry: verificationExpiry
         }
       });
@@ -901,6 +945,7 @@ export class AuthService {
         to: normalizedEmail,
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
+        verificationCode,
         expiryHours: tokenExpiryHours,
         language: user.systemLanguage || 'fr'
       });

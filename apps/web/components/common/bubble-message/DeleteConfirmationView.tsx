@@ -59,7 +59,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
   // Calculer les éléments qui seront supprimés
   const translationCount = message.translations?.length || 0;
   const attachmentCount = message.attachments?.length || 0;
-  const reactionCount = message.reactions?.length || 0;
+  const reactionCount = (message as any).reactions?.length || 0;
 
   // Tronquer le contenu pour l'aperçu
   // Si le message est vide mais a des attachments, afficher les noms des fichiers

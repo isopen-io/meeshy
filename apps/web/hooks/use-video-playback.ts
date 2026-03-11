@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { apiService } from '@/services/api.service';
 import MediaManager from '@/utils/media-manager';
 
 class VideoManager {
@@ -28,13 +29,15 @@ interface UseVideoPlaybackOptions {
   duration?: number;
   mimeType?: string;
   attachmentId: string;
+  isOwnMessage?: boolean;
 }
 
 export function useVideoPlayback({
   fileUrl,
   duration: attachmentDuration,
   mimeType,
-  attachmentId
+  attachmentId,
+  isOwnMessage = false,
 }: UseVideoPlaybackOptions) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -45,6 +48,27 @@ export function useVideoPlayback({
   const [errorMessage, setErrorMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const playStartTimeRef = useRef<number | null>(null);
+  const hasTrackedCompletionRef = useRef(false);
+
+  const trackConsumption = useCallback((complete: boolean) => {
+    if (isOwnMessage) return;
+    const video = videoRef.current;
+    const playPositionMs = video ? Math.round(video.currentTime * 1000) : 0;
+    const durationMs = video ? Math.round(video.duration * 1000) : 0;
+    apiService.post(`/attachments/${attachmentId}/status`, {
+      action: 'watched',
+      playPositionMs,
+      durationMs: isFinite(durationMs) ? durationMs : 0,
+      complete,
+    }).catch(() => {});
+  }, [attachmentId, isOwnMessage]);
+
+  // Reset tracking refs when attachment changes
+  useEffect(() => {
+    hasTrackedCompletionRef.current = false;
+    playStartTimeRef.current = null;
+  }, [attachmentId]);
 
   const updateProgress = useCallback(() => {
     const video = videoRef.current;
@@ -98,6 +122,11 @@ export function useVideoPlayback({
 
     try {
       if (isPlaying) {
+        const watchedMs = playStartTimeRef.current ? Date.now() - playStartTimeRef.current : 0;
+        playStartTimeRef.current = null;
+        if (watchedMs >= 3000 && !hasTrackedCompletionRef.current) {
+          trackConsumption(false);
+        }
         videoRef.current.pause();
         setIsPlaying(false);
         VideoManager.getInstance().stop(videoRef.current);
@@ -124,6 +153,7 @@ export function useVideoPlayback({
         }
 
         await videoRef.current.play();
+        playStartTimeRef.current = Date.now();
         setIsPlaying(true);
         setIsLoading(false);
       }
@@ -140,7 +170,7 @@ export function useVideoPlayback({
         setErrorMessage('Erreur de lecture vidéo');
       }
     }
-  }, [fileUrl, isPlaying]);
+  }, [fileUrl, isPlaying, trackConsumption]);
 
   const handleSeek = useCallback((time: number) => {
     setCurrentTime(time);
@@ -155,11 +185,15 @@ export function useVideoPlayback({
 
   const handleEnded = useCallback(() => {
     setIsPlaying(false);
+    if (!hasTrackedCompletionRef.current) {
+      hasTrackedCompletionRef.current = true;
+      trackConsumption(true);
+    }
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
     }
-  }, []);
+  }, [trackConsumption]);
 
   const handleVideoError = useCallback(
     (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {

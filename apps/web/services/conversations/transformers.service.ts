@@ -5,6 +5,7 @@
 
 import {
   UserRoleEnum,
+  MemberRole,
 } from '@meeshy/shared/types';
 import type {
   Conversation,
@@ -56,15 +57,15 @@ export class TransformersService {
   /**
    * Map statique pour la conversion des rôles (O(1) lookup)
    */
-  private static readonly ROLE_MAP = new Map<string, UserRoleEnum>([
+  private static readonly ROLE_MAP = new Map<string, string>([
     ['ADMIN', UserRoleEnum.ADMIN],
     ['MODERATOR', UserRoleEnum.MODERATOR],
     ['BIGBOSS', UserRoleEnum.BIGBOSS],
-    ['CREATOR', UserRoleEnum.CREATOR],
+    ['CREATOR', MemberRole.CREATOR],
     ['AUDIT', UserRoleEnum.AUDIT],
     ['ANALYST', UserRoleEnum.ANALYST],
     ['USER', UserRoleEnum.USER],
-    ['MEMBER', UserRoleEnum.MEMBER],
+    ['MEMBER', MemberRole.MEMBER],
   ]);
 
   /**
@@ -107,8 +108,8 @@ export class TransformersService {
   /**
    * Convertir un rôle string en UserRoleEnum
    */
-  stringToUserRole(role: string): UserRoleEnum {
-    return TransformersService.ROLE_MAP.get(role.toUpperCase()) ?? UserRoleEnum.MEMBER;
+  stringToUserRole(role: string): string {
+    return TransformersService.ROLE_MAP.get(role.toUpperCase()) ?? MemberRole.MEMBER;
   }
 
   /**
@@ -138,7 +139,7 @@ export class TransformersService {
   private createDefaultUser(id: string): User {
     return {
       id,
-      username: 'Unknown User',
+      username: '',
       firstName: '',
       lastName: '',
       displayName: 'Utilisateur Inconnu',
@@ -167,52 +168,42 @@ export class TransformersService {
    */
   private transformSender(sender: any, _unused: any, defaultId: string): User {
     if (sender) {
-      const {
-        id = defaultId,
-        username = 'Unknown',
-        firstName = '',
-        lastName = '',
-        displayName = username || 'Unknown',
-        email = 'unknown@example.com',
-        phoneNumber = '',
-        role = 'USER',
-        systemLanguage = 'fr',
-        regionalLanguage = 'fr',
-        autoTranslateEnabled = false,
-        translateToSystemLanguage = false,
-        translateToRegionalLanguage = false,
-        useCustomDestination = false,
-        isOnline = false,
-        avatar,
-        createdAt = Date.now(),
-        lastActiveAt = Date.now(),
-        isActive = true,
-        updatedAt = Date.now(),
-      } = sender;
+      // sender can be a flat User object (Socket.IO) or a Participant with nested .user (REST API)
+      const nestedUser = sender.user as Record<string, unknown> | undefined;
+
+      const id = sender.id || defaultId;
+      const username = sender.username || nestedUser?.username;
+      const firstName = sender.firstName || nestedUser?.firstName || '';
+      const lastName = sender.lastName || nestedUser?.lastName || '';
+      const displayName = sender.nickname || sender.displayName || nestedUser?.displayName || username || '';
+      const avatar = sender.avatar || nestedUser?.avatar;
+      const role = sender.role || nestedUser?.role || 'USER';
+      const systemLanguage = sender.systemLanguage || nestedUser?.systemLanguage || 'fr';
+      const regionalLanguage = sender.regionalLanguage || nestedUser?.regionalLanguage || 'fr';
 
       return {
         id: String(id),
-        username: String(username),
+        username: username ? String(username) : '',
         firstName: String(firstName),
         lastName: String(lastName),
         displayName: String(displayName),
-        email: String(email),
-        phoneNumber: String(phoneNumber),
-        role: role as any,
+        email: String(sender.email || ''),
+        phoneNumber: String(sender.phoneNumber || ''),
+        role: String(role),
         permissions: this.DEFAULT_PERMISSIONS,
         systemLanguage: String(systemLanguage),
         regionalLanguage: String(regionalLanguage),
         customDestinationLanguage: undefined,
-        autoTranslateEnabled: Boolean(autoTranslateEnabled),
-        translateToSystemLanguage: Boolean(translateToSystemLanguage),
-        translateToRegionalLanguage: Boolean(translateToRegionalLanguage),
-        useCustomDestination: Boolean(useCustomDestination),
-        isOnline: Boolean(isOnline),
+        autoTranslateEnabled: Boolean(sender.autoTranslateEnabled),
+        translateToSystemLanguage: Boolean(sender.translateToSystemLanguage),
+        translateToRegionalLanguage: Boolean(sender.translateToRegionalLanguage),
+        useCustomDestination: Boolean(sender.useCustomDestination),
+        isOnline: Boolean(sender.isOnline),
         avatar: avatar as string | undefined,
-        createdAt: new Date(createdAt),
-        lastActiveAt: new Date(lastActiveAt),
-        isActive: Boolean(isActive),
-        updatedAt: new Date(updatedAt),
+        createdAt: new Date(sender.createdAt || Date.now()),
+        lastActiveAt: new Date(sender.lastActiveAt || Date.now()),
+        isActive: Boolean(sender.isActive ?? true),
+        updatedAt: new Date(sender.updatedAt || Date.now()),
       };
     }
 
@@ -262,7 +253,7 @@ export class TransformersService {
       isEncrypted: Boolean(att.isEncrypted),
 
       // ✅ V2: Transcription et translations - passés tels quels depuis la BD
-      transcription: att.transcription as AttachmentTranscription | undefined,
+      transcription: att.transcription as any,
       translations: att.translations as AttachmentTranslations | undefined,
     };
   });
@@ -350,7 +341,6 @@ export class TransformersService {
         },
         translations: [],
         isEdited: false,
-        isDeleted: false,
         updatedAt: new Date(String(replyToMsg.updatedAt || replyToMsg.createdAt)),
       };
     }
@@ -371,7 +361,7 @@ export class TransformersService {
       messageType: (String(msg.messageType) || 'text') as MessageType,
       messageSource: (String(msg.messageSource) || 'user') as MessageSource,
       isEdited: Boolean(msg.isEdited),
-      isDeleted: Boolean(msg.isDeleted),
+      deletedAt: msg.deletedAt ? new Date(String(msg.deletedAt)) : undefined,
       isViewOnce: Boolean(msg.isViewOnce),
       viewOnceCount: Number(msg.viewOnceCount) || 0,
       isBlurred: Boolean(msg.isBlurred),
@@ -385,7 +375,7 @@ export class TransformersService {
       encryptionMetadata: msg.encryptionMetadata as Record<string, unknown> | undefined,
       createdAt,
       updatedAt: new Date(String(msg.updatedAt)),
-      sender: finalSender,
+      sender: finalSender as any,
       translations,
       replyTo,
       attachments,

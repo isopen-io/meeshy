@@ -3,15 +3,6 @@ import AVFoundation
 import Combine
 import MeeshySDK
 
-// MARK: - Attachment Status Body
-
-private struct AttachmentStatusBody: Encodable {
-    let action: String
-    let playPositionMs: Int
-    let durationMs: Int
-    let complete: Bool
-}
-
 // MARK: - Audio Playback Manager
 
 @MainActor
@@ -185,20 +176,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // MARK: - Listen Progress Reporting
     private func reportListenProgress(complete: Bool) {
         guard let attId = attachmentId else { return }
+        guard let start = listenStartTime else { return }
+        let listenedSeconds = Date().timeIntervalSince(start)
+        guard complete || listenedSeconds >= 3 else { return }
         let positionMs = Int(currentTime * 1000)
-        let durationMs: Int = {
-            guard let start = listenStartTime else { return 0 }
-            return Int(Date().timeIntervalSince(start) * 1000)
-        }()
+        let totalDurationMs = Int(duration * 1000)
 
         Task {
             let body = AttachmentStatusBody(
                 action: "listened",
                 playPositionMs: positionMs,
-                durationMs: durationMs,
+                durationMs: totalDurationMs,
                 complete: complete
             )
-            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
                 endpoint: "/attachments/\(attId)/status",
                 body: body
             )

@@ -7,7 +7,7 @@ import type { RecoveryMethod } from './use-recovery-flow';
 
 interface UseRecoverySubmissionProps {
   setIsLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+  setError: (error: string | null | undefined) => void;
   setStep: (step: RecoveryMethod) => void;
   setStoredEmail: (email: string) => void;
   setPhoneResetTokenId: (tokenId: string) => void;
@@ -18,7 +18,7 @@ interface UseRecoverySubmissionProps {
   resetBotProtection: () => void;
   isSessionExpiredError: (errorCode: string) => boolean;
   handleSessionExpired: () => void;
-  t: (key: string) => string | undefined;
+  t: (key: string) => string;
   router: any;
   onClose: () => void;
 }

@@ -13,7 +13,7 @@ struct ConversationParticipant: Identifiable, Decodable {
     let lastName: String?
     let displayName: String?
     let avatar: String?
-    let conversationRole: String?
+    var conversationRole: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
     let joinedAt: Date?
@@ -31,9 +31,100 @@ private extension String {
 
 // MARK: - Participants Response
 
+struct ParticipantsPagination: Decodable {
+    let nextCursor: String?
+    let hasMore: Bool
+    let totalCount: Int?
+}
+
 struct ParticipantsResponse: Decodable {
     let success: Bool
     let data: [ConversationParticipant]
+    let pagination: ParticipantsPagination?
+}
+
+// MARK: - Participant Cache
+
+actor ParticipantCache {
+    static let shared = ParticipantCache()
+
+    struct CacheEntry {
+        var participants: [ConversationParticipant]
+        var nextCursor: String?
+        var hasMore: Bool
+        var totalCount: Int?
+        var lastFetchedAt: Date
+    }
+
+    private var cache: [String: CacheEntry] = [:]
+    private let pageSize = 30
+    private let staleTTL: TimeInterval = 300
+
+    func cached(for id: String) -> [ConversationParticipant] {
+        cache[id]?.participants ?? []
+    }
+
+    func hasMore(for id: String) -> Bool {
+        cache[id]?.hasMore ?? true
+    }
+
+    func totalCount(for id: String) -> Int? {
+        cache[id]?.totalCount
+    }
+
+    func isStale(for id: String) -> Bool {
+        guard let entry = cache[id] else { return true }
+        return Date().timeIntervalSince(entry.lastFetchedAt) > staleTTL
+    }
+
+    func loadFirstPage(for conversationId: String, forceRefresh: Bool = false) async throws -> [ConversationParticipant] {
+        if !forceRefresh, let entry = cache[conversationId], !isStale(for: conversationId) {
+            return entry.participants
+        }
+        cache[conversationId] = nil
+        return try await loadNextPage(for: conversationId)
+    }
+
+    func loadNextPage(for conversationId: String) async throws -> [ConversationParticipant] {
+        let entry = cache[conversationId]
+        if let entry, !entry.hasMore { return entry.participants }
+
+        let cursor = entry?.nextCursor
+        var endpoint = "/conversations/\(conversationId)/participants?limit=\(pageSize)"
+        if let cursor { endpoint += "&cursor=\(cursor)" }
+
+        let response: ParticipantsResponse = try await APIClient.shared.request(endpoint: endpoint)
+        guard response.success else { return entry?.participants ?? [] }
+
+        var updated = entry ?? CacheEntry(participants: [], nextCursor: nil, hasMore: true, totalCount: nil, lastFetchedAt: Date())
+        updated.participants.append(contentsOf: response.data)
+        updated.nextCursor = response.pagination?.nextCursor
+        updated.hasMore = response.pagination?.hasMore ?? false
+        updated.totalCount = response.pagination?.totalCount ?? updated.totalCount
+        updated.lastFetchedAt = Date()
+
+        cache[conversationId] = updated
+        return updated.participants
+    }
+
+    func updateRole(conversationId: String, participantId: String, newRole: String) {
+        guard var entry = cache[conversationId] else { return }
+        if let idx = entry.participants.firstIndex(where: { $0.id == participantId || $0.userId == participantId }) {
+            entry.participants[idx].conversationRole = newRole
+            cache[conversationId] = entry
+        }
+    }
+
+    func removeParticipant(conversationId: String, participantId: String) {
+        guard var entry = cache[conversationId] else { return }
+        entry.participants.removeAll { $0.id == participantId || $0.userId == participantId }
+        if let total = entry.totalCount { entry.totalCount = total - 1 }
+        cache[conversationId] = entry
+    }
+
+    func invalidate(conversationId: String) {
+        cache.removeValue(forKey: conversationId)
+    }
 }
 
 // MARK: - ConversationInfoSheet
@@ -50,6 +141,9 @@ struct ConversationInfoSheet: View {
 
     @State private var participants: [ConversationParticipant] = []
     @State private var isLoadingParticipants = false
+    @State private var isLoadingMoreParticipants = false
+    @State private var hasMoreParticipants = true
+    @State private var totalParticipants: Int = 0
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
     @State private var showParticipantsView = false
@@ -107,7 +201,10 @@ struct ConversationInfoSheet: View {
         }
         .background(sheetBackground)
         .presentationDragIndicator(.visible)
-        .task { await loadParticipants() }
+        .task {
+            totalParticipants = conversation.memberCount
+            await loadParticipants()
+        }
         .fullScreenCover(isPresented: $showParticipantsView) {
             ParticipantsView(
                 conversationId: conversation.id,
@@ -271,7 +368,7 @@ struct ConversationInfoSheet: View {
         HStack(spacing: 0) {
             ForEach(InfoTab.allCases, id: \.self) { tab in
                 let isSelected = selectedTab == tab
-                let count = tabCount(for: tab)
+                let label = tabCountLabel(for: tab)
 
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -284,8 +381,8 @@ struct ConversationInfoSheet: View {
                             Text(tab.rawValue)
                                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
 
-                            if count > 0 {
-                                Text("\(count)")
+                            if let label {
+                                Text(label)
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(isSelected ? .white : theme.textMuted)
                                     .padding(.horizontal, 5)
@@ -350,6 +447,16 @@ struct ConversationInfoSheet: View {
                 LazyVStack(spacing: 0) {
                     ForEach(participants) { participant in
                         memberRow(participant)
+                            .onAppear {
+                                if participant.id == participants.last?.id {
+                                    Task { await loadMoreParticipants() }
+                                }
+                            }
+                    }
+                    if isLoadingMoreParticipants {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                     }
                 }
                 .padding(.top, 8)
@@ -777,11 +884,17 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func tabCount(for tab: InfoTab) -> Int {
+    private func tabCountLabel(for tab: InfoTab) -> String? {
         switch tab {
-        case .members: return participants.count
-        case .media: return mediaAttachments.count
-        case .pinned: return pinnedMessages.count
+        case .members:
+            if totalParticipants > participants.count {
+                return "\(participants.count)/\(totalParticipants)"
+            }
+            return participants.count > 0 ? "\(participants.count)" : nil
+        case .media:
+            return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
+        case .pinned:
+            return pinnedMessages.count > 0 ? "\(pinnedMessages.count)" : nil
         }
     }
 
@@ -912,14 +1025,34 @@ struct ConversationInfoSheet: View {
         defer { isLoadingParticipants = false }
 
         do {
-            let response: ParticipantsResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversation.id)/participants?limit=100"
+            let fetched = try await ParticipantCache.shared.loadFirstPage(
+                for: conversation.id,
+                forceRefresh: await ParticipantCache.shared.isStale(for: conversation.id)
             )
-            if response.success {
-                participants = response.data
+            participants = fetched
+            hasMoreParticipants = await ParticipantCache.shared.hasMore(for: conversation.id)
+            if let serverTotal = await ParticipantCache.shared.totalCount(for: conversation.id) {
+                totalParticipants = serverTotal
             }
         } catch {
-            // Silently fail — show empty
+            Self.logger.error("Failed to load participants: \(error.localizedDescription)")
+        }
+    }
+
+    private func loadMoreParticipants() async {
+        guard hasMoreParticipants, !isLoadingMoreParticipants else { return }
+        isLoadingMoreParticipants = true
+        defer { isLoadingMoreParticipants = false }
+
+        do {
+            let allFetched = try await ParticipantCache.shared.loadNextPage(for: conversation.id)
+            participants = allFetched
+            hasMoreParticipants = await ParticipantCache.shared.hasMore(for: conversation.id)
+            if let serverTotal = await ParticipantCache.shared.totalCount(for: conversation.id) {
+                totalParticipants = serverTotal
+            }
+        } catch {
+            Self.logger.error("Failed to load more participants: \(error.localizedDescription)")
         }
     }
 }

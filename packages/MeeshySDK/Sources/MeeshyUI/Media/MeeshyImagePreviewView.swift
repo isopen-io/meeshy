@@ -140,9 +140,7 @@ public struct MeeshyImagePreviewView: View {
             VStack(spacing: 0) {
                 Image(uiImage: displayImage)
                     .resizable()
-                    .scaledToFill()
-                    .frame(maxHeight: 350)
-                    .clipped()
+                    .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, 16)
 
@@ -158,10 +156,9 @@ public struct MeeshyImagePreviewView: View {
         case .message:
             Image(uiImage: displayImage)
                 .resizable()
-                .scaledToFill()
-                .frame(maxWidth: 240, maxHeight: 200)
-                .clipped()
+                .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 20)
 
         case .avatar:
             Image(uiImage: displayImage)

@@ -18,6 +18,7 @@ export type {
   GetConversationsResponse,
   GetMessagesResponse,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
 } from './conversations/types';

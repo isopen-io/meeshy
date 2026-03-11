@@ -52,7 +52,6 @@ describe('useMessageTranslations', () => {
     originalLanguage: 'en',
     messageType: 'text' as const,
     isEdited: false,
-    isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     translations: [],

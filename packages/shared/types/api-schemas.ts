@@ -583,8 +583,7 @@ export const messageSchema = {
     // State
     isEdited: { type: 'boolean', description: 'Message has been edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edit timestamp' },
-    isDeleted: { type: 'boolean', description: 'Message has been deleted' },
-    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp' },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp (null = not deleted)' },
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },
@@ -803,7 +802,9 @@ export const conversationParticipantSchema = {
   description: 'Participant in a conversation with full user information',
   properties: {
     id: { type: 'string', description: 'User ID' },
-    userId: { type: 'string', description: 'User ID (duplicate for backward compatibility)' },
+    participantId: { type: 'string', nullable: true, description: 'Participant ID (unified model)' },
+    userId: { type: 'string', nullable: true, description: 'User ID (null for anonymous participants)' },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'], description: 'Participant type (unified model)' },
     username: { type: 'string', description: 'Username' },
     firstName: { type: 'string', nullable: true, description: 'First name' },
     lastName: { type: 'string', nullable: true, description: 'Last name' },
@@ -2773,19 +2774,30 @@ export const refreshTokenRequestSchema = {
  */
 export const verifyEmailRequestSchema = {
   type: 'object',
-  required: ['token', 'email'],
+  required: ['email'],
   properties: {
     token: {
       type: 'string',
       minLength: 1,
-      description: 'Verification token from email'
+      description: 'Verification token from email link'
+    },
+    code: {
+      type: 'string',
+      minLength: 6,
+      maxLength: 6,
+      pattern: '^[0-9]{6}$',
+      description: '6-digit verification code for mobile'
     },
     email: {
       type: 'string',
       format: 'email',
       description: 'Email address to verify'
     }
-  }
+  },
+  oneOf: [
+    { required: ['token', 'email'] },
+    { required: ['code', 'email'] }
+  ]
 } as const;
 
 /**

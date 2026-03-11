@@ -195,7 +195,7 @@ export {
   aggregateHealthStatus,
 } from './status-types.js';
 
-// Role types (exports sélectifs pour éviter conflits avec UserRole/ConversationRole existants)
+// Role types (exports sélectifs pour éviter conflits avec UserRole existant)
 export {
   GlobalUserRole,
   type GlobalUserRoleType,
@@ -215,14 +215,16 @@ export {
   isMemberAdmin,
   isMemberModerator,
   isMemberCreator,
-  // Aliases de compatibilité (deprecated)
-  hasMinimumConversationRole,
-  isConversationMemberRole,
-  isConversationAdmin,
-  isConversationModerator,
-  CONVERSATION_ROLE_HIERARCHY,
-  COMMUNITY_ROLE_HIERARCHY,
+  // Unified role resolution
+  getEffectiveRole,
+  getEffectiveRoleLevel,
+  hasModeratorPrivileges,
+  // Legacy alias — use MemberRoleType instead
+  type ConversationRole,
 } from './role-types.js';
+
+// Re-import GlobalUserRole and GLOBAL_ROLE_HIERARCHY as values for legacy aliases below
+import { GlobalUserRole, GLOBAL_ROLE_HIERARCHY } from './role-types.js';
 
 // Action types (pas de conflits majeurs)
 export * from './action-types.js';
@@ -231,7 +233,7 @@ export * from './action-types.js';
 export * from './socketio-events.js';
 
 // Import pour éviter les conflits de noms
-import type { MessageTranslationCache, SocketIOUser, TranslationData, UserPermissions } from './socketio-events.js';
+import type { MessageTranslationCache, SocketIOUser, TranslationData, UserPermissions, MessageType } from './socketio-events.js';
 
 // Ré-export des types essentiels
 export type { TranslationData, MessageTranslationCache, SocketIOUser };
@@ -239,68 +241,12 @@ export type { TranslationData, MessageTranslationCache, SocketIOUser };
 // ===== ENUM DES RÔLES UNIFORMES =====
 /**
  * Rôles globaux des utilisateurs (aligné avec schema.prisma User.role)
+ * @deprecated Use GlobalUserRole instead
  * @see shared/schema.prisma ligne 35
  */
-export enum UserRoleEnum {
-  BIGBOSS = 'BIGBOSS',
-  ADMIN = 'ADMIN',
-  MODERATOR = 'MODERATOR',  // Modérateur global (aligné avec Prisma)
-  AUDIT = 'AUDIT',
-  ANALYST = 'ANALYST',
-  USER = 'USER'
-}
-
-/**
- * Roles dans une conversation ou communaute (aligne avec Participant.role)
- * @see shared/schema.prisma Participant model
- */
-export type ConversationRole = 'admin' | 'moderator' | 'member';
-
-// ===== TYPES SPÉCIFIQUES À LA TRADUCTION =====
-export interface TranslationRequest {
-  messageId: string;
-  text: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  modelType?: 'basic' | 'medium' | 'premium';
-  conversationId?: string;
-  participantIds?: string[];
-  requestType?: 'conversation' | 'direct' | 'forced' | 'batch';
-}
-
-export interface TranslationResponse {
-  messageId: string;
-  translatedText: string;
-  detectedSourceLanguage: string;
-  status: number;
-  metadata?: {
-    confidenceScore: number;
-    fromCache: boolean;
-    modelUsed: string;
-    processingTimeMs?: number;
-  };
-}
-
-// ===== TYPES DE SERVICE =====
-export interface ServiceConfig {
-  port: number;
-  host: string;
-  jwtSecret: string;
-  databaseUrl: string;
-  translationServicePort?: number;
-}
-
-export interface ServiceHealth {
-  status: 'healthy' | 'unhealthy' | 'degraded';
-  uptime: number;
-  connections: number;
-  memoryUsage: {
-    used: number;
-    total: number;
-    percentage: number;
-  };
-  timestamp: Date;
-}
+export const UserRoleEnum = GlobalUserRole;
+/** @deprecated Use GlobalUserRole instead */
+export type UserRoleEnum = GlobalUserRole;
 
 // Legacy API types removed - use api-responses.ts instead
 
@@ -343,7 +289,6 @@ export interface TranslatedMessage {
   readonly messageType: MessageType;
   readonly isEdited: boolean;
   readonly editedAt?: Date;
-  readonly isDeleted: boolean;
   readonly deletedAt?: Date;
   readonly replyToId?: string;
   readonly createdAt: Date;
@@ -380,17 +325,10 @@ export interface Translation {
 // Notification est maintenant exporté depuis notification.ts
 // L'interface unifiée supporte à la fois la structure plate (Prisma) et imbriquée (frontend)
 
-export type UserRole = UserRoleEnum;
+export type UserRole = GlobalUserRole;
 
-// Utilitaires pour les rôles et permissions
-export const ROLE_HIERARCHY: Readonly<Record<string, number>> = {
-  [UserRoleEnum.BIGBOSS]: 7,
-  [UserRoleEnum.ADMIN]: 5,
-  [UserRoleEnum.MODERATOR]: 4,
-  [UserRoleEnum.AUDIT]: 3,
-  [UserRoleEnum.ANALYST]: 2,
-  [UserRoleEnum.USER]: 1
-};
+/** @deprecated Use GLOBAL_ROLE_HIERARCHY instead */
+export const ROLE_HIERARCHY: Readonly<Record<string, number>> = GLOBAL_ROLE_HIERARCHY;
 
 export const DEFAULT_PERMISSIONS: Readonly<Record<string, UserPermissions>> = {
   [UserRoleEnum.BIGBOSS]: {
@@ -459,6 +397,17 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<string, UserPermissions>> = {
     canManageNotifications: false,
     canManageTranslations: false,
   },
+  [UserRoleEnum.AGENT]: {
+    canAccessAdmin: false,
+    canManageUsers: false,
+    canManageGroups: false,
+    canManageConversations: false,
+    canViewAnalytics: false,
+    canModerateContent: false,
+    canViewAuditLogs: false,
+    canManageNotifications: false,
+    canManageTranslations: false,
+  },
   // Aliases ne sont pas inclus car ils retournent les mêmes valeurs string que les rôles principaux
 };
 
@@ -487,7 +436,7 @@ export interface GroupMember {
   readonly groupId: string;
   readonly userId: string;
   readonly joinedAt: Date;
-  readonly role: UserRoleEnum;
+  readonly role: GlobalUserRole;
   readonly user: SocketIOUser;
 }
 
@@ -583,79 +532,14 @@ export interface ConversationLink {
   readonly stats?: ConversationLinkStats;
 }
 
-// ===== TYPES POUR L'AUTHENTIFICATION =====
-
-/**
- * Requête d'authentification
- */
-export interface AuthRequest {
-  readonly username: string;
-  readonly password?: string;
-  readonly firstName?: string;
-  readonly lastName?: string;
-  readonly email?: string;
-  readonly phoneNumber?: string;
-  readonly systemLanguage?: string;
-  readonly regionalLanguage?: string;
-}
-
-/**
- * Réponse d'authentification
- */
-export interface AuthResponse {
-  readonly success: boolean;
-  readonly user?: SocketIOUser;
-  readonly token?: string;
-  readonly message?: string;
-}
 
 /**
  * Modes d'authentification
  */
 export type AuthMode = 'welcome' | 'login' | 'register' | 'join';
 
-// ===== TYPES POUR LES INDICATEURS =====
 
-/**
- * Indicateur de frappe
- */
-export interface TypingIndicator {
-  readonly userId: string;
-  readonly conversationId: string;
-  readonly isTyping: boolean;
-  readonly user: SocketIOUser;
-}
-
-/**
- * Statut en ligne d'un utilisateur
- */
-export interface OnlineStatus {
-  readonly userId: string;
-  readonly isOnline: boolean;
-  readonly lastActiveAt: Date;
-}
-
-// ===== TYPES POUR L'ERREUR HANDLING =====
-
-/**
- * Réponse d'erreur standardisée
- */
-export interface ErrorResponse {
-  readonly success: false;
-  readonly error: string;
-  readonly code?: string;
-  readonly details?: Readonly<Record<string, string | number | boolean | null>>;
-  readonly timestamp: Date;
-}
-
-/**
- * Erreur de validation
- */
-export interface ValidationError {
-  readonly field: string;
-  readonly message: string;
-  readonly value?: string | number | boolean | null;
-}
+// ValidationError is exported from messaging.ts via `export * from './messaging.js'`
 
 // ===== CONSTANTES =====
 // Réexporter les langues supportées depuis le module centralisé (60+ langues avec capacités)
@@ -707,44 +591,10 @@ export interface LanguageCode {
   translateText: string;
 }
 
-// Type pour les codes de langue supportés (alias pour compatibilité)
-export type SupportedLanguage = string;
 
-export const TRANSLATION_MODELS = ['basic', 'medium', 'premium'] as const;
-export type TranslationModel = typeof TRANSLATION_MODELS[number];
+// TranslationModel is now exported from message-types.ts (via conversation.ts)
+// MessageType is now exported from socketio-events.ts
 
-/**
- * Types de messages supportés (aligné avec schema.prisma)
- * @see shared/schema.prisma ligne 184
- */
-export const MESSAGE_TYPES = ['text', 'image', 'file', 'audio', 'video', 'location', 'system'] as const;
-export type MessageType = typeof MESSAGE_TYPES[number];
-
-// ===== TYPES POUR LES STATISTIQUES =====
-
-/**
- * Statistiques de connexion
- */
-export interface ConnectionStats {
-  readonly connectedSockets: number;
-  readonly connectedUsers: number;
-  readonly activeConversations: number;
-  readonly typingUsers: Readonly<Record<string, number>>;
-  readonly messagesPerSecond?: number;
-  readonly translationsPerSecond?: number;
-}
-
-/**
- * Statistiques de traduction
- */
-export interface TranslationStats {
-  readonly requestsTotal: number;
-  readonly requestsSuccess: number;
-  readonly requestsError: number;
-  readonly cacheHitRate: number;
-  readonly averageProcessingTime: number;
-  readonly modelUsage: Readonly<Record<TranslationModel, number>>;
-}
 
 // ===== TYPES POUR MISE À JOUR UTILISATEUR =====
 
@@ -808,6 +658,7 @@ export interface SendMessageRequest {
 // ===== RE-EXPORTS POUR RÉTROCOMPATIBILITÉ =====
 export type {
   SocketIOMessage,
+  SocketIOMessageSender,
   SocketIOUser as User,
   SocketIOResponse as SocketResponse,
   MessageTranslationCache as TranslationCache,

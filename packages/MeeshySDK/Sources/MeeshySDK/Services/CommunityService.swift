@@ -1,9 +1,34 @@
 import Foundation
 
-public final class CommunityService: @unchecked Sendable {
+// MARK: - Protocol
+
+public protocol CommunityServiceProviding: Sendable {
+    func list(search: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunity]>
+    func search(query: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunitySearchResult]>
+    func get(communityId: String) async throws -> APICommunity
+    func create(name: String, identifier: String?, description: String?, isPrivate: Bool) async throws -> APICommunity
+    func update(communityId: String, name: String?, identifier: String?, description: String?, isPrivate: Bool?, avatar: String?, banner: String?) async throws -> APICommunity
+    func delete(communityId: String) async throws
+    func getMembers(communityId: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunityMember]>
+    func addMember(communityId: String, userId: String, role: CommunityRole) async throws -> APICommunityMember
+    func updateMemberRole(communityId: String, memberId: String, role: CommunityRole) async throws -> APICommunityMember
+    func removeMember(communityId: String, userId: String) async throws
+    func join(communityId: String) async throws -> APICommunityMember
+    func leave(communityId: String) async throws
+    func invite(communityId: String, userId: String) async throws -> APICommunityMember
+    func invite(communityId: String, userIds: [String]) async throws
+    func checkIdentifier(_ identifier: String) async throws -> IdentifierAvailability
+    func getConversations(communityId: String) async throws -> [APIConversation]
+    func addConversation(communityId: String, conversationId: String) async throws -> APIConversation
+}
+
+public final class CommunityService: CommunityServiceProviding, @unchecked Sendable {
     public static let shared = CommunityService()
-    private init() {}
-    private var api: APIClient { APIClient.shared }
+    private let api: APIClientProviding
+
+    init(api: APIClientProviding = APIClient.shared) {
+        self.api = api
+    }
 
     // MARK: - List User Communities
 
@@ -134,6 +159,22 @@ public final class CommunityService: @unchecked Sendable {
         let body = InviteMemberRequest(userId: userId)
         let response: APIResponse<APICommunityMember> = try await api.post(endpoint: "/communities/\(communityId)/invite", body: body)
         return response.data
+    }
+
+    // MARK: - Invite Multiple Users
+
+    public func invite(communityId: String, userIds: [String]) async throws {
+        var failCount = 0
+        for userId in userIds {
+            do {
+                _ = try await invite(communityId: communityId, userId: userId)
+            } catch {
+                failCount += 1
+            }
+        }
+        if failCount > 0 {
+            throw MeeshyError.server(statusCode: 0, message: "Failed to invite \(failCount) user(s)")
+        }
     }
 
     // MARK: - Check Identifier Availability

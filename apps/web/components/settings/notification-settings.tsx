@@ -68,10 +68,10 @@ export function NotificationSettings() {
     error,
     consentViolations,
     updatePreferences,
-  } = usePreferences<'notification'>('notification', {
+  } = usePreferences<'notifications'>('notifications', {
     onError: (error) => {
       console.error('[NotificationSettings] Error:', error);
-      toast.error(error.message || 'Erreur lors de la sauvegarde');
+      toast.error('message' in error ? error.message : 'Erreur lors de la sauvegarde');
     },
     onSuccess: () => {
       // Toast uniquement si sauvegarde manuelle (pas debounced)

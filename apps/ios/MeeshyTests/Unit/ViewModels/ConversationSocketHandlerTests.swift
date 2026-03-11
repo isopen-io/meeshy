@@ -85,6 +85,30 @@ final class ConversationSocketHandlerTests: XCTestCase {
         return (sut, delegate, messageSocket)
     }
 
+    private func makeReactionEvent(
+        messageId: String,
+        emoji: String,
+        participantId: String,
+        action: String
+    ) -> ReactionUpdateEvent {
+        let json = """
+        {
+            "messageId": "\(messageId)",
+            "participantId": "\(participantId)",
+            "emoji": "\(emoji)",
+            "action": "\(action)",
+            "aggregation": {
+                "emoji": "\(emoji)",
+                "count": \(action == "remove" ? 0 : 1),
+                "participantIds": ["\(participantId)"],
+                "hasCurrentUser": false
+            },
+            "timestamp": "2026-03-06T12:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+        return try! JSONDecoder().decode(ReactionUpdateEvent.self, from: json)
+    }
+
     private func makeMessage(
         id: String = "msg1",
         senderId: String? = nil,
@@ -213,6 +237,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         {
             "id":"msg1",
             "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
             "content":"Edited content",
             "isEdited":true,
             "createdAt":"2026-03-06T12:00:00.000Z"
@@ -236,6 +261,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         {
             "id":"unknown",
             "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
             "content":"Edited",
             "createdAt":"2026-03-06T12:00:00.000Z"
         }
@@ -285,7 +311,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [makeMessage(id: "msg1")]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 1, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -303,7 +329,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [msg]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 1, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -324,7 +350,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         delegate.messages = [msg]
         delegate.invalidateIndex()
 
-        let event = ReactionUpdateEvent(messageId: "msg1", emoji: "thumbsup", count: 0, userId: otherUserId)
+        let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "remove")
         socket.reactionRemoved.send(event)
 
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -410,9 +436,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
             "userId":"\(otherUserId)",
             "type":"read",
-            "updatedAt":"2099-12-31T23:59:59.000Z"
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":2}
         }
         """)
         socket.readStatusUpdated.send(event)
@@ -435,9 +463,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
             "userId":"\(otherUserId)",
             "type":"received",
-            "updatedAt":"2099-12-31T23:59:59.000Z"
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":1,"readCount":0}
         }
         """)
         socket.readStatusUpdated.send(event)
@@ -458,9 +488,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
+            "participantId":"participant-me",
             "userId":"\(currentUserId)",
             "type":"read",
-            "updatedAt":"2099-12-31T23:59:59.000Z"
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":1,"readCount":1}
         }
         """)
         socket.readStatusUpdated.send(event)
@@ -481,9 +513,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
             "userId":"\(otherUserId)",
             "type":"received",
-            "updatedAt":"2099-12-31T23:59:59.000Z"
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":1,"readCount":0}
         }
         """)
         socket.readStatusUpdated.send(event)

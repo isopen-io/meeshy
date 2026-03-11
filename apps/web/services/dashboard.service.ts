@@ -63,7 +63,7 @@ export const dashboardService = {
       const response = await apiService.get<{ success: boolean; data: any }>('/users/me/dashboard-stats');
       
       // Transformation des données pour assurer la compatibilité
-      const data = response.data.data;
+      const data = response.data!.data;
       
       // Si le backend retourne encore totalGroups, le convertir en totalCommunities
       if (data.stats && data.stats.totalGroups !== undefined && data.stats.totalCommunities === undefined) {
@@ -96,7 +96,7 @@ export const dashboardService = {
       const response = await apiService.get<{ success: boolean; data: ShareLink[] }>('/share-links');
       return {
         success: true,
-        data: response.data.data,
+        data: response.data!.data,
         message: response.message
       };
     } catch (error) {
@@ -119,7 +119,7 @@ export const dashboardService = {
       const response = await apiService.post<{ success: boolean; data: ShareLink }>('/share-links', data);
       return {
         success: true,
-        data: response.data.data,
+        data: response.data!.data,
         message: response.message
       };
     } catch (error) {

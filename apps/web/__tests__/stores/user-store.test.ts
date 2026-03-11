@@ -25,7 +25,7 @@ describe('UserStore', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  });
+  } as any);
 
   const mockUser1: User = createMockUser({
     id: 'user-1',
@@ -408,7 +408,7 @@ describe('UserStore', () => {
 
   describe('Edge Cases', () => {
     it('should handle user with minimal data', () => {
-      const minimalUser: User = {
+      const minimalUser = {
         id: 'minimal-user',
         username: 'minimal',
         email: 'minimal@example.com',
@@ -424,7 +424,7 @@ describe('UserStore', () => {
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      } as any as User;
 
       act(() => {
         useUserStore.getState().setParticipants([minimalUser]);

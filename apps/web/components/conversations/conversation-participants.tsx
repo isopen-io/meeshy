@@ -18,22 +18,20 @@ import {
   Loader2,
   Ghost
 } from 'lucide-react';
-import { SocketIOUser as User, ThreadMember, UserRoleEnum } from '@meeshy/shared/types';
+import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
+
+/** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
+type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkId?: string };
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
-import { getUserInitials } from '@/lib/avatar-utils';
 import { cn } from '@/lib/utils';
-
-// Helper pour détecter si un utilisateur est anonyme
-function isAnonymousUser(user: any): user is Participant {
-  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
-}
+import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
 
 interface ConversationParticipantsProps {
   conversationId: string;
-  participants: ThreadMember[];
+  participants: Participant[];
   currentUser: User;
   isGroup: boolean;
   conversationType?: string; // Ajouter le type de conversation
@@ -71,8 +69,8 @@ export function ConversationParticipants({
 
 
   // Listes en ligne / hors-ligne (inclure l'utilisateur actuel)
-  const onlineAll = participants.filter(p => p.user.isOnline);
-  const offlineAll = participants.filter(p => !p.user.isOnline);
+  const onlineAll = participants.filter(p => (p.user as ParticipantUser)?.isOnline);
+  const offlineAll = participants.filter(p => !(p.user as ParticipantUser)?.isOnline);
   const recentActiveParticipants = onlineAll.slice(0, 3);
 
 
@@ -80,7 +78,7 @@ export function ConversationParticipants({
   // Obtenir les noms des utilisateurs qui tapent
   const typingUserNames = usersTypingInChat.map((typingUser: { userId: string; conversationId: string }) => {
     const participant = participants.find(p => p.userId === typingUser.userId);
-    return participant?.user.displayName || participant?.user.username || typingUser.userId;
+    return (participant?.user as ParticipantUser)?.displayName || (participant?.user as ParticipantUser)?.username || typingUser.userId;
   });
 
   const renderTypingMessage = () => {
@@ -93,26 +91,16 @@ export function ConversationParticipants({
     }
   };
 
-  const getDisplayName = (user: User): string => {
-    return user.displayName || 
-           `${user.firstName} ${user.lastName}`.trim() || 
-           user.username;
+  const isCreator = (participant: Participant): boolean => {
+    return participant.role === MemberRole.CREATOR;
   };
 
-  const getAvatarFallback = (user: User): string => {
-    return getUserInitials(user);
-  };
-
-  const isCreator = (participant: ThreadMember): boolean => {
-    return participant.role === UserRoleEnum.CREATOR;
-  };
-
-  const shouldShowCrown = (participant: ThreadMember): boolean => {
+  const shouldShowCrown = (participant: Participant): boolean => {
     return conversationType !== 'direct' && isCreator(participant);
   };
 
   // Dédupliquer les participants par userId pour éviter les erreurs de clés dupliquées
-  const uniqueParticipantsMap = new Map<string, ThreadMember>();
+  const uniqueParticipantsMap = new Map<string, Participant>();
   participants.forEach(p => {
     if (p.userId && !uniqueParticipantsMap.has(p.userId)) {
       uniqueParticipantsMap.set(p.userId, p);
@@ -124,11 +112,11 @@ export function ConversationParticipants({
   const currentUserParticipant = uniqueParticipants.find(p => p.userId === currentUser.id);
   const allParticipantsIncludingCurrent = currentUserParticipant
     ? uniqueParticipants
-    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: UserRoleEnum.MEMBER } as ThreadMember];
+    : [...uniqueParticipants, { userId: currentUser.id, user: currentUser, role: MemberRole.MEMBER } as Participant];
 
   // Afficher les 3 premiers participants en ligne (incluant l'utilisateur connecté s'il est en ligne)
   // Afficher l'utilisateur courant + 2 autres participants (en ligne ou non)
-  let displayParticipants: ThreadMember[] = [];
+  let displayParticipants: Participant[] = [];
   if (currentUserParticipant) {
     displayParticipants = [currentUserParticipant];
     // Ajoute 2 autres participants (excluant l'utilisateur courant)
@@ -156,11 +144,11 @@ export function ConversationParticipants({
             {/* Avatars des participants en ligne */}
             <div className="flex -space-x-2">
               {displayParticipants.map((participant, index) => {
-                const user = participant.user;
-                const isAnonymous = isAnonymousUser(user);
-                const isCurrentUser = user.id === currentUser.id;
+                const user = participant.user as ParticipantUser;
+                const isAnonymous = isAnonymousParticipant(user);
+                const isCurrentUser = user?.id === currentUser.id;
                 // Utiliser index pour garantir l'unicité même en cas de doublons dans les données
-                const uniqueKey = `${participant.userId || participant.user?.id || 'unknown'}-${index}`;
+                const uniqueKey = `${participant.userId || user?.id || 'unknown'}-${index}`;
 
                 const avatarContent = (
                   <>
@@ -172,7 +160,7 @@ export function ConversationParticipants({
                       <Avatar className="h-6 w-6 border-2 border-background">
                         <AvatarImage src={user.avatar} />
                         <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {getAvatarFallback(user)}
+                          {getParticipantInitials(user)}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -180,7 +168,7 @@ export function ConversationParticipants({
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                       <div className="flex items-center gap-1">
                         {isAnonymous && <Ghost className="h-3 w-3" />}
-                        {getDisplayName(user)}
+                        {getParticipantDisplayName(user)}
                         {isCurrentUser && ` (${t('conversationDetails.you')})`}
                       </div>
                     </div>

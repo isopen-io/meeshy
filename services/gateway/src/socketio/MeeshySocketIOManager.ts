@@ -930,6 +930,11 @@ export class MeeshySocketIOManager {
         this._handleTypingStop(socket, data);
       });
 
+      // Heartbeat pour présence
+      socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
+        this._handleHeartbeat(socket);
+      });
+
       // ===== ÉVÉNEMENTS DE RÉACTIONS =====
       
       // Ajouter une réaction
@@ -1439,7 +1444,7 @@ export class MeeshySocketIOManager {
         originalLanguage: saved?.originalLanguage || messageData.originalLanguage || 'fr',
         messageType: saved?.messageType || data.messageType || 'text',
         isEdited: Boolean(saved?.isEdited),
-        isDeleted: saved?.deletedAt !== null,
+        deletedAt: saved?.deletedAt || undefined,
         isBlurred: Boolean(saved?.isBlurred),
         isViewOnce: Boolean(saved?.isViewOnce),
         expiresAt: saved?.expiresAt || undefined,
@@ -2133,6 +2138,28 @@ export class MeeshySocketIOManager {
     }
   }
 
+  private async _handleHeartbeat(socket: any) {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+
+    try {
+      const result = this._getConnectedUser(userIdOrToken);
+      if (!result) return;
+      const { user: connectedUser, realUserId: userId } = result;
+
+      this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
+
+      if (!connectedUser.isAnonymous) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { lastActiveAt: new Date() }
+        });
+      }
+    } catch {
+      // Silent - heartbeat failure is not critical
+    }
+  }
+
   private async _handleTypingStart(socket: any, data: { conversationId: string }) {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
@@ -2427,7 +2454,7 @@ export class MeeshySocketIOManager {
         originalContent: (message as any).originalContent || message.content,
         messageType: message.messageType || 'text',
         isEdited: Boolean(message.isEdited),
-        isDeleted: message.deletedAt !== null,
+        deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),
         isViewOnce: Boolean((message as any).isViewOnce),
         expiresAt: (message as any).expiresAt || undefined,
@@ -2646,8 +2673,32 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
 
+      // Résoudre le participantId : pour les anonymes, il est sur le SocketUser ;
+      // pour les registered, il faut le chercher en DB via le message → conversationId
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
@@ -2704,23 +2755,33 @@ export class MeeshySocketIOManager {
 
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
-        // Créer une notification pour l'auteur du message (si ce n'est pas lui qui réagit)
-        // Ne notifier que les utilisateurs authentifiés (pas les anonymes)
-        const messageAuthorId = message.senderId;
-        const reactorId = !isAnonymous ? userId : null;
+        // Résoudre senderId (Participant.id) → User.id pour la notification
+        if (!isAnonymous && message.senderId) {
+          const [authorParticipant, reactorParticipant] = await Promise.all([
+            this.prisma.participant.findUnique({
+              where: { id: message.senderId },
+              select: { userId: true }
+            }),
+            this.prisma.participant.findUnique({
+              where: { id: participantId },
+              select: { userId: true }
+            })
+          ]);
 
-        if (messageAuthorId && reactorId && messageAuthorId !== reactorId) {
-          // Créer la notification de manière asynchrone sans bloquer
-          // Fire-and-forget pour éviter les timeouts
-          this.notificationService.createReactionNotification({
-            messageAuthorId,
-            reactorUserId: reactorId,
-            messageId: data.messageId,
-            conversationId: message.conversationId,
-            reactionEmoji: data.emoji,
-          }).catch((notifError) => {
-            logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
-          });
+          const authorUserId = authorParticipant?.userId;
+          const reactorUserId = reactorParticipant?.userId;
+
+          if (authorUserId && reactorUserId && authorUserId !== reactorUserId) {
+            this.notificationService.createReactionNotification({
+              messageAuthorId: authorUserId,
+              reactorUserId,
+              messageId: data.messageId,
+              conversationId: message.conversationId,
+              reactionEmoji: data.emoji,
+            }).catch((notifError) => {
+              logger.error('❌ [REACTION_ADDED] Erreur lors de la création de la notification', notifError);
+            });
+          }
         }
 
       } else {
@@ -2760,7 +2821,31 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      // Résoudre le participantId pour les registered users
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: data.messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');
@@ -2844,8 +2929,31 @@ export class MeeshySocketIOManager {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
 
+      // Résoudre le participantId pour les registered users
+      let participantId = user?.participantId;
+      if (!participantId && !isAnonymous) {
+        const msg = await this.prisma.message.findUnique({
+          where: { id: messageId },
+          select: { conversationId: true }
+        });
+        if (msg) {
+          const participant = await this.prisma.participant.findFirst({
+            where: { userId, conversationId: msg.conversationId, isActive: true },
+            select: { id: true }
+          });
+          participantId = participant?.id;
+        }
+      }
+
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<any> = {
+          success: false,
+          error: 'Could not resolve participant'
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       // Importer le ReactionService
       const { ReactionService } = await import('../services/ReactionService.js');

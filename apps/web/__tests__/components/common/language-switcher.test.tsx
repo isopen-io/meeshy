@@ -246,7 +246,7 @@ describe('LanguageSwitcher (LanguageSelector)', () => {
 
   describe('Custom Choices', () => {
     it('displays only custom choices when provided', () => {
-      const choices = [
+      const choices: any[] = [
         { code: 'en', name: 'English' },
         { code: 'fr', name: 'French' },
       ];
@@ -293,7 +293,7 @@ describe('LanguageSwitcher (LanguageSelector)', () => {
     });
 
     it('hides search input when 10 or fewer languages', () => {
-      const fewChoices = [
+      const fewChoices: any[] = [
         { code: 'en', name: 'English' },
         { code: 'fr', name: 'French' },
         { code: 'es', name: 'Spanish' },

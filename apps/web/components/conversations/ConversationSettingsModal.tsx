@@ -66,8 +66,10 @@ import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
-import type { Conversation, ConversationParticipant, Message, ThreadMember, SocketIOUser } from '@meeshy/shared/types';
+import type { Conversation, ConversationParticipant, Message, SocketIOUser } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { useUserStore } from '@/stores/user-store';
@@ -102,15 +104,13 @@ const ShareLinksSection = lazy(() =>
 // Dialog upload image
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
 
-// Rôles qui peuvent accéder à la configuration admin
-const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'BIGBOSS', 'CREATOR', 'AUDIT', 'ANALYST', 'admin', 'moderator'];
 
 interface ConversationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: Conversation;
   currentUser?: any; // User from shared/types - optionnel pour compatibilité
-  conversationParticipants?: ThreadMember[]; // Pour accéder aux données de l'autre utilisateur
+  conversationParticipants?: Participant[]; // Pour accéder aux données de l'autre utilisateur
   messages?: Message[]; // Pour les stats de langues
   currentUserRole?: string;
   onConversationUpdate?: (conversation: Conversation) => void;
@@ -144,7 +144,7 @@ export function ConversationSettingsModal({
     id: '',
     username: '',
     email: '',
-    role: 'MEMBER' as any,
+    role: 'MEMBER',
     systemLanguage: 'en'
   };
 
@@ -200,10 +200,10 @@ export function ConversationSettingsModal({
   );
 
   // Déterminer si l'utilisateur peut accéder aux paramètres admin
-  const canAccessAdminSettings = useMemo(() => {
-    return ADMIN_ROLES.includes(currentUserRole.toUpperCase()) ||
-           ADMIN_ROLES.includes(currentUserRole.toLowerCase());
-  }, [currentUserRole]);
+  const canAccessAdminSettings = useMemo(
+    () => hasMinimumMemberRole(currentUserRole.toLowerCase(), MemberRole.MODERATOR),
+    [currentUserRole],
+  );
 
   // État des tabs synchronisé avec l'URL
   const [activeTab, setActiveTab] = useState(() => {

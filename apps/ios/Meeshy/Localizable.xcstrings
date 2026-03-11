@@ -779,9 +779,6 @@
     "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide." : {
 
     },
-    "Analyse de l'audio…" : {
-
-    },
     "Annuler" : {
       "localizations" : {
         "en" : {
@@ -2080,9 +2077,6 @@
     "Export de donnees" : {
 
     },
-    "Faites glisser les poignees pour recadrer" : {
-
-    },
     "Fermer" : {
       "localizations" : {
         "en" : {
@@ -2790,9 +2784,6 @@
         }
       }
     },
-    "Reinitialiser" : {
-
-    },
     "Renvoyer" : {
 
     },
@@ -3325,9 +3316,6 @@
     "Transcription en cours..." : {
 
     },
-    "Transcription indisponible." : {
-
-    },
     "Transcrire" : {
 
     },
@@ -3426,9 +3414,6 @@
 
     },
     "Utilisations max (optionnel)" : {
-
-    },
-    "Utiliser" : {
 
     },
     "Vérification non disponible" : {

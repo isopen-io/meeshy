@@ -214,16 +214,12 @@ final class DeepLinkParserTests: XCTestCase {
 @MainActor
 final class DeepLinkRouterTests: XCTestCase {
 
-    private var sut: DeepLinkRouter { DeepLinkRouter.shared }
-
-    override func setUp() {
-        super.setUp()
-        _ = sut.consumePendingDeepLink()
-    }
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
 
     // MARK: - Universal Link handling
 
     func test_handle_joinLink_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/join/inv123")!
 
         let handled = sut.handle(url: url)
@@ -233,6 +229,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_joinLink_shortPath_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/l/shortcode")!
 
         let handled = sut.handle(url: url)
@@ -242,6 +239,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_conversationLink_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/c/conv456")!
 
         let handled = sut.handle(url: url)
@@ -251,6 +249,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_conversationFullPath_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/conversation/conv789")!
 
         let handled = sut.handle(url: url)
@@ -260,6 +259,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_unknownMeeshyPath_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/settings")!
 
         let handled = sut.handle(url: url)
@@ -269,6 +269,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_externalUrl_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "https://google.com/search")!
 
         let handled = sut.handle(url: url)
@@ -277,6 +278,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_emptyPath_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/")!
 
         let handled = sut.handle(url: url)
@@ -285,6 +287,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_joinWithoutIdentifier_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/join")!
 
         let handled = sut.handle(url: url)
@@ -293,6 +296,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_appMeeshyMe_recognized() {
+        let sut = makeSUT()
         let url = URL(string: "https://app.meeshy.me/c/conv111")!
 
         let handled = sut.handle(url: url)
@@ -304,6 +308,7 @@ final class DeepLinkRouterTests: XCTestCase {
     // MARK: - Custom Scheme via router
 
     func test_handle_customScheme_join_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "meeshy://join/inv999")!
 
         let handled = sut.handle(url: url)
@@ -313,6 +318,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_customScheme_conversation_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "meeshy://conversation/conv222")!
 
         let handled = sut.handle(url: url)
@@ -322,6 +328,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_customScheme_auth_magicLink_setsPendingDeepLink() {
+        let sut = makeSUT()
         let url = URL(string: "meeshy://auth/magic-link?token=tok999")!
 
         let handled = sut.handle(url: url)
@@ -331,6 +338,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_customScheme_auth_noToken_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "meeshy://auth/magic-link")!
 
         let handled = sut.handle(url: url)
@@ -339,6 +347,7 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_handle_customScheme_unknown_returnsFalse() {
+        let sut = makeSUT()
         let url = URL(string: "meeshy://settings")!
 
         let handled = sut.handle(url: url)
@@ -349,6 +358,7 @@ final class DeepLinkRouterTests: XCTestCase {
     // MARK: - Consume
 
     func test_consumePendingDeepLink_returnsAndClears() {
+        let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/join/abc")!
         _ = sut.handle(url: url)
 
@@ -359,16 +369,54 @@ final class DeepLinkRouterTests: XCTestCase {
     }
 
     func test_consumePendingDeepLink_whenNoPending_returnsNil() {
+        let sut = makeSUT()
         let consumed = sut.consumePendingDeepLink()
 
         XCTAssertNil(consumed)
     }
 
     func test_handle_overwritesPreviousPendingLink() {
+        let sut = makeSUT()
         _ = sut.handle(url: URL(string: "https://meeshy.me/join/first")!)
         _ = sut.handle(url: URL(string: "https://meeshy.me/c/second")!)
 
         XCTAssertEqual(sut.pendingDeepLink, .conversation(id: "second"))
+    }
+}
+
+// MARK: - DeepLinkRouter chatLink Tests
+
+@MainActor
+final class DeepLinkRouterChatLinkTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    func test_handle_chatPath_setsChatLink() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/chat/mshy_support")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        guard case .chatLink(let id) = sut.pendingDeepLink else {
+            XCTFail("Expected chatLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+        XCTAssertEqual(id, "mshy_support")
+    }
+
+    func test_handle_chatCustomScheme_setsChatLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://chat/mshy_abc123")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        guard case .chatLink(let id) = sut.pendingDeepLink else {
+            XCTFail("Expected chatLink, got \(String(describing: sut.pendingDeepLink))")
+            return
+        }
+        XCTAssertEqual(id, "mshy_abc123")
     }
 }
 
@@ -379,6 +427,11 @@ final class DeepLinkEquatableTests: XCTestCase {
     func test_joinLink_equality() {
         XCTAssertEqual(DeepLink.joinLink(identifier: "a"), DeepLink.joinLink(identifier: "a"))
         XCTAssertNotEqual(DeepLink.joinLink(identifier: "a"), DeepLink.joinLink(identifier: "b"))
+    }
+
+    func test_chatLink_equality() {
+        XCTAssertEqual(DeepLink.chatLink(identifier: "a"), DeepLink.chatLink(identifier: "a"))
+        XCTAssertNotEqual(DeepLink.chatLink(identifier: "a"), DeepLink.chatLink(identifier: "b"))
     }
 
     func test_magicLink_equality() {
@@ -394,5 +447,6 @@ final class DeepLinkEquatableTests: XCTestCase {
     func test_differentCases_notEqual() {
         XCTAssertNotEqual(DeepLink.joinLink(identifier: "x"), DeepLink.conversation(id: "x"))
         XCTAssertNotEqual(DeepLink.magicLink(token: "x"), DeepLink.joinLink(identifier: "x"))
+        XCTAssertNotEqual(DeepLink.chatLink(identifier: "x"), DeepLink.joinLink(identifier: "x"))
     }
 }

@@ -6,6 +6,7 @@
  * pour garantir une compatibilité totale avec l'API existante.
  */
 
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { conversationsCrudService } from './crud.service';
 import { messagesService } from './messages.service';
 import { participantsService } from './participants.service';
@@ -25,6 +26,7 @@ import type {
   GetConversationsResponse,
   GetMessagesResponse,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
 } from './types';
@@ -141,7 +143,7 @@ export class ConversationsService {
    * Obtenir les participants d'une conversation
    */
   async getParticipants(conversationId: string, filters?: ParticipantsFilters): Promise<User[]> {
-    return participantsService.getParticipants(conversationId, filters);
+    return participantsService.getParticipants(conversationId, filters) as any;
   }
 
   /**
@@ -171,7 +173,7 @@ export class ConversationsService {
   async updateParticipantRole(
     conversationId: string,
     userId: string,
-    role: 'ADMIN' | 'MODERATOR' | 'MEMBER'
+    role: MemberRoleType,
   ): Promise<void> {
     return participantsService.updateParticipantRole(conversationId, userId, role);
   }
@@ -233,6 +235,7 @@ export type {
   GetConversationsResponse,
   GetMessagesResponse,
   AllParticipantsResponse,
+  ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
 };

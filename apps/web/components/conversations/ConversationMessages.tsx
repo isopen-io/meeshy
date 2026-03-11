@@ -9,7 +9,6 @@ import type {
   ConversationType
 } from '@meeshy/shared/types';
 import { MessagesDisplay } from '@/components/common/messages-display';
-import { UserRoleEnum } from '@meeshy/shared/types';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
@@ -25,7 +24,7 @@ interface ConversationMessagesProps {
   usedLanguages: string[];
   isMobile: boolean;
   conversationType?: ConversationType;
-  userRole: UserRoleEnum;
+  userRole: string;
   conversationId?: string;
   isAnonymous?: boolean; // Add isAnonymous for anonymous reactions
   currentAnonymousUserId?: string; // Add anonymous user ID for reactions

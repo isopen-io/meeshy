@@ -240,6 +240,18 @@ export function registerMessagesRoutes(
         });
       }
 
+      // Resolve the current user's participantId in this conversation
+      const isAnonymousUser = authRequest.authContext.type === 'anonymous';
+      const currentParticipant = !isAnonymousUser && userId
+        ? await prisma.participant.findFirst({
+            where: { userId, conversationId, isActive: true },
+            select: { id: true }
+          })
+        : null;
+      const currentParticipantId = isAnonymousUser
+        ? authRequest.authContext.participantId
+        : currentParticipant?.id;
+
       // Construire la requête avec pagination
       const whereClause: any = {
         conversationId: conversationId, // Utiliser l'ID résolu
@@ -536,8 +548,7 @@ export function registerMessagesRoutes(
 
       // ===== OPTIMISATION: Exécuter les requêtes en parallèle =====
       // Évite le problème N+1 séquentiel (count -> messages -> user)
-      const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !authRequest.authContext.isAnonymous;
-      const isAnonymousUser = authRequest.authContext.isAnonymous;
+      const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !isAnonymousUser;
 
       const [totalCount, messages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination) - skip when using cursor or around
@@ -578,19 +589,16 @@ export function registerMessagesRoutes(
         const messageIds: string[] = (messages as any[]).map(m => m.id);
 
         // Requête pour obtenir les réactions de l'utilisateur sur ces messages
-        const userReactions = await prisma.reaction.findMany({
+        const userReactions = currentParticipantId ? await prisma.reaction.findMany({
           where: {
             messageId: { in: messageIds },
-            ...(isAnonymousUser
-              ? { participantId: authRequest.authContext.participantId }
-              : { userId: userId }
-            )
+            participantId: currentParticipantId
           },
           select: {
             messageId: true,
             emoji: true
           }
-        });
+        }) : [];
 
         // Grouper par messageId
         for (const reaction of userReactions) {
@@ -683,7 +691,6 @@ export function registerMessagesRoutes(
           // Édition/Suppression
           isEdited: message.isEdited,
           editedAt: message.editedAt,
-          isDeleted: message.deletedAt !== null,
           deletedAt: message.deletedAt,
 
           // Reply/Forward
@@ -842,7 +849,9 @@ export function registerMessagesRoutes(
           const readStatusService = new MessageReadStatusService(prisma);
 
           // Marquer les messages comme reçus (curseur automatiquement placé sur le dernier message)
-          await readStatusService.markMessagesAsReceived(userId, conversationId);
+          if (currentParticipantId) {
+            await readStatusService.markMessagesAsReceived(currentParticipantId, conversationId);
+          }
         } catch (error) {
           logger.warn('Error marking messages as received:', error);
         }
@@ -997,7 +1006,7 @@ export function registerMessagesRoutes(
         const readStatusService = new MessageReadStatusService(prisma);
 
         // Marquer comme lu (curseur automatiquement placé sur le dernier message)
-        await readStatusService.markMessagesAsRead(userId, conversationId);
+        await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
       } catch (err) {
         logger.warn('Error marking messages as read:', err);
       }
@@ -1134,6 +1143,21 @@ export function registerMessagesRoutes(
         });
       }
 
+      // Resolve the sender's participantId
+      const senderParticipant = authRequest.authContext.isAnonymous
+        ? { id: authRequest.authContext.participantId }
+        : await prisma.participant.findFirst({
+            where: { userId, conversationId, isActive: true },
+            select: { id: true }
+          });
+
+      if (!senderParticipant?.id) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Participant not found in this conversation'
+        });
+      }
+
       // Validation du contenu (plaintext ou encrypted)
       if (isEncrypted) {
         // For encrypted messages, validate encrypted content
@@ -1183,7 +1207,7 @@ export function registerMessagesRoutes(
       // ÉTAPE 2: Créer le message avec le contenu transformé
       const messageData: any = {
         conversationId: conversationId,
-        senderId: userId,
+        senderId: senderParticipant.id,
         content: processedContent,
         originalLanguage,
         messageType,
@@ -1446,7 +1470,7 @@ export function registerMessagesRoutes(
           try {
             const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
             const readStatusService = new MessageReadStatusService(prisma);
-            await readStatusService.markMessagesAsRead(userId, conversationId, message.id);
+            await readStatusService.markMessagesAsRead(senderParticipant.id, conversationId, message.id);
           } catch (err) {
             logger.warn('Error marking message as read for sender:', err);
           }

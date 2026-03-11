@@ -393,7 +393,7 @@ describe('useComposerDrafts', () => {
     it('should save replyTo state when switching conversations', () => {
       const mockReply = { id: 'reply-msg-id', content: 'Original message' };
       mockGetState.mockReturnValue({
-        replyingTo: mockReply,
+        replyingTo: mockReply as any,
         setReplyingTo: mockSetReplyingTo,
         clearReply: mockClearReply,
       });

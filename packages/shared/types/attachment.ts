@@ -309,7 +309,7 @@ export interface UploadedAttachmentResponse {
    */
   readonly metadata?: {
     audioEffectsTimeline?: import('./audio-effects-timeline.js').AudioEffectsTimeline;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   /**
    * Timeline des effets audio appliqués pendant l'enregistrement

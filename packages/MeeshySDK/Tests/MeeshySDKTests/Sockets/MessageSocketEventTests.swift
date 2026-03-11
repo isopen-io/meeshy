@@ -39,32 +39,42 @@ final class MessageSocketEventTests: XCTestCase {
         let json = """
         {
             "messageId": "msg1",
+            "participantId": "p1",
             "emoji": "\u{1F44D}",
-            "count": 3,
-            "userId": "user1",
-            "conversationId": "conv1"
+            "action": "add",
+            "aggregation": {
+                "emoji": "\u{1F44D}",
+                "count": 3,
+                "participantIds": ["p1", "p2", "p3"],
+                "hasCurrentUser": true
+            },
+            "timestamp": "2026-03-06T12:00:00.000Z"
         }
         """.data(using: .utf8)!
 
         let event = try decoder.decode(ReactionUpdateEvent.self, from: json)
         XCTAssertEqual(event.messageId, "msg1")
+        XCTAssertEqual(event.participantId, "p1")
         XCTAssertEqual(event.emoji, "\u{1F44D}")
+        XCTAssertEqual(event.action, "add")
         XCTAssertEqual(event.count, 3)
-        XCTAssertEqual(event.userId, "user1")
-        XCTAssertEqual(event.conversationId, "conv1")
+        XCTAssertEqual(event.aggregation?.participantIds, ["p1", "p2", "p3"])
+        XCTAssertEqual(event.aggregation?.hasCurrentUser, true)
+        XCTAssertEqual(event.timestamp, "2026-03-06T12:00:00.000Z")
     }
 
     func testReactionUpdateEventDecodingWithNilOptionals() throws {
         let json = """
-        {"messageId": "msg2", "emoji": "\u{2764}\u{FE0F}", "count": 1}
+        {"messageId": "msg2", "emoji": "\u{2764}\u{FE0F}"}
         """.data(using: .utf8)!
 
         let event = try decoder.decode(ReactionUpdateEvent.self, from: json)
         XCTAssertEqual(event.messageId, "msg2")
         XCTAssertEqual(event.emoji, "\u{2764}\u{FE0F}")
-        XCTAssertEqual(event.count, 1)
-        XCTAssertNil(event.userId)
-        XCTAssertNil(event.conversationId)
+        XCTAssertEqual(event.count, 0)
+        XCTAssertNil(event.participantId)
+        XCTAssertNil(event.action)
+        XCTAssertNil(event.aggregation)
     }
 
     // MARK: - TypingEvent
@@ -349,17 +359,27 @@ final class MessageSocketEventTests: XCTestCase {
         let json = """
         {
             "conversationId": "c1",
+            "participantId": "p1",
             "userId": "u1",
             "type": "read",
-            "updatedAt": "2026-03-06T14:30:00.000Z"
+            "updatedAt": "2026-03-06T14:30:00.000Z",
+            "summary": {
+                "totalMembers": 3,
+                "deliveredCount": 2,
+                "readCount": 1
+            }
         }
         """.data(using: .utf8)!
 
         let event = try decoder.decode(ReadStatusUpdateEvent.self, from: json)
         XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.participantId, "p1")
         XCTAssertEqual(event.userId, "u1")
         XCTAssertEqual(event.type, "read")
         XCTAssertNotNil(event.updatedAt)
+        XCTAssertEqual(event.summary.totalMembers, 3)
+        XCTAssertEqual(event.summary.deliveredCount, 2)
+        XCTAssertEqual(event.summary.readCount, 1)
     }
 
     // MARK: - MessageConsumedEvent

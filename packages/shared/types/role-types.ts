@@ -33,6 +33,8 @@ export enum GlobalUserRole {
   ANALYST = 'ANALYST',
   /** Utilisateur standard */
   USER = 'USER',
+  /** Agent IA (SAV, FAQ bots) - privilèges minimaux */
+  AGENT = 'AGENT',
 }
 
 /**
@@ -45,7 +47,8 @@ export type GlobalUserRoleType =
   | 'MODERATOR'
   | 'AUDIT'
   | 'ANALYST'
-  | 'USER';
+  | 'USER'
+  | 'AGENT';
 
 /**
  * Hiérarchie numérique des rôles globaux
@@ -58,6 +61,7 @@ export const GLOBAL_ROLE_HIERARCHY: Record<GlobalUserRole, number> = {
   [GlobalUserRole.AUDIT]: 40,
   [GlobalUserRole.ANALYST]: 30,
   [GlobalUserRole.USER]: 10,
+  [GlobalUserRole.AGENT]: 5,
 };
 
 /**
@@ -134,13 +138,63 @@ export function hasMinimumMemberRole(
   return userLevel >= requiredLevel;
 }
 
-// Aliases de compatibilité (à supprimer progressivement)
-/** @deprecated Utilisez hasMinimumMemberRole à la place */
-export const hasMinimumConversationRole = hasMinimumMemberRole;
-/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
-export const CONVERSATION_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
-/** @deprecated Utilisez MEMBER_ROLE_HIERARCHY à la place */
-export const COMMUNITY_ROLE_HIERARCHY = MEMBER_ROLE_HIERARCHY;
+// ============================================================================
+// UNIFIED ROLE RESOLUTION - Echelle unifiee global + member
+// ============================================================================
+
+/**
+ * Echelle unifiee pour comparer roles globaux et roles member.
+ * Permet de calculer le role effectif = max(global, member).
+ */
+const UNIFIED_ROLE_LEVELS: Record<string, number> = {
+  BIGBOSS: 100,
+  ADMIN: 80,
+  CREATOR: 70,
+  MODERATOR: 60,
+  AUDIT: 40,
+  ANALYST: 30,
+  MEMBER: 10,
+  USER: 10,
+  AGENT: 5,
+};
+
+/**
+ * Retourne le role effectif = max(globalRole, memberRole) sur une echelle unifiee.
+ * Le resultat est toujours UPPERCASE.
+ */
+export function getEffectiveRole(
+  globalRole: string,
+  memberRole: string | undefined | null,
+): string {
+  const globalUpper = (globalRole || 'USER').toUpperCase();
+  const memberUpper = (memberRole || '').toUpperCase();
+  const globalLevel = UNIFIED_ROLE_LEVELS[globalUpper] || 0;
+  const memberLevel = UNIFIED_ROLE_LEVELS[memberUpper] || 0;
+  return memberLevel > globalLevel ? memberUpper : globalUpper;
+}
+
+/**
+ * Retourne le niveau numerique du role effectif.
+ */
+export function getEffectiveRoleLevel(
+  globalRole: string,
+  memberRole: string | undefined | null,
+): number {
+  const globalUpper = (globalRole || 'USER').toUpperCase();
+  const memberUpper = (memberRole || '').toUpperCase();
+  const globalLevel = UNIFIED_ROLE_LEVELS[globalUpper] || 0;
+  const memberLevel = UNIFIED_ROLE_LEVELS[memberUpper] || 0;
+  return Math.max(globalLevel, memberLevel);
+}
+
+/**
+ * Verifie si un role effectif (global ou member, any case) a des privileges de moderation.
+ * Seuil: >= MODERATOR (60) sur l'echelle unifiee.
+ */
+export function hasModeratorPrivileges(effectiveRole: string): boolean {
+  const level = UNIFIED_ROLE_LEVELS[effectiveRole.toUpperCase()] || 0;
+  return level >= (UNIFIED_ROLE_LEVELS.MODERATOR ?? 60);
+}
 
 // ============================================================================
 // WRITE PERMISSIONS - Permissions d'écriture dans une conversation
@@ -218,9 +272,6 @@ export function isMemberRole(value: string): value is MemberRoleType {
   return validRoles.includes(value.toLowerCase());
 }
 
-/** @deprecated Utilisez isMemberRole à la place */
-export const isConversationMemberRole = isMemberRole;
-
 /**
  * Vérifie si un utilisateur est un administrateur global (ADMIN ou BIGBOSS)
  */
@@ -260,8 +311,3 @@ export function isMemberCreator(role: MemberRole | MemberRoleType | string): boo
   return normalized === MemberRole.CREATOR;
 }
 
-// Aliases de compatibilité (à supprimer progressivement)
-/** @deprecated Utilisez isMemberAdmin à la place */
-export const isConversationAdmin = isMemberAdmin;
-/** @deprecated Utilisez isMemberModerator à la place */
-export const isConversationModerator = isMemberModerator;

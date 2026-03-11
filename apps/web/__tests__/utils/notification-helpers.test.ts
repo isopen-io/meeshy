@@ -365,7 +365,7 @@ describe('notification-helpers - Structure Groupée V2', () => {
 
     it('devrait retourner null si pas de conversationId', () => {
       const notification = createNotification({
-        type: NotificationTypeEnum.SYSTEM_ANNOUNCEMENT,
+        type: (NotificationTypeEnum as any).SYSTEM_ANNOUNCEMENT,
         context: {},
       });
 

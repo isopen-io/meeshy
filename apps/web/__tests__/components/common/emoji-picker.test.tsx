@@ -388,7 +388,7 @@ describe('EmojiPicker', () => {
       );
       expect(setItemCall).toBeTruthy();
 
-      const savedEmojis = JSON.parse(setItemCall[1]);
+      const savedEmojis = JSON.parse(setItemCall![1]);
       expect(savedEmojis[0]).toBe('👍'); // Most recent first
     });
 
@@ -406,7 +406,7 @@ describe('EmojiPicker', () => {
       const setItemCall = localStorageMock.setItem.mock.calls.find(
         (call: any[]) => call[0] === 'meeshy-frequent-emojis'
       );
-      const savedEmojis = JSON.parse(setItemCall[1]);
+      const savedEmojis = JSON.parse(setItemCall![1]);
       expect(savedEmojis.length).toBeLessThanOrEqual(8);
     });
 

@@ -50,7 +50,7 @@ Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
 });
 
 // Create a mock attachment
-const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse => ({
+const createMockAttachment = (overrides: any = {}): UploadedAttachmentResponse => ({
   id: 'test-attachment-id',
   fileUrl: '/api/v1/attachments/test-attachment-id/file',
   originalName: 'test-audio.mp3',
@@ -326,8 +326,7 @@ describe('SimpleAudioPlayer', () => {
       await act(async () => {
         render(
           <SimpleAudioPlayer
-            attachment={attachment}
-            initialTranslatedAudios={translatedAudios}
+            {...{ attachment, initialTranslatedAudios: translatedAudios } as any}
           />
         );
       });

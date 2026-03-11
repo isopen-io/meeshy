@@ -13,7 +13,7 @@ public struct JoinLinkPreviewView: View {
     }
 
     private var isDark: Bool { theme.mode.isDark }
-    private var accent: Color { Color(hex: "4ECDC4") }
+    private var accent: Color { MeeshyColors.indigo400 }
 
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -33,9 +33,9 @@ public struct JoinLinkPreviewView: View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient(
                 colors: [
-                    Color(hex: "B24BF3").opacity(0.4),
-                    Color(hex: "4ECDC4").opacity(0.3),
-                    isDark ? Color(hex: "0a0a14") : Color(hex: "FAF8F5")
+                    MeeshyColors.indigo500.opacity(0.4),
+                    MeeshyColors.indigo400.opacity(0.3),
+                    theme.backgroundPrimary
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottom
@@ -71,7 +71,7 @@ public struct JoinLinkPreviewView: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "B24BF3"), Color(hex: "4ECDC4")],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -82,7 +82,7 @@ public struct JoinLinkPreviewView: View {
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .shadow(color: Color(hex: "B24BF3").opacity(0.3), radius: 8, x: 0, y: 4)
+        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 8, x: 0, y: 4)
     }
 
     // MARK: - Details
@@ -120,10 +120,10 @@ public struct JoinLinkPreviewView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
                         .font(.system(size: 11))
-                        .foregroundColor(Color(hex: "F8B500"))
+                        .foregroundColor(MeeshyColors.warning)
                     Text("Expire \(relativeDate(expiresAt))")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "F8B500"))
+                        .foregroundColor(MeeshyColors.warning)
                 }
             }
         }
@@ -266,15 +266,9 @@ public struct JoinLinkPreviewView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: "B24BF3"), Color(hex: "4ECDC4")],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .background(MeeshyColors.brandGradient)
                     .cornerRadius(16)
-                    .shadow(color: Color(hex: "B24BF3").opacity(0.3), radius: 12, x: 0, y: 6)
+                    .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, x: 0, y: 6)
                 }
                 .padding(.horizontal, 20)
             }

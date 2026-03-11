@@ -9,9 +9,11 @@ public protocol ConversationServiceProviding: Sendable {
     func delete(conversationId: String) async throws
     func markRead(conversationId: String) async throws
     func markUnread(conversationId: String) async throws
-    func getParticipants(conversationId: String, limit: Int) async throws -> [APIParticipant]
+    func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]>
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
+    func removeParticipant(conversationId: String, participantId: String) async throws
+    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws
 }
 
 public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
@@ -51,17 +53,35 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
     }
 
-    public func getParticipants(conversationId: String, limit: Int = 100) async throws -> [APIParticipant] {
-        let response: APIResponse<[APIParticipant]> = try await api.request(
+    public func getParticipants(conversationId: String, limit: Int = 100, cursor: String? = nil) async throws -> PaginatedAPIResponse<[APIParticipant]> {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        return try await api.request(
             endpoint: "/conversations/\(conversationId)/participants",
-            queryItems: [URLQueryItem(name: "limit", value: "\(limit)")]
+            queryItems: queryItems
         )
-        return response.data
     }
 
     public func deleteForMe(conversationId: String) async throws {
-        let _ = try await api.delete(
+        let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/conversations/\(conversationId)/delete-for-me"
+        )
+    }
+
+    public func removeParticipant(conversationId: String, participantId: String) async throws {
+        let _: APIResponse<[String: String]> = try await api.request(
+            endpoint: "/conversations/\(conversationId)/participants/\(participantId)",
+            method: "DELETE"
+        )
+    }
+
+    public func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {
+        struct RoleBody: Encodable { let role: String }
+        let _: APIResponse<[String: String]> = try await api.patch(
+            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/role",
+            body: RoleBody(role: role)
         )
     }
 

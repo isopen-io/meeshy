@@ -389,6 +389,7 @@ class ConversationViewModel: ObservableObject {
         unreadCount: Int = 0,
         isDirect: Bool = false,
         participantUserId: String? = nil,
+        anonymousSession: AnonymousSessionContext? = nil,
         authManager: AuthManaging = AuthManager.shared,
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
@@ -412,11 +413,16 @@ class ConversationViewModel: ObservableObject {
         )
         handler.delegate = self
         self.socketHandler = handler
+        if let session = anonymousSession {
+            APIClient.shared.anonymousSessionToken = session.sessionToken
+            MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
+        }
     }
 
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        APIClient.shared.anonymousSessionToken = nil
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)
@@ -836,7 +842,7 @@ class ConversationViewModel: ObservableObject {
     func deleteMessage(messageId: String) async {
         // Optimistic: mark as deleted locally
         if let idx = messageIndex(for: messageId) {
-            messages[idx].isDeleted = true
+            messages[idx].deletedAt = Date()
             messages[idx].content = ""
         }
 
@@ -845,7 +851,7 @@ class ConversationViewModel: ObservableObject {
         } catch {
             // Revert on failure
             if let idx = messageIndex(for: messageId) {
-                messages[idx].isDeleted = false
+                messages[idx].deletedAt = nil
             }
             self.error = error.localizedDescription
         }
@@ -967,6 +973,23 @@ class ConversationViewModel: ObservableObject {
         NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
         Task {
             try? await conversationService.markRead(conversationId: conversationId)
+        }
+        markConversationAsRead()
+    }
+
+    func markConversationAsRead() {
+        let convId = conversationId
+        Task {
+            do {
+                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                    endpoint: "/conversations/\(convId)/mark-as-read",
+                    method: "POST"
+                )
+            } catch {
+                await PendingStatusQueue.shared.enqueue(.init(
+                    conversationId: convId, type: "read", timestamp: Date()
+                ))
+            }
         }
     }
 
@@ -1354,4 +1377,8 @@ class ConversationViewModel: ObservableObject {
 
 // MARK: - ConversationSocketDelegate Conformance
 
-extension ConversationViewModel: ConversationSocketDelegate {}
+extension ConversationViewModel: ConversationSocketDelegate {
+    func handleParticipantRoleUpdated(participantId: String, newRole: String) {
+        Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
+    }
+}

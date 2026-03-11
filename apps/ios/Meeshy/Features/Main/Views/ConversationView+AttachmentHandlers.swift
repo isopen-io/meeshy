@@ -225,14 +225,14 @@ extension ConversationView {
                         }
 
                         await MainActor.run {
-                            scrollState.videosToPreview.append(compressedURL)
+                            handleCameraVideo(compressedURL)
                         }
                     }
                 } else {
                     if let imageData = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: imageData) {
                         await MainActor.run {
-                            scrollState.photosToEdit.append(uiImage)
+                            handleCameraCapture(uiImage)
                         }
                     }
                 }

@@ -82,10 +82,10 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       return;
     }
 
-    const fullSignal: WebRTCSignal = {
+    const fullSignal = {
       ...signal,
       from: userId,
-    };
+    } as WebRTCSignal;
 
     socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
       callId,

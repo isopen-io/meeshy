@@ -150,7 +150,7 @@ const mockConversations: Conversation[] = [
       sender: { id: 'user-2', username: 'john', displayName: 'John' },
     },
     unreadCount: 2,
-  } as Conversation,
+  } as any,
   {
     id: 'conv-2',
     title: 'Direct Chat',
@@ -168,7 +168,7 @@ const mockConversations: Conversation[] = [
       sender: { id: 'user-2', username: 'jane', displayName: 'Jane Doe' },
     },
     unreadCount: 0,
-  } as Conversation,
+  } as any,
   {
     id: 'conv-3',
     title: 'Another Group',
@@ -177,7 +177,7 @@ const mockConversations: Conversation[] = [
     updatedAt: new Date().toISOString(),
     lastMessage: null,
     unreadCount: 0,
-  } as Conversation,
+  } as any,
 ];
 
 const mockT = (key: string) => {

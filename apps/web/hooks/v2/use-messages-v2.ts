@@ -212,7 +212,6 @@ export function useMessagesV2(
         updatedAt: new Date(),
         timestamp: new Date(),
         isEdited: false,
-        isDeleted: false,
         isViewOnce: false,
         viewOnceCount: 0,
         isBlurred: false,
@@ -223,7 +222,7 @@ export function useMessagesV2(
         translations: [],
         replyToId,
         sender: currentUser,
-      } as Message;
+      } as unknown as Message;
 
       // Add optimistic message immediately
       addMessage(optimisticMessage);

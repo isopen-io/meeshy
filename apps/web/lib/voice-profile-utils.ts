@@ -267,5 +267,5 @@ export const base64ToBlob = (base64: string, mimeType: string): Blob => {
     byteArrays.push(new Uint8Array(byteNumbers));
   }
 
-  return new Blob(byteArrays, { type: mimeType });
+  return new Blob(byteArrays as BlobPart[], { type: mimeType });
 };

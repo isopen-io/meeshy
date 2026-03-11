@@ -23,6 +23,7 @@ protocol ConversationSocketDelegate: AnyObject {
 
     func evictViewOnceMedia(message: Message)
     func markMessageAsConsumed(messageId: String)
+    func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
 }
@@ -181,6 +182,8 @@ final class ConversationSocketHandler {
                             self.clearTypingSafetyTimer(for: senderName)
                         }
                     }
+
+                    // mark-as-received is handled globally by ConversationListViewModel
                 }
             }
             .store(in: &cancellables)
@@ -205,7 +208,7 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
-                    delegate.messages[idx].isDeleted = true
+                    delegate.messages[idx].deletedAt = Date()
                     delegate.messages[idx].content = ""
                 }
             }
@@ -218,10 +221,10 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     let exists = delegate.messages[idx].reactions.contains {
-                        $0.emoji == event.emoji && $0.participantId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.participantId
                     }
                     if !exists {
-                        let reaction = Reaction(messageId: event.messageId, participantId: event.userId, emoji: event.emoji)
+                        let reaction = Reaction(messageId: event.messageId, participantId: event.participantId, emoji: event.emoji)
                         delegate.messages[idx].reactions.append(reaction)
                     }
                 }
@@ -235,7 +238,7 @@ final class ConversationSocketHandler {
                 guard let delegate = self?.delegate else { return }
                 if let idx = delegate.messageIndex(for: event.messageId) {
                     delegate.messages[idx].reactions.removeAll {
-                        $0.emoji == event.emoji && $0.participantId == event.userId
+                        $0.emoji == event.emoji && $0.participantId == event.participantId
                     }
                 }
             }
@@ -267,34 +270,55 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read)
+        // Read status updated (delivered / read) — uses summary counts
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
             .filter { $0.userId != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
-                let newStatus: Message.DeliveryStatus = event.type == "read" ? .read : .delivered
-                
+                let summary = event.summary
+
+                let newStatus: Message.DeliveryStatus
+                if summary.totalMembers > 0 && summary.readCount >= summary.totalMembers {
+                    newStatus = .read
+                } else if summary.readCount > 0 {
+                    newStatus = summary.totalMembers == 1 ? .read : .delivered
+                } else if summary.deliveredCount > 0 {
+                    newStatus = .delivered
+                } else {
+                    return
+                }
+
                 for i in delegate.messages.indices.reversed() {
                     guard delegate.messages[i].isMe else { continue }
-                    
+
                     let current = delegate.messages[i].deliveryStatus
-                    
+
                     if delegate.messages[i].createdAt <= event.updatedAt {
-                        // Break early: if current message already has target state (or better), older ones do too
                         if newStatus == .read && current == .read { break }
                         if newStatus == .delivered && (current == .delivered || current == .read) { break }
-                        
+
                         if newStatus == .read || (newStatus == .delivered && current != .read) {
                             delegate.messages[i].deliveryStatus = newStatus
                         }
                     } else if current == .read {
-                        // Even if this message is newer than updatedAt, if it's already read, we don't need to keep checking older ones
-                        // because they will be read too.
                         break
                     }
                 }
+            }
+            .store(in: &cancellables)
+
+        // Participant role updated
+        socketManager.participantRoleUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let delegate = self?.delegate else { return }
+                delegate.handleParticipantRoleUpdated(
+                    participantId: event.participant.id,
+                    newRole: event.newRole
+                )
             }
             .store(in: &cancellables)
 
@@ -475,6 +499,7 @@ final class ConversationSocketHandler {
                 guard let self else { return }
                 Task { [weak self] in
                     await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
                 }
             }
             .store(in: &cancellables)

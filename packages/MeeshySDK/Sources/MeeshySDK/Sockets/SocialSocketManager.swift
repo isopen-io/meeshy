@@ -180,16 +180,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    private var heartbeatTimer: Timer?
+
+    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
+    // Safe to share: options are set once during init and never mutated after.
+    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 
     private init() {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = iso.date(from: dateStr) { return date }
-            iso.formatOptions = [.withInternetDateTime]
-            if let date = iso.date(from: dateStr) { return date }
+            if let date = SocialSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = SocialSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
     }
@@ -225,6 +236,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func disconnect() {
+        stopHeartbeat()
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -232,6 +244,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         connectionState = .disconnected
         reconnectAttempt = 0
         hadPreviousConnection = false
+    }
+
+    // MARK: - Heartbeat
+
+    private func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.socket?.emit("heartbeat")
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
 
     // MARK: - Client Events
@@ -257,12 +283,14 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 self.isConnected = true
                 self.connectionState = .connected
             }
+            self.startHeartbeat()
             self.subscribeFeed()
             Logger.socket.info("SocialSocket connected")
         }
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             guard let self else { return }
+            self.stopHeartbeat()
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
@@ -420,13 +448,15 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // --- Post translation events ---
 
         socket.on("post:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
+            guard let self else { return }
+            self.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.postTranslationUpdated.send(payload)
             }
         }
 
         socket.on("comment:translation-updated") { [weak self] data, _ in
-            self?.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
+            guard let self else { return }
+            self.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.commentTranslationUpdated.send(payload)
             }
         }

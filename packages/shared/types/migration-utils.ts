@@ -207,12 +207,11 @@ export function normalizeMessage(rawMessage: unknown): Message {
     messageType: (raw.messageType as 'text' | 'image' | 'file' | 'audio' | 'video' | 'location' | 'system') || 'text',
     messageSource: (raw.messageSource as 'user' | 'system' | 'ads' | 'app' | 'agent' | 'authority') || 'user',
     isEdited: Boolean(raw.isEdited),
-    isDeleted: Boolean(raw.isDeleted),
+    deletedAt: raw.deletedAt ? toDate(raw.deletedAt) : (raw.isDeleted ? new Date() : undefined),
     replyToId: raw.replyToId ? String(raw.replyToId) : undefined,
     createdAt: toDate(raw.createdAt || raw.timestamp),
     updatedAt: toDate(raw.updatedAt || raw.createdAt || raw.timestamp),
     editedAt: raw.editedAt ? toDate(raw.editedAt) : undefined,
-    deletedAt: raw.deletedAt ? toDate(raw.deletedAt) : undefined,
 
     // View-once and blur
     isViewOnce: Boolean(raw.isViewOnce),

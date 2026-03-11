@@ -8,7 +8,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { ThreadMember } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types';
+import type { SocketIOUser } from '@meeshy/shared/types/socketio-events';
 
 interface TypingUser {
   id: string;
@@ -21,7 +22,7 @@ interface UseConversationTypingOptions {
   /** ID de l'utilisateur actuel */
   currentUserId: string | null;
   /** Liste des participants de la conversation */
-  participants: ThreadMember[];
+  participants: Participant[];
   /** Fonction pour signaler le début de la frappe (Socket.IO) */
   startTyping: () => void;
   /** Fonction pour signaler la fin de la frappe (Socket.IO) */
@@ -50,19 +51,21 @@ const TYPING_STOP_DELAY = 3000;
  * Extrait le displayName d'un participant
  */
 function getParticipantDisplayName(
-  participants: ThreadMember[],
+  participants: Participant[],
   userId: string,
   fallbackUsername: string
 ): string {
   const participant = participants.find(p => p.userId === userId);
 
-  if (participant?.user) {
-    const user = participant.user;
-    if (user.displayName) return user.displayName;
-    if (user.firstName || user.lastName) {
-      return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  if (participant) {
+    if (participant.displayName) return participant.displayName;
+    if (participant.user) {
+      const user = participant.user as SocketIOUser;
+      if (user.firstName || user.lastName) {
+        return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      }
+      if (user.username) return user.username;
     }
-    if (user.username) return user.username;
   }
 
   if (fallbackUsername && fallbackUsername !== userId) {

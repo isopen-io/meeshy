@@ -677,8 +677,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           onBackToList={handleBackToList}
           onStartCall={handleStartCall}
           onOpenGallery={() => setGalleryOpen(true)}
-          onParticipantAdded={() => loadParticipants(effectiveSelectedId)}
-          onParticipantRemoved={() => loadParticipants(effectiveSelectedId)}
+          onParticipantAdded={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
+          onParticipantRemoved={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
           onLinkCreated={() => {}}
           scrollContainerRef={messagesScrollRef}
           composerRef={messageComposerRef}
@@ -824,8 +824,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 onBackToList={handleBackToList}
                 onStartCall={handleStartCall}
                 onOpenGallery={() => setGalleryOpen(true)}
-                onParticipantAdded={() => loadParticipants(effectiveSelectedId)}
-                onParticipantRemoved={() => loadParticipants(effectiveSelectedId)}
+                onParticipantAdded={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
+                onParticipantRemoved={() => effectiveSelectedId && loadParticipants(effectiveSelectedId)}
                 onLinkCreated={() => {}}
                 scrollContainerRef={messagesScrollRef}
                 composerRef={messageComposerRef}

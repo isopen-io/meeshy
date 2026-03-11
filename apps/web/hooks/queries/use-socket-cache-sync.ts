@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { apiService } from '@/services/api.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 
@@ -82,6 +84,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // DO NOT invalidate here - setQueryData already has the correct lastMessage
       // Invalidating would trigger a re-fetch that could return stale data from backend cache
       // The backend may not have processed the message yet when we re-fetch
+
+      // Auto mark-as-received for messages from other users
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser && message.senderId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
+        apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
+          .catch(() => {}); // Non-critical, fire-and-forget
+      }
     };
 
     // Handler for edited messages

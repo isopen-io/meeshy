@@ -109,7 +109,7 @@ export function useLanguage(): UseLanguageReturn {
 
     // Obtenir les langues du navigateur
     const browserLangs = navigator.languages || [navigator.language];
-    setBrowserLanguages(browserLangs);
+    setBrowserLanguages([...browserLangs]);
 
     // Détecter la langue du système
     const systemLanguage = navigator.language || 'en';

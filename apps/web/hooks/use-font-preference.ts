@@ -4,13 +4,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
-import { FontFamily, defaultFont, getFontConfig } from '@/lib/fonts';
+import { FontFamily, getFontConfig } from '@/lib/fonts';
 import { buildApiUrl } from '@/lib/config';
 
 const FONT_PREFERENCE_KEY = 'font-family';
+const DEFAULT_FONT_ID: FontFamily = 'nunito';
 
 export function useFontPreference() {
-  const [currentFont, setCurrentFont] = useState<FontFamily>(defaultFont);
+  const [currentFont, setCurrentFont] = useState<FontFamily>(DEFAULT_FONT_ID);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,8 +72,8 @@ export function useFontPreference() {
       } catch (err) {
         console.error('Error loading font preference:', err);
         setError('Erreur lors du chargement des préférences de police');
-        setCurrentFont(defaultFont);
-        applyFontToDocument(defaultFont);
+        setCurrentFont(DEFAULT_FONT_ID);
+        applyFontToDocument(DEFAULT_FONT_ID);
       } finally {
         setIsLoading(false);
       }
@@ -164,7 +165,7 @@ export function useFontPreference() {
 
   // Réinitialiser à la police par défaut
   const resetToDefault = useCallback(() => {
-    changeFontFamily(defaultFont);
+    changeFontFamily(DEFAULT_FONT_ID);
   }, [changeFontFamily]);
 
   return {

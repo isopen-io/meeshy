@@ -690,7 +690,7 @@ export default function LinksPage() {
                         setShowEditModal(true);
                       }}
                       onToggle={() => handleToggleActive(link)}
-                      onExtend={(days) => handleExtendDuration(link, days)}
+                      onExtend={(l: any, days: number) => handleExtendDuration(l, days)}
                       onDelete={() => handleDeleteLink(link)}
                     />
                   ))}
@@ -802,7 +802,7 @@ export default function LinksPage() {
         {/* Modales */}
         {selectedLink && (
           <LinkEditModal
-            link={selectedLink}
+            link={selectedLink as any}
             isOpen={showEditModal}
             onClose={() => {
               setShowEditModal(false);

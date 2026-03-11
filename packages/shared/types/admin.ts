@@ -173,7 +173,7 @@ export interface AdminGetMessagesResponse {
  * @deprecated Use ApiResponse from api-responses.ts instead
  * Kept for backwards compatibility
  */
-export interface AdminApiResponse<T = any> extends ApiResponse<T> {}
+export interface AdminApiResponse<T = unknown> extends ApiResponse<T> {}
 
 // ===== ADMIN AUDIT LOG =====
 

@@ -30,8 +30,9 @@ export class MeeshyError extends Error {
     this.timestamp = new Date().toISOString();
     
     // Maintenir la pile d'appels (Node.js uniquement)
-    if (typeof (Error as any).captureStackTrace === 'function') {
-      (Error as any).captureStackTrace(this, this.constructor);
+    const ErrorWithCapture = Error as { captureStackTrace?: (target: object, constructor: Function) => void };
+    if (typeof ErrorWithCapture.captureStackTrace === 'function') {
+      ErrorWithCapture.captureStackTrace(this, this.constructor);
     }
   }
 
@@ -134,7 +135,7 @@ export function logError(error: Error | MeeshyError, context?: string): void {
  * Wrapper pour créer une réponse d'erreur Fastify
  */
 export function sendErrorResponse(
-  reply: any,
+  reply: { status: (code: number) => { send: (body: unknown) => void } },
   error: Error | MeeshyError,
   context?: string
 ): void {

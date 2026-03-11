@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// @ts-expect-error module may not exist yet
 import { NotificationFilters, type NotificationType } from '@/components/notifications/NotificationFilters';
 
 // Mock useI18n hook

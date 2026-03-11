@@ -68,7 +68,7 @@ const BaseParticipantSchema = z.object({
   lastActiveAt: z.coerce.date().optional(),
   sessionTokenHash: z.string().optional(),
   anonymousSession: AnonymousSessionSchema.optional(),
-  user: z.any().optional(),
+  user: z.unknown().optional(),
 })
 
 export const ParticipantSchema = BaseParticipantSchema.superRefine((data, ctx) => {

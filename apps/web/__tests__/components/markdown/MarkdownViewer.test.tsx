@@ -82,16 +82,14 @@ import { useTheme } from 'next-themes';
 // Create mock attachment
 const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse => ({
   id: 'md-attachment-123',
+  messageId: 'msg-123',
   fileUrl: 'https://example.com/document.md',
+  fileName: 'test-document.md',
   originalName: 'test-document.md',
   mimeType: 'text/markdown',
-  size: 1024,
-  duration: undefined,
-  createdAt: new Date().toISOString(),
-  uploadedAt: new Date().toISOString(),
-  storagePath: '/uploads/markdown/document.md',
+  fileSize: 1024,
   ...overrides,
-});
+} as UploadedAttachmentResponse);
 
 describe('MarkdownViewer', () => {
   beforeEach(() => {

@@ -22,24 +22,30 @@ struct ParticipantsView: View {
     @State private var roleChangeTarget: (userId: String, newRole: String)?
     @State private var confirmLeave = false
     @State private var errorMessage: String?
+    @State private var isLoadingMore = false
+    @State private var hasMore = true
 
     private var accent: Color { Color(hex: accentColor) }
 
+    private var parsedRole: MemberRole {
+        guard let roleStr = currentUserRole?.lowercased() else { return .member }
+        return MemberRole(rawValue: roleStr) ?? .member
+    }
+
     private var isAdmin: Bool {
-        let role = currentUserRole?.uppercased() ?? ""
-        return ["ADMIN", "CREATOR", "BIGBOSS"].contains(role)
+        parsedRole.hasMinimumRole(.admin)
     }
 
     private var isCreator: Bool {
-        (currentUserRole?.uppercased() ?? "") == "CREATOR"
+        parsedRole == .creator
     }
 
     private var isConvAdmin: Bool {
-        (currentUserRole?.uppercased() ?? "") == "ADMIN"
+        parsedRole == .admin
     }
 
     private var isModerator: Bool {
-        (currentUserRole?.uppercased() ?? "") == "MODERATOR"
+        parsedRole == .moderator
     }
 
     private var canManageMembers: Bool { isAdmin || isModerator }
@@ -98,6 +104,42 @@ struct ParticipantsView: View {
                 }
             }
             .task { await loadParticipants() }
+            .onReceive(
+                MessageSocketManager.shared.participantRoleUpdated
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { event in
+                if let idx = participants.firstIndex(where: { $0.id == event.participant.id }) {
+                    participants[idx].conversationRole = event.newRole.lowercased()
+                }
+                Task {
+                    await ParticipantCache.shared.updateRole(
+                        conversationId: conversationId,
+                        participantId: event.participant.id,
+                        newRole: event.newRole
+                    )
+                }
+            }
+            .onReceive(
+                MessageSocketManager.shared.conversationJoined
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task {
+                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
+                    await loadParticipants()
+                }
+            }
+            .onReceive(
+                MessageSocketManager.shared.conversationLeft
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { event in
+                participants.removeAll { $0.userId == event.userId }
+                Task {
+                    await ParticipantCache.shared.invalidate(conversationId: conversationId)
+                }
+            }
             .sheet(isPresented: $showAddSheet) {
                 AddParticipantSheet(
                     conversationId: conversationId,
@@ -144,6 +186,16 @@ struct ParticipantsView: View {
             } message: {
                 Text("Vous ne pourrez plus voir les messages de ce groupe.")
             }
+            .alert(String(localized: "Erreur", defaultValue: "Erreur"), isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                if let errorMessage {
+                    Text(errorMessage)
+                }
+            }
         }
         .withStatusBubble()
     }
@@ -184,6 +236,9 @@ struct ParticipantsView: View {
             LazyVStack(spacing: 0) {
                 ForEach(participants) { participant in
                     participantRow(participant)
+                        .onAppear {
+                            Task { await loadMoreIfNeeded(currentItem: participant) }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if canRemoveParticipant(participant) {
                                 Button(role: .destructive) {
@@ -196,6 +251,15 @@ struct ParticipantsView: View {
                         .contextMenu {
                             contextMenuItems(for: participant)
                         }
+                }
+
+                if isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
                 }
             }
         }
@@ -226,7 +290,9 @@ struct ParticipantsView: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    if let role = participant.conversationRole, role.uppercased() != "MEMBER" {
+                    if let role = participant.conversationRole,
+                       let memberRole = MemberRole(rawValue: role.lowercased()),
+                       memberRole != .member {
                         roleBadge(role)
                     }
                 }
@@ -273,33 +339,33 @@ struct ParticipantsView: View {
     @ViewBuilder
     private func contextMenuItems(for participant: ConversationParticipant) -> some View {
         let isCurrentUser = participant.id == currentUserId
-        let participantRole = participant.conversationRole?.uppercased() ?? "MEMBER"
+        let targetRole = MemberRole(rawValue: participant.conversationRole?.lowercased() ?? "member") ?? .member
 
-        if !isCurrentUser && participantRole != "CREATOR" {
+        if !isCurrentUser && targetRole != .creator {
             if isCreator {
                 // Créateur : peut gérer tout le monde (MEMBER, MODERATOR, ADMIN)
-                if participantRole == "MEMBER" {
+                if targetRole == .member {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Promouvoir Moderateur", systemImage: "shield.fill")
                     }
                 }
-                if participantRole != "ADMIN" {
+                if targetRole != .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "ADMIN")
                     } label: {
                         Label("Promouvoir Admin", systemImage: "crown.fill")
                     }
                 }
-                if participantRole == "ADMIN" {
+                if targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
                         Label("Retrograder en Moderateur", systemImage: "shield")
                     }
                 }
-                if participantRole == "MODERATOR" || participantRole == "ADMIN" {
+                if targetRole == .moderator || targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
                     } label: {
@@ -307,9 +373,9 @@ struct ParticipantsView: View {
                     }
                 }
                 Divider()
-            } else if isConvAdmin && participantRole != "ADMIN" {
+            } else if isConvAdmin && targetRole != .admin {
                 // Admin : peut gérer MEMBER et MODERATOR uniquement (pas les autres admins)
-                if participantRole == "MEMBER" {
+                if targetRole == .member {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MODERATOR")
                     } label: {
@@ -321,7 +387,7 @@ struct ParticipantsView: View {
                 } label: {
                     Label("Promouvoir Admin", systemImage: "crown.fill")
                 }
-                if participantRole == "MODERATOR" {
+                if targetRole == .moderator {
                     Button {
                         roleChangeTarget = (userId: participant.id, newRole: "MEMBER")
                     } label: {
@@ -354,12 +420,12 @@ struct ParticipantsView: View {
                 Text("Quitter le groupe")
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "FF6B6B"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "FF6B6B").opacity(theme.mode.isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(theme.mode.isDark ? 0.12 : 0.08))
             )
         }
         .padding(.horizontal, 20)
@@ -404,32 +470,43 @@ struct ParticipantsView: View {
         let isCurrentUser = participant.id == currentUserId
         guard !isCurrentUser else { return false }
 
-        let targetRole = participant.conversationRole?.uppercased() ?? "MEMBER"
-        if targetRole == "CREATOR" { return false }
+        let targetRole = MemberRole(rawValue: participant.conversationRole?.lowercased() ?? "member") ?? .member
+        if targetRole == .creator { return false }
 
         if isAdmin { return true }
-        if isModerator && targetRole == "MEMBER" { return true }
+        if isModerator && targetRole == .member { return true }
         return false
     }
 
     // MARK: - Display Helpers
 
     private func roleDisplayLabel(_ role: String) -> String {
-        switch role.uppercased() {
-        case "ADMIN": return "Admin"
-        case "CREATOR": return "Createur"
-        case "MODERATOR": return "Mod"
-        default: return role.capitalized
-        }
+        let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
+        return memberRole.displayName
     }
 
     private func roleBadgeColor(_ role: String) -> Color {
-        switch role.uppercased() {
-        case "ADMIN", "CREATOR": return Color(hex: "A855F7")
-        case "MODERATOR": return Color(hex: "08D9D6")
-        default: return Color(hex: "6B7280")
+        let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
+        switch memberRole {
+        case .creator, .admin: return MeeshyColors.indigo500
+        case .moderator: return MeeshyColors.indigo400
+        case .member: return MeeshyColors.indigo300
         }
     }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd MMM"
+        return formatter
+    }()
+
+    private static let shortDateYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd MMM yy"
+        return formatter
+    }()
 
     private func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
@@ -437,18 +514,14 @@ struct ParticipantsView: View {
         if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
         if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
         if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter.string(from: date)
+        return Self.shortDateFormatter.string(from: date)
     }
 
     private func shortDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
         let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
-        return formatter.string(from: date)
+        return isSameYear
+            ? Self.shortDateFormatter.string(from: date)
+            : Self.shortDateYearFormatter.string(from: date)
     }
 
     // MARK: - API Calls
@@ -458,25 +531,45 @@ struct ParticipantsView: View {
         defer { isLoading = false }
 
         do {
-            let response: ParticipantsResponse = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants?limit=100"
+            let fetched = try await ParticipantCache.shared.loadFirstPage(
+                for: conversationId,
+                forceRefresh: true
             )
-            if response.success {
-                participants = response.data
-            }
+            participants = fetched
+            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")
         }
     }
 
+    private func loadMoreIfNeeded(currentItem: ConversationParticipant) async {
+        guard hasMore, !isLoadingMore else { return }
+        guard currentItem.id == participants.last?.id else { return }
+
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        do {
+            let allFetched = try await ParticipantCache.shared.loadNextPage(for: conversationId)
+            participants = allFetched
+            hasMore = await ParticipantCache.shared.hasMore(for: conversationId)
+        } catch {
+            Logger.participants.error("Failed to load more: \(error.localizedDescription)")
+        }
+    }
+
     private func removeParticipant(userId: String) async {
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)",
-                method: "DELETE"
+            try await ConversationService.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: userId
             )
             HapticFeedback.success()
-            participants.removeAll { $0.id == userId }
+            participants.removeAll { $0.id == userId || $0.userId == userId }
+            await ParticipantCache.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: userId
+            )
         } catch {
             Logger.participants.error("Failed to remove participant: \(error.localizedDescription)")
             HapticFeedback.error()
@@ -485,16 +578,21 @@ struct ParticipantsView: View {
     }
 
     private func changeRole(userId: String, newRole: String) async {
-        struct RoleBody: Encodable { let role: String }
         do {
-            let body = try JSONEncoder().encode(RoleBody(role: newRole))
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)/role",
-                method: "PATCH",
-                body: body
+            try await ConversationService.shared.updateParticipantRole(
+                conversationId: conversationId,
+                participantId: userId,
+                role: newRole
             )
             HapticFeedback.success()
-            await loadParticipants()
+            if let idx = participants.firstIndex(where: { $0.id == userId }) {
+                participants[idx].conversationRole = newRole.lowercased()
+            }
+            await ParticipantCache.shared.updateRole(
+                conversationId: conversationId,
+                participantId: userId,
+                newRole: newRole
+            )
         } catch {
             Logger.participants.error("Failed to change role: \(error.localizedDescription)")
             HapticFeedback.error()
@@ -502,11 +600,10 @@ struct ParticipantsView: View {
     }
 
     private func leaveGroup() async {
-        let userId = currentUserId
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/participants/\(userId)",
-                method: "DELETE"
+            try await ConversationService.shared.removeParticipant(
+                conversationId: conversationId,
+                participantId: currentUserId
             )
             HapticFeedback.success()
             dismiss()

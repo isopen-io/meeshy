@@ -73,7 +73,7 @@ jest.mock('@/lib/react-query/query-keys', () => ({
 }));
 
 // Test data
-const createMockMessage = (id: string, content: string): Message => ({
+const createMockMessage = (id: string, content: string) => ({
   id,
   content,
   conversationId: 'conv-1',
@@ -82,7 +82,6 @@ const createMockMessage = (id: string, content: string): Message => ({
   messageType: 'text',
   messageSource: 'user',
   isEdited: false,
-  isDeleted: false,
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   sender: {
@@ -95,15 +94,13 @@ const createMockMessage = (id: string, content: string): Message => ({
     phoneNumber: '',
     role: 'USER',
     permissions: {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageGroups: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
+      canSendMessages: true,
+      canSendFiles: true,
+      canSendImages: true,
+      canSendVideos: true,
+      canSendAudios: true,
+      canSendLocations: true,
+      canSendLinks: true,
     },
     systemLanguage: 'en',
     regionalLanguage: 'en',
@@ -118,14 +115,14 @@ const createMockMessage = (id: string, content: string): Message => ({
     updatedAt: new Date(),
   },
   translations: [],
-});
+}) as any as Message;
 
 const mockMessages = [
   createMockMessage('msg-1', 'Hello'),
   createMockMessage('msg-2', 'World'),
 ];
 
-const mockConversation: Conversation = {
+const mockConversation = {
   id: 'conv-1',
   title: 'Test Conversation',
   type: 'direct',
@@ -136,7 +133,9 @@ const mockConversation: Conversation = {
   updatedAt: new Date('2024-01-01'),
   lastMessageAt: new Date('2024-01-01'),
   unreadCount: 0,
-};
+  isActive: true,
+  memberCount: 0,
+} as Conversation;
 
 // Helper to create a wrapper with QueryClient
 function createWrapper() {

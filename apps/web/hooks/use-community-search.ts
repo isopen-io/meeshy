@@ -41,8 +41,8 @@ export function useCommunitySearch(): UseCommunitySearchReturn {
           : '/api/communities'
       );
 
-      if (response.data.success) {
-        setCommunities(response.data.data || []);
+      if (response.data?.success) {
+        setCommunities(response.data?.data || []);
       } else {
         console.error('Error loading communities');
       }

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 public struct CommunityInviteView: View {
     @StateObject private var viewModel: CommunityInviteViewModel
@@ -58,7 +59,7 @@ public struct CommunityInviteView: View {
         Group {
             if viewModel.isSearching {
                 ProgressView()
-                    .tint(Color(hex: "FF2E63"))
+                    .tint(MeeshyColors.indigo500)
                     .frame(maxHeight: .infinity)
             } else if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
                 EmptyStateView(
@@ -135,7 +136,7 @@ public struct CommunityInviteView: View {
             if alreadyInvited {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "2ECC71"))
+                    .foregroundColor(MeeshyColors.success)
             } else {
                 Button {
                     Task { await viewModel.inviteUser(userId: user.id) }
@@ -145,7 +146,7 @@ public struct CommunityInviteView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
-                        .background(Color(hex: "A855F7"))
+                        .background(MeeshyColors.indigo500)
                         .clipShape(Capsule())
                 }
                 .disabled(viewModel.invitingUserId == user.id)
@@ -168,9 +169,15 @@ final class CommunityInviteViewModel: ObservableObject {
     @Published var invitingUserId: String?
 
     let communityId: String
+    private let communityService: CommunityServiceProviding
+    private let userService: UserServiceProviding
 
-    init(communityId: String) {
+    init(communityId: String,
+         communityService: CommunityServiceProviding = CommunityService.shared,
+         userService: UserServiceProviding = UserService.shared) {
         self.communityId = communityId
+        self.communityService = communityService
+        self.userService = userService
     }
 
     func searchUsers() async {
@@ -183,13 +190,9 @@ final class CommunityInviteViewModel: ObservableObject {
         defer { isSearching = false }
 
         do {
-            let response: APIResponse<[UserSearchResult]> = try await APIClient.shared.request(
-                endpoint: "/users/search",
-                queryItems: [URLQueryItem(name: "q", value: searchText)]
-            )
-            searchResults = response.data
+            searchResults = try await userService.searchUsers(query: searchText, limit: 20, offset: 0)
         } catch {
-            print("[CommunityInviteVM] Search error: \(error)")
+            Logger.community.error("[CommunityInviteVM] Search error: \(error)")
         }
     }
 
@@ -198,13 +201,19 @@ final class CommunityInviteViewModel: ObservableObject {
         defer { invitingUserId = nil }
 
         do {
-            _ = try await CommunityService.shared.invite(communityId: communityId, userId: userId)
+            _ = try await communityService.invite(communityId: communityId, userId: userId)
             invitedUserIds.insert(userId)
             if let user = searchResults.first(where: { $0.id == userId }) {
                 recentlyInvited.append(user)
             }
         } catch {
-            print("[CommunityInviteVM] Invite error: \(error)")
+            Logger.community.error("[CommunityInviteVM] Invite error: \(error)")
         }
     }
+}
+
+// MARK: - Logger
+
+private extension Logger {
+    static let community = Logger(subsystem: "me.meeshy.sdk", category: "community")
 }

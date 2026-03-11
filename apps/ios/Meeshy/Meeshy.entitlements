@@ -9,8 +9,16 @@
 		<string>applinks:meeshy.me</string>
 		<string>applinks:www.meeshy.me</string>
 	</array>
+	<key>com.apple.developer.calling-app</key>
+	<true/>
+	<key>com.apple.developer.default-data-protection</key>
+	<string>NSFileProtectionComplete</string>
+	<key>com.apple.developer.messaging-app</key>
+	<true/>
 	<key>com.apple.security.application-groups</key>
-	<array/>
+	<array>
+		<string>group.me.meeshy.apps</string>
+	</array>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)me.meeshy.app</string>

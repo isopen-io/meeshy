@@ -263,7 +263,7 @@ class ApiService {
       options.method || 'GET',
       !shouldExcludeContentType,
       token,
-      options.headers
+      options.headers as Record<string, string> | undefined
     );
 
     const controller = new AbortController();

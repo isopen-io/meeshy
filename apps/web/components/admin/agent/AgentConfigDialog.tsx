@@ -26,53 +26,55 @@ interface AgentConfigDialogProps {
   onSave: () => void;
 }
 
+const DEFAULTS: AgentConfigUpsert = {
+  enabled: true,
+  autoPickupEnabled: false,
+  inactivityThresholdHours: 72,
+  minHistoricalMessages: 0,
+  maxControlledUsers: 5,
+  triggerOnTimeout: true,
+  timeoutSeconds: 300,
+  triggerOnUserMessage: false,
+  triggerOnReplyTo: true,
+  agentType: 'personal',
+  contextWindowSize: 50,
+  useFullHistory: false,
+  excludedRoles: [],
+  excludedUserIds: [],
+  manualUserIds: [],
+  triggerFromUserIds: [],
+  scanIntervalMinutes: 3,
+  minResponsesPerCycle: 2,
+  maxResponsesPerCycle: 12,
+  reactionsEnabled: true,
+  maxReactionsPerCycle: 8,
+  agentInstructions: null,
+  webSearchEnabled: false,
+  minWordsPerMessage: 3,
+  maxWordsPerMessage: 400,
+  generationTemperature: 0.8,
+  qualityGateEnabled: true,
+  qualityGateMinScore: 0.5,
+  weekdayMaxMessages: 10,
+  weekendMaxMessages: 25,
+  weekdayMaxUsers: 4,
+  weekendMaxUsers: 6,
+  burstEnabled: true,
+  burstSize: 4,
+  burstIntervalMinutes: 5,
+  quietIntervalMinutes: 90,
+  inactivityDaysThreshold: 3,
+  prioritizeTaggedUsers: true,
+  prioritizeRepliedUsers: true,
+  reactionBoostFactor: 1.5,
+};
+
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
   const isNew = !config;
   const [saving, setSaving] = useState(false);
   const [conversationId, setConversationId] = useState('');
 
-  const [form, setForm] = useState<AgentConfigUpsert>({
-    enabled: false,
-    autoPickupEnabled: false,
-    inactivityThresholdHours: 72,
-    minHistoricalMessages: 0,
-    maxControlledUsers: 5,
-    triggerOnTimeout: true,
-    timeoutSeconds: 300,
-    triggerOnUserMessage: false,
-    triggerOnReplyTo: true,
-    agentType: 'personal',
-    contextWindowSize: 50,
-    useFullHistory: false,
-    excludedRoles: [],
-    excludedUserIds: [],
-    manualUserIds: [],
-    triggerFromUserIds: [],
-    scanIntervalMinutes: 3,
-    minResponsesPerCycle: 2,
-    maxResponsesPerCycle: 12,
-    reactionsEnabled: true,
-    maxReactionsPerCycle: 8,
-    agentInstructions: null,
-    webSearchEnabled: false,
-    minWordsPerMessage: 3,
-    maxWordsPerMessage: 400,
-    generationTemperature: 0.8,
-    qualityGateEnabled: true,
-    qualityGateMinScore: 0.5,
-    weekdayMaxMessages: 10,
-    weekendMaxMessages: 25,
-    weekdayMaxUsers: 4,
-    weekendMaxUsers: 6,
-    burstEnabled: true,
-    burstSize: 4,
-    burstIntervalMinutes: 5,
-    quietIntervalMinutes: 90,
-    inactivityDaysThreshold: 3,
-    prioritizeTaggedUsers: true,
-    prioritizeRepliedUsers: true,
-    reactionBoostFactor: 1.5,
-  });
+  const [form, setForm] = useState<AgentConfigUpsert>({ ...DEFAULTS });
 
   useEffect(() => {
     if (config) {
@@ -101,81 +103,40 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         maxReactionsPerCycle: config.maxReactionsPerCycle,
         agentInstructions: config.agentInstructions,
         webSearchEnabled: config.webSearchEnabled,
-        minWordsPerMessage: config.minWordsPerMessage ?? 3,
-        maxWordsPerMessage: config.maxWordsPerMessage ?? 400,
-        generationTemperature: config.generationTemperature ?? 0.8,
-        qualityGateEnabled: config.qualityGateEnabled ?? true,
-        qualityGateMinScore: config.qualityGateMinScore ?? 0.5,
-        weekdayMaxMessages: config.weekdayMaxMessages ?? 10,
-        weekendMaxMessages: config.weekendMaxMessages ?? 25,
-        weekdayMaxUsers: config.weekdayMaxUsers ?? 4,
-        weekendMaxUsers: config.weekendMaxUsers ?? 6,
-        burstEnabled: config.burstEnabled ?? true,
-        burstSize: config.burstSize ?? 4,
-        burstIntervalMinutes: config.burstIntervalMinutes ?? 5,
-        quietIntervalMinutes: config.quietIntervalMinutes ?? 90,
-        inactivityDaysThreshold: config.inactivityDaysThreshold ?? 3,
-        prioritizeTaggedUsers: config.prioritizeTaggedUsers ?? true,
-        prioritizeRepliedUsers: config.prioritizeRepliedUsers ?? true,
-        reactionBoostFactor: config.reactionBoostFactor ?? 1.5,
+        minWordsPerMessage: config.minWordsPerMessage,
+        maxWordsPerMessage: config.maxWordsPerMessage,
+        generationTemperature: config.generationTemperature,
+        qualityGateEnabled: config.qualityGateEnabled,
+        qualityGateMinScore: config.qualityGateMinScore,
+        weekdayMaxMessages: config.weekdayMaxMessages,
+        weekendMaxMessages: config.weekendMaxMessages,
+        weekdayMaxUsers: config.weekdayMaxUsers,
+        weekendMaxUsers: config.weekendMaxUsers,
+        burstEnabled: config.burstEnabled,
+        burstSize: config.burstSize,
+        burstIntervalMinutes: config.burstIntervalMinutes,
+        quietIntervalMinutes: config.quietIntervalMinutes,
+        inactivityDaysThreshold: config.inactivityDaysThreshold,
+        prioritizeTaggedUsers: config.prioritizeTaggedUsers,
+        prioritizeRepliedUsers: config.prioritizeRepliedUsers,
+        reactionBoostFactor: config.reactionBoostFactor,
       });
     } else {
       setConversationId('');
-      setForm({
-        enabled: true,
-        autoPickupEnabled: false,
-        inactivityThresholdHours: 72,
-        minHistoricalMessages: 0,
-        maxControlledUsers: 5,
-        triggerOnTimeout: true,
-        timeoutSeconds: 300,
-        triggerOnUserMessage: false,
-        triggerOnReplyTo: true,
-        agentType: 'personal',
-        contextWindowSize: 50,
-        useFullHistory: false,
-        excludedRoles: [],
-        excludedUserIds: [],
-        manualUserIds: [],
-        triggerFromUserIds: [],
-        scanIntervalMinutes: 3,
-        minResponsesPerCycle: 2,
-        maxResponsesPerCycle: 12,
-        reactionsEnabled: true,
-        maxReactionsPerCycle: 8,
-        agentInstructions: null,
-        webSearchEnabled: false,
-        minWordsPerMessage: 3,
-        maxWordsPerMessage: 400,
-        generationTemperature: 0.8,
-        qualityGateEnabled: true,
-        qualityGateMinScore: 0.5,
-        weekdayMaxMessages: 10,
-        weekendMaxMessages: 25,
-        weekdayMaxUsers: 4,
-        weekendMaxUsers: 6,
-        burstEnabled: true,
-        burstSize: 4,
-        burstIntervalMinutes: 5,
-        quietIntervalMinutes: 90,
-        inactivityDaysThreshold: 3,
-        prioritizeTaggedUsers: true,
-        prioritizeRepliedUsers: true,
-        reactionBoostFactor: 1.5,
-      });
+      setForm({ ...DEFAULTS });
     }
   }, [config, open]);
 
   const handleSave = async () => {
     if (!conversationId.match(/^[0-9a-fA-F]{24}$/)) {
-      toast.error('ID de conversation invalide (24 caractères hexadécimaux)');
+      toast.error('ID de conversation invalide (24 caract\u00e8res hexad\u00e9cimaux)');
       return;
     }
 
     setSaving(true);
     try {
       await agentAdminService.upsertConfig(conversationId, form);
-      toast.success(isNew ? 'Configuration créée' : 'Configuration mise à jour');
+      toast.success(isNew ? 'Configuration cr\u00e9\u00e9e' : 'Configuration mise \u00e0 jour');
       onSave();
     } catch {
       toast.error('Erreur lors de la sauvegarde');
@@ -192,7 +153,14 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isNew ? 'Nouvelle configuration agent' : 'Modifier la configuration'}</DialogTitle>
+          <DialogTitle>
+            {isNew ? 'Nouvelle configuration agent' : 'Modifier la configuration'}
+            {!isNew && config?.conversation?.title && (
+              <span className="block text-sm font-normal text-gray-500 mt-1">
+                {config.conversation.title}
+              </span>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -209,11 +177,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
           )}
 
-          {/* Général */}
+          {/* G\u00e9n\u00e9ral */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Général</h3>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">G\u00e9n\u00e9ral</h3>
             <div className="flex items-center justify-between">
-              <Label>Agent activé</Label>
+              <Label>Agent activ\u00e9</Label>
               <Switch checked={form.enabled} onCheckedChange={v => updateField('enabled', v)} />
             </div>
             <div className="flex items-center justify-between">
@@ -230,7 +198,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <Label>Type d&apos;agent</Label>
               <select
-                className="w-full p-2 border rounded-md bg-transparent"
+                className="w-full p-2 border rounded-md bg-transparent text-sm"
                 value={form.agentType}
                 onChange={e => updateField('agentType', e.target.value)}
               >
@@ -241,7 +209,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Taille fenêtre contextuelle (messages)</Label>
+              <Label>Taille fen\u00eatre contextuelle (messages)</Label>
               <Input
                 type="number"
                 value={form.contextWindowSize}
@@ -292,9 +260,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           {/* Seuils */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Seuils</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Inactivité (heures)</Label>
+                <Label>Inactivit\u00e9 (heures)</Label>
                 <Input
                   type="number"
                   value={form.inactivityThresholdHours}
@@ -313,7 +281,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max utilisateurs contrôlés</Label>
+                <Label>Max utilisateurs contr\u00f4l\u00e9s</Label>
                 <Input
                   type="number"
                   value={form.maxControlledUsers}
@@ -331,7 +299,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Planificateur</h3>
             <div className="space-y-2">
-              <Label>Fréquence de scan</Label>
+              <Label>Fr\u00e9quence de scan</Label>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-xs text-gray-500">Heures</Label>
@@ -363,9 +331,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Min réponses/cycle</Label>
+                <Label>Min r\u00e9ponses/cycle</Label>
                 <Input
                   type="number"
                   value={form.minResponsesPerCycle ?? 2}
@@ -375,7 +343,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max réponses/cycle</Label>
+                <Label>Max r\u00e9ponses/cycle</Label>
                 <Input
                   type="number"
                   value={form.maxResponsesPerCycle ?? 12}
@@ -386,12 +354,12 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <Label>Réactions activées</Label>
+              <Label>R\u00e9actions activ\u00e9es</Label>
               <Switch checked={form.reactionsEnabled ?? true} onCheckedChange={v => updateField('reactionsEnabled', v)} />
             </div>
             {form.reactionsEnabled !== false && (
               <div className="space-y-2 pl-4">
-                <Label>Max réactions/cycle</Label>
+                <Label>Max r\u00e9actions/cycle</Label>
                 <Input
                   type="number"
                   value={form.maxReactionsPerCycle ?? 8}
@@ -409,13 +377,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Instructions Agent</h3>
             <div className="space-y-2">
-              <Label>Instructions spécifiques</Label>
+              <Label>Instructions sp\u00e9cifiques</Label>
               <Textarea
                 rows={4}
                 maxLength={5000}
                 value={form.agentInstructions ?? ''}
                 onChange={e => updateField('agentInstructions', e.target.value || null)}
-                placeholder="Instructions personnalisées pour l'agent dans cette conversation..."
+                placeholder="Instructions personnalis\u00e9es pour l'agent dans cette conversation..."
               />
               <p className="text-xs text-gray-500">{(form.agentInstructions ?? '').length}/5000</p>
             </div>
@@ -428,8 +396,8 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Recherche Web</h3>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Recherche web activée</Label>
-                <p className="text-xs text-gray-500 mt-1">Permet à l&apos;agent de rechercher des informations actuelles</p>
+                <Label>Recherche web activ\u00e9e</Label>
+                <p className="text-xs text-gray-500 mt-1">Permet \u00e0 l&apos;agent de rechercher des informations actuelles</p>
               </div>
               <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
             </div>
@@ -437,10 +405,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
           <Separator />
 
-          {/* Génération */}
+          {/* G\u00e9n\u00e9ration */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Génération</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">G\u00e9n\u00e9ration</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Mots min. par message</Label>
                 <Input
@@ -463,9 +431,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Température de génération ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
+              <Label>Temp\u00e9rature de g\u00e9n\u00e9ration ({((form.generationTemperature ?? 0.8) * 100).toFixed(0)}%)</Label>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-10">Précis</span>
+                <span className="text-xs text-gray-400 w-10">Pr\u00e9cis</span>
                 <input
                   type="range"
                   min={0}
@@ -475,9 +443,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   onChange={e => updateField('generationTemperature', parseInt(e.target.value) / 100)}
                   className="flex-1"
                 />
-                <span className="text-xs text-gray-400 w-12">Créatif</span>
+                <span className="text-xs text-gray-400 w-12">Cr\u00e9atif</span>
               </div>
-              <p className="text-xs text-gray-500">0 = déterministe, 1 = équilibré, 2 = très créatif</p>
+              <p className="text-xs text-gray-500">0 = d\u00e9terministe, 1 = \u00e9quilibr\u00e9, 2 = tr\u00e8s cr\u00e9atif</p>
             </div>
           </div>
 
@@ -488,9 +456,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Quality Gate</h3>
             <div className="flex items-center justify-between">
               <div>
-                <Label>Vérification LLM activée</Label>
+                <Label>V\u00e9rification LLM activ\u00e9e</Label>
                 <p className="text-xs text-gray-500 mt-1">
-                  Vérifie la cohérence du ton, registre et langue. Les checks déterministes (@@, longueur, révélation IA) s&apos;appliquent toujours.
+                  V\u00e9rifie la coh\u00e9rence du ton, registre et langue. Les checks d\u00e9terministes (@@, longueur, r\u00e9v\u00e9lation IA) s&apos;appliquent toujours.
                 </p>
               </div>
               <Switch
@@ -515,7 +483,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <span className="text-xs text-gray-400 w-10">Strict</span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Score en dessous duquel le message est rejeté. 50% = équilibré, 80% = très strict.
+                  Score en dessous duquel le message est rejet\u00e9. 50% = \u00e9quilibr\u00e9, 80% = tr\u00e8s strict.
                 </p>
               </div>
             )}
@@ -527,7 +495,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Scheduling & Rythme</h3>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Messages/jour (semaine)</Label>
                 <Input
@@ -550,7 +518,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Utilisateurs/jour (semaine)</Label>
                 <Input
@@ -583,7 +551,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
             {(form.burstEnabled ?? true) && (
               <div className="space-y-4 pl-4">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label className="text-xs">Taille burst</Label>
                     <Input
@@ -619,7 +587,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             )}
 
             <div className="space-y-2">
-              <Label>Seuil d&apos;inactivité (jours)</Label>
+              <Label>Seuil d&apos;inactivit\u00e9 (jours)</Label>
               <Input
                 type="number"
                 value={form.inactivityDaysThreshold ?? 3}
@@ -630,16 +598,16 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
 
             <div className="flex items-center justify-between">
-              <Label>Prioriser les utilisateurs taggés</Label>
+              <Label>Prioriser les utilisateurs tagg\u00e9s</Label>
               <Switch checked={form.prioritizeTaggedUsers ?? true} onCheckedChange={v => updateField('prioritizeTaggedUsers', v)} />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Prioriser les réponses</Label>
+              <Label>Prioriser les r\u00e9ponses</Label>
               <Switch checked={form.prioritizeRepliedUsers ?? true} onCheckedChange={v => updateField('prioritizeRepliedUsers', v)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Boost réactions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
+              <Label>Boost r\u00e9actions ({(form.reactionBoostFactor ?? 1.5).toFixed(1)}x)</Label>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-gray-400 w-8">0.5x</span>
                 <input
@@ -656,25 +624,25 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
           </div>
 
-          {/* Rôles (only for existing configs) */}
+          {/* R\u00f4les (only for existing configs) */}
           {!isNew && (
             <>
               <Separator />
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Rôles utilisateurs</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">R\u00f4les utilisateurs</h3>
                 <AgentRolesSection conversationId={conversationId} />
               </div>
             </>
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Annuler
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isNew ? 'Créer' : 'Enregistrer'}
+            {isNew ? 'Cr\u00e9er' : 'Enregistrer'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,8 +3,8 @@
  * Remplace les anciens types WebSocket pour correspondre à la nouvelle architecture Socket.IO
  */
 
-// Import unified Participant
-import type { Participant } from './participant.js';
+// Import unified Participant types
+import type { ParticipantType } from './participant.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -183,6 +183,9 @@ export const CLIENT_EVENTS = {
   // --- Feed subscription ---
   FEED_SUBSCRIBE: 'feed:subscribe',
   FEED_UNSUBSCRIBE: 'feed:unsubscribe',
+
+  // --- Presence ---
+  HEARTBEAT: 'heartbeat',
 } as const;
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
@@ -330,13 +333,23 @@ export interface ReactionSyncEventData {
 }
 
 /**
+ * Résumé des statuts de lecture pour enrichir les événements temps réel
+ */
+export interface ReadStatusSummary {
+  readonly totalMembers: number;
+  readonly deliveredCount: number;
+  readonly readCount: number;
+}
+
+/**
  * Données pour l'événement de mise à jour du statut de lecture
  */
 export interface ReadStatusUpdatedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  readonly participantId: string;
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
+  readonly summary: ReadStatusSummary;
 }
 
 /**
@@ -429,7 +442,7 @@ export interface TranscriptionReadyEventData {
     readonly senderVoiceIdentified?: boolean;
     readonly senderSpeakerId?: string;
     // Analyse détaillée des speakers avec caractéristiques vocales (pitch, fréquences, etc.)
-    readonly speakerAnalysis?: any;
+    readonly speakerAnalysis?: Record<string, unknown>;
   };
   readonly processingTimeMs?: number;
 }
@@ -510,6 +523,24 @@ export interface LocationLiveStoppedEventData {
 }
 
 /**
+ * Données pour l'événement de mise à jour du rôle d'un participant
+ * Émis lorsqu'un admin/modérateur modifie le rôle d'un participant dans une conversation
+ */
+export interface ParticipantRoleUpdatedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly newRole: string;
+  readonly updatedBy: string;
+  /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
+  readonly participant: {
+    readonly id: string;
+    readonly role: string;
+    readonly displayName: string;
+    readonly userId: string | null;
+  };
+}
+
+/**
  * Données pour l'événement de mise à jour des traductions d'un textObject de story.
  * Émis après que le pipeline ZMQ a traduit un textObject de storyEffects.
  */
@@ -553,6 +584,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ERROR]: (data: CallError) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
+  [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
@@ -726,6 +758,9 @@ export interface ClientToServerEvents {
   // Feed subscription
   [CLIENT_EVENTS.FEED_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.FEED_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
+
+  // Presence
+  [CLIENT_EVENTS.HEARTBEAT]: () => void;
 }
 
 // ===== TYPES DE BASE =====
@@ -738,33 +773,47 @@ export type MessageType = 'text' | 'image' | 'file' | 'audio' | 'video' | 'locat
 
 // ===== STRUCTURES DE DONNÉES =====
 
+/**
+ * Lightweight sender shape for Socket.IO message broadcasts.
+ * A subset of Participant — only the fields needed for display.
+ */
+export interface SocketIOMessageSender {
+  readonly id: string;
+  readonly displayName: string;
+  readonly avatar?: string;
+  readonly type?: ParticipantType;
+  readonly userId?: string;
+  readonly username?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+}
+
 export interface SocketIOMessage {
-  id: string;
-  conversationId: string;
-  senderId: string; // Participant.id (unified)
-  content: string;
-  originalLanguage: string;
-  messageType: MessageType;
-  isEdited?: boolean;
-  isDeleted?: boolean;
-  editedAt?: Date;
-  deletedAt?: Date;
-  replyToId?: string;
-  createdAt: Date;
-  updatedAt?: Date;
-  sender?: Participant;
+  readonly id: string;
+  readonly conversationId: string;
+  readonly senderId: string; // Participant.id (unified)
+  readonly content: string;
+  readonly originalLanguage: string;
+  readonly messageType: MessageType;
+  readonly isEdited?: boolean;
+  readonly editedAt?: Date;
+  readonly deletedAt?: Date;
+  readonly replyToId?: string;
+  readonly createdAt: Date;
+  readonly updatedAt?: Date;
+  readonly sender?: SocketIOMessageSender;
 }
 
 export interface UserPermissions {
-  canAccessAdmin: boolean;
-  canManageUsers: boolean;
-  canManageGroups: boolean;
-  canManageConversations: boolean;
-  canViewAnalytics: boolean;
-  canModerateContent: boolean;
-  canViewAuditLogs: boolean;
-  canManageNotifications: boolean;
-  canManageTranslations: boolean;
+  readonly canAccessAdmin: boolean;
+  readonly canManageUsers: boolean;
+  readonly canManageGroups: boolean;
+  readonly canManageConversations: boolean;
+  readonly canViewAnalytics: boolean;
+  readonly canModerateContent: boolean;
+  readonly canViewAuditLogs: boolean;
+  readonly canManageNotifications: boolean;
+  readonly canManageTranslations: boolean;
 }
 
 /**
@@ -772,187 +821,187 @@ export interface UserPermissions {
  * Aligned with schema.prisma User model
  */
 export interface SocketIOUser {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber?: string;
-  displayName?: string;
-  avatar?: string;
-  banner?: string;  // Profile banner/cover image
-  bio?: string;
-  role: string;
-  permissions?: UserPermissions;
-  isOnline: boolean;
-  lastActiveAt: Date;
-  timezone?: string;  // IANA format (e.g., "America/New_York")
+  readonly id: string;
+  readonly username: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly email: string;
+  readonly phoneNumber?: string;
+  readonly displayName?: string;
+  readonly avatar?: string;
+  readonly banner?: string;  // Profile banner/cover image
+  readonly bio?: string;
+  readonly role: string;
+  readonly permissions?: UserPermissions;
+  readonly isOnline: boolean;
+  readonly lastActiveAt: Date;
+  readonly timezone?: string;  // IANA format (e.g., "America/New_York")
 
   // Blocked users
-  blockedUserIds?: string[];
+  readonly blockedUserIds?: readonly string[];
 
   // Language preferences
-  systemLanguage: string;
-  regionalLanguage: string;
-  customDestinationLanguage?: string;
-  autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
+  readonly systemLanguage: string;
+  readonly regionalLanguage: string;
+  readonly customDestinationLanguage?: string;
+  readonly autoTranslateEnabled: boolean;
+  readonly translateToSystemLanguage: boolean;
+  readonly translateToRegionalLanguage: boolean;
+  readonly useCustomDestination: boolean;
 
   // Account status
-  isActive: boolean;
-  deactivatedAt?: Date;
-  deletedAt?: Date;
-  deletedBy?: string;
+  readonly isActive: boolean;
+  readonly deactivatedAt?: Date;
+  readonly deletedAt?: Date;
+  readonly deletedBy?: string;
 
   // Verification statuses
-  emailVerifiedAt?: Date;
-  phoneVerifiedAt?: Date;
-  twoFactorEnabledAt?: Date;
+  readonly emailVerifiedAt?: Date;
+  readonly phoneVerifiedAt?: Date;
+  readonly twoFactorEnabledAt?: Date;
 
   // Pending contact changes (awaiting verification)
-  pendingEmail?: string;
-  pendingPhone?: string;
+  readonly pendingEmail?: string;
+  readonly pendingPhone?: string;
 
   // Security fields
-  failedLoginAttempts?: number;
-  lockedUntil?: Date;
-  lockedReason?: string;
-  lastPasswordChange?: Date;
-  passwordResetAttempts?: number;
-  lastPasswordResetAttempt?: Date;
+  readonly failedLoginAttempts?: number;
+  readonly lockedUntil?: Date;
+  readonly lockedReason?: string;
+  readonly lastPasswordChange?: Date;
+  readonly passwordResetAttempts?: number;
+  readonly lastPasswordResetAttempt?: Date;
 
   // Login tracking
-  lastLoginIp?: string;
-  lastLoginLocation?: string;
-  lastLoginDevice?: string;
+  readonly lastLoginIp?: string;
+  readonly lastLoginLocation?: string;
+  readonly lastLoginDevice?: string;
 
   // E2EE / Signal Protocol
-  encryptionPreference?: 'disabled' | 'optional' | 'always';
-  signalIdentityKeyPublic?: string;  // Base64 encoded
-  signalRegistrationId?: number;
-  signalPreKeyBundleVersion?: number;
-  lastKeyRotation?: Date;
+  readonly encryptionPreference?: 'disabled' | 'optional' | 'always';
+  readonly signalIdentityKeyPublic?: string;  // Base64 encoded
+  readonly signalRegistrationId?: number;
+  readonly signalPreKeyBundleVersion?: number;
+  readonly lastKeyRotation?: Date;
 
   // Transcription settings (on-device)
-  autoTranscriptionEnabled?: boolean;  // Auto-transcribe audio/video when no transcription exists
+  readonly autoTranscriptionEnabled?: boolean;  // Auto-transcribe audio/video when no transcription exists
 
   // Voice profile
-  voiceProfileConsentAt?: Date;
-  ageVerificationConsentAt?: Date;
-  birthDate?: Date;
-  voiceCloningEnabledAt?: Date;
-  voiceProfileUpdateNotifiedAt?: Date;
+  readonly voiceProfileConsentAt?: Date;
+  readonly ageVerificationConsentAt?: Date;
+  readonly birthDate?: Date;
+  readonly voiceCloningEnabledAt?: Date;
+  readonly voiceProfileUpdateNotifiedAt?: Date;
 
   // Metadata
-  profileCompletionRate?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  readonly profileCompletionRate?: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 
   // Compatibility flags
-  isAnonymous?: boolean;
-  isMeeshyer?: boolean;
+  readonly isAnonymous?: boolean;
+  readonly isMeeshyer?: boolean;
 }
 
 export interface SocketIOResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
+  readonly success: boolean;
+  readonly data?: T;
+  readonly error?: string;
 }
 
 export interface TranslationEvent {
-  messageId: string;
-  translations: TranslationData[];
+  readonly messageId: string;
+  readonly translations: readonly TranslationData[];
 }
 
 export interface TranslationData {
-  id: string; // ID de la traduction en base de données
-  messageId: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  translatedContent: string;
-  translationModel: string;
-  cacheKey: string;
-  cached: boolean;
-  confidenceScore?: number;
-  createdAt?: Date; // Ajouté pour la gestion des traductions
+  readonly id: string; // ID de la traduction en base de données
+  readonly messageId: string;
+  readonly sourceLanguage: string;
+  readonly targetLanguage: string;
+  readonly translatedContent: string;
+  readonly translationModel: string;
+  readonly cacheKey: string;
+  readonly cached: boolean;
+  readonly confidenceScore?: number;
+  readonly createdAt?: Date; // Ajouté pour la gestion des traductions
 }
 
 export interface TypingEvent {
-  userId: string;
-  username: string;
-  conversationId: string;
-  isTyping?: boolean; // Ajouté côté service pour distinguer start/stop
+  readonly userId: string;
+  readonly username: string;
+  readonly conversationId: string;
+  readonly isTyping?: boolean; // Ajouté côté service pour distinguer start/stop
 }
 
 export interface UserStatusEvent {
-  userId: string;
-  username: string;
-  isOnline: boolean;
-  lastActiveAt?: Date | null;
+  readonly userId: string;
+  readonly username: string;
+  readonly isOnline: boolean;
+  readonly lastActiveAt?: Date | null;
 }
 
 // ===== TYPES POUR LES STATISTIQUES DE CONVERSATION =====
 
 export interface ConversationOnlineUser {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
+  readonly id: string;
+  readonly username: string;
+  readonly firstName: string;
+  readonly lastName: string;
 }
 
 export interface ConversationStatsDTO {
-  messagesPerLanguage: Record<string, number>;
-  participantCount: number;
-  participantsPerLanguage: Record<string, number>;
-  onlineUsers: ConversationOnlineUser[];
-  updatedAt: Date;
+  readonly messagesPerLanguage: Record<string, number>;
+  readonly participantCount: number;
+  readonly participantsPerLanguage: Record<string, number>;
+  readonly onlineUsers: readonly ConversationOnlineUser[];
+  readonly updatedAt: Date;
 }
 
 // ===== TYPES DE CONFIGURATION =====
 
 export interface UserLanguageConfig {
-  systemLanguage: string;
-  regionalLanguage: string;
-  customDestinationLanguage?: string;
-  autoTranslateEnabled: boolean;
-  translateToSystemLanguage: boolean;
-  translateToRegionalLanguage: boolean;
-  useCustomDestination: boolean;
+  readonly systemLanguage: string;
+  readonly regionalLanguage: string;
+  readonly customDestinationLanguage?: string;
+  readonly autoTranslateEnabled: boolean;
+  readonly translateToSystemLanguage: boolean;
+  readonly translateToRegionalLanguage: boolean;
+  readonly useCustomDestination: boolean;
 }
 
 // ===== HELPERS POUR LA GESTION DES TRADUCTIONS =====
 
 export interface MessageTranslationCache {
-  messageId: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  translatedContent: string;
-  translationModel: 'basic' | 'medium' | 'premium';
-  cacheKey: string;
-  cached: boolean;
-  createdAt: Date;
-  confidenceScore?: number;
+  readonly messageId: string;
+  readonly sourceLanguage: string;
+  readonly targetLanguage: string;
+  readonly translatedContent: string;
+  readonly translationModel: 'basic' | 'medium' | 'premium';
+  readonly cacheKey: string;
+  readonly cached: boolean;
+  readonly createdAt: Date;
+  readonly confidenceScore?: number;
 }
 
 // ===== TYPES POUR LES CONNEXIONS =====
 
 export interface ConnectionStatus {
-  isConnected: boolean;
-  hasSocket: boolean;
-  currentUser: string;
-  connectedAt?: Date;
-  lastReconnectAttempt?: Date;
-  reconnectAttempts?: number;
+  readonly isConnected: boolean;
+  readonly hasSocket: boolean;
+  readonly currentUser: string;
+  readonly connectedAt?: Date;
+  readonly lastReconnectAttempt?: Date;
+  readonly reconnectAttempts?: number;
 }
 
 export interface ConnectionDiagnostics {
-  connectionStatus: ConnectionStatus;
-  socketId?: string;
-  transport?: string;
-  connectedSockets?: number;
-  serverStatus?: 'online' | 'offline' | 'unknown';
+  readonly connectionStatus: ConnectionStatus;
+  readonly socketId?: string;
+  readonly transport?: string;
+  readonly connectedSockets?: number;
+  readonly serverStatus?: 'online' | 'offline' | 'unknown';
 }
 
 // ===== TYPES POUR L'AUTHENTIFICATION =====

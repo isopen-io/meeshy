@@ -59,7 +59,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -139,7 +145,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, data.messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -216,7 +228,13 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
-      const participantId = user?.participantId || userId;
+
+      const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
+      if (!participantId) {
+        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        if (callback) callback(errorResponse);
+        return;
+      }
 
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(this.prisma);
@@ -239,6 +257,31 @@ export class ReactionHandler {
       };
       if (callback) callback(errorResponse);
     }
+  }
+
+  /**
+   * Résout le Participant.id pour un utilisateur enregistré via le messageId → conversationId.
+   * Pour les anonymes, retourne directement user.participantId.
+   */
+  private async _resolveParticipantId(
+    user: SocketUser | undefined,
+    userId: string,
+    isAnonymous: boolean,
+    messageId: string
+  ): Promise<string | undefined> {
+    if (isAnonymous) return user?.participantId;
+
+    const msg = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { conversationId: true }
+    });
+    if (!msg) return undefined;
+
+    const participant = await this.prisma.participant.findFirst({
+      where: { userId, conversationId: msg.conversationId, isActive: true },
+      select: { id: true }
+    });
+    return participant?.id;
   }
 
   /**
@@ -278,31 +321,37 @@ export class ReactionHandler {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {
-        content: true,
         senderId: true,
         conversationId: true,
-        conversation: {
-          select: { title: true }
-        }
       }
     });
 
-    if (!message || !message.senderId || message.senderId === reactorId) {
-      return; // Pas de notification si l'auteur réagit à son propre message
-    }
+    if (!message || !message.senderId) return;
+
+    // Résoudre senderId (Participant.id) → User.id pour la notification
+    const [authorParticipant, reactorParticipant] = await Promise.all([
+      this.prisma.participant.findUnique({
+        where: { id: message.senderId },
+        select: { userId: true }
+      }),
+      this.prisma.participant.findUnique({
+        where: { id: reactorId },
+        select: { userId: true }
+      })
+    ]);
+
+    const authorUserId = authorParticipant?.userId;
+    const reactorUserId = reactorParticipant?.userId;
+
+    if (!authorUserId || !reactorUserId || authorUserId === reactorUserId) return;
 
     this.notificationService
       .createReactionNotification({
-        messageAuthorId: message.senderId,
-        reactorId,
-        reactorUsername: '',
-        reactorAvatar: undefined,
-        emoji,
-        messageContent: message.content,
-        conversationId: message.conversationId,
-        conversationTitle: message.conversation.title || undefined,
+        messageAuthorId: authorUserId,
+        reactorUserId,
         messageId,
-        reactionId
+        conversationId: message.conversationId,
+        reactionEmoji: emoji,
       })
       .catch((error) => {
         console.error('❌ [REACTION_NOTIFICATION] Erreur création notification:', error);

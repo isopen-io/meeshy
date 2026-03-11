@@ -50,7 +50,7 @@ export function CreateLinkModalV2({
   preGeneratedToken
 }: CreateLinkModalProps) {
   const { t } = useI18n('modals');
-  const { user: currentUser } = useUser();
+  const currentUser = useUser();
 
   // Use custom hooks
   const conversationState = useConversationSelection(currentUser, isOpen);

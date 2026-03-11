@@ -48,6 +48,8 @@ const mockConversation: Conversation = {
   updatedAt: new Date('2024-01-01'),
   lastMessageAt: new Date('2024-01-01'),
   unreadCount: 0,
+  isActive: true,
+  memberCount: 0,
 };
 
 const mockConversations = [

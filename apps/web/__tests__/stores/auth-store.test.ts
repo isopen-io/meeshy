@@ -27,7 +27,7 @@ jest.mock('../../stores/user-preferences-store', () => ({
 global.fetch = jest.fn();
 
 describe('AuthStore', () => {
-  const mockUser: User = {
+  const mockUser = {
     id: 'user-123',
     username: 'testuser',
     email: 'test@example.com',
@@ -43,7 +43,7 @@ describe('AuthStore', () => {
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
-  };
+  } as any as User;
 
   beforeEach(() => {
     // Reset the store to initial state before each test
@@ -146,7 +146,7 @@ describe('AuthStore', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', 3600);
+        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', 3600 as any);
       });
 
       const state = useAuthStore.getState();
@@ -179,7 +179,7 @@ describe('AuthStore', () => {
       // First set auth state
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        useAuthStore.getState().setTokens('test-token', 'test-refresh', 3600);
+        useAuthStore.getState().setTokens('test-token', 'test-refresh', 3600 as any);
       });
 
       // Then clear it

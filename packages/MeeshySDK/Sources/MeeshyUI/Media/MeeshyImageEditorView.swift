@@ -96,7 +96,7 @@ public struct MeeshyImageEditorView: View {
                     tabBar
 
                     toolPanel
-                        .frame(height: 140)
+                        .frame(minHeight: 140, maxHeight: 200)
 
                     acceptButton
                         .padding(.horizontal, 20)
@@ -159,7 +159,7 @@ public struct MeeshyImageEditorView: View {
             .scaleEffect(scale)
             .offset(offset)
             .rotationEffect(rotation)
-            .gesture(
+            .simultaneousGesture(
                 MagnifyGesture()
                     .onChanged { value in scale = value.magnification }
                     .onEnded { _ in
@@ -168,11 +168,11 @@ public struct MeeshyImageEditorView: View {
                         }
                     }
             )
-            .gesture(
+            .simultaneousGesture(
                 DragGesture()
                     .onChanged { value in offset = value.translation }
                     .onEnded { value in
-                        if abs(value.translation.height) > 200 {
+                        if scale <= 1.05 && abs(value.translation.height) > 200 {
                             onCancel?()
                             dismiss()
                         } else {
@@ -188,7 +188,7 @@ public struct MeeshyImageEditorView: View {
     // MARK: - Crop Image Preview
 
     private func cropImagePreview(geometry: GeometryProxy) -> some View {
-        let availableHeight = geometry.size.height - 300
+        let availableHeight = geometry.size.height - 340
         let size = CGSize(width: geometry.size.width - 32, height: max(availableHeight, 200))
         let displayRect = calculateDisplayRect(for: croppedImage, in: size)
 
@@ -525,8 +525,12 @@ public struct MeeshyImageEditorView: View {
             HapticFeedback.success()
             dismiss()
         } label: {
-            Text("Utiliser")
-                .font(.system(size: 16, weight: .bold))
+            HStack(spacing: 6) {
+                    Image(systemName: "eye")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Aper\u{00E7}u")
+                        .font(.system(size: 16, weight: .bold))
+                }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -627,6 +631,7 @@ struct CropOverlayView: View {
 
     @State private var isDragging = false
     @State private var activeHandle: CropHandle = .none
+    @State private var lastTranslation: CGSize = .zero
 
     enum CropHandle {
         case none
@@ -667,12 +672,19 @@ struct CropOverlayView: View {
                     if !isDragging {
                         activeHandle = detectHandle(at: value.startLocation)
                         isDragging = true
+                        lastTranslation = .zero
                     }
-                    updateCropRect(with: value.translation, handle: activeHandle)
+                    let delta = CGSize(
+                        width: value.translation.width - lastTranslation.width,
+                        height: value.translation.height - lastTranslation.height
+                    )
+                    lastTranslation = value.translation
+                    updateCropRect(with: delta, handle: activeHandle)
                 }
                 .onEnded { _ in
                     isDragging = false
                     activeHandle = .none
+                    lastTranslation = .zero
                     constrainCropRect()
                 }
         )

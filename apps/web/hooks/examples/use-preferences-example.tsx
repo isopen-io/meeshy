@@ -40,7 +40,7 @@ export function TranslationPreferencesExample() {
       toast.success('Translation preferences updated');
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error((error as any).message);
     },
   });
 
@@ -162,9 +162,9 @@ export function NotificationPreferencesExample() {
           <div className="flex items-center justify-between">
             <label>Push Notifications</label>
             <Switch
-              checked={preferences.enablePushNotifications}
+              checked={preferences.pushEnabled}
               onCheckedChange={(checked) =>
-                updatePreferences({ enablePushNotifications: checked })
+                updatePreferences({ pushEnabled: checked })
               }
               disabled={isUpdating}
             />
@@ -173,9 +173,9 @@ export function NotificationPreferencesExample() {
           <div className="flex items-center justify-between">
             <label>Email Notifications</label>
             <Switch
-              checked={preferences.enableEmailNotifications}
+              checked={preferences.emailEnabled}
               onCheckedChange={(checked) =>
-                updatePreferences({ enableEmailNotifications: checked })
+                updatePreferences({ emailEnabled: checked })
               }
               disabled={isUpdating}
             />

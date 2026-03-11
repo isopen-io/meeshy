@@ -177,6 +177,7 @@ public struct InlineVideoPlayerView: View {
 
     private func startPlayback() {
         isActive = true
+        manager.attachmentId = attachment.id
         manager.load(urlString: attachment.fileUrl)
         manager.play()
         scheduleControlsHide()

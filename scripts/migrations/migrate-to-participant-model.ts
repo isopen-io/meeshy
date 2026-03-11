@@ -283,6 +283,21 @@ async function main() {
       const count = await collection.countDocuments()
       log(`  Found ${count} ${name} documents`)
 
+      // Drop unique indexes containing userId before migration to avoid E11000 conflicts
+      if (!DRY_RUN) {
+        try {
+          const indexes = await collection.indexes()
+          for (const idx of indexes) {
+            if (idx.unique && idx.key && ('userId' in idx.key || 'anonymousId' in idx.key)) {
+              log(`  Dropping conflicting unique index: ${idx.name}`)
+              await collection.dropIndex(idx.name!)
+            }
+          }
+        } catch (err) {
+          log(`  Warning: could not inspect/drop indexes: ${err}`)
+        }
+      }
+
       const cursor = collection.find({}, {
         projection: { _id: 1, conversationId: 1, userId: 1, anonymousId: 1, messageId: 1 },
       })

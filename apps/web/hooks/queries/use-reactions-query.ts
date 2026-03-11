@@ -108,9 +108,8 @@ export function useReactionsQuery({
       ([emoji, count]) => ({
         emoji,
         count,
-        userIds: [],
-        anonymousIds: [],
-        hasCurrentUser: userReactionsSet.has(emoji), // Indique si l'utilisateur a réagi
+        participantIds: [] as readonly string[],
+        hasCurrentUser: userReactionsSet.has(emoji),
       })
     );
 
@@ -187,8 +186,7 @@ export function useReactionsQuery({
             {
               emoji,
               count: 1,
-              userIds: currentUserId && !isAnonymous ? [currentUserId] : [],
-              anonymousIds: isAnonymous && currentUserId ? [currentUserId] : [],
+              participantIds: currentUserId ? [currentUserId] : [],
               hasCurrentUser: true,
             },
           ];
@@ -356,10 +354,7 @@ export function useReactionsQuery({
 
         // Mettre à jour userReactions si c'est nous
         let newUserReactions = old.userReactions;
-        if (
-          (event.userId && event.userId === currentUserId && !isAnonymous) ||
-          (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
-        ) {
+        if (event.participantId && event.participantId === currentUserId) {
           if (!old.userReactions.includes(event.emoji)) {
             newUserReactions = [...old.userReactions, event.emoji];
           }
@@ -389,10 +384,7 @@ export function useReactionsQuery({
 
         // Mettre à jour userReactions si c'est nous
         let newUserReactions = old.userReactions;
-        if (
-          (event.userId && event.userId === currentUserId && !isAnonymous) ||
-          (event.anonymousId && event.anonymousId === currentUserId && isAnonymous)
-        ) {
+        if (event.participantId && event.participantId === currentUserId) {
           newUserReactions = old.userReactions.filter(e => e !== event.emoji);
         }
 

@@ -58,12 +58,26 @@ export class MessagingService {
       }
 
       // 3. Vérification des permissions via Participant
-      const participant = await this.prisma.participant.findUnique({
+      // participantId can be a Participant.id OR a User.id (legacy callers)
+      let participant = await this.prisma.participant.findUnique({
         where: { id: participantId },
         select: { id: true, conversationId: true, isActive: true }
       });
 
-      if (!participant || participant.conversationId !== conversationId || !participant.isActive) {
+      // Fallback: participantId might be a userId — resolve via conversationId + userId
+      if (!participant || participant.conversationId !== conversationId) {
+        participant = await this.prisma.participant.findFirst({
+          where: { userId: participantId, conversationId, isActive: true },
+          select: { id: true, conversationId: true, isActive: true }
+        });
+      }
+
+      // Auto-create Participant from legacy ConversationMember if needed
+      if (!participant) {
+        participant = await this.ensureParticipantFromMember(participantId, conversationId);
+      }
+
+      if (!participant || !participant.isActive) {
         return this.createErrorResponse(
           'Permissions insuffisantes pour envoyer des messages',
           requestId
@@ -273,5 +287,75 @@ export class MessagingService {
    */
   private generateRequestId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * Auto-create a Participant from legacy ConversationMember data.
+   * This bridges the gap between the old ConversationMember model and
+   * the new unified Participant model during migration.
+   */
+  private async ensureParticipantFromMember(
+    userId: string,
+    conversationId: string
+  ): Promise<{ id: string; conversationId: string; isActive: boolean } | null> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, systemLanguage: true }
+      });
+      if (!user) return null;
+
+      // Check legacy ConversationMember collection via raw query
+      const members = await (this.prisma as any).$runCommandRaw({
+        find: 'ConversationMember',
+        filter: {
+          userId: { $oid: userId },
+          conversationId: { $oid: conversationId },
+          isActive: true
+        },
+        limit: 1
+      });
+
+      const memberDoc = members?.cursor?.firstBatch?.[0];
+      if (!memberDoc) return null;
+
+      const roleMap: Record<string, string> = {
+        'CREATOR': 'admin',
+        'ADMIN': 'admin',
+        'MODERATOR': 'moderator',
+        'MEMBER': 'member',
+        'USER': 'member'
+      };
+
+      const participant = await this.prisma.participant.create({
+        data: {
+          conversationId,
+          type: 'user',
+          userId: user.id,
+          displayName: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+          avatar: user.avatar,
+          role: roleMap[memberDoc.role] || 'member',
+          language: user.systemLanguage || 'fr',
+          permissions: {
+            canSendMessages: memberDoc.canSendMessage ?? true,
+            canSendFiles: memberDoc.canSendFiles ?? true,
+            canSendImages: memberDoc.canSendImages ?? true,
+            canSendVideos: memberDoc.canSendVideos ?? false,
+            canSendAudios: memberDoc.canSendAudios ?? false,
+            canSendLocations: memberDoc.canSendLocations ?? false,
+            canSendLinks: memberDoc.canSendLinks ?? false
+          },
+          isActive: true,
+          joinedAt: memberDoc.joinedAt ? new Date(memberDoc.joinedAt) : new Date()
+        },
+        select: { id: true, conversationId: true, isActive: true }
+      });
+
+      console.log(`[MessagingService] Auto-created Participant ${participant.id} for user ${userId} in conversation ${conversationId}`);
+      return participant;
+    } catch (error) {
+      console.error('[MessagingService] Error auto-creating participant:', error);
+      return null;
+    }
   }
 }

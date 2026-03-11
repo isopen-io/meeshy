@@ -285,8 +285,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var messageSource: MessageSource = .user
     public var isEdited: Bool = false
     public var editedAt: Date?
-    public var isDeleted: Bool = false
     public var deletedAt: Date?
+    public var isDeleted: Bool { deletedAt != nil }
     public var replyToId: String?
     public var forwardedFromId: String?
     public var forwardedFromConversationId: String?
@@ -309,6 +309,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var senderUsername: String?
     public var senderColor: String?
     public var senderAvatarURL: String?
+    public var senderUserId: String?
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -335,7 +336,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public init(id: String = UUID().uuidString, conversationId: String, senderId: String = "",
                 content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
-                isEdited: Bool = false, editedAt: Date? = nil, isDeleted: Bool = false, deletedAt: Date? = nil,
+                isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
                 replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil,
                 expiresAt: Date? = nil, isViewOnce: Bool = false, maxViewOnceCount: Int? = nil,
                 viewOnceCount: Int = 0, isBlurred: Bool = false, pinnedAt: Date? = nil, pinnedBy: String? = nil,
@@ -343,14 +344,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
-                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil,
+                senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0) {
         self.id = id; self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
-        self.isEdited = isEdited; self.editedAt = editedAt; self.isDeleted = isDeleted; self.deletedAt = deletedAt
+        self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
         self.replyToId = replyToId; self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.expiresAt = expiresAt; self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
@@ -359,7 +360,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
-        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL
+        self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount

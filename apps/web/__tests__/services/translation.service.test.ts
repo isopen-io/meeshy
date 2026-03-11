@@ -96,7 +96,7 @@ describe('TranslationService', () => {
       mockAxios.post.mockResolvedValueOnce({
         data: {
           translated_text: 'Bonjour le monde',
-          model: 'advanced',
+          model: 'advanced' as any,
           confidence: 0.98,
         },
       });
@@ -105,7 +105,7 @@ describe('TranslationService', () => {
         text: 'Hello world',
         sourceLanguage: 'en',
         targetLanguage: 'fr',
-        model: 'advanced',
+        model: 'advanced' as any,
       });
 
       expect(mockAxios.post).toHaveBeenCalledWith(
@@ -164,7 +164,7 @@ describe('TranslationService', () => {
         text: 'Hello',
         sourceLanguage: 'en',
         targetLanguage: 'fr',
-        model: 'advanced',
+        model: 'advanced' as any,
       });
 
       expect(mockAxios.post).toHaveBeenCalledTimes(2);
@@ -225,11 +225,11 @@ describe('TranslationService', () => {
         data: {
           translated_text: 'Bonjour',
           detected_language: 'en',
-          model: 'advanced',
+          model: 'advanced' as any,
         },
       });
 
-      await translationService.translateWithAutoDetect('Hello', 'fr', 'advanced');
+      await translationService.translateWithAutoDetect('Hello', 'fr', 'advanced' as any);
 
       expect(mockAxios.post).toHaveBeenCalledWith(
         expect.any(String),
@@ -393,7 +393,7 @@ describe('TranslationService', () => {
         data: { translated_text: 'Advanced result', model: 'advanced' },
       });
 
-      await translateText('Hello', 'en', 'fr', 'advanced');
+      await translateText('Hello', 'en', 'fr', 'advanced' as any);
 
       expect(mockAxios.post).toHaveBeenCalledWith(
         expect.any(String),

@@ -212,12 +212,12 @@ export function CallManager() {
     (event: CallParticipantLeftEvent) => {
       logger.info('[CallManager]', 'Participant left - callId: ' + event.callId + ', participantId: ' + event.participantId, {
         userId: event.userId,
-        anonymousId: event.anonymousId,
+        anonymousId: (event as any).anonymousId,
         mode: event.mode
       });
 
       // Use userId for WebRTC cleanup (peer connections and streams are tracked by userId)
-      const userIdForCleanup = event.userId || event.anonymousId;
+      const userIdForCleanup = event.userId || (event as any).anonymousId;
 
 
       if (userIdForCleanup) {

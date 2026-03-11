@@ -643,6 +643,191 @@ EOXML
     ok "IPA exported: ${BOLD}$ipa_file${NC} ($ipa_size)"
 }
 
+# ─── Distribute (App Store / TestFlight) ─────────────────────────────────────
+# Automatically handles:
+#   B1: CODE_SIGN_IDENTITY → "Apple Distribution"
+#   B2: aps-environment   → "production"
+do_distribute() {
+    local dist_config="Release"
+    local dist_method="${EXPORT_METHOD:-app-store}"
+
+    echo ""
+    echo -e "${BOLD}${CYAN}  Meeshy iOS — App Store Distribution Build${NC}"
+    echo ""
+
+    # ── Pre-flight checks ──
+    log "Running pre-flight checks..."
+
+    # Verify GoogleService-Info.plist exists (required for Firebase)
+    if [ ! -f "Meeshy/GoogleService-Info.plist" ]; then
+        err "GoogleService-Info.plist is MISSING."
+        err "Create it: Firebase Console → meeshy-me → Add iOS app (me.meeshy.app) → Download plist"
+        err "Place it in: apps/ios/Meeshy/GoogleService-Info.plist"
+        exit 1
+    fi
+    ok "GoogleService-Info.plist found"
+
+    # Verify Info.plist has ITSAppUsesNonExemptEncryption
+    if ! /usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" "Meeshy/Info.plist" &>/dev/null; then
+        err "ITSAppUsesNonExemptEncryption missing from Info.plist"
+        exit 1
+    fi
+    ok "Export compliance key present"
+
+    # Verify no empty privacy descriptions
+    local privacy_keys=(
+        "NSCameraUsageDescription"
+        "NSMicrophoneUsageDescription"
+        "NSContactsUsageDescription"
+        "NSPhotoLibraryUsageDescription"
+        "NSPhotoLibraryAddUsageDescription"
+        "NSLocationWhenInUseUsageDescription"
+        "NSFaceIDUsageDescription"
+        "NSSpeechRecognitionUsageDescription"
+        "NSVoIPUsageDescription"
+    )
+    local has_empty=false
+    for key in "${privacy_keys[@]}"; do
+        local val
+        val=$(/usr/libexec/PlistBuddy -c "Print :$key" "Meeshy/Info.plist" 2>/dev/null || echo "__MISSING__")
+        if [ "$val" = "" ]; then
+            err "Empty privacy description: $key"
+            has_empty=true
+        fi
+    done
+    if [ "$has_empty" = true ]; then
+        err "Fix empty privacy descriptions before distributing."
+        exit 1
+    fi
+    ok "All privacy descriptions valid"
+
+    # ── B2: Switch aps-environment to production ──
+    log "Setting aps-environment to production..."
+    cp "$ENTITLEMENTS_FILE" "${ENTITLEMENTS_FILE}.dist-bak"
+    /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$ENTITLEMENTS_FILE"
+    if [ -f "$NOTIF_ENTITLEMENTS_FILE" ]; then
+        cp "$NOTIF_ENTITLEMENTS_FILE" "${NOTIF_ENTITLEMENTS_FILE}.dist-bak"
+        /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$NOTIF_ENTITLEMENTS_FILE" 2>/dev/null || true
+    fi
+    ok "aps-environment → production"
+
+    # Restore entitlements on exit (even on failure)
+    restore_dist_entitlements() {
+        if [ -f "${ENTITLEMENTS_FILE}.dist-bak" ]; then
+            mv "${ENTITLEMENTS_FILE}.dist-bak" "$ENTITLEMENTS_FILE"
+        fi
+        if [ -f "${NOTIF_ENTITLEMENTS_FILE}.dist-bak" ]; then
+            mv "${NOTIF_ENTITLEMENTS_FILE}.dist-bak" "$NOTIF_ENTITLEMENTS_FILE"
+        fi
+        ok "Entitlements restored to development"
+    }
+    trap restore_dist_entitlements EXIT
+
+    # ── Clean previous distribution artifacts ──
+    log "Cleaning previous distribution artifacts..."
+    mkdir -p "$DERIVED_DATA/Distribution"
+    rm -rf "$DERIVED_DATA/Distribution"/*
+
+    # ── Resolve dependencies ──
+    log "Resolving package dependencies..."
+    xcodebuild -resolvePackageDependencies -project "$PROJECT" 2>/dev/null
+    ok "Dependencies resolved"
+
+    # ── Archive with distribution signing (B1) ──
+    local archive_path="$DERIVED_DATA/Distribution/$APP_NAME.xcarchive"
+
+    log "Archiving for distribution ($dist_config)..."
+    local archive_log="/tmp/meeshy_distribute_archive_$$.log"
+
+    set +e
+    xcodebuild archive \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -configuration "$dist_config" \
+        -archivePath "$archive_path" \
+        -destination "generic/platform=iOS" \
+        -allowProvisioningUpdates \
+        ONLY_ACTIVE_ARCH=NO \
+        CODE_SIGN_STYLE=Automatic \
+        CODE_SIGN_IDENTITY="Apple Distribution" \
+        2>&1 | tee "$archive_log" | if command -v xcpretty &>/dev/null; then xcpretty; else cat; fi
+    local archive_rc=${PIPESTATUS[0]}
+    set -e
+
+    if [ "$archive_rc" -ne 0 ] || [ ! -d "$archive_path" ]; then
+        err "Archive FAILED"
+        grep -E "error:" "$archive_log" | head -20 || tail -20 "$archive_log"
+        rm -f "$archive_log"
+        exit 1
+    fi
+    rm -f "$archive_log"
+    ok "Archive created: $archive_path"
+
+    # ── Export IPA ──
+    log "Exporting IPA (method: $dist_method)..."
+    local export_opts="$DERIVED_DATA/Distribution/ExportOptions.plist"
+    cat > "$export_opts" << EOXML
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>$dist_method</string>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>compileBitcode</key>
+    <false/>
+    <key>signingStyle</key>
+    <string>automatic</string>
+</dict>
+</plist>
+EOXML
+
+    local export_path="$DERIVED_DATA/Distribution/IPA"
+    set +e
+    xcodebuild -exportArchive \
+        -archivePath "$archive_path" \
+        -exportPath "$export_path" \
+        -exportOptionsPlist "$export_opts" \
+        -allowProvisioningUpdates \
+        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty; else cat; fi
+    local export_rc=${PIPESTATUS[0]}
+    set -e
+
+    if [ "$export_rc" -ne 0 ]; then
+        err "IPA export failed"
+        exit 1
+    fi
+
+    local ipa_file
+    ipa_file=$(find "$export_path" -name "*.ipa" -type f 2>/dev/null | head -1)
+    if [ -z "$ipa_file" ] || [ ! -f "$ipa_file" ]; then
+        err "IPA file not found after export"
+        exit 1
+    fi
+
+    local ipa_size
+    ipa_size=$(du -h "$ipa_file" | cut -f1)
+
+    # ── Restore entitlements ──
+    restore_dist_entitlements
+    trap - EXIT
+
+    echo ""
+    echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${GREEN}${BOLD}  Distribution build complete!${NC}"
+    echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${BOLD}IPA:${NC}     $ipa_file"
+    echo -e "  ${BOLD}Size:${NC}    $ipa_size"
+    echo -e "  ${BOLD}Method:${NC}  $dist_method"
+    echo ""
+    echo -e "  ${CYAN}Upload to App Store Connect:${NC}"
+    echo -e "    ${DIM}xcrun altool --upload-app -f \"$ipa_file\" -t ios --apiKey <KEY> --apiIssuer <ISSUER>${NC}"
+    echo -e "    ${DIM}-- or use Transporter.app / Xcode Organizer${NC}"
+    echo ""
+}
+
 # ─── Tests ───────────────────────────────────────────────────────────────────
 do_test() {
     local destination="platform=iOS Simulator,id=$DEVICE_ID"
@@ -784,6 +969,7 @@ usage() {
     echo -e "    ${GREEN}status${NC}       Show simulator/app status"
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
+    echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
@@ -803,6 +989,7 @@ usage() {
     echo -e "    ${DIM}./meeshy.sh run --clean${NC}              ${DIM}# Clean build + run${NC}"
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
+    echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
     echo -e "    ${DIM}./meeshy.sh clean --deep${NC}             ${DIM}# Nuke all caches${NC}"
     echo ""
@@ -815,7 +1002,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|distribute|test|setup|screenshot|device|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -928,6 +1115,10 @@ case "$COMMAND" in
 
     archive)
         do_archive
+        ;;
+
+    distribute)
+        do_distribute
         ;;
 
     test)

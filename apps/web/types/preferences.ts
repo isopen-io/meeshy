@@ -3,6 +3,8 @@
  * Support des catégories de préférences avec validation stricte
  */
 
+import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+
 // ===== TYPES DES CATÉGORIES DE PRÉFÉRENCES =====
 
 /**
@@ -116,7 +118,7 @@ export interface TranslationPreferences {
  */
 export interface PreferenceTypeMap {
   privacy: PrivacyPreferences;
-  notifications: NotificationPreferences;
+  notifications: NotificationPreference;
   language: LanguagePreferences;
   accessibility: AccessibilityPreferences;
   audio: AudioPreferences;

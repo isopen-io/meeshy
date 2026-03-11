@@ -208,8 +208,8 @@ export function ConversationDrawer({
                   `}
                   style={{
                     background: color,
-                    ringColor: color,
-                  }}
+                    '--tw-ring-color': color,
+                  } as React.CSSProperties}
                   aria-label={`Couleur de thème ${color}`}
                 >
                   {themeColor === color && (

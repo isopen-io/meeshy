@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// @ts-expect-error module may not exist yet
 import { NotificationItem } from '../../../components/notifications/notifications-v2/NotificationItem';
 import { NotificationTypeEnum } from '@/types/notification';
 

@@ -239,23 +239,29 @@ export const ZERO_EFFECT_PARAMS: {
 /**
  * Type guard pour vérifier si une timeline est valide
  */
-export function isValidAudioEffectsTimeline(data: any): data is AudioEffectsTimeline {
+export function isValidAudioEffectsTimeline(data: unknown): data is AudioEffectsTimeline {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+  const obj = data as Record<string, unknown>;
   return (
-    typeof data === 'object' &&
-    data !== null &&
-    typeof data.version === 'string' &&
-    typeof data.createdAt === 'string' &&
-    typeof data.duration === 'number' &&
-    typeof data.sampleRate === 'number' &&
-    typeof data.channels === 'number' &&
-    Array.isArray(data.events) &&
-    data.events.every((event: any) =>
-      typeof event === 'object' &&
-      event !== null &&
-      typeof event.timestamp === 'number' &&
-      typeof event.effectType === 'string' &&
-      typeof event.action === 'string'
-    )
+    typeof obj.version === 'string' &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.duration === 'number' &&
+    typeof obj.sampleRate === 'number' &&
+    typeof obj.channels === 'number' &&
+    Array.isArray(obj.events) &&
+    obj.events.every((event: unknown) => {
+      if (typeof event !== 'object' || event === null) {
+        return false;
+      }
+      const ev = event as Record<string, unknown>;
+      return (
+        typeof ev.timestamp === 'number' &&
+        typeof ev.effectType === 'string' &&
+        typeof ev.action === 'string'
+      );
+    })
   );
 }
 

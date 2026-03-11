@@ -66,8 +66,8 @@ describe('GroupsService', () => {
       const result = await groupsService.getGroups();
 
       expect(mockedApiService.get).toHaveBeenCalledWith('/communities', undefined);
-      expect(result.data.groups).toHaveLength(2);
-      expect(result.data.groups[0].name).toBe('Groupe de test');
+      expect(result.data!.groups).toHaveLength(2);
+      expect(result.data!.groups[0].name).toBe('Groupe de test');
     });
 
     it('should fetch groups with filters', async () => {
@@ -88,8 +88,8 @@ describe('GroupsService', () => {
       const result = await groupsService.getGroups(filters);
 
       expect(mockedApiService.get).toHaveBeenCalledWith('/communities', filters);
-      expect(result.data.groups).toHaveLength(1);
-      expect(result.data.page).toBe(2);
+      expect(result.data!.groups).toHaveLength(1);
+      expect(result.data!.page).toBe(2);
     });
 
     it('should handle API errors', async () => {
@@ -114,8 +114,8 @@ describe('GroupsService', () => {
       const result = await groupsService.getGroupById(groupId);
 
       expect(mockedApiService.get).toHaveBeenCalledWith(`/communities/${groupId}`);
-      expect(result.data.id).toBe(groupId);
-      expect(result.data.name).toBe('Groupe de test');
+      expect(result.data!.id).toBe(groupId);
+      expect(result.data!.name).toBe('Groupe de test');
     });
 
     it('should handle group not found', async () => {
@@ -153,8 +153,8 @@ describe('GroupsService', () => {
       const result = await groupsService.createGroup(groupData);
 
       expect(mockedApiService.post).toHaveBeenCalledWith('/communities', groupData);
-      expect(result.data.name).toBe('Nouveau groupe');
-      expect(result.data.isPrivate).toBe(false);
+      expect(result.data!.name).toBe('Nouveau groupe');
+      expect(result.data!.isPrivate).toBe(false);
     });
 
     it('should handle validation errors', async () => {
@@ -192,7 +192,7 @@ describe('GroupsService', () => {
       const result = await groupsService.updateGroup(groupId, updateData);
 
       expect(mockedApiService.patch).toHaveBeenCalledWith(`/communities/${groupId}`, updateData);
-      expect(result.data.name).toBe('Nom modifié');
+      expect(result.data!.name).toBe('Nom modifié');
     });
   });
 
@@ -226,8 +226,8 @@ describe('GroupsService', () => {
       const result = await groupsService.getGroupMembers(groupId);
 
       expect(mockedApiService.get).toHaveBeenCalledWith(`/communities/${groupId}/members`);
-      expect(result.data).toHaveLength(3);
-      expect(result.data[0].role).toBe('ADMIN');
+      expect(result.data!).toHaveLength(3);
+      expect(result.data![0].role).toBe('ADMIN');
     });
   });
 
@@ -256,8 +256,8 @@ describe('GroupsService', () => {
       const result = await groupsService.inviteMember(groupId, memberData);
 
       expect(mockedApiService.post).toHaveBeenCalledWith(`/communities/${groupId}/members`, memberData);
-      expect(result.data.userId).toBe('user-123');
-      expect(result.data.role).toBe('MEMBER');
+      expect(result.data!.userId).toBe('user-123');
+      expect(result.data!.role).toBe('MEMBER');
     });
   });
 
@@ -283,7 +283,7 @@ describe('GroupsService', () => {
         `/communities/${groupId}/members/${memberId}`,
         { role: newRole }
       );
-      expect(result.data.role).toBe(UserRoleEnum.ADMIN);
+      expect(result.data!.role).toBe(UserRoleEnum.ADMIN);
     });
   });
 
@@ -319,7 +319,7 @@ describe('GroupsService', () => {
       const result = await groupsService.searchUsers(query);
 
       expect(mockedApiService.get).toHaveBeenCalledWith('/users/search', { search: query });
-      expect(result.data).toHaveLength(1);
+      expect(result.data!).toHaveLength(1);
     });
 
     it('should search for users excluding a group', async () => {
@@ -359,7 +359,7 @@ describe('GroupsService', () => {
       expect(mockedApiService.post).toHaveBeenCalledWith(`/communities/${groupId}/invite-link`, {
         expiresIn: 7 * 24 * 60 * 60 * 1000,
       });
-      expect(result.data.link).toContain('group-1');
+      expect(result.data!.link).toContain('group-1');
     });
 
     it('should generate an invite link with custom expiration', async () => {
@@ -402,8 +402,8 @@ describe('GroupsService', () => {
       expect(mockedApiService.post).toHaveBeenCalledWith('/communities/join-by-invite', {
         inviteCode,
       });
-      expect(result.data.group.id).toBe('group-1');
-      expect(result.data.member.role).toBe('ADMIN');
+      expect(result.data!.group.id).toBe('group-1');
+      expect(result.data!.member.role).toBe('ADMIN');
     });
 
     it('should handle invalid invite code', async () => {

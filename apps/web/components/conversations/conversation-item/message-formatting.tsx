@@ -1,6 +1,7 @@
 /**
  * Utilitaires pour formater l'affichage du dernier message d'une conversation
  */
+import React from 'react';
 
 /**
  * Formater la durée d'un fichier audio avec millisecondes
@@ -32,7 +33,7 @@ function formatVideoDuration(milliseconds: number): string {
 /**
  * Formater l'affichage d'une pièce jointe image
  */
-function formatImageAttachment(attachment: any): JSX.Element {
+function formatImageAttachment(attachment: any): React.JSX.Element {
   return (
     <>
       <span className="inline-flex text-blue-500">📷</span>
@@ -46,7 +47,7 @@ function formatImageAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe vidéo
  */
-function formatVideoAttachment(attachment: any): JSX.Element {
+function formatVideoAttachment(attachment: any): React.JSX.Element {
   return (
     <>
       <span className="inline-flex text-red-500">🎥</span>
@@ -66,7 +67,7 @@ function formatVideoAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe audio
  */
-function formatAudioAttachment(attachment: any): JSX.Element {
+function formatAudioAttachment(attachment: any): React.JSX.Element {
   // Extraire les effets appliqués depuis la timeline
   const effectIcons: Record<string, string> = {
     'voice-coder': '🎤',
@@ -116,7 +117,7 @@ function formatAudioAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe PDF
  */
-function formatPdfAttachment(attachment: any): JSX.Element {
+function formatPdfAttachment(attachment: any): React.JSX.Element {
   return (
     <>
       <span className="inline-flex text-orange-500">📄</span>
@@ -130,7 +131,7 @@ function formatPdfAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe Markdown
  */
-function formatMarkdownAttachment(attachment: any): JSX.Element {
+function formatMarkdownAttachment(attachment: any): React.JSX.Element {
   return (
     <>
       <span className="inline-flex text-blue-500">📝</span>
@@ -144,7 +145,7 @@ function formatMarkdownAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe code
  */
-function formatCodeAttachment(attachment: any): JSX.Element {
+function formatCodeAttachment(attachment: any): React.JSX.Element {
   return (
     <>
       <span className="inline-flex text-green-500">💻</span>
@@ -158,7 +159,7 @@ function formatCodeAttachment(attachment: any): JSX.Element {
 /**
  * Formater l'affichage d'une pièce jointe générique
  */
-function formatGenericAttachment(): JSX.Element {
+function formatGenericAttachment(): React.JSX.Element {
   return <span className="inline-flex text-gray-500">📎</span>;
 }
 
@@ -171,7 +172,7 @@ export function formatLastMessage(lastMessage: any): React.ReactNode {
     const attachment = lastMessage.attachments[0];
     const mimeType = attachment.mimeType || '';
 
-    let attachmentDisplay: JSX.Element;
+    let attachmentDisplay: React.JSX.Element;
 
     if (mimeType.startsWith('image/')) {
       attachmentDisplay = formatImageAttachment(attachment);

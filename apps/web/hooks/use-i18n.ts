@@ -223,6 +223,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
   }), [t, tArray, currentInterfaceLanguage, setLanguage, isLoading]);
 }
 
-// Export du type pour réutilisation
+// Export des types pour réutilisation
+export type TFunction = (key: string, paramsOrFallback?: Record<string, any> | string) => string;
 export type { UseI18nReturn };
 

@@ -29,7 +29,7 @@ class MeeshySocketIOService {
   private static instance: MeeshySocketIOService | null = null;
 
   // Delegate to orchestrator
-  private orchestrator: SocketIOOrchestrator;
+  private orchestrator!: SocketIOOrchestrator;
 
   constructor() {
     // CORRECTION CRITIQUE: Le constructeur ne doit s'exécuter QU'UNE SEULE FOIS
@@ -352,15 +352,17 @@ class MeeshySocketIOService {
       const replyToSender = replyToMsg.sender;
 
       // Construire le sender pour replyTo
+      // replyToSender can be flat (Socket.IO) or Participant with nested .user (REST)
       let replyToFinalSender;
+      const replyNestedUser = replyToSender?.user as Record<string, unknown> | undefined;
       if (replyToSender) {
         replyToFinalSender = {
           id: String(replyToSender.id || 'unknown'),
-          username: String(replyToSender.username || 'Unknown'),
-          displayName: String(replyToSender.displayName || replyToSender.username || 'Unknown'),
-          firstName: String(replyToSender.firstName || ''),
-          lastName: String(replyToSender.lastName || ''),
-          email: String(replyToSender.email || ''),
+          username: String((replyToSender as any).username || replyNestedUser?.username || ''),
+          displayName: String(replyToSender.displayName || replyToSender.nickname || replyNestedUser?.displayName || (replyToSender as any).username || replyNestedUser?.username || ''),
+          firstName: String((replyToSender as any).firstName || replyNestedUser?.firstName || ''),
+          lastName: String((replyToSender as any).lastName || replyNestedUser?.lastName || ''),
+          email: String((replyToSender as any).email || ''),
           phoneNumber: '',
           role: 'USER' as const,
           systemLanguage: String(replyToSender.systemLanguage || replyToSender.language || 'fr'),
@@ -375,12 +377,12 @@ class MeeshySocketIOService {
           lastActiveAt: new Date(),
           isActive: true,
           updatedAt: new Date()
-        };
+        } as any;
       } else {
         replyToFinalSender = {
           id: String(replyToMsg.senderId || 'unknown'),
-          username: 'Unknown',
-          displayName: 'Utilisateur Inconnu',
+          username: '',
+          displayName: '',
           firstName: '',
           lastName: '',
           email: '',
@@ -413,18 +415,17 @@ class MeeshySocketIOService {
         sender: replyToFinalSender,
         translations: [],
         isEdited: false,
-        isDeleted: false,
         updatedAt: new Date(replyToMsg.updatedAt || replyToMsg.createdAt),
-      };
+      } as unknown as Message;
     }
 
     // Définir le sender par défaut
     const defaultSender = {
       id: socketMessage.senderId || 'unknown',
-      username: 'Utilisateur inconnu',
+      username: '',
       firstName: '',
       lastName: '',
-      displayName: 'Utilisateur inconnu',
+      displayName: '',
       email: '',
       phoneNumber: '',
       role: 'USER' as const,
@@ -495,13 +496,12 @@ class MeeshySocketIOService {
       createdAt: socketMessage.createdAt,
       updatedAt: socketMessage.updatedAt,
       isEdited: false,
-      isDeleted: false,
       translations: [],
       replyTo: replyTo,
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
       validatedMentions: (socketMessage as any).validatedMentions || []
-    } as Message;
+    } as unknown as Message;
   }
 }
 

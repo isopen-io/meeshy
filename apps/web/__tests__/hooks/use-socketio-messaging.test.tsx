@@ -61,18 +61,18 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     deleteMessage: (...args: any[]) => mockDeleteMessage(...args),
     startTyping: (...args: any[]) => mockStartTyping(...args),
     stopTyping: (...args: any[]) => mockStopTyping(...args),
-    reconnect: () => mockReconnect(),
+    reconnect: (...args: any[]) => mockReconnect(...args),
     setCurrentUser: (...args: any[]) => mockSetCurrentUser(...args),
-    getCurrentConversationId: () => mockGetCurrentConversationId(),
-    getConnectionDiagnostics: () => mockGetConnectionDiagnostics(),
-    onNewMessage: (cb: any) => mockOnNewMessage(cb),
-    onMessageEdited: (cb: any) => mockOnMessageEdited(cb),
-    onMessageDeleted: (cb: any) => mockOnMessageDeleted(cb),
-    onTranslation: (cb: any) => mockOnTranslation(cb),
-    onTyping: (cb: any) => mockOnTyping(cb),
-    onUserStatus: (cb: any) => mockOnUserStatus(cb),
-    onConversationStats: (cb: any) => mockOnConversationStats(cb),
-    onConversationOnlineStats: (cb: any) => mockOnConversationOnlineStats(cb),
+    getCurrentConversationId: (...args: any[]) => (mockGetCurrentConversationId as any)(...args),
+    getConnectionDiagnostics: (...args: any[]) => (mockGetConnectionDiagnostics as any)(...args),
+    onNewMessage: (...args: any[]) => (mockOnNewMessage as any)(...args),
+    onMessageEdited: (...args: any[]) => (mockOnMessageEdited as any)(...args),
+    onMessageDeleted: (...args: any[]) => (mockOnMessageDeleted as any)(...args),
+    onTranslation: (...args: any[]) => (mockOnTranslation as any)(...args),
+    onTyping: (...args: any[]) => (mockOnTyping as any)(...args),
+    onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
+    onConversationStats: (...args: any[]) => (mockOnConversationStats as any)(...args),
+    onConversationOnlineStats: (...args: any[]) => (mockOnConversationOnlineStats as any)(...args),
   },
 }));
 
@@ -116,6 +116,7 @@ describe('useSocketIOMessaging', () => {
       mockGetConnectionDiagnostics.mockReturnValue({
         isConnected: true,
         hasSocket: true,
+        isConnecting: false,
       });
 
       const { result } = renderHook(() => useSocketIOMessaging());
@@ -138,15 +139,15 @@ describe('useSocketIOMessaging', () => {
 
     it('should set current user when provided', () => {
       renderHook(() =>
-        useSocketIOMessaging({ currentUser: mockUser })
+        useSocketIOMessaging({ currentUser: mockUser as any })
       );
 
       expect(mockSetCurrentUser).toHaveBeenCalledWith(mockUser);
     });
 
     it('should attempt reconnection if anonymous session available', async () => {
-      mockGetAuthToken.mockReturnValue(null);
-      mockGetAnonymousSession.mockReturnValue({ token: 'anon-token' });
+      mockGetAuthToken.mockReturnValue(null as any);
+      mockGetAnonymousSession.mockReturnValue({ token: 'anon-token' } as any);
 
       renderHook(() => useSocketIOMessaging());
 
@@ -341,7 +342,7 @@ describe('useSocketIOMessaging', () => {
 
   describe('Typing Indicators', () => {
     it('should start typing', () => {
-      mockGetCurrentConversationId.mockReturnValue(mockConversationId);
+      mockGetCurrentConversationId.mockReturnValue(mockConversationId as any);
 
       const { result } = renderHook(() =>
         useSocketIOMessaging({ conversationId: mockConversationId })
@@ -355,7 +356,7 @@ describe('useSocketIOMessaging', () => {
     });
 
     it('should stop typing', () => {
-      mockGetCurrentConversationId.mockReturnValue(mockConversationId);
+      mockGetCurrentConversationId.mockReturnValue(mockConversationId as any);
 
       const { result } = renderHook(() =>
         useSocketIOMessaging({ conversationId: mockConversationId })
@@ -369,7 +370,7 @@ describe('useSocketIOMessaging', () => {
     });
 
     it('should use normalized conversation ID if available', () => {
-      mockGetCurrentConversationId.mockReturnValue('normalized-conv-id');
+      mockGetCurrentConversationId.mockReturnValue('normalized-conv-id' as any);
 
       const { result } = renderHook(() =>
         useSocketIOMessaging({ conversationId: mockConversationId })
@@ -488,7 +489,7 @@ describe('useSocketIOMessaging', () => {
       const { result } = renderHook(() =>
         useSocketIOMessaging({
           conversationId: mockConversationId,
-          currentUser: mockUser,
+          currentUser: mockUser as any,
         })
       );
 
@@ -503,8 +504,9 @@ describe('useSocketIOMessaging', () => {
       mockGetConnectionDiagnostics.mockReturnValue({
         isConnected: true,
         hasSocket: true,
+        isConnecting: false,
         socketId: 'socket-123',
-      });
+      } as any);
 
       const { result } = renderHook(() =>
         useSocketIOMessaging({ conversationId: mockConversationId })

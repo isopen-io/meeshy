@@ -81,8 +81,8 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               from: userId,
               to: participantId,
               candidate: candidateInit.candidate || '',
-              sdpMLineIndex: candidateInit.sdpMLineIndex,
-              sdpMid: candidateInit.sdpMid,
+              sdpMLineIndex: candidateInit.sdpMLineIndex ?? undefined,
+              sdpMid: candidateInit.sdpMid ?? undefined,
             };
 
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -519,7 +519,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           break;
 
         default:
-          logger.warn('[useWebRTCP2P]', 'Unknown signal type', { type: signal.type });
+          logger.warn('[useWebRTCP2P]', 'Unknown signal type', { type: (signal as any).type });
       }
     };
 

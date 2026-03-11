@@ -24,14 +24,14 @@ final class MessageServiceTests: XCTestCase {
     private func makeMessage(id: String = "msg456") -> APIMessage {
         APIMessage(
             id: id, conversationId: "conv123", senderId: "user1",
-            anonymousSenderId: nil, content: "Hello", originalLanguage: "en",
+            content: "Hello", originalLanguage: "en",
             messageType: "text", messageSource: "user", isEdited: false,
-            isDeleted: false, replyToId: nil, storyReplyToId: nil,
+            deletedAt: nil, replyToId: nil, storyReplyToId: nil,
             forwardedFromId: nil, forwardedFromConversationId: nil,
             pinnedAt: nil, pinnedBy: nil, isViewOnce: false, isBlurred: false,
             expiresAt: nil, isEncrypted: false, encryptionMode: nil,
             createdAt: Date(), updatedAt: nil,
-            sender: APIMessageSender(id: "user1", username: "alice", displayName: "Alice", avatar: nil),
+            sender: APIMessageSender(id: "user1", username: "alice", displayName: "Alice", avatar: nil, type: nil, userId: "userId1", firstName: nil, lastName: nil),
             attachments: nil, replyTo: nil, forwardedFrom: nil,
             forwardedFromConversation: nil, reactionSummary: nil,
             reactionCount: nil, currentUserReactions: nil,

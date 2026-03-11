@@ -166,7 +166,7 @@ describe('useFontPreference', () => {
 
     it('should ignore invalid font from localStorage', async () => {
       localStorageMock.setItem('font-family', 'invalid-font');
-      mockGetFontConfig.mockReturnValueOnce(null);
+      mockGetFontConfig.mockReturnValueOnce(null as any);
 
       const { result } = renderHook(() => useFontPreference());
 
@@ -236,7 +236,7 @@ describe('useFontPreference', () => {
     });
 
     it('should not fetch if not authenticated', async () => {
-      mockGetAuthToken.mockReturnValue(null);
+      mockGetAuthToken.mockReturnValue(null as any);
 
       renderHook(() => useFontPreference());
 
@@ -306,7 +306,7 @@ describe('useFontPreference', () => {
 
     it('should set error for invalid font', async () => {
       // Mock getFontConfig to return null for the invalid font
-      mockGetFontConfig.mockImplementation((font: string) => {
+      mockGetFontConfig.mockImplementation((font: string): any => {
         if (font === 'invalid') return null;
         return { name: font, cssClass: `font-${font}`, variable: `--font-${font}` };
       });
@@ -430,7 +430,7 @@ describe('useFontPreference', () => {
       });
 
       // First, cause an error
-      mockGetFontConfig.mockReturnValueOnce(null);
+      mockGetFontConfig.mockReturnValueOnce(null as any);
       await act(async () => {
         await result.current.changeFontFamily('invalid' as any);
       });

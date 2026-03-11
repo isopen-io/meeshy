@@ -135,10 +135,13 @@ describe('UserSettings', () => {
     translateToSystemLanguage: true,
     translateToRegionalLanguage: false,
     useCustomDestination: false,
-    customDestinationLanguage: null,
+    customDestinationLanguage: undefined,
     role: 'USER',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    isOnline: true,
+    lastActiveAt: new Date() as any,
+    isActive: true,
+    createdAt: new Date().toISOString() as any,
+    updatedAt: new Date().toISOString() as any,
   };
 
   const defaultProps = {
@@ -220,7 +223,7 @@ describe('UserSettings', () => {
 
       // Simuler le chargement du fichier
       act(() => {
-        if (mockFileReader.onloadend) {
+        if (typeof mockFileReader.onloadend === 'function') {
           (mockFileReader as any).onloadend();
         }
       });

@@ -13,7 +13,8 @@ import {
   formatConversationTitle,
   formatConversationTitleFromMembers,
 } from '../../utils/user';
-import { User, ThreadMember } from '@/types';
+import { User } from '@/types';
+import type { Participant } from '@meeshy/shared/types';
 
 // Mock SUPPORTED_LANGUAGES
 jest.mock('@/types', () => ({
@@ -41,16 +42,31 @@ describe('user', () => {
     ...overrides,
   } as User);
 
-  // Helper to create mock thread member
-  const createMockThreadMember = (userOverrides: Partial<User> = {}): ThreadMember => ({
+  const defaultPermissions = {
+    canSendMessages: true,
+    canSendFiles: true,
+    canSendImages: true,
+    canSendVideos: true,
+    canSendAudios: true,
+    canSendLocations: true,
+    canSendLinks: true,
+  };
+
+  // Helper to create mock participant
+  const createMockParticipant = (userOverrides: Partial<User> = {}): Participant => ({
     id: 'member-123',
-    threadId: 'thread-123',
+    conversationId: 'thread-123',
+    type: 'user',
     userId: 'user-123',
+    displayName: userOverrides.displayName || userOverrides.firstName || userOverrides.username || 'Test User',
+    language: 'fr',
+    permissions: defaultPermissions,
+    isOnline: true,
+    isActive: true,
+    role: 'member',
     user: createMockUser(userOverrides),
     joinedAt: new Date(),
-    isAdmin: false,
-    hasLeft: false,
-  } as ThreadMember);
+  } as Participant);
 
   describe('getUserDisplayName', () => {
     it('should return firstName lastName when both exist', () => {
@@ -149,17 +165,17 @@ describe('user', () => {
 
   describe('getThreadMemberFirstName', () => {
     it('should return firstName from member user', () => {
-      const member = createMockThreadMember({ firstName: 'John' });
+      const member = createMockParticipant({ firstName: 'John' });
       expect(getThreadMemberFirstName(member)).toBe('John');
     });
 
     it('should return first word of displayName', () => {
-      const member = createMockThreadMember({ displayName: 'John Doe' });
+      const member = createMockParticipant({ displayName: 'John Doe' });
       expect(getThreadMemberFirstName(member)).toBe('John');
     });
 
     it('should return username as fallback', () => {
-      const member = createMockThreadMember({ username: 'johndoe' });
+      const member = createMockParticipant({ username: 'johndoe' });
       expect(getThreadMemberFirstName(member)).toBe('johndoe');
     });
   });
@@ -203,12 +219,12 @@ describe('user', () => {
 
   describe('formatThreadMemberForConversation', () => {
     it('should format member as firstName (username)', () => {
-      const member = createMockThreadMember({ firstName: 'John', username: 'johndoe' });
+      const member = createMockParticipant({ firstName: 'John', username: 'johndoe' });
       expect(formatThreadMemberForConversation(member)).toBe('John (johndoe)');
     });
 
     it('should use displayName when no firstName', () => {
-      const member = createMockThreadMember({ displayName: 'John Doe', username: 'johndoe' });
+      const member = createMockParticipant({ displayName: 'John Doe', username: 'johndoe' });
       expect(formatThreadMemberForConversation(member)).toBe('John (johndoe)');
     });
   });
@@ -231,15 +247,15 @@ describe('user', () => {
 
   describe('formatConversationTitleFromMembers', () => {
     it('should return "Conversation vide" when no other participants', () => {
-      const participants = [createMockThreadMember({ username: 'currentuser' })];
+      const participants = [createMockParticipant({ username: 'currentuser' })];
       participants[0].userId = 'current-user-id';
       expect(formatConversationTitleFromMembers(participants, 'current-user-id')).toBe('Conversation vide');
     });
 
     it('should format single participant with flag and username', () => {
       const participants = [
-        { ...createMockThreadMember({ username: 'currentuser' }), userId: 'current-user-id' },
-        { ...createMockThreadMember({ username: 'otheruser', systemLanguage: 'en' }), userId: 'other-user-id' },
+        { ...createMockParticipant({ username: 'currentuser' }), userId: 'current-user-id' },
+        { ...createMockParticipant({ username: 'otheruser', systemLanguage: 'en' }), userId: 'other-user-id' },
       ];
       const result = formatConversationTitleFromMembers(participants, 'current-user-id');
       expect(result).toContain('otheruser');
@@ -247,12 +263,12 @@ describe('user', () => {
 
     it('should show +N autres for more than 3 participants', () => {
       const participants = [
-        { ...createMockThreadMember({ username: 'currentuser' }), userId: 'current' },
-        { ...createMockThreadMember({ username: 'user1' }), userId: 'user1' },
-        { ...createMockThreadMember({ username: 'user2' }), userId: 'user2' },
-        { ...createMockThreadMember({ username: 'user3' }), userId: 'user3' },
-        { ...createMockThreadMember({ username: 'user4' }), userId: 'user4' },
-        { ...createMockThreadMember({ username: 'user5' }), userId: 'user5' },
+        { ...createMockParticipant({ username: 'currentuser' }), userId: 'current' },
+        { ...createMockParticipant({ username: 'user1' }), userId: 'user1' },
+        { ...createMockParticipant({ username: 'user2' }), userId: 'user2' },
+        { ...createMockParticipant({ username: 'user3' }), userId: 'user3' },
+        { ...createMockParticipant({ username: 'user4' }), userId: 'user4' },
+        { ...createMockParticipant({ username: 'user5' }), userId: 'user5' },
       ];
       const result = formatConversationTitleFromMembers(participants, 'current');
       expect(result).toContain('+2 autres');
@@ -266,8 +282,8 @@ describe('user', () => {
         systemLanguage: 'en',
       });
       const participants = [
-        { ...createMockThreadMember(), userId: 'current', user: createMockUser({ username: 'current' }) },
-        { ...createMockThreadMember(), userId: 'other', user },
+        { ...createMockParticipant(), userId: 'current', user: createMockUser({ username: 'current' }) },
+        { ...createMockParticipant(), userId: 'other', user },
       ];
       const result = formatConversationTitleFromMembers(participants, 'current');
       expect(result).toContain('🇫🇷');
@@ -281,8 +297,8 @@ describe('user', () => {
         systemLanguage: 'en',
       });
       const participants = [
-        { ...createMockThreadMember(), userId: 'current', user: createMockUser({ username: 'current' }) },
-        { ...createMockThreadMember(), userId: 'other', user },
+        { ...createMockParticipant(), userId: 'current', user: createMockUser({ username: 'current' }) },
+        { ...createMockParticipant(), userId: 'other', user },
       ];
       const result = formatConversationTitleFromMembers(participants, 'current');
       expect(result).toContain('🇪🇸');
@@ -290,10 +306,10 @@ describe('user', () => {
   });
 
   describe('formatConversationTitle', () => {
-    it('should delegate to formatConversationTitleFromMembers for ThreadMember array', () => {
+    it('should delegate to formatConversationTitleFromMembers for Participant array', () => {
       const participants = [
-        { ...createMockThreadMember({ username: 'currentuser' }), userId: 'current' },
-        { ...createMockThreadMember({ username: 'otheruser' }), userId: 'other' },
+        { ...createMockParticipant({ username: 'currentuser' }), userId: 'current' },
+        { ...createMockParticipant({ username: 'otheruser' }), userId: 'other' },
       ];
       const result = formatConversationTitle(participants, 'current', false);
       expect(result).toContain('otheruser');
@@ -301,7 +317,7 @@ describe('user', () => {
 
     it('should return "Conversation vide" when no other participants', () => {
       const participants = [
-        { ...createMockThreadMember({ username: 'currentuser' }), userId: 'current' },
+        { ...createMockParticipant({ username: 'currentuser' }), userId: 'current' },
       ];
       const result = formatConversationTitle(participants, 'current', false);
       expect(result).toBe('Conversation vide');

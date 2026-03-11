@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
-import type { Notification } from '@/services/notification.service';
+import type { Notification } from '@/types/notification';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { cn } from '@/lib/utils';
 import { buildNotificationTitle, buildNotificationContent, getNotificationIcon } from '@/utils/notification-helpers';

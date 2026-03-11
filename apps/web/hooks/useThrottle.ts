@@ -34,7 +34,7 @@ export function useThrottledCallback<T extends (...args: any[]) => any>(
   delay: number = 16
 ): T {
   const lastRan = useRef(Date.now());
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout>(undefined);
 
   return ((...args: Parameters<T>) => {
     const timeSinceLastRun = Date.now() - lastRan.current;

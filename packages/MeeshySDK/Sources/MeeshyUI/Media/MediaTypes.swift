@@ -87,6 +87,15 @@ public enum ComposerMode: Equatable {
     }
 }
 
+// MARK: - Attachment Status Body
+
+struct AttachmentStatusBody: Encodable, Sendable {
+    let action: String
+    let playPositionMs: Int
+    let durationMs: Int
+    let complete: Bool
+}
+
 // MARK: - Playback Speed
 
 public enum PlaybackSpeed: Double, CaseIterable {

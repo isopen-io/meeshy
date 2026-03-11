@@ -6,10 +6,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  NotificationList,
-  NotificationListWithFilters,
-} from '@/components/notifications/notifications-v2/NotificationList';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { NotificationList, NotificationListWithFilters } = require('@/components/notifications/notifications-v2/NotificationList');
 import { NotificationTypeEnum } from '@/types/notification';
 
 // Mock IntersectionObserver

@@ -8,7 +8,7 @@
  * @jest-environment jsdom
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+// jest globals are available in test environment via @types/jest
 import { render, screen, waitFor, renderHook } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
@@ -100,7 +100,7 @@ describe('Frontend - Sans Firebase configuré', () => {
       render(<TestComponent />);
 
       const firebaseErrors = consoleError.mock.calls.filter(
-        call => call.some(arg => String(arg).toLowerCase().includes('firebase'))
+        (call: any) => call.some((arg: any) => String(arg).toLowerCase().includes('firebase'))
       );
 
       expect(firebaseErrors).toHaveLength(0);
@@ -408,7 +408,7 @@ describe('Tests de compatibilité navigateur', () => {
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
-      value: jest.fn().mockImplementation(query => ({
+      value: jest.fn().mockImplementation((query: any) => ({
         matches: query === '(display-mode: standalone)',
         media: query,
         onchange: null,

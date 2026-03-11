@@ -6,7 +6,7 @@ import type {
   MentionSuggestionsResponse,
   GetMessageMentionsResponse,
   GetUserMentionsResponse
-} from '@meeshy/shared/types/index.js';
+} from '@meeshy/shared/types/index';
 
 interface MessageParams {
   messageId: string;

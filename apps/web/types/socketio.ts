@@ -11,6 +11,7 @@ export * from '@meeshy/shared/types';
 // Import des types nécessaires pour les extensions frontend
 import type {
   SocketIOMessage,
+  SocketIOMessageSender,
   SocketIOUser,
   SocketIOResponse,
   TranslationData,
@@ -43,7 +44,7 @@ export type User = FrontendUser;
  * Message avec traductions pour l'affichage frontend
  * @deprecated Utilisez SharedUIMessage de @meeshy/shared/types à la place
  */
-export interface TranslatedMessage extends Message {
+export interface TranslatedMessage extends Omit<Message, 'sender'> {
   originalContent?: string;
   translatedContent?: string;
   targetLanguage?: string;
@@ -54,7 +55,7 @@ export interface TranslatedMessage extends Message {
   translationFailed?: boolean;
   translations?: TranslationData[];
   modelUsed?: string;
-  sender?: FrontendUser;
+  sender?: FrontendUser | SocketIOMessageSender;
 }
 
 // ===== TYPES POUR LES HOOKS SOCKET.IO =====

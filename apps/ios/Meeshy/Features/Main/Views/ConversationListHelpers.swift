@@ -108,29 +108,13 @@ struct SectionHeaderView: View {
 // MARK: - Conversation Preview View (for hard press)
 struct ConversationPreviewView: View {
     let conversation: Conversation
+    var cachedMessages: [Message] = []
 
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var messages: [Message] = []
-    @State private var isLoading = true
+    @StateObject private var previewRouter = Router()
 
     private var accentColor: String { conversation.accentColor }
     private var secondaryColor: String { conversation.colorPalette.secondary }
-
-    private func loadRecentMessages() async {
-        do {
-            let response = try await MessageService.shared.list(
-                conversationId: conversation.id,
-                offset: 0,
-                limit: 4,
-                includeReplies: false
-            )
-            let userId = AuthManager.shared.currentUser?.id ?? ""
-            messages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
-        } catch {
-            // Silent fail -- preview is best-effort
-        }
-        isLoading = false
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -229,25 +213,11 @@ struct ConversationPreviewView: View {
                     )
             )
 
-            // Recent messages preview (up to 4 most recent, real bubbles)
+            // Recent messages preview
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
 
-                if isLoading {
-                    VStack(spacing: 6) {
-                        ForEach(0..<4, id: \.self) { i in
-                            HStack {
-                                if i % 2 == 0 { Spacer(minLength: 40) }
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(theme.textMuted.opacity(0.1))
-                                    .frame(width: CGFloat.random(in: 100...180), height: 28)
-                                if i % 2 != 0 { Spacer(minLength: 40) }
-                            }
-                            .padding(.horizontal, 8)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                } else if messages.isEmpty {
+                if cachedMessages.isEmpty {
                     EmptyStateView(
                         icon: "bubble.left.and.bubble.right",
                         title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
@@ -257,7 +227,7 @@ struct ConversationPreviewView: View {
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 0) {
-                            ForEach(messages) { msg in
+                            ForEach(cachedMessages) { msg in
                                 ThemedMessageBubble(
                                     message: msg,
                                     contactColor: accentColor,
@@ -266,15 +236,16 @@ struct ConversationPreviewView: View {
                                 .allowsHitTesting(false)
                             }
                         }
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                     }
+                    .environmentObject(previewRouter)
                 }
             }
-            .frame(minHeight: 100, maxHeight: 260)
+            .frame(minHeight: 120, maxHeight: 300)
             .background(previewBackground)
         }
-        .frame(width: 320)
+        .frame(width: 350)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
@@ -288,9 +259,6 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 20, y: 10)
-        .task {
-            await loadRecentMessages()
-        }
     }
 
     private var previewBackground: some View {

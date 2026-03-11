@@ -90,14 +90,13 @@ export class PermissionsService {
       ADMIN: 'Administrateur',
       CREATOR: 'Créateur',
       MODERATOR: 'Modérateur',
-      MODO: 'Modérateur',
       AUDIT: 'Auditeur',
       ANALYST: 'Analyste',
       USER: 'Utilisateur',
       MEMBER: 'Membre',
     };
 
-    return roleNames[role as string] || role;
+    return roleNames[(role as string).toUpperCase()] || role;
   }
 
   /**
@@ -109,14 +108,13 @@ export class PermissionsService {
       ADMIN: 'bg-red-600 text-white',
       CREATOR: 'bg-indigo-600 text-white',
       MODERATOR: 'bg-orange-600 text-white',
-      MODO: 'bg-orange-600 text-white',
       AUDIT: 'bg-blue-600 text-white',
       ANALYST: 'bg-green-600 text-white',
       USER: 'bg-gray-600 text-white',
       MEMBER: 'bg-gray-500 text-white',
     };
 
-    return roleColors[role as string];
+    return roleColors[(role as string).toUpperCase()];
   }
 
   /**
@@ -128,14 +126,13 @@ export class PermissionsService {
       ADMIN: '⚡',
       CREATOR: '🎨',
       MODERATOR: '🛡️',
-      MODO: '🛡️',
       AUDIT: '📊',
       ANALYST: '📈',
       USER: '👤',
       MEMBER: '👥',
     };
 
-    return roleIcons[role as string];
+    return roleIcons[(role as string).toUpperCase()];
   }
 
   /**
@@ -163,14 +160,13 @@ export class PermissionsService {
       ADMIN: 'Gestion des utilisateurs, groupes, conversations et accès aux analyses. Peut modérer le contenu.',
       CREATOR: 'Créateur de contenus et communautés avec permissions étendues de gestion.',
       MODERATOR: 'Modération du contenu, gestion des groupes et conversations. Accès limité à l\'administration.',
-      MODO: 'Modération du contenu, gestion des groupes et conversations. Accès limité à l\'administration.',
       AUDIT: 'Accès en lecture aux logs d\'audit et analyses. Peut surveiller l\'activité système.',
       ANALYST: 'Accès aux analyses et statistiques pour le reporting et l\'optimisation.',
       USER: 'Utilisateur standard avec accès aux fonctionnalités de messagerie et traduction.',
       MEMBER: 'Membre standard d\'une communauté ou conversation.',
     };
 
-    return descriptions[role as string];
+    return descriptions[(role as string).toUpperCase()];
   }
 
   /**

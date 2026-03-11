@@ -45,7 +45,8 @@ final class ConversationViewModelTests: XCTestCase {
         conversationId: String? = nil,
         unreadCount: Int = 0,
         isDirect: Bool = false,
-        participantUserId: String? = nil
+        participantUserId: String? = nil,
+        anonymousSession: AnonymousSessionContext? = nil
     ) -> ConversationViewModel {
         let currentUser = MeeshyUser(id: testUserId, username: "testuser", displayName: "Test User")
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -55,6 +56,7 @@ final class ConversationViewModelTests: XCTestCase {
             unreadCount: unreadCount,
             isDirect: isDirect,
             participantUserId: participantUserId,
+            anonymousSession: anonymousSession,
             authManager: mockAuthManager,
             messageService: mockMessageService,
             conversationService: mockConversationService,
@@ -90,7 +92,7 @@ final class ConversationViewModelTests: XCTestCase {
     private func makeAPIMessagesJSON(_ messages: [APIMessage]) -> String {
         let items = messages.map { msg in
             """
-            {"id":"\(msg.id)","conversationId":"\(msg.conversationId)","createdAt":"2026-01-01T00:00:00.000Z"}
+            {"id":"\(msg.id)","conversationId":"\(msg.conversationId)","senderId":"\(msg.senderId)","createdAt":"2026-01-01T00:00:00.000Z"}
             """
         }
         return "[\(items.joined(separator: ","))]"
@@ -103,11 +105,12 @@ final class ConversationViewModelTests: XCTestCase {
         senderId: String? = nil
     ) -> String {
         let convId = conversationId ?? testConversationId
+        let sId = senderId ?? testUserId
         let senderJSON = senderId.map { """
         ,"sender":{"id":"\($0)","username":"sender","displayName":"Sender"}
         """ } ?? ""
         return """
-        {"id":"\(id)","conversationId":"\(convId)","content":"\(content)","createdAt":"2026-01-01T00:00:00.000Z"\(senderJSON)}
+        {"id":"\(id)","conversationId":"\(convId)","senderId":"\(sId)","content":"\(content)","createdAt":"2026-01-01T00:00:00.000Z"\(senderJSON)}
         """
     }
 
@@ -119,14 +122,14 @@ final class ConversationViewModelTests: XCTestCase {
         reactions: [Reaction] = [],
         pinnedAt: Date? = nil,
         pinnedBy: String? = nil,
-        isDeleted: Bool = false
+        deletedAt: Date? = nil
     ) -> Message {
         Message(
             id: id,
             conversationId: testConversationId,
             senderId: senderId ?? testUserId,
             content: content,
-            isDeleted: isDeleted,
+            deletedAt: deletedAt,
             pinnedAt: pinnedAt,
             pinnedBy: pinnedBy,
             createdAt: Date(),
@@ -141,8 +144,8 @@ final class ConversationViewModelTests: XCTestCase {
     func test_loadMessages_success_populatesMessages() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[
-            {"id":"msg-1","conversationId":"\(testConversationId)","content":"First","createdAt":"2026-01-01T00:00:00.000Z"},
-            {"id":"msg-2","conversationId":"\(testConversationId)","content":"Second","createdAt":"2026-01-01T00:01:00.000Z"}
+            {"id":"msg-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"First","createdAt":"2026-01-01T00:00:00.000Z"},
+            {"id":"msg-2","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Second","createdAt":"2026-01-01T00:01:00.000Z"}
         ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":50},"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
@@ -158,8 +161,8 @@ final class ConversationViewModelTests: XCTestCase {
     func test_loadMessages_reversesOrderForDisplay() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[
-            {"id":"msg-newer","conversationId":"\(testConversationId)","content":"Newer","createdAt":"2026-01-01T00:01:00.000Z"},
-            {"id":"msg-older","conversationId":"\(testConversationId)","content":"Older","createdAt":"2026-01-01T00:00:00.000Z"}
+            {"id":"msg-newer","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Newer","createdAt":"2026-01-01T00:01:00.000Z"},
+            {"id":"msg-older","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Older","createdAt":"2026-01-01T00:00:00.000Z"}
         ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":50},"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
@@ -719,5 +722,26 @@ final class ConversationViewModelTests: XCTestCase {
         let override = sut.activeTranslationOverrides["msg-1"]
         XCTAssertNotNil(override)
         XCTAssertNil(override as? MessageTranslation)
+    }
+
+    // MARK: - Anonymous Session Tests
+
+    func test_init_withAnonymousSession_setsSessionTokenOnAPIClient() async {
+        let session = AnonymousSessionContext(
+            sessionToken: "test-anon-token",
+            participantId: "part-123",
+            permissions: ParticipantPermissions(),
+            linkId: "mshy_test",
+            conversationId: "conv-456"
+        )
+        let sut = makeSUT(anonymousSession: session)
+        XCTAssertEqual(APIClient.shared.anonymousSessionToken, "test-anon-token")
+        _ = sut
+    }
+
+    func test_init_withNilAnonymousSession_doesNotSetSessionToken() {
+        let sut = makeSUT(anonymousSession: nil)
+        XCTAssertNil(APIClient.shared.anonymousSessionToken)
+        _ = sut
     }
 }

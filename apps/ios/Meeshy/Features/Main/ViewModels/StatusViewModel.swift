@@ -9,6 +9,7 @@ class StatusViewModel: ObservableObject {
     @Published var myStatus: StatusEntry?
     @Published var isLoading = false
     @Published var isLoadingMore = false
+    @Published var error: String?
 
     let mode: StatusService.Mode
     private let statusService: StatusServiceProviding
@@ -42,6 +43,7 @@ class StatusViewModel: ObservableObject {
     func loadStatuses() async {
         guard !isLoading else { return }
         isLoading = true
+        error = nil
         nextCursor = nil
         hasMore = true
 
@@ -56,10 +58,16 @@ class StatusViewModel: ObservableObject {
                     myStatus = statuses.first
                 }
             } else {
-                if mode == .friends { fallbackToSampleData() }
+                if statuses.isEmpty {
+                    statuses = []
+                }
+                error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
             }
         } catch {
-            if mode == .friends { fallbackToSampleData() }
+            if statuses.isEmpty {
+                self.statuses = []
+            }
+            self.error = error.localizedDescription
         }
 
         isLoading = false
@@ -180,6 +188,8 @@ class StatusViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
+        guard cancellables.isEmpty else { return }
+
         socialSocket.statusCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
@@ -210,13 +220,6 @@ class StatusViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        socialSocket.statusReacted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] data in
-                // Could update reaction counts on the status if needed
-                _ = self // suppress unused warning
-            }
-            .store(in: &cancellables)
     }
 
     // MARK: - React to Status
@@ -229,32 +232,4 @@ class StatusViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Sample Data Fallback
-
-    private func fallbackToSampleData() {
-        if statuses.isEmpty {
-            statuses = Self.sampleStatuses
-        }
-    }
-
-    static let sampleStatuses: [StatusEntry] = {
-        let now = Date()
-        return [
-            StatusEntry(id: "st1", userId: "user_alice", username: "Alice", avatarColor: DynamicColorGenerator.colorForName("Alice"),
-                        moodEmoji: "🎉", content: "Weekend mode!", audioUrl: nil,
-                        createdAt: now.addingTimeInterval(-600), expiresAt: now.addingTimeInterval(3000)),
-            StatusEntry(id: "st2", userId: "user_bob", username: "Bob", avatarColor: DynamicColorGenerator.colorForName("Bob"),
-                        moodEmoji: "💪", content: nil, audioUrl: nil,
-                        createdAt: now.addingTimeInterval(-1200), expiresAt: now.addingTimeInterval(2400)),
-            StatusEntry(id: "st3", userId: "user_sarah", username: "Sarah", avatarColor: DynamicColorGenerator.colorForName("Sarah"),
-                        moodEmoji: "☕", content: "Coffee break", audioUrl: nil,
-                        createdAt: now.addingTimeInterval(-1800), expiresAt: now.addingTimeInterval(1800)),
-            StatusEntry(id: "st4", userId: "user_emma", username: "Emma", avatarColor: DynamicColorGenerator.colorForName("Emma"),
-                        moodEmoji: "📚", content: "Deep in a book", audioUrl: nil,
-                        createdAt: now.addingTimeInterval(-2400), expiresAt: now.addingTimeInterval(1200)),
-            StatusEntry(id: "st5", userId: "user_hugo", username: "Hugo", avatarColor: DynamicColorGenerator.colorForName("Hugo"),
-                        moodEmoji: "🔥", content: nil, audioUrl: nil,
-                        createdAt: now.addingTimeInterval(-900), expiresAt: now.addingTimeInterval(2700)),
-        ]
-    }()
 }

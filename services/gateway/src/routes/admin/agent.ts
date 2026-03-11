@@ -67,6 +67,9 @@ const agentConfigSchema = z.object({
   prioritizeTaggedUsers: z.boolean().optional(),
   prioritizeRepliedUsers: z.boolean().optional(),
   reactionBoostFactor: z.number().min(0.5).max(5).optional(),
+  eligibleConversationTypes: z.array(z.string()).optional(),
+  messageFreshnessHours: z.number().int().min(1).max(168).optional(),
+  maxConversationsPerCycle: z.number().int().min(0).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -113,7 +116,7 @@ const successDataResponse = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
-    data: { type: 'object' },
+    data: { oneOf: [{ type: 'object', additionalProperties: true }, { type: 'null' }] },
   },
 } as const;
 
@@ -121,7 +124,7 @@ const successArrayResponse = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
-    data: { type: 'array', items: { type: 'object' } },
+    data: { type: 'array', items: { type: 'object', additionalProperties: true } },
   },
 } as const;
 
@@ -129,9 +132,10 @@ const paginatedArrayResponse = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
-    data: { type: 'array', items: { type: 'object' } },
+    data: { type: 'array', items: { type: 'object', additionalProperties: true } },
     pagination: {
       type: 'object',
+      additionalProperties: true,
       properties: {
         total: { type: 'integer' },
         page: { type: 'integer' },
@@ -156,8 +160,9 @@ const resetResultResponse = {
     success: { type: 'boolean', example: true },
     data: {
       type: 'object',
+      additionalProperties: true,
       properties: {
-        deleted: { type: 'object' },
+        deleted: { type: 'object', additionalProperties: true },
       },
     },
     message: { type: 'string' },
@@ -242,6 +247,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           skip,
           take: limitNum,
           orderBy: { updatedAt: 'desc' },
+          include: {
+            conversation: {
+              select: { id: true, title: true, type: true },
+            },
+          },
         }),
         fastify.prisma.agentConfig.count(),
       ]);
@@ -853,6 +863,9 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     fallbackModel: z.string().nullable().optional(),
     globalDailyBudgetUsd: z.number().min(0).max(1000).optional(),
     maxConcurrentCalls: z.number().int().min(1).max(50).optional(),
+    eligibleConversationTypes: z.array(z.string()).optional(),
+    messageFreshnessHours: z.number().int().min(1).max(168).optional(),
+    maxConversationsPerCycle: z.number().int().min(0).optional(),
   });
 
   // GET /global-config

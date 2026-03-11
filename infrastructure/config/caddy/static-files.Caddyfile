@@ -18,8 +18,8 @@
 		# Cache long terme pour les fichiers statiques (1 an)
 		Cache-Control "public, max-age=31536000, immutable"
 
-		# CORS
-		Access-Control-Allow-Origin "https://staging.meeshy.me:8443"
+		# CORS - fichiers statiques publics (images, avatars)
+		Access-Control-Allow-Origin *
 		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 
 		# Métadata

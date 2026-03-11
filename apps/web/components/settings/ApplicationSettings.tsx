@@ -42,8 +42,8 @@ import {
   TestTube,
   BarChart3,
   Loader2,
-  SidebarLeft,
-  SidebarRight,
+  PanelLeft,
+  PanelRight,
   UserCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,7 +51,7 @@ import { API_CONFIG } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { useI18n } from '@/hooks/use-i18n';
-import type { ApplicationPreference } from '@shared/types/preferences/application';
+type ApplicationPreference = Record<string, any>;
 
 // Accent colors configuration
 const ACCENT_COLORS = [
@@ -140,7 +140,7 @@ export function ApplicationSettings() {
           const data = await response.json();
           if (data.success && data.data) {
             const { id, userId, isDefault, createdAt, updatedAt, ...prefs } = data.data;
-            setPreferences((prev) => ({ ...prev, ...prefs }));
+            setPreferences((prev: any) => ({ ...prev, ...prefs }));
           }
         }
       } catch (error) {
@@ -191,7 +191,7 @@ export function ApplicationSettings() {
     key: K,
     value: ApplicationPreference[K]
   ) => {
-    setPreferences((prev) => ({ ...prev, [key]: value }));
+    setPreferences((prev: any) => ({ ...prev, [key]: value }));
     setHasChanges(true);
 
     // Play sound feedback for toggles
@@ -476,7 +476,7 @@ export function ApplicationSettings() {
           {/* Sidebar Position */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <SidebarLeft className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <PanelLeft className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
                 <Label className="text-sm sm:text-base">
                   {t('application.layout.sidebar.label', 'Sidebar Position')}
@@ -496,13 +496,13 @@ export function ApplicationSettings() {
               <SelectContent>
                 <SelectItem value="left">
                   <div className="flex items-center gap-2">
-                    <SidebarLeft className="h-4 w-4" />
+                    <PanelLeft className="h-4 w-4" />
                     {t('application.layout.sidebar.left', 'Left')}
                   </div>
                 </SelectItem>
                 <SelectItem value="right">
                   <div className="flex items-center gap-2">
-                    <SidebarRight className="h-4 w-4" />
+                    <PanelRight className="h-4 w-4" />
                     {t('application.layout.sidebar.right', 'Right')}
                   </div>
                 </SelectItem>

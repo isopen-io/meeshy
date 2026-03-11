@@ -58,8 +58,8 @@ function ProfilePageContent() {
 
       // Appeler l'API /auth/me pour récupérer le profil complet (avec createdAt et updatedAt corrects)
       const response = await usersService.getMyProfile();
-      setUser(response.data);
-      setUserOnlineStatus(response.data.isOnline);
+      setUser(response.data ?? null);
+      setUserOnlineStatus(response.data?.isOnline ?? false);
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error(t('errors.loadProfileError'));

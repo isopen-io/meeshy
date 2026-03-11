@@ -349,9 +349,9 @@ public struct MeeshyVideoEditorView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Utiliser")
+                    Image(systemName: "eye")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Aper\u{00E7}u")
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(.white)

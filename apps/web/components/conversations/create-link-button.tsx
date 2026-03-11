@@ -50,7 +50,7 @@ export function CreateLinkButton({
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [quickLinkDefaultTitle, setQuickLinkDefaultTitle] = useState<string>('');
   const [createdLinkData, setCreatedLinkData] = useState<CreatedLinkData | null>(null);
-  const { user: storeUser } = useUser();
+  const storeUser = useUser();
   const currentUser = propCurrentUser || storeUser; // Utiliser la prop en priorité, sinon le store
   const router = useRouter();
   const searchParams = useSearchParams();

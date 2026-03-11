@@ -9,8 +9,8 @@ import type { Conversation, Group } from '../../types';
 jest.mock('../../services/conversations.service');
 jest.mock('../../services/groups.service');
 
-const conversationsService = conversationsServiceModule as jest.Mocked<typeof conversationsServiceModule>;
-const groupsService = groupsServiceModule as jest.Mocked<typeof groupsServiceModule>;
+const conversationsService = conversationsServiceModule as any;
+const groupsService = groupsServiceModule as any;
 
 // Types for API responses
 interface GroupsResponse {
@@ -27,8 +27,8 @@ import type { ApiResponse as SharedApiResponse } from '@meeshy/shared/types';
 // Helper type that wraps data in the format expected by tests
 type ApiResponse<T> = SharedApiResponse<T>;
 
-const mockConversationsService = conversationsService as jest.Mocked<typeof conversationsService>;
-const mockGroupsService = groupsService as jest.Mocked<typeof groupsService>;
+const mockConversationsService = conversationsService as any;
+const mockGroupsService = groupsService as any;
 
 // Mock React components for testing
 const MockConversationList = ({ onConversationSelect }: { onConversationSelect: (id: string) => void }) => {
@@ -63,7 +63,7 @@ const MockConversationList = ({ onConversationSelect }: { onConversationSelect: 
           data-testid={`conversation-${conversation.id}`}
           onClick={() => onConversationSelect(conversation.id)}
         >
-          {conversation.name || `Conversation ${conversation.id}`}
+          {(conversation as any).name || `Conversation ${conversation.id}`}
         </button>
       ))}
     </div>
@@ -155,7 +155,7 @@ const MockSearchComponent = () => {
             <h3>Conversations</h3>
             {results.conversations.map((conv) => (
               <div key={conv.id} data-testid={`result-conversation-${conv.id}`}>
-                {conv.name || `Conversation ${conv.id}`}
+                {(conv as any).name || `Conversation ${conv.id}`}
               </div>
             ))}
           </div>
@@ -183,7 +183,7 @@ describe('UI and API Integration Tests', () => {
 
   describe('ConversationList Integration', () => {
     it('should load and display conversations from API', async () => {
-      const mockConversations: Conversation[] = [
+      const mockConversations = [
         {
           id: '1',
           type: 'direct',
@@ -204,7 +204,7 @@ describe('UI and API Integration Tests', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      ];
+      ] as any as Conversation[];
 
       mockConversationsService.getConversations.mockResolvedValue(mockConversations);
 
@@ -241,7 +241,7 @@ describe('UI and API Integration Tests', () => {
     });
 
     it('should handle conversation selection', async () => {
-      const mockConversations: Conversation[] = [
+      const mockConversations = [
         {
           id: '1',
           type: 'direct',
@@ -252,7 +252,7 @@ describe('UI and API Integration Tests', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      ];
+      ] as any as Conversation[];
 
       mockConversationsService.getConversations.mockResolvedValue(mockConversations);
 
@@ -361,7 +361,7 @@ describe('UI and API Integration Tests', () => {
 
   describe('Search Integration', () => {
     it('should search both conversations and groups', async () => {
-      const mockConversations: Conversation[] = [
+      const mockConversations = [
         {
           id: '1',
           type: 'direct',
@@ -372,7 +372,7 @@ describe('UI and API Integration Tests', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      ];
+      ] as any as Conversation[];
 
       const mockGroups: Group[] = [
         {

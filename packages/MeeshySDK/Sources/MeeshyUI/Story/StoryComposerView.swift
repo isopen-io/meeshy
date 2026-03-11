@@ -75,6 +75,12 @@ public struct StoryComposerView: View {
     @State private var fgPhotoItem: PhotosPickerItem?
     @State private var fgVideoItem: PhotosPickerItem?
 
+    // MARK: - Media editor (triggered by edit button on canvas elements)
+
+    @State private var editingBgImage: UIImage?
+    @State private var editingElementImage: EditingMediaImage?
+    @State private var editingElementVideo: EditingMediaVideo?
+
     // MARK: - Audio pickers
 
     @State private var showAudioDocumentPicker = false
@@ -192,6 +198,7 @@ public struct StoryComposerView: View {
                 },
                 onEditMedia: { id in
                     viewModel.selectedElementId = id
+                    openMediaEditor(elementId: id)
                 }
             )
             .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
@@ -297,6 +304,44 @@ public struct StoryComposerView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .fullScreenCover(item: Binding(
+            get: { editingBgImage.map { PendingImageWrapper(image: $0) } },
+            set: { if $0 == nil { editingBgImage = nil } }
+        )) { wrapper in
+            MeeshyImageEditorView(
+                image: wrapper.image,
+                initialCropRatio: .ratio9x16,
+                onAccept: { edited in
+                    selectedImage = edited
+                    viewModel.hasBackgroundImage = true
+                    viewModel.setImage(edited, for: viewModel.currentSlide.id)
+                    editingBgImage = nil
+                },
+                onCancel: { editingBgImage = nil }
+            )
+        }
+        .fullScreenCover(item: $editingElementImage) { item in
+            MeeshyImageEditorView(
+                image: item.image,
+                initialCropRatio: .ratio9x16,
+                onAccept: { edited in
+                    viewModel.loadedImages[item.elementId] = edited
+                    editingElementImage = nil
+                },
+                onCancel: { editingElementImage = nil }
+            )
+        }
+        .fullScreenCover(item: $editingElementVideo) { item in
+            MeeshyVideoEditorView(
+                url: item.url,
+                onAccept: {
+                    let thumbnail = Self.generateVideoThumbnail(url: item.url)
+                    if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+                    editingElementVideo = nil
+                },
+                onCancel: { editingElementVideo = nil }
+            )
         }
         .alert("Erreur de publication", isPresented: $showPublishError) {
             Button("Reessayer") { resumePublish(.retry) }
@@ -582,6 +627,19 @@ public struct StoryComposerView: View {
                     .background(Capsule().fill(selectedImage != nil ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.1)))
                 }
                 if selectedImage != nil {
+                    Button {
+                        editingBgImage = selectedImage
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("\u{00C9}diter")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.15)))
+                    }
                     Button {
                         withAnimation(.spring(response: 0.25)) { selectedImage = nil; viewModel.hasBackgroundImage = false }
                         HapticFeedback.light()
@@ -1033,7 +1091,6 @@ public struct StoryComposerView: View {
                         if let obj = viewModel.addMediaObject(type: "video") {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
-                            // Remap if id differs from objectId
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
@@ -1075,6 +1132,17 @@ public struct StoryComposerView: View {
                 }
                 confirmedMediaAudioURL = nil
             }
+        }
+    }
+
+    private func openMediaEditor(elementId: String) {
+        let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
+        guard let mediaObj else { return }
+
+        if mediaObj.mediaType == "video", let url = viewModel.loadedVideoURLs[elementId] {
+            editingElementVideo = EditingMediaVideo(elementId: elementId, url: url)
+        } else if let image = viewModel.loadedImages[elementId] {
+            editingElementImage = EditingMediaImage(elementId: elementId, image: image)
         }
     }
 
@@ -1204,6 +1272,11 @@ public struct StoryComposerView: View {
     private func saveDraft() {
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.saveMedia(
+            images: viewModel.loadedImages,
+            videoURLs: viewModel.loadedVideoURLs,
+            audioURLs: viewModel.loadedAudioURLs
+        )
         HapticFeedback.light()
     }
 
@@ -1220,6 +1293,10 @@ public struct StoryComposerView: View {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
             visibility = stored.visibility
+            let media = StoryDraftStore.shared.loadMedia()
+            viewModel.loadedImages.merge(media.images) { _, new in new }
+            viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
+            viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
                   let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
             viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
@@ -1251,5 +1328,24 @@ public struct StoryComposerView: View {
 
 private struct AudioEditorItemWrapper: Identifiable {
     let id = UUID()
+    let url: URL
+}
+
+// MARK: - Media Editor Wrappers
+
+private struct PendingImageWrapper: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+struct EditingMediaImage: Identifiable {
+    let id = UUID()
+    let elementId: String
+    let image: UIImage
+}
+
+struct EditingMediaVideo: Identifiable {
+    let id = UUID()
+    let elementId: String
     let url: URL
 }

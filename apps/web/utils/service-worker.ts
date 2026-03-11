@@ -139,6 +139,6 @@ export async function sendMessageToServiceWorker(message: any): Promise<any> {
       }
     };
 
-    navigator.serviceWorker.controller.postMessage(message, [messageChannel.port2]);
+    navigator.serviceWorker.controller!.postMessage(message, [messageChannel.port2]);
   });
 }

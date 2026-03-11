@@ -40,7 +40,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       }>('/api/voice/analysis');
 
       if (response.success && response.data) {
-        setAnalysis(response.data.analysis);
+        setAnalysis((response.data as any).data?.analysis ?? (response.data as any).analysis);
       } else {
         setAnalysis(null);
       }
@@ -66,7 +66,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       }>(`/api/attachments/${attachmentId}/analysis`);
 
       if (response.success && response.data) {
-        setAnalysis(response.data.analysis);
+        setAnalysis((response.data as any).data?.analysis ?? (response.data as any).analysis);
       } else {
         setAnalysis(null);
       }
@@ -99,7 +99,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       });
 
       if (response.success && response.data) {
-        setAnalysis(response.data.analysis);
+        setAnalysis((response.data as any).data?.analysis ?? (response.data as any).analysis);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to analyze voice');

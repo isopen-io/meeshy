@@ -34,7 +34,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  window.location = originalLocation;
+  window.location = originalLocation as any;
 });
 
 describe('AuthGuard', () => {

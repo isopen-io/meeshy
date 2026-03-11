@@ -13,13 +13,15 @@ import {
 import { ConversationParticipantsDrawer } from '../conversation-participants-drawer';
 import { CreateLinkButton } from '../create-link-button';
 import { HeaderActions } from './HeaderActions';
-import type { Conversation, SocketIOUser as User, ThreadMember } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserRoleEnum } from '@meeshy/shared/types';
+import { isGlobalAdmin, hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 
 interface HeaderToolbarProps {
   conversation: Conversation;
   currentUser: User;
-  conversationParticipants: ThreadMember[];
+  conversationParticipants: Participant[];
   currentUserRole: UserRoleEnum;
   canUseVideoCalls: boolean;
   isPinned: boolean;
@@ -61,17 +63,19 @@ export const HeaderToolbar = memo(function HeaderToolbar({
   onShareConversation,
   t
 }: HeaderToolbarProps) {
+  const userIsGlobalAdmin = isGlobalAdmin(currentUser.role);
+  const userIsConversationAdmin = hasMinimumMemberRole(
+    (currentUserRole || 'member').toLowerCase(),
+    MemberRole.ADMIN,
+  );
+
   const showCreateLink =
     conversation.type !== 'direct' &&
-    !(conversation.type === 'global' && currentUser.role !== 'BIGBOSS' && currentUser.role !== 'ADMIN');
+    !(conversation.type === 'global' && !userIsGlobalAdmin);
 
   const showParticipantsDrawer =
     conversation.type !== 'direct' &&
-    !(conversation.type === 'global' &&
-      currentUser.role !== 'BIGBOSS' &&
-      currentUser.role !== 'ADMIN' &&
-      currentUserRole !== 'ADMIN' &&
-      currentUserRole !== 'CREATOR');
+    !(conversation.type === 'global' && !userIsGlobalAdmin && !userIsConversationAdmin);
 
   return (
     <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-center">
@@ -103,7 +107,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
           conversationId={conversation.id}
           participants={conversationParticipants}
           currentUser={currentUser}
-          isGroup={conversation.type !== 'direct'}
+          isGroup={(conversation.type as string) !== 'direct'}
           conversationType={conversation.type}
           userConversationRole={currentUserRole}
           memberCount={conversation.memberCount}

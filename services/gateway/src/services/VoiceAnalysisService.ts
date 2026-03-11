@@ -185,7 +185,7 @@ export class VoiceAnalysisService {
     const transcriptionData = attachment.transcription as unknown as AttachmentTranscription;
     const updatedTranscription: AttachmentTranscription = {
       ...transcriptionData,
-      voiceQualityAnalysis: analysis
+      voiceQualityAnalysis: analysis as unknown as Record<string, unknown>
     };
 
     await this.prisma.messageAttachment.update({
@@ -377,7 +377,7 @@ export class VoiceAnalysisService {
       return null;
     }
 
-    return transcriptionData.voiceQualityAnalysis as VoiceQualityAnalysis;
+    return transcriptionData.voiceQualityAnalysis as unknown as VoiceQualityAnalysis;
   }
 
   /**

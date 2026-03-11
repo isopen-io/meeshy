@@ -18,7 +18,7 @@ export function validateSchema<T>(
   const result = schema.safeParse(data);
 
   if (!result.success) {
-    const errors = result.error.issues.map((err: any) => ({
+    const errors = result.error.issues.map((err) => ({
       path: err.path.join('.'),
       message: err.message,
     }));
@@ -43,14 +43,14 @@ export function validateSchema<T>(
 export const CommonSchemas = {
   // Pagination
   pagination: z.object({
-    limit: z.string().optional().transform((val: any) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val: any) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
+    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
   }),
   
   // Message pagination
   messagePagination: z.object({
-    limit: z.string().optional().transform((val: any) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val: any) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
+    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
     before: z.string().optional(),
   }),
   
@@ -326,11 +326,15 @@ export const AuthSchemas = {
     sessionToken: z.string().optional(),
   }),
 
-  // Verify email
+  // Verify email (token from link OR 6-digit code from mobile)
   verifyEmail: z.object({
-    token: z.string().min(1),
+    token: z.string().min(1).optional(),
+    code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
     email: z.string().email(),
-  }),
+  }).refine(
+    (data) => !!data.token || !!data.code,
+    { message: 'Either token or code must be provided' }
+  ),
 
   // Resend verification
   resendVerification: z.object({
@@ -498,7 +502,6 @@ export const MessageSchemas = {
     messageSource: messageSourceEnum.optional(),
     isEdited: z.boolean(),
     editedAt: z.string().datetime().nullable().optional(),
-    isDeleted: z.boolean(),
     deletedAt: z.string().datetime().nullable().optional(),
     replyToId: z.string().nullable().optional(),
     forwardedFromId: z.string().nullable().optional(),
@@ -578,7 +581,7 @@ export const ConversationSchemas = {
     title: CommonSchemas.conversationTitle.optional(),
     description: CommonSchemas.description,
     type: CommonSchemas.conversationType.optional(),
-  }).refine((data: any) => Object.keys(data).length > 0, {
+  }).refine((data) => Object.keys(data).length > 0, {
     message: 'Au moins un champ doit être fourni pour la mise à jour',
   }),
   
@@ -611,7 +614,7 @@ export const ConversationSchemas = {
     onlineOnly: z.string().optional(),
     role: z.string().optional(),
     search: z.string().optional(),
-    limit: z.string().optional().transform((val: any) => parseInt(val || '50', 10)),
+    limit: z.string().optional().transform((val) => parseInt(val || '50', 10)),
   }),
 
   // ===== SCHEMAS COMPLETS POUR RÉPONSES API =====

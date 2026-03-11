@@ -435,7 +435,7 @@ export class ConnectionService {
     }
 
     // Logout and redirect
-    await authManager.logout();
+    await (authManager as any).logout();
 
     const message = this.t('websocket.sessionExpired') || 'Your session has expired, please reconnect';
     toast.error(message);

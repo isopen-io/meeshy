@@ -2,39 +2,8 @@ import Foundation
 
 // MARK: - Community Role
 
-public enum CommunityRole: String, Codable, CaseIterable, Sendable {
-    case admin
-    case moderator
-    case member
-
-    public var displayName: String {
-        switch self {
-        case .admin: return "Admin"
-        case .moderator: return "Moderator"
-        case .member: return "Member"
-        }
-    }
-
-    public var icon: String {
-        switch self {
-        case .admin: return "crown.fill"
-        case .moderator: return "shield.fill"
-        case .member: return "person.fill"
-        }
-    }
-
-    public var hierarchy: Int {
-        switch self {
-        case .admin: return 3
-        case .moderator: return 2
-        case .member: return 1
-        }
-    }
-
-    public func hasPermission(_ permission: CommunityPermission) -> Bool {
-        CommunityPermissions.forRole(self).contains(permission)
-    }
-}
+@available(*, deprecated, renamed: "MemberRole")
+public typealias CommunityRole = MemberRole
 
 // MARK: - Community Permissions
 
@@ -50,9 +19,9 @@ public enum CommunityPermission: String, CaseIterable {
 }
 
 public enum CommunityPermissions {
-    public static func forRole(_ role: CommunityRole) -> Set<CommunityPermission> {
+    public static func forRole(_ role: MemberRole) -> Set<CommunityPermission> {
         switch role {
-        case .admin:
+        case .creator, .admin:
             return Set(CommunityPermission.allCases)
         case .moderator:
             return [.inviteMembers, .removeMembers, .moderateContent, .createConversations, .editConversations]
@@ -84,8 +53,8 @@ public struct APICommunityMember: Decodable, Identifiable {
     public let joinedAt: Date?
     public let user: APICommunityUser?
 
-    public var communityRole: CommunityRole {
-        CommunityRole(rawValue: role) ?? .member
+    public var communityRole: MemberRole {
+        MemberRole(rawValue: role) ?? .member
     }
 }
 

@@ -33,35 +33,34 @@ import {
   ChevronDown,
   Settings,
 } from 'lucide-react';
-import { ThreadMember } from '@meeshy/shared/types';
+import type { Participant } from '@meeshy/shared/types/participant';
 import { conversationsService } from '@/services/conversations.service';
 import { participantsService } from '@/services/conversations/participants.service';
 import { usersService } from '@/services/users.service';
 import type { User as SocketIOUser } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
-import { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
+
+/** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
+type ParticipantUser = SocketIOUser & { type?: string; sessionToken?: string; shareLinkId?: string };
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { InviteUserModal } from './invite-user-modal';
 import { getUserInitials } from '@/lib/avatar-utils';
-import type { Participant } from '@meeshy/shared/types/participant';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
-
-// Helper pour détecter si un utilisateur est anonyme
-function isAnonymousUser(user: any): user is Participant {
-  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
-}
+import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials, isParticipantModerator } from '@/utils/participant-helpers';
 
 interface ConversationParticipantsDrawerProps {
   conversationId: string;
-  participants: ThreadMember[];
+  participants: Participant[];
   currentUser: any;
   isGroup: boolean;
   conversationType?: string;
-  userConversationRole?: UserRoleEnum;
+  userConversationRole?: UserRoleEnum | string;
   /** Nombre total de membres (depuis conversation.memberCount) */
   memberCount?: number;
   onParticipantRemoved?: (userId: string) => void;
@@ -94,7 +93,7 @@ export function ConversationParticipantsDrawer({
   const [isPlatformSearching, setIsPlatformSearching] = useState(false);
 
   // Recherche backend des participants de la conversation
-  const [backendSearchResults, setBackendSearchResults] = useState<ThreadMember[] | null>(null);
+  const [backendSearchResults, setBackendSearchResults] = useState<Participant[] | null>(null);
   const [isFilterSearching, setIsFilterSearching] = useState(false);
 
   // TEMPS RÉEL: Activer les listeners Socket.IO pour les statuts utilisateur
@@ -110,7 +109,7 @@ export function ConversationParticipantsDrawer({
   // Initialiser le store avec les participants au montage
   useEffect(() => {
     if (participants && participants.length > 0) {
-      const users = participants.map(p => p.user);
+      const users = participants.map(p => p.user as SocketIOUser);
       setStoreParticipants(users);
     }
   }, [participants, setStoreParticipants]);
@@ -119,7 +118,7 @@ export function ConversationParticipantsDrawer({
   const rawActiveParticipants = storeParticipants.length > 0
     ? participants.map(p => ({
         ...p,
-        user: storeParticipants.find(u => u.id === p.userId) || p.user
+        user: storeParticipants.find(u => u.id === p.userId) || (p.user as SocketIOUser)
       }))
     : participants;
 
@@ -159,9 +158,8 @@ export function ConversationParticipantsDrawer({
 
   // Vérifier si l'utilisateur actuel est admin/moderator/creator
   const currentUserParticipant = participants.find(p => p.userId === currentUser.id);
-  const isAdmin = currentUserParticipant?.role === UserRoleEnum.ADMIN ||
-                  currentUserParticipant?.role === UserRoleEnum.CREATOR ||
-                  currentUserParticipant?.role === UserRoleEnum.MODERATOR;
+  const currentRole = currentUserParticipant?.role;
+  const isAdmin = isParticipantModerator(currentRole || 'member');
 
   // Recherche backend des participants quand searchQuery change
   useEffect(() => {
@@ -174,15 +172,20 @@ export function ConversationParticipantsDrawer({
       setIsFilterSearching(true);
       try {
         const results = await participantsService.searchParticipants(conversationId, searchQuery, 50);
-        const mappedResults: ThreadMember[] = results.map(user => ({
+        const mappedResults: Participant[] = results.map(user => ({
           id: user.id,
           conversationId,
+          type: 'user' as const,
           userId: user.id,
-          user,
-          role: (user as any).conversationRole || 'MEMBER',
+          displayName: user.displayName || user.username,
+          avatar: user.avatar ?? undefined,
+          role: MemberRole.MEMBER as string,
+          language: 'en',
+          permissions: { canSendMessages: true as boolean, canSendFiles: true as boolean, canSendImages: true as boolean, canSendVideos: true as boolean, canSendAudios: true as boolean, canSendLocations: true as boolean, canSendLinks: true as boolean },
+          isActive: true as boolean,
+          isOnline: (user.isOnline ?? false) as boolean,
           joinedAt: new Date(),
-          isActive: true,
-          isAnonymous: (user as any).isAnonymous || false,
+          user: user as unknown,
         }));
         setBackendSearchResults(mappedResults);
       } catch (error) {
@@ -243,10 +246,10 @@ export function ConversationParticipantsDrawer({
     ? backendSearchResults
     : activeParticipants.filter(participant => {
         if (!searchQuery.trim()) return true;
-        const user = participant.user;
+        const user = participant.user as ParticipantUser;
         const searchTerm = searchQuery.toLowerCase();
         return (
-          user.username.toLowerCase().includes(searchTerm) ||
+          user.username?.toLowerCase().includes(searchTerm) ||
           user.displayName?.toLowerCase().includes(searchTerm) ||
           user.firstName?.toLowerCase().includes(searchTerm) ||
           user.lastName?.toLowerCase().includes(searchTerm) ||
@@ -255,8 +258,8 @@ export function ConversationParticipantsDrawer({
       });
 
   // Séparer en ligne / hors ligne
-  const onlineParticipants = filteredParticipants.filter(p => p.user.isOnline);
-  const offlineParticipants = filteredParticipants.filter(p => !p.user.isOnline);
+  const onlineParticipants = filteredParticipants.filter(p => (p.user as ParticipantUser)?.isOnline);
+  const offlineParticipants = filteredParticipants.filter(p => !(p.user as ParticipantUser)?.isOnline);
 
   // Pagination : limiter le rendu
   const displayedOnline = onlineParticipants.slice(0, displayLimit);
@@ -270,17 +273,6 @@ export function ConversationParticipantsDrawer({
     user => !activeParticipants.some(p => p.userId === user.id)
   );
   const allPlatformResultsAlreadyMembers = platformResults.length > 0 && filteredPlatformResults.length === 0;
-
-  const getDisplayName = (user: any): string => {
-    const name = user.displayName ||
-           `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-           user.username;
-    return name;
-  };
-
-  const getAvatarFallback = (user: any): string => {
-    return getUserInitials(user);
-  };
 
   const handleRemoveParticipant = async (userId: string) => {
     if (!isAdmin) return;
@@ -298,7 +290,7 @@ export function ConversationParticipantsDrawer({
     }
   };
 
-  const handleUpdateParticipantRole = async (userId: string, currentRole: string, newRole: 'ADMIN' | 'MODERATOR' | 'MEMBER') => {
+  const handleUpdateParticipantRole = async (userId: string, currentRole: string, newRole: MemberRoleType) => {
     if (!isAdmin) return;
 
     try {
@@ -306,10 +298,10 @@ export function ConversationParticipantsDrawer({
       await conversationsService.updateParticipantRole(conversationId, userId, newRole);
       window.location.reload();
 
-      const roleNames = {
-        'ADMIN': 'administrateur',
-        'MODERATOR': 'modérateur',
-        'MEMBER': 'membre'
+      const roleNames: Record<string, string> = {
+        'admin': 'administrateur',
+        'moderator': 'modérateur',
+        'member': 'membre'
       };
 
       toast.success(`Rôle mis à jour avec succès: ${roleNames[newRole]}`);
@@ -321,15 +313,17 @@ export function ConversationParticipantsDrawer({
     }
   };
 
-  const getUpgradeRole = (currentRole: string): 'ADMIN' | 'MODERATOR' | 'MEMBER' | null => {
-    if (currentRole === 'MEMBER') return 'MODERATOR';
-    if (currentRole === 'MODERATOR') return 'ADMIN';
+  const getUpgradeRole = (currentRole: string): MemberRoleType | null => {
+    const normalized = currentRole.toLowerCase();
+    if (normalized === MemberRole.MEMBER) return 'moderator';
+    if (normalized === MemberRole.MODERATOR) return 'admin';
     return null;
   };
 
-  const getDowngradeRole = (currentRole: string): 'ADMIN' | 'MODERATOR' | 'MEMBER' | null => {
-    if (currentRole === 'ADMIN') return 'MODERATOR';
-    if (currentRole === 'MODERATOR') return 'MEMBER';
+  const getDowngradeRole = (currentRole: string): MemberRoleType | null => {
+    const normalized = currentRole.toLowerCase();
+    if (normalized === MemberRole.ADMIN) return 'moderator';
+    if (normalized === MemberRole.MODERATOR) return 'member';
     return null;
   };
 
@@ -339,37 +333,37 @@ export function ConversationParticipantsDrawer({
   };
 
   // Rôles assignables selon le rôle de l'utilisateur courant
-  const getAssignableRoles = (): Array<{ value: 'MEMBER' | 'MODERATOR' | 'ADMIN'; label: string }> => {
+  const getAssignableRoles = (): Array<{ value: MemberRoleType; label: string }> => {
     const role = currentUserParticipant?.role;
-    if (role === UserRoleEnum.CREATOR || role === UserRoleEnum.ADMIN) {
+    if (role === MemberRole.CREATOR || role === MemberRole.ADMIN) {
       return [
-        { value: 'MEMBER', label: 'Membre' },
-        { value: 'MODERATOR', label: 'Modérateur' },
-        { value: 'ADMIN', label: 'Administrateur' },
+        { value: 'member', label: 'Membre' },
+        { value: 'moderator', label: 'Modérateur' },
+        { value: 'admin', label: 'Administrateur' },
       ];
     }
-    if (role === UserRoleEnum.MODERATOR) {
+    if (role === MemberRole.MODERATOR) {
       return [
-        { value: 'MEMBER', label: 'Membre' },
-        { value: 'MODERATOR', label: 'Modérateur' },
+        { value: 'member', label: 'Membre' },
+        { value: 'moderator', label: 'Modérateur' },
       ];
     }
-    return [{ value: 'MEMBER', label: 'Membre' }];
+    return [{ value: 'member', label: 'Membre' }];
   };
 
   const assignableRoles = getAssignableRoles();
 
   // Ajouter un participant depuis la recherche plateforme (avec rôle optionnel)
-  const handleAddParticipant = async (user: SocketIOUser, role: 'MEMBER' | 'MODERATOR' | 'ADMIN' = 'MEMBER') => {
+  const handleAddParticipant = async (user: SocketIOUser, role: MemberRoleType = 'member') => {
     try {
       setIsLoading(true);
       await conversationsService.addParticipant(conversationId, user.id);
-      // Si le rôle demandé n'est pas MEMBER, mettre à jour après l'ajout
-      if (role !== 'MEMBER') {
+      // Si le rôle demandé n'est pas member, mettre à jour après l'ajout
+      if (role !== 'member') {
         await conversationsService.updateParticipantRole(conversationId, user.id, role);
       }
       onParticipantAdded?.(user.id);
-      const roleLabels: Record<string, string> = { MEMBER: 'membre', MODERATOR: 'modérateur', ADMIN: 'administrateur' };
+      const roleLabels: Record<string, string> = { member: 'membre', moderator: 'modérateur', admin: 'administrateur' };
       toast.success(`${user.displayName || user.username} ajouté comme ${roleLabels[role]}`);
       setSearchQuery('');
       setPlatformResults([]);
@@ -382,8 +376,8 @@ export function ConversationParticipantsDrawer({
   };
 
   // Rendu d'une carte participant (partagé online/offline)
-  const renderParticipantCard = (participant: ThreadMember, index: number, isOnline: boolean) => {
-    const user = participant.user;
+  const renderParticipantCard = (participant: Participant, index: number, isOnline: boolean) => {
+    const user = participant.user as ParticipantUser;
     const isCurrentUser = user.id === currentUser.id;
     const prefix = isOnline ? 'online' : 'offline';
 
@@ -396,7 +390,7 @@ export function ConversationParticipantsDrawer({
         transition={{ delay: index * 0.03 }}
         layout
         className={`backdrop-blur-xl ${isOnline ? 'bg-white/60 dark:bg-gray-900/60' : 'bg-white/40 dark:bg-gray-900/40 opacity-75 hover:opacity-100'} rounded-xl p-3 shadow-sm hover:shadow-md transition-[color,box-shadow,opacity] duration-200 group ${
-          participant.role === 'CREATOR'
+          participant.role === MemberRole.CREATOR
             ? 'border-2 border-yellow-400/60 dark:border-yellow-500/60 shadow-yellow-500/20 shadow-lg ring-2 ring-yellow-400/30 dark:ring-yellow-500/30'
             : isOnline
               ? 'border border-white/30 dark:border-gray-700/40'
@@ -406,7 +400,7 @@ export function ConversationParticipantsDrawer({
         <div className="flex items-center gap-3">
           {/* Avatar */}
           <div className="relative flex-shrink-0">
-            {isAnonymousUser(user) ? (
+            {isAnonymousParticipant(user) ? (
               <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${isOnline ? 'from-purple-400 to-violet-500' : 'from-purple-300 to-violet-400 opacity-50'} flex items-center justify-center`}>
                 <Ghost className={`h-5 w-5 ${isOnline ? 'text-white' : 'text-purple-600'}`} />
               </div>
@@ -417,7 +411,7 @@ export function ConversationParticipantsDrawer({
                   ? 'bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium'
                   : 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium'
                 }>
-                  {getAvatarFallback(user)}
+                  {getParticipantInitials(user)}
                 </AvatarFallback>
               </Avatar>
             )}
@@ -436,18 +430,18 @@ export function ConversationParticipantsDrawer({
           {/* Nom + pseudo */}
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0">
-              {isAnonymousUser(user) && (
+              {isAnonymousParticipant(user) && (
                 <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
               )}
               <span className={`text-sm font-medium truncate max-w-[160px] ${!isOnline ? 'text-gray-600 dark:text-gray-400' : ''}`}>
-                {getDisplayName(user)}
+                {getParticipantDisplayName(user)}
               </span>
               {isCurrentUser && (
                 <Badge variant="outline" className="ml-0.5 text-[10px] px-1.5 py-0 flex-shrink-0">
                   {t('conversationDetails.you')}
                 </Badge>
               )}
-              {(['ADMIN', 'CREATOR'].includes(participant.role)) && (
+              {([MemberRole.ADMIN as string, MemberRole.CREATOR as string].includes(participant.role)) && (
                 <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
               )}
             </div>
@@ -474,7 +468,7 @@ export function ConversationParticipantsDrawer({
           {/* Actions admin */}
           {isAdmin && !isCurrentUser && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              {participant.role !== 'CREATOR' && getUpgradeRole(participant.role) && (
+              {participant.role !== MemberRole.CREATOR && getUpgradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"
@@ -494,7 +488,7 @@ export function ConversationParticipantsDrawer({
                   </Button>
                 </motion.div>
               )}
-              {participant.role !== 'CREATOR' && getDowngradeRole(participant.role) && (
+              {participant.role !== MemberRole.CREATOR && getDowngradeRole(participant.role) && (
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                   <Button
                     variant="ghost"
@@ -669,7 +663,7 @@ export function ConversationParticipantsDrawer({
                               <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => handleAddParticipant(user, 'MEMBER')}
+                                onClick={() => handleAddParticipant(user, 'member')}
                                 disabled={isLoading}
                                 className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
                               >
@@ -833,7 +827,7 @@ export function ConversationParticipantsDrawer({
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         conversationId={conversationId}
-        currentParticipants={participants.map(p => p.user)}
+        currentParticipants={participants.map(p => p.user as SocketIOUser)}
         onUserInvited={handleUserInvited}
       />
     </>

@@ -121,7 +121,8 @@ const mockUser = {
   lastLoginDevice: null,
   lastLoginIp: null,
   lastLoginLocation: null,
-  lastActiveAt: new Date()
+  lastActiveAt: new Date(),
+  systemLanguage: 'en'
 };
 
 const mockGeoData = {
@@ -522,7 +523,8 @@ describe('PasswordResetService', () => {
           to: mockUser.email,
           name: `${mockUser.firstName} ${mockUser.lastName}`,
           resetLink: expect.stringContaining('token='),
-          expiryMinutes: 15
+          expiryMinutes: 15,
+          language: 'en'
         });
       });
 
@@ -1085,7 +1087,8 @@ describe('PasswordResetService', () => {
           name: `${mockUser.firstName} ${mockUser.lastName}`,
           timestamp: expect.any(String),
           ipAddress: validResetCompletion.ipAddress,
-          location: 'New York, United States'
+          location: 'New York, United States',
+          language: 'en'
         });
       });
 

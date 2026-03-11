@@ -73,32 +73,12 @@ extension ConversationView {
             CameraView { result in
                 switch result {
                 case .photo(let image):
-                    scrollState.imageToPreview = image
+                    handleCameraCapture(image)
                 case .video(let url):
-                    scrollState.videoToPreview = url
-                }
-            }
-            .ignoresSafeArea()
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.imageToPreview != nil },
-            set: { if !$0 { scrollState.imageToPreview = nil } }
-        )) {
-            if let image = scrollState.imageToPreview {
-                MeeshyImagePreviewView(image: image, context: .message, accentColor: accentColor) { editedImage in
-                    handleCameraCapture(editedImage)
-                }
-            }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.videoToPreview != nil },
-            set: { if !$0 { scrollState.videoToPreview = nil } }
-        )) {
-            if let url = scrollState.videoToPreview {
-                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
                     handleCameraVideo(url)
                 }
             }
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { coordinate, address in
@@ -116,30 +96,6 @@ extension ConversationView {
         }
         .onChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
-        }
-        // A. PhotosPicker images queue → ImageEditView
-        .fullScreenCover(isPresented: Binding(
-            get: { !scrollState.photosToEdit.isEmpty },
-            set: { if !$0 { scrollState.photosToEdit.removeAll() } }
-        )) {
-            if let image = scrollState.photosToEdit.first {
-                MeeshyImagePreviewView(image: image, context: .message, accentColor: accentColor) { editedImage in
-                    handleCameraCapture(editedImage)
-                    scrollState.photosToEdit.removeFirst()
-                }
-            }
-        }
-        // B. PhotosPicker videos queue → VideoPreviewView
-        .fullScreenCover(isPresented: Binding(
-            get: { !scrollState.videosToPreview.isEmpty },
-            set: { if !$0 { scrollState.videosToPreview.removeAll() } }
-        )) {
-            if let url = scrollState.videosToPreview.first {
-                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
-                    handleCameraVideo(url)
-                    scrollState.videosToPreview.removeFirst()
-                }
-            }
         }
         // C. Tap pending image → ImageEditView
         .fullScreenCover(isPresented: Binding(

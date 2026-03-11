@@ -79,8 +79,8 @@ jest.mock('@/hooks/useI18n', () => ({
 }));
 
 // Mock password reset store
-const mockStoreState = {
-  phoneResetStep: 'phone_input' as const,
+const mockStoreState: Record<string, any> = {
+  phoneResetStep: 'phone_input',
   phoneNumber: '',
   phoneCountryCode: 'FR',
   phoneResetTokenId: '',
