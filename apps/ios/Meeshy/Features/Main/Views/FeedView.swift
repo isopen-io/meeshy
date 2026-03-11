@@ -119,10 +119,81 @@ struct FeedView: View {
             .buttonStyle(PlainButtonStyle())
 
             // Add content button (+)
-            Button(action: {
-                // TODO: Show attachment picker
-                HapticFeedback.light()
-            }) {
+            Menu {
+                Button {
+                    pendingAttachmentType = "photo"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showPhotoPicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Photo ou video", defaultValue: "Photo ou vid\u{00E9}o"),
+                        systemImage: "photo.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "camera"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showCamera = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Appareil photo", defaultValue: "Appareil photo"),
+                        systemImage: "camera.fill"
+                    )
+                }
+
+                Button {
+                    showAudioComposer = true
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Enregistrement audio", defaultValue: "Enregistrement audio"),
+                        systemImage: "mic.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "file"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showFilePicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Fichier", defaultValue: "Fichier"),
+                        systemImage: "doc.fill"
+                    )
+                }
+
+                Button {
+                    pendingAttachmentType = "location"
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showComposer = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showLocationPicker = true
+                        }
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    Label(
+                        String(localized: "Position", defaultValue: "Position"),
+                        systemImage: "location.fill"
+                    )
+                }
+            } label: {
                 ZStack {
                     Circle()
                         .fill(
@@ -140,7 +211,7 @@ struct FeedView: View {
                         .foregroundColor(.white)
                 }
             }
-            .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(String(localized: "Ajouter du contenu", defaultValue: "Ajouter du contenu"))
         }
         .padding(16)
         .background(
