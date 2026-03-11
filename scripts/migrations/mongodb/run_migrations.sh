@@ -99,6 +99,7 @@ MIGRATIONS=(
     "004_report_missing_audio_duration.js"
     "006_remove_encryptionMode_from_message_attachment.js"
     "007_migrate_snake_case_to_camel_case.js"
+    "008_add_email_verification_code.js"
 )
 
 # Filter to specific migration if requested
