@@ -60,6 +60,7 @@ class ConversationListViewModel: ObservableObject {
 
     func invalidateCache() {
         lastFetchedAt = nil
+        Task.detached { await ConversationCacheManager.shared.invalidateAll() }
     }
 
     init(
@@ -343,7 +344,7 @@ class ConversationListViewModel: ObservableObject {
 
         // Afficher le cache immédiatement
         if conversations.isEmpty {
-            let cached = await LocalStore.shared.loadConversations()
+            let cached = await ConversationCacheManager.shared.loadConversations()
             if !cached.isEmpty {
                 conversations = cached
             }
@@ -367,8 +368,7 @@ class ConversationListViewModel: ObservableObject {
                 lastFetchedAt = Date()
 
                 Task.detached(priority: .utility) { [conversations] in
-                    await LocalStore.shared.saveConversations(conversations)
-                    await LocalStore.shared.cleanupStaleMessageCaches()
+                    await ConversationCacheManager.shared.saveConversations(conversations)
                 }
 
                 prefetchMessages(for: response.data, userId: userId)
@@ -428,7 +428,7 @@ class ConversationListViewModel: ObservableObject {
                     currentOffset += deduplicated.count
 
                     Task.detached(priority: .background) { [snapshot = self.conversations] in
-                        await LocalStore.shared.saveConversations(snapshot)
+                        await ConversationCacheManager.shared.saveConversations(snapshot)
                     }
                 } else {
                     hasMore = false
@@ -636,7 +636,7 @@ class ConversationListViewModel: ObservableObject {
 
     func loadPreviewMessages(for conversationId: String) async {
         guard previewMessages[conversationId] == nil else { return }
-        let cached = await LocalStore.shared.loadMessages(for: conversationId)
+        let cached = await MessageCacheManager.shared.loadMessages(for: conversationId)
         if !cached.isEmpty {
             previewMessages[conversationId] = Array(cached.suffix(5))
             return
@@ -659,7 +659,7 @@ class ConversationListViewModel: ObservableObject {
             await withTaskGroup(of: Void.self) { group in
                 for apiConversation in toFetch {
                     let conversationId = apiConversation.id
-                    let cached = await LocalStore.shared.loadMessages(for: conversationId)
+                    let cached = await MessageCacheManager.shared.loadMessages(for: conversationId)
                     if !cached.isEmpty { continue }
 
                     group.addTask {
@@ -674,7 +674,7 @@ class ConversationListViewModel: ObservableObject {
                                 let messages = response.data.reversed().map {
                                     $0.toMessage(currentUserId: userId)
                                 }
-                                await LocalStore.shared.saveMessages(Array(messages), for: conversationId)
+                                await MessageCacheManager.shared.saveMessages(Array(messages), for: conversationId)
                             }
                         } catch { }
                     }
