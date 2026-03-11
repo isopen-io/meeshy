@@ -341,6 +341,13 @@ struct ChangePasswordView: View {
                 default:
                     errorMessage = error.errorDescription
                 }
+            } catch let error as MeeshyError {
+                HapticFeedback.error()
+                if case .server(_, let msg) = error {
+                    errorMessage = msg
+                } else {
+                    errorMessage = error.localizedDescription
+                }
             } catch {
                 HapticFeedback.error()
                 errorMessage = "Une erreur est survenue"
