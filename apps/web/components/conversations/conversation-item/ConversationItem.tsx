@@ -144,8 +144,18 @@ export const ConversationItem = memo(function ConversationItem({
   // Helper pour obtenir l'autre participant dans une conversation directe
   const getOtherParticipantUser = useCallback(() => {
     if (conversation.type !== 'direct') return null;
-    const otherParticipant = conversation.participants?.find(p => p.userId !== currentUser?.id);
-    return otherParticipant ? (otherParticipant as any).user : null;
+    const otherParticipant = conversation.participants?.find(p => {
+      const participantUserId = p.userId ?? (p as any).user?.id;
+      return participantUserId && participantUserId !== currentUser?.id;
+    });
+    if (!otherParticipant) return null;
+    // Return nested user if available, otherwise build user-like object from participant
+    return (otherParticipant as any).user ?? {
+      id: otherParticipant.userId,
+      displayName: otherParticipant.displayName,
+      username: (otherParticipant as any).nickname ?? otherParticipant.displayName,
+      avatar: (otherParticipant as any).avatar,
+    };
   }, [conversation, currentUser]);
 
   const conversationName = getConversationNameOnly(conversation, getOtherParticipantUser);

@@ -269,11 +269,19 @@ export function registerCoreRoutes(
             },
             select: {
               id: true,
+              conversationId: true,
+              type: true,
               userId: true,
+              displayName: true,
+              avatar: true,
               role: true,
+              language: true,
+              permissions: true,
               nickname: true,
               joinedAt: true,
               isActive: true,
+              isOnline: true,
+              lastActiveAt: true,
               user: {
                 select: {
                   id: true,

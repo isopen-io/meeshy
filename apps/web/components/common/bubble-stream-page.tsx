@@ -252,7 +252,9 @@ export function BubbleStreamPage({
     console.log('✅ [BubbleStreamPage] addMessage returned:', wasAdded);
 
     // Scroll automatique pour les nouveaux messages
-    if (message.senderId !== user.id) {
+    // senderId is a Participant ID, compare via sender.userId or sender.user.id
+    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? message.senderId;
+    if (senderUserId !== user.id) {
       setTimeout(() => {
         if (messagesContainerRef.current) {
           const { scrollTop } = messagesContainerRef.current;

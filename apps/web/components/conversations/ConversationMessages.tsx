@@ -165,7 +165,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // Un message est considéré non lu si :
       // 1. Ce n'est pas un message de l'utilisateur courant
       // 2. Il n'a pas de readStatus ou l'utilisateur n'est pas dans readStatus
-      if (msg.senderId === currentUser.id) return false;
+      const senderUserId = (msg.sender as any)?.userId ?? (msg.sender as any)?.user?.id;
+      if (senderUserId === currentUser.id) return false;
       
       if (!(msg as any).readStatus || (msg as any).readStatus.length === 0) return true;
       
@@ -363,7 +364,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
         const lastMessage = messages[messages.length - 1];
 
         // AMÉLIORATION: Toujours scroller sur NOTRE propre message (envoi)
-        if (lastMessage && lastMessage.senderId === currentUser?.id) {
+        const lastSenderUserId = (lastMessage?.sender as any)?.userId ?? (lastMessage?.sender as any)?.user?.id;
+        if (lastMessage && lastSenderUserId === currentUser?.id) {
           // En mode scrollDirection='down' (BubbleStream), scroller vers le haut
           if (scrollDirection === 'down') {
             scrollToTop(true); // true = avec animation fluide

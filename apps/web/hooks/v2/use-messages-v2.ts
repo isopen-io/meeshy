@@ -97,7 +97,8 @@ export function useMessagesV2(
   const handleNewMessage = useCallback(
     (message: Message) => {
       // Only add if not from current user (avoid duplicates from optimistic updates)
-      if (message.senderId !== currentUser?.id) {
+      const msgSenderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id;
+      if (msgSenderUserId !== currentUser?.id) {
         addMessage(message);
       }
       onNewMessage?.(message);
