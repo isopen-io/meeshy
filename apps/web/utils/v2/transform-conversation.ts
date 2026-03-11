@@ -97,9 +97,12 @@ export function transformToConversationItem(
       otherUser?.displayName ||
       otherUser?.username ||
       otherUser?.firstName ||
+      otherMember?.displayName ||
+      (otherMember as any)?.nickname ||
+      conversation.title ||
       'Utilisateur';
     languageCode = otherUser?.systemLanguage || otherUser?.regionalLanguage || 'fr';
-    avatar = otherUser?.avatar;
+    avatar = otherUser?.avatar || otherMember?.avatar;
   }
 
   // Check if online (direct conversations only)

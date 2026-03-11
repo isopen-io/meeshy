@@ -463,19 +463,22 @@ export function registerCoreRoutes(
             user: m.userId ? (userMap.get(m.userId) || null) : null
           }));
 
-        // S'assurer qu'un titre existe toujours
-        const displayTitle = conversation.title && conversation.title.trim() !== ''
-          ? conversation.title
-          : generateDefaultConversationTitle(
-              membersWithUser.map((m: any) => ({
-                id: m.userId,
-                displayName: m.user?.displayName,
-                username: m.user?.username,
-                firstName: m.user?.firstName,
-                lastName: m.user?.lastName
-              })),
-              userId
-            );
+        // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
+        // Pour les groupes/publics, s'assurer qu'un titre existe
+        const displayTitle = conversation.type === 'direct'
+          ? (conversation.title || null)
+          : (conversation.title && conversation.title.trim() !== ''
+              ? conversation.title
+              : generateDefaultConversationTitle(
+                  membersWithUser.map((m: any) => ({
+                    id: m.userId,
+                    displayName: m.user?.displayName,
+                    username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName
+                  })),
+                  userId
+                ));
 
         return {
           ...conversation,
@@ -638,19 +641,21 @@ export function registerCoreRoutes(
         });
       }
 
-      // S'assurer qu'un titre existe toujours
-      const displayTitle = conversation.title && conversation.title.trim() !== ''
-        ? conversation.title
-        : generateDefaultConversationTitle(
-            conversation.participants.map((m: any) => ({
-              id: m.userId,
-              displayName: m.user?.displayName,
-              username: m.user?.username,
-              firstName: m.user?.firstName,
-              lastName: m.user?.lastName
-            })),
-            userId
-          );
+      // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
+      const displayTitle = (conversation as any).type === 'direct'
+        ? (conversation.title || null)
+        : (conversation.title && conversation.title.trim() !== ''
+            ? conversation.title
+            : generateDefaultConversationTitle(
+                conversation.participants.map((m: any) => ({
+                  id: m.userId,
+                  displayName: m.user?.displayName,
+                  username: m.user?.username,
+                  firstName: m.user?.firstName,
+                  lastName: m.user?.lastName
+                })),
+                userId
+              ));
 
       // Ajouter les statistiques de conversation dans les métadonnées (via cache 1h)
       const stats = await conversationStatsService.getOrCompute(
@@ -893,19 +898,21 @@ export function registerCoreRoutes(
         }
       }
 
-      // S'assurer qu'un titre existe toujours
-      const displayTitle = conversation.title && conversation.title.trim() !== ''
-        ? conversation.title
-        : generateDefaultConversationTitle(
-            conversation.participants.map((m: any) => ({
-              id: m.userId,
-              displayName: m.user?.displayName,
-              username: m.user?.username,
-              firstName: m.user?.firstName,
-              lastName: m.user?.lastName
-            })),
-            userId
-          );
+      // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
+      const displayTitle = type === 'direct'
+        ? (conversation.title || null)
+        : (conversation.title && conversation.title.trim() !== ''
+            ? conversation.title
+            : generateDefaultConversationTitle(
+                conversation.participants.map((m: any) => ({
+                  id: m.userId,
+                  displayName: m.user?.displayName,
+                  username: m.user?.username,
+                  firstName: m.user?.firstName,
+                  lastName: m.user?.lastName
+                })),
+                userId
+              ));
 
       // Envoyer des notifications aux participants invités
       const notificationService = (fastify as any).notificationService;

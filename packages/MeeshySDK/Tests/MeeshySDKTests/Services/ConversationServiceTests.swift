@@ -25,7 +25,7 @@ final class ConversationServiceTests: XCTestCase {
             isActive: true, memberCount: 2, isAnnouncementChannel: false,
             lastMessageAt: nil, participants: nil, lastMessage: nil,
             recentMessages: nil, userPreferences: nil, unreadCount: 0,
-            updatedAt: nil, encryptionMode: nil, createdAt: Date()
+            updatedAt: nil, encryptionMode: nil, currentUserRole: nil, createdAt: Date()
         )
     }
 

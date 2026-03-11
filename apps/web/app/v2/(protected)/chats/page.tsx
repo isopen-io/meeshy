@@ -434,7 +434,17 @@ export default function V2ChatsPage() {
           )}
 
           <div>
-            <h2 className="font-semibold text-[var(--gp-text-primary)]">{currentConversation?.title || 'Conversation'}</h2>
+            <h2 className="font-semibold text-[var(--gp-text-primary)]">{(() => {
+              if (currentConversation?.type === 'direct') {
+                const other = currentConversation.participants?.find(p => {
+                  const uid = p.userId ?? (p as any).user?.id;
+                  return uid && uid !== currentUser?.id;
+                }) ?? currentConversation.participants?.[1] ?? currentConversation.participants?.[0];
+                const otherUser = (other as any)?.user;
+                return otherUser?.displayName || otherUser?.username || other?.displayName || currentConversation.title || 'Conversation';
+              }
+              return currentConversation?.title || 'Conversation';
+            })()}</h2>
             <span className="text-sm text-[var(--gp-text-muted)]">
               {currentTypingUsers.length > 0
                 ? 'Quelqu\'un ecrit...'
@@ -613,7 +623,17 @@ export default function V2ChatsPage() {
       <ConversationDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        conversationName={currentConversation?.title || ''}
+        conversationName={(() => {
+          if (currentConversation?.type === 'direct') {
+            const other = currentConversation.participants?.find(p => {
+              const uid = p.userId ?? (p as any).user?.id;
+              return uid && uid !== currentUser?.id;
+            }) ?? currentConversation.participants?.[1] ?? currentConversation.participants?.[0];
+            const otherUser = (other as any)?.user;
+            return otherUser?.displayName || otherUser?.username || other?.displayName || currentConversation.title || '';
+          }
+          return currentConversation?.title || '';
+        })()}
         onNameChange={() => {}}
         notificationLevel={drawerNotifications}
         onNotificationChange={setDrawerNotifications}

@@ -144,11 +144,27 @@ export const ConversationItem = memo(function ConversationItem({
   // Helper pour obtenir l'autre participant dans une conversation directe
   const getOtherParticipantUser = useCallback(() => {
     if (conversation.type !== 'direct') return null;
-    const otherParticipant = conversation.participants?.find(p => {
+    if (!conversation.participants?.length) return null;
+
+    // Stratégie 1: trouver par userId différent du current user
+    let otherParticipant = conversation.participants.find(p => {
       const participantUserId = p.userId ?? (p as any).user?.id;
       return participantUserId && participantUserId !== currentUser?.id;
     });
+
+    // Stratégie 2: si currentUser.id est undefined, prendre le premier participant
+    // qui n'est pas le seul (pour les DMs, il y a toujours 2 participants)
+    if (!otherParticipant && conversation.participants.length >= 2) {
+      otherParticipant = conversation.participants[1];
+    }
+
+    // Stratégie 3: s'il n'y a qu'un seul participant, l'utiliser
+    if (!otherParticipant && conversation.participants.length === 1) {
+      otherParticipant = conversation.participants[0];
+    }
+
     if (!otherParticipant) return null;
+
     // Return nested user if available, otherwise build user-like object from participant
     return (otherParticipant as any).user ?? {
       id: otherParticipant.userId,
