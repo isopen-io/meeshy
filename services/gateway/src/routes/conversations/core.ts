@@ -361,6 +361,21 @@ export function registerCoreRoutes(
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
 
+      const currentUserParticipants = userId ? await prisma.participant.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          userId: userId,
+          isActive: true
+        },
+        select: {
+          conversationId: true,
+          role: true
+        }
+      }) : [];
+      const currentUserRoleMap = new Map(
+        currentUserParticipants.map(p => [p.conversationId, p.role])
+      );
+
       // Collect all unique member userIds (optimized: only from returned conversations)
       // Filter out null userIds (anonymous participants have userId: null)
       const allMemberUserIds = new Set<string>();
@@ -459,7 +474,8 @@ export function registerCoreRoutes(
           participants: membersWithUser,
           title: displayTitle,
           lastMessage: conversation.messages[0] || null,
-          unreadCount
+          unreadCount,
+          currentUserRole: currentUserRoleMap.get(conversation.id) || null
         };
       });
 
