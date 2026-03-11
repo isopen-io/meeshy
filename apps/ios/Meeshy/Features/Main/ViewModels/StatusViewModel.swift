@@ -43,6 +43,7 @@ class StatusViewModel: ObservableObject {
     func loadStatuses() async {
         guard !isLoading else { return }
         isLoading = true
+        error = nil
         nextCursor = nil
         hasMore = true
 
@@ -57,11 +58,15 @@ class StatusViewModel: ObservableObject {
                     myStatus = statuses.first
                 }
             } else {
-                statuses = []
+                if statuses.isEmpty {
+                    statuses = []
+                }
                 error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
             }
         } catch {
-            statuses = []
+            if statuses.isEmpty {
+                self.statuses = []
+            }
             self.error = error.localizedDescription
         }
 

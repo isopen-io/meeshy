@@ -173,6 +173,7 @@ struct FeedView: View {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
                             Text(String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil"))
                                 .font(.headline)
                             Text(error)
@@ -183,6 +184,7 @@ struct FeedView: View {
                             }
                             .buttonStyle(.bordered)
                         }
+                        .accessibilityElement(children: .combine)
                         .padding()
                     }
 

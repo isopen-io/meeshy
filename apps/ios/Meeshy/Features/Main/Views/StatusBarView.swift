@@ -19,6 +19,26 @@ struct StatusBarView: View {
                     addStatusPill
                 }
 
+                // Error indicator
+                if viewModel.error != nil, viewModel.statuses.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(MeeshyColors.warning)
+                            .accessibilityHidden(true)
+                        Text(String(localized: "Erreur de chargement", defaultValue: "Erreur de chargement"))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassCard(cornerRadius: 20)
+                    .accessibilityElement(children: .combine)
+                    .onTapGesture {
+                        Task { await viewModel.loadStatuses() }
+                    }
+                }
+
                 // Other statuses
                 ForEach(viewModel.statuses.filter { $0.id != viewModel.myStatus?.id }) { status in
                     statusPill(status)
