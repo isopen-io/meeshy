@@ -76,7 +76,7 @@ public struct AnonymousSessionResponse: Decodable, Sendable {
 
 // MARK: - Paginated Participant (GET /conversations/:id/participants response)
 
-public struct PaginatedParticipant: Decodable, Identifiable, Sendable {
+public struct PaginatedParticipant: Codable, Identifiable, Sendable {
     public let id: String
     public let userId: String?
     public let username: String?
@@ -89,6 +89,20 @@ public struct PaginatedParticipant: Decodable, Identifiable, Sendable {
     public let lastActiveAt: Date?
     public let joinedAt: Date?
     public let isActive: Bool?
+
+    public init(
+        id: String, userId: String? = nil, username: String? = nil,
+        firstName: String? = nil, lastName: String? = nil,
+        displayName: String? = nil, avatar: String? = nil,
+        conversationRole: String? = nil, isOnline: Bool? = nil,
+        lastActiveAt: Date? = nil, joinedAt: Date? = nil, isActive: Bool? = nil
+    ) {
+        self.id = id; self.userId = userId; self.username = username
+        self.firstName = firstName; self.lastName = lastName
+        self.displayName = displayName; self.avatar = avatar
+        self.conversationRole = conversationRole; self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt; self.joinedAt = joinedAt; self.isActive = isActive
+    }
 
     public var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").nilIfEmpty ?? username ?? "?"
