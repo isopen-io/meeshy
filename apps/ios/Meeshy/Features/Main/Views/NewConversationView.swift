@@ -54,7 +54,7 @@ struct NewConversationView: View {
 
             Spacer()
 
-            Text("Nouvelle conversation")
+            Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -69,7 +69,7 @@ struct NewConversationView: View {
                         ProgressView()
                             .tint(MeeshyColors.indigo400)
                     } else {
-                        Text("Créer")
+                        Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(MeeshyColors.indigo400)
                     }
@@ -91,7 +91,7 @@ struct NewConversationView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
 
-            TextField("Nom du groupe", text: $groupTitle)
+            TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
@@ -176,7 +176,7 @@ struct NewConversationView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un utilisateur...", text: $searchQuery)
+            TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -234,7 +234,7 @@ struct NewConversationView: View {
                 .font(.system(size: 36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
 
-            Text("Aucun utilisateur trouvé")
+            Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -394,7 +394,7 @@ struct NewConversationView: View {
                 await MainActor.run {
                     HapticFeedback.error()
                     isCreating = false
-                    errorMessage = "Impossible de créer la conversation"
+                    errorMessage = String(localized: "Impossible de creer la conversation", defaultValue: "Impossible de cr\u{00E9}er la conversation")
                 }
             }
         }

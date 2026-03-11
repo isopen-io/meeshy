@@ -53,7 +53,7 @@ struct MeeshyApp: App {
                             session: guestSession,
                             onSessionCreated: { ctx in
                                 if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError("Impossible de sauvegarder la session")
+                                    toastManager.showError(String(localized: "Impossible de sauvegarder la session", defaultValue: "Impossible de sauvegarder la session"))
                                 }
                                 activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
                             },
@@ -191,7 +191,7 @@ struct MeeshyApp: App {
                         object: conversation
                     )
                 } catch {
-                    toastManager.showError("Impossible d'ouvrir la conversation")
+                    toastManager.showError(String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation"))
                 }
                 pushManager.clearPendingNotification()
             }
@@ -234,9 +234,9 @@ struct MeeshyApp: App {
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
-                toastManager.showSuccess("Connexion reussie !")
+                toastManager.showSuccess(String(localized: "Connexion reussie !", defaultValue: "Connexion r\u{00E9}ussie !"))
             } else {
-                toastManager.showError(authManager.errorMessage ?? "Lien invalide ou expire")
+                toastManager.showError(authManager.errorMessage ?? String(localized: "Lien invalide ou expire", defaultValue: "Lien invalide ou expir\u{00E9}"))
             }
         }
     }
@@ -345,7 +345,7 @@ struct SplashScreen: View {
                     .padding(.bottom, 8)
 
                 // Tagline
-                Text("Break the language barrier")
+                Text(String(localized: "Break the language barrier", defaultValue: "Break the language barrier"))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)

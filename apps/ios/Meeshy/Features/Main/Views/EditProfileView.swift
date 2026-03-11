@@ -63,7 +63,7 @@ struct EditProfileView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "Retour", defaultValue: "Retour"))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
@@ -71,7 +71,7 @@ struct EditProfileView: View {
 
             Spacer()
 
-            Text("Modifier le profil")
+            Text(String(localized: "Modifier le profil", defaultValue: "Modifier le profil"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -151,7 +151,7 @@ struct EditProfileView: View {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo400)
-                    Text("Envoi de la photo...")
+                    Text(String(localized: "Envoi de la photo...", defaultValue: "Envoi de la photo..."))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -163,14 +163,14 @@ struct EditProfileView: View {
 
     private var fieldsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Informations", icon: "pencil.circle.fill", color: accentColor)
+            sectionHeader(title: String(localized: "Informations", defaultValue: "Informations"), icon: "pencil.circle.fill", color: accentColor)
 
             VStack(spacing: 0) {
                 editableField(
                     icon: "person.fill",
-                    title: "Nom d'affichage",
+                    title: String(localized: "Nom d'affichage", defaultValue: "Nom d'affichage"),
                     text: $displayName,
-                    placeholder: "Votre nom"
+                    placeholder: String(localized: "Votre nom", defaultValue: "Votre nom")
                 )
 
                 bioField
@@ -199,11 +199,11 @@ struct EditProfileView: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Bio")
+                Text(String(localized: "Bio", defaultValue: "Bio"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                TextField("Parlez de vous...", text: $bio, axis: .vertical)
+                TextField(String(localized: "Parlez de vous...", defaultValue: "Parlez de vous..."), text: $bio, axis: .vertical)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(3...6)
@@ -231,20 +231,20 @@ struct EditProfileView: View {
 
     private var readOnlySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Compte", icon: "lock.fill", color: "4338CA")
+            sectionHeader(title: String(localized: "Compte", defaultValue: "Compte"), icon: "lock.fill", color: "4338CA")
 
             VStack(spacing: 0) {
                 if let email = user?.email {
-                    readOnlyRow(icon: "envelope.fill", title: "Email", value: email, color: "4338CA")
+                    readOnlyRow(icon: "envelope.fill", title: String(localized: "Email", defaultValue: "Email"), value: email, color: "4338CA")
                 }
 
                 if let phone = user?.phoneNumber {
-                    readOnlyRow(icon: "phone.fill", title: "Telephone", value: phone, color: "4338CA")
+                    readOnlyRow(icon: "phone.fill", title: String(localized: "Telephone", defaultValue: "T\u{00E9}l\u{00E9}phone"), value: phone, color: "4338CA")
                 }
 
                 readOnlyRow(
                     icon: "at",
-                    title: "Nom d'utilisateur",
+                    title: String(localized: "Nom d'utilisateur", defaultValue: "Nom d'utilisateur"),
                     value: "@\(user?.username ?? "—")",
                     color: "4338CA"
                 )
@@ -282,7 +282,7 @@ struct EditProfileView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text("Sauvegarder")
+                    Text(String(localized: "Sauvegarder", defaultValue: "Sauvegarder"))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -309,7 +309,7 @@ struct EditProfileView: View {
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
 
-            Text("Profil mis a jour")
+            Text(String(localized: "Profil mis a jour", defaultValue: "Profil mis \u{00E0} jour"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
@@ -466,7 +466,7 @@ struct EditProfileView: View {
                 isUploadingAvatar = false
             } catch {
                 HapticFeedback.error()
-                errorMessage = "Une erreur est survenue"
+                errorMessage = String(localized: "Une erreur est survenue", defaultValue: "Une erreur est survenue")
                 isUploadingAvatar = false
             }
             isSaving = false
@@ -504,7 +504,7 @@ struct EditProfileView: View {
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.serverError(
                 (response as? HTTPURLResponse)?.statusCode ?? 500,
-                "Echec de l'envoi de l'avatar"
+                String(localized: "Echec de l'envoi de l'avatar", defaultValue: "\u{00C9}chec de l'envoi de l'avatar")
             )
         }
 
