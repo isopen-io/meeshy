@@ -336,13 +336,16 @@ export function useConversationMessagesRQ(
   const hasLoadedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!conversationId || !currentUser || isLoading || messages.length === 0) return;
-    if (hasLoadedRef.current === conversationId) return;
-    hasLoadedRef.current = conversationId;
+    // Resolve real ObjectId from loaded messages (conversationId param may be an identifier/slug)
+    const resolvedId = messages[0]?.conversationId ?? conversationId;
+    if (hasLoadedRef.current === resolvedId) return;
+    if (!/^[a-f\d]{24}$/i.test(resolvedId)) return;
+    hasLoadedRef.current = resolvedId;
 
     // Mark-as-received triggers a read-status:updated socket event with summary
-    apiService.post(`/conversations/${conversationId}/mark-as-received`)
+    apiService.post(`/conversations/${resolvedId}/mark-as-received`)
       .catch(() => {}); // Non-critical
-  }, [conversationId, currentUser, isLoading, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversationId, currentUser, isLoading, messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fill if container not full enough
   useEffect(() => {
