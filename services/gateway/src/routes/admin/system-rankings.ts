@@ -644,7 +644,7 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
         messageType: true,
         createdAt: true,
         sender: {
-          select: { id: true, displayName: true, avatar: true, user: { select: { username: true } } }
+          select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
         },
         conversation: {
           select: { id: true, identifier: true, title: true, type: true }

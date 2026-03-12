@@ -49,6 +49,20 @@ export const AnonymousSessionSchema = z.object({
 })
 export type AnonymousSession = z.infer<typeof AnonymousSessionSchema>
 
+export const ParticipantUserSchema = z.object({
+  id: z.string(),
+  username: z.string().optional(),
+  displayName: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  avatar: z.string().optional(),
+  isOnline: z.boolean().optional(),
+  lastActiveAt: z.coerce.date().optional(),
+  systemLanguage: z.string().optional(),
+  role: z.string().optional(),
+})
+export type ParticipantUser = z.infer<typeof ParticipantUserSchema>
+
 const BaseParticipantSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
@@ -68,7 +82,7 @@ const BaseParticipantSchema = z.object({
   lastActiveAt: z.coerce.date().optional(),
   sessionTokenHash: z.string().optional(),
   anonymousSession: AnonymousSessionSchema.optional(),
-  user: z.unknown().optional(),
+  user: ParticipantUserSchema.optional(),
 })
 
 export const ParticipantSchema = BaseParticipantSchema.superRefine((data, ctx) => {

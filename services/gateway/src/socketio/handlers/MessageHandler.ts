@@ -406,7 +406,7 @@ export class MessageHandler {
             where: { id: message.forwardedFromId },
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
-              sender: { select: { id: true, displayName: true, avatar: true, type: true } },
+              sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
               attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
             }
           }),

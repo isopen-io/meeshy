@@ -13,6 +13,7 @@ import { useCallback, useRef, useEffect } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useNotificationStore } from '@/stores/notification-store';
 import type { Message, Conversation, User } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface Translation {
   id?: string;
@@ -160,8 +161,8 @@ export function useSocketCallbacks({
         }
 
         const currentConversation = prevConversations[conversationIndex];
-        const isMessageFromCurrentUser =
-          currentUser && ((message.sender as any)?.userId === currentUser.id || (message.sender as any)?.user?.id === currentUser.id || (message.sender as any)?.id === currentUser.id);
+        const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
+        const isMessageFromCurrentUser = currentUser && senderUserId === currentUser.id;
         const activeConvId = useNotificationStore.getState().activeConversationId;
         const isCurrentlyViewingThisConversation =
           message.conversationId === currentConvId ||

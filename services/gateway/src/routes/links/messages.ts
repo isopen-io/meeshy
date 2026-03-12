@@ -216,6 +216,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               type: true,
@@ -486,6 +487,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               type: true,

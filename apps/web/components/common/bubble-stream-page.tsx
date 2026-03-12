@@ -52,6 +52,7 @@ import { getMaxMessageLength } from '@/lib/constants/languages';
 
 // Types et constantes
 import type { User, Message } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import {
   getUserLanguageChoices,
   type BubbleStreamPageProps,
@@ -253,7 +254,7 @@ export function BubbleStreamPage({
 
     // Scroll automatique pour les nouveaux messages
     // senderId is a Participant ID, compare via sender.userId or sender.user.id
-    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? message.senderId;
+    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? message.senderId;
     if (senderUserId !== user.id) {
       setTimeout(() => {
         if (messagesContainerRef.current) {

@@ -8,6 +8,7 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
@@ -109,7 +110,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
       // Auto mark-as-received for messages from other users
       const currentUser = useAuthStore.getState().user;
-      const msgSenderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id;
+      const msgSenderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
       if (currentUser && msgSenderUserId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
         apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
           .catch(() => {}); // Non-critical, fire-and-forget

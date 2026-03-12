@@ -123,6 +123,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               isOnline: true,
@@ -299,6 +300,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               user: { select: { username: true } }
@@ -389,6 +391,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               user: { select: { username: true } }
             }

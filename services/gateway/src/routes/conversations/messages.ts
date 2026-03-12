@@ -374,6 +374,7 @@ export function registerMessagesRoutes(
         sender: {
           select: {
             id: true,
+            userId: true,
             displayName: true,
             avatar: true,
             type: true,
@@ -484,6 +485,7 @@ export function registerMessagesRoutes(
             sender: {
               select: {
                 id: true,
+                userId: true,
                 displayName: true,
                 avatar: true,
                 type: true,
@@ -783,7 +785,7 @@ export function registerMessagesRoutes(
             messageType: true,
             createdAt: true,
             sender: {
-              select: { id: true, displayName: true, avatar: true, user: { select: { username: true } } }
+              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
             attachments: {
               select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true },
@@ -1253,6 +1255,7 @@ export function registerMessagesRoutes(
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               role: true,
@@ -1264,6 +1267,7 @@ export function registerMessagesRoutes(
               sender: {
                 select: {
                   id: true,
+                  userId: true,
                   displayName: true,
                   avatar: true,
                   user: { select: { username: true } }
@@ -2216,7 +2220,7 @@ export function registerMessagesRoutes(
         createdAt: true,
         senderId: true,
         sender: {
-          select: { id: true, username: true, displayName: true, avatar: true }
+          select: { id: true, userId: true, username: true, displayName: true, avatar: true }
         }
       };
 

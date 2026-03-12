@@ -21,6 +21,7 @@ import type { TagItem } from '@/components/v2';
 import { useConversationsV2, useMessagesV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import type { User, Message } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 // ============================================================================
 // Types
@@ -496,7 +497,7 @@ export default function V2ChatsPage() {
           </div>
         ) : (
           displayMessages.map((msg, index) => {
-            const isSent = ((msg.sender as any)?.userId ?? (msg.sender as any)?.user?.id ?? (msg.sender as any)?.id) === currentUser?.id;
+            const isSent = (getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id) === currentUser?.id;
             const showTimestamp = index === 0 || new Date(msg.createdAt).toDateString() !== new Date(displayMessages[index - 1].createdAt).toDateString();
             const status = isSent ? getMessageStatus(msg) : undefined;
             const reactions = messageReactions[msg.id] || {};
