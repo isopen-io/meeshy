@@ -10,7 +10,6 @@
 
 'use client';
 
-import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -153,7 +152,7 @@ export class MessagingService {
     options: MessageSendOptions
   ): Promise<boolean> {
     if (!socket || !socket.connected) {
-      toast.error('Socket not connected');
+      logger.warn('[MessagingService]', 'Socket not connected');
       return false;
     }
 
@@ -233,7 +232,6 @@ export class MessagingService {
 
     } catch (error) {
       console.error('[MessagingService] Error sending message:', error);
-      toast.error('Error sending message');
       return false;
     }
   }
@@ -256,7 +254,7 @@ export class MessagingService {
         if (response?.success) {
           resolve(true);
         } else {
-          toast.error(response?.error || 'Error editing message');
+          logger.warn('[MessagingService]', 'Edit failed', response?.error || 'Unknown error');
           resolve(false);
         }
       });
@@ -280,7 +278,7 @@ export class MessagingService {
         if (response?.success) {
           resolve(true);
         } else {
-          toast.error(response?.error || 'Error deleting message');
+          logger.warn('[MessagingService]', 'Delete failed', response?.error || 'Unknown error');
           resolve(false);
         }
       });
@@ -305,7 +303,6 @@ export class MessagingService {
       });
 
       logger.info('[MessagingService]', 'Message sent via REST fallback');
-      toast.success('Message envoyé (connexion alternative)');
       return true;
     } catch (error) {
       console.error('[MessagingService] REST fallback also failed:', error);
@@ -324,7 +321,7 @@ export class MessagingService {
   ): Promise<boolean> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        toast.error('Timeout: Server did not respond in time');
+        logger.warn('[MessagingService]', 'Timeout: Server did not respond in time');
         resolve(false);
       }, timeoutMs);
 
@@ -334,7 +331,7 @@ export class MessagingService {
           resolve(true);
         } else {
           const errorMsg = response?.message || response?.error || 'Error sending message';
-          toast.error(`Error: ${errorMsg}`);
+          logger.warn('[MessagingService]', `Send failed: ${errorMsg}`);
           resolve(false);
         }
       });

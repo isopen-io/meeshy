@@ -45,8 +45,9 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 
-import type { Conversation, UserRoleEnum } from '@meeshy/shared/types';
+import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
+
 
 // Hooks refactorisés (Single Responsibility)
 import {
@@ -80,6 +81,44 @@ const AuthCheckingLoader = (
     </div>
   </div>
 );
+
+function createOptimisticMessage(
+  content: string,
+  senderId: string,
+  conversationId: string,
+  language: string,
+  replyToId?: string,
+  sender?: { id: string; username: string; displayName: string; avatar?: string }
+): Message & { _localStatus: 'sending'; _tempId: string } {
+  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return {
+    id: tempId,
+    _tempId: tempId,
+    _localStatus: 'sending',
+    conversationId,
+    senderId,
+    content,
+    originalLanguage: language,
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    replyToId,
+    sender: sender ? {
+      id: sender.id,
+      username: sender.username,
+      displayName: sender.displayName,
+      avatar: sender.avatar,
+    } : undefined,
+  } as any;
+}
 
 export function ConversationLayout({ selectedConversationId }: ConversationLayoutProps) {
   const user = useUser();
@@ -217,6 +256,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addMessage,
     updateMessage,
     removeMessage,
+    addOptimisticMessage,
+    markMessageFailed,
+    removeOptimisticMessage,
   } = useConversationMessagesRQ(selectedConversation?.id || null, user!, {
     limit: 20,
     enabled: !!selectedConversation?.id,
@@ -499,11 +541,38 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
     const currentAttachmentIds = [...attachmentIds];
     const currentAttachmentMimeTypes = [...attachmentMimeTypes];
+    const conversationId = selectedConversation.id;
 
+    // 1. Create optimistic message and add to store IMMEDIATELY
+    const optimistic = createOptimisticMessage(
+      content,
+      user.id,
+      conversationId,
+      selectedLanguage,
+      replyToId,
+      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar }
+    );
+
+    addOptimisticMessage(optimistic);
+
+    // 2. Clear input IMMEDIATELY (before network call)
+    if (isTyping) handleTypingStop();
+    clearDraft();
+    messageComposerRef.current?.clearAttachments?.();
+    messageComposerRef.current?.clearMentionedUserIds?.();
+    if (replyToId) useReplyStore.getState().clearReply();
+
+    // 3. Scroll to bottom
+    setTimeout(() => {
+      messagesScrollRef.current?.scrollTo({
+        top: messagesScrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }, 50);
+
+    // 4. Send via socket in background
     try {
-      if (isTyping) handleTypingStop();
-
-      await sendMessageViaSocket(
+      const success = await sendMessageViaSocket(
         content,
         selectedLanguage,
         replyToId,
@@ -512,35 +581,25 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         hasAttachments ? currentAttachmentMimeTypes : undefined
       );
 
-      // Marquer comme lu après envoi
-      if (selectedConversation?.id) {
-        conversationsService
-          .markAsRead(selectedConversation.id)
+      if (!success) {
+        markMessageFailed(optimistic._tempId);
+      }
+
+      // Mark as read after send
+      if (conversationId) {
+        conversationsService.markAsRead(conversationId)
           .then(() => {
             setConversations(prev =>
               prev.map(conv =>
-                conv.id === selectedConversation.id ? { ...conv, unreadCount: 0 } : conv
+                conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
               )
             );
           })
           .catch(console.error);
       }
-
-      clearDraft();
-      messageComposerRef.current?.clearAttachments?.();
-      messageComposerRef.current?.clearMentionedUserIds?.();
-
-      if (replyToId) useReplyStore.getState().clearReply();
-
-      setTimeout(() => {
-        messagesScrollRef.current?.scrollTo({
-          top: messagesScrollRef.current.scrollHeight,
-          behavior: 'smooth',
-        });
-      }, 100);
     } catch (error) {
-      console.error('[ConversationLayout] Erreur envoi message:', error);
-      setAttachmentIds(currentAttachmentIds);
+      console.error('[ConversationLayout] Send error:', error);
+      markMessageFailed(optimistic._tempId);
     }
   }, [
     newMessage,
@@ -555,9 +614,36 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     sendMessageViaSocket,
     clearDraft,
     setConversations,
-    setAttachmentIds,
     t,
+    addOptimisticMessage,
+    markMessageFailed,
   ]);
+
+  const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
+    if (!selectedConversation || !user) return;
+
+    removeOptimisticMessage(tempId);
+
+    const optimistic = createOptimisticMessage(
+      content, user.id, selectedConversation.id, language, replyToId,
+      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar }
+    );
+    addOptimisticMessage(optimistic);
+
+    try {
+      const success = await sendMessageViaSocket(content, language, replyToId);
+      if (!success) {
+        markMessageFailed(optimistic._tempId);
+      }
+    } catch {
+      markMessageFailed(optimistic._tempId);
+    }
+  }, [selectedConversation, user, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed]);
+
+  const handleCancelMessage = useCallback((tempId: string) => {
+    if (!selectedConversation) return;
+    removeOptimisticMessage(tempId);
+  }, [selectedConversation, removeOptimisticMessage]);
 
   const handleTyping = useCallback(
     (value: string) => {
@@ -674,6 +760,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           onAttachmentsChange={handleAttachmentsChange}
           onRetryFailedMessage={handleRetryFailedMessage}
           onRestoreFailedMessage={handleRestoreFailedMessage}
+          onRetryMessage={handleRetryMessage}
+          onCancelMessage={handleCancelMessage}
           onBackToList={handleBackToList}
           onStartCall={handleStartCall}
           onOpenGallery={() => setGalleryOpen(true)}

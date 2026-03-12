@@ -89,6 +89,10 @@ interface ConversationViewProps {
   onRetryFailedMessage: (msg: FailedMessage) => Promise<boolean>;
   onRestoreFailedMessage: (msg: FailedMessage) => void;
 
+  // Handlers - Optimistic message retry/cancel
+  onRetryMessage?: (tempId: string, content: string, language: string, replyToId?: string) => void;
+  onCancelMessage?: (tempId: string) => void;
+
   // Handlers - Navigation et UI
   onBackToList: () => void;
   onStartCall: () => void;
@@ -166,6 +170,8 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       onAttachmentsChange,
       onRetryFailedMessage,
       onRestoreFailedMessage,
+      onRetryMessage,
+      onCancelMessage,
       onBackToList,
       onStartCall,
       onOpenGallery,
@@ -269,6 +275,8 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             onReplyMessage={onReplyMessage}
             onNavigateToMessage={onNavigateToMessage}
             onImageClick={onImageClick}
+            onRetryMessage={onRetryMessage}
+            onCancelMessage={onCancelMessage}
             onLoadMore={onLoadMore}
             t={t}
             tCommon={tCommon}

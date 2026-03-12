@@ -35,6 +35,12 @@ interface ConversationActions {
   updateMessage: (conversationId: string, messageId: string, updates: Partial<Message>) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   clearMessages: (conversationId: string) => void;
+
+  // Optimistic messages
+  addOptimisticMessage: (conversationId: string, message: Message & { _localStatus: 'sending'; _tempId: string }) => void;
+  replaceOptimisticMessage: (conversationId: string, tempId: string, serverMessage: Message) => void;
+  markMessageFailed: (conversationId: string, tempId: string) => void;
+  removeOptimisticMessage: (conversationId: string, tempId: string) => void;
   
   // Translations
   requestTranslation: (messageId: string, targetLanguage: string, sourceLanguage?: string) => Promise<void>;
@@ -299,7 +305,56 @@ export const useConversationStore = create<ConversationStore>()(
         set((state) => {
           const newMessages = new Map(state.messages);
           newMessages.delete(conversationId);
-          
+
+          return { messages: newMessages };
+        });
+      },
+
+      // Optimistic Message Actions
+      addOptimisticMessage: (conversationId, message) => {
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          const existing = newMessages.get(conversationId) || [];
+          newMessages.set(conversationId, [message, ...existing]);
+          return { messages: newMessages };
+        });
+      },
+
+      replaceOptimisticMessage: (conversationId, tempId, serverMessage) => {
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          const messages = newMessages.get(conversationId);
+          if (!messages) return state;
+          newMessages.set(
+            conversationId,
+            messages.map(m => (m as any)._tempId === tempId ? serverMessage : m)
+          );
+          return { messages: newMessages };
+        });
+      },
+
+      markMessageFailed: (conversationId, tempId) => {
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          const messages = newMessages.get(conversationId);
+          if (!messages) return state;
+          newMessages.set(
+            conversationId,
+            messages.map(m => (m as any)._tempId === tempId ? { ...m, _localStatus: 'failed' } : m)
+          );
+          return { messages: newMessages };
+        });
+      },
+
+      removeOptimisticMessage: (conversationId, tempId) => {
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          const messages = newMessages.get(conversationId);
+          if (!messages) return state;
+          newMessages.set(
+            conversationId,
+            messages.filter(m => (m as any)._tempId !== tempId)
+          );
           return { messages: newMessages };
         });
       },

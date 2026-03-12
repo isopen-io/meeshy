@@ -114,6 +114,16 @@
         "title": "Premium"
       },
       "unknown": "Desconocido"
+    },
+    "delivery": {
+      "sending": "Enviando...",
+      "sent": "Enviado",
+      "delivered": "Entregado",
+      "read": "Leído",
+      "failed": "Error al enviar",
+      "retry": "Reintentar",
+      "cancel": "Eliminar",
+      "retrying": "Reintentando..."
     }
   }
 }

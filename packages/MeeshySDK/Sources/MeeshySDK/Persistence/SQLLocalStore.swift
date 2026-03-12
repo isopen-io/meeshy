@@ -2,6 +2,7 @@ import Foundation
 import os
 import GRDB
 
+@available(*, deprecated, message: "Use ConversationCacheManager, MessageCacheManager, or ParticipantCacheManager instead")
 public actor SQLLocalStore {
     public static let shared = SQLLocalStore()
     
