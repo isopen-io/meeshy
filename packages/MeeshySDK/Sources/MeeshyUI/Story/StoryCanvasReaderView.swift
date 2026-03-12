@@ -110,7 +110,7 @@ public struct StoryCanvasReaderView: View {
     private var backgroundMediaLayer: some View {
         if let bgMedia = story.storyEffects?.mediaObjects?.first(where: { $0.placement == "background" }) {
             if bgMedia.mediaType == "image" {
-                // TODO: charger depuis MediaCacheManager si disponible
+                // TODO: charger depuis CacheCoordinator si disponible
                 if let urlStr = mediaURL(for: bgMedia.postMediaId) {
                     CachedAsyncImage(url: urlStr) {
                         Color.clear
@@ -583,7 +583,7 @@ private final class ReaderState: ObservableObject {
             }
             guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url else { continue }
             guard let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
-            if let img = try? await MediaCacheManager.shared.image(for: resolved) {
+            if let img = await CacheCoordinator.shared.images.image(for: resolved) {
                 loadedImages[media.id] = img
             }
         }
@@ -744,11 +744,11 @@ private final class ReaderState: ObservableObject {
                 registerPendingVideoStart(media: media, url: preloaded)
             } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
                       let resolved = MeeshyConfig.resolveMediaURL(urlString) {
-                // Telecharger via MediaCacheManager pour contourner les erreurs de Content-Type serveur,
+                // Telecharger via CacheCoordinator pour contourner les erreurs de Content-Type serveur,
                 // puis jouer depuis un fichier local temporaire.
                 Task {
                     do {
-                        let data = try await MediaCacheManager.shared.data(for: resolved.absoluteString)
+                        let data = try await CacheCoordinator.shared.video.data(for: resolved.absoluteString)
                         let ext = resolved.pathExtension.isEmpty ? "mov" : resolved.pathExtension
                         let tempURL = FileManager.default.temporaryDirectory
                             .appendingPathComponent("story_video_\(media.id).\(ext)")

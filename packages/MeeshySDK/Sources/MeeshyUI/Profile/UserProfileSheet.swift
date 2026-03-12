@@ -359,8 +359,13 @@ public struct UserProfileSheet: View {
         // Charger le profil complet
         internalIsLoading = true
         do {
-            let fetchedUser = try await UserProfileCacheManager.shared.profile(for: userId)
-            internalFullUser = fetchedUser
+            let result = await CacheCoordinator.shared.profiles.load(for: userId)
+            if let user = result.value?.first {
+                internalFullUser = user
+            } else {
+                let fetchedUser = try await UserService.shared.getProfile(idOrUsername: userId)
+                internalFullUser = fetchedUser
+            }
         } catch {
             // Silent fail - utilisera les données de base
         }
@@ -374,7 +379,7 @@ public struct UserProfileSheet: View {
         // Charger les stats
         internalIsLoadingStats = true
         do {
-            let fetchedStats = try await UserProfileCacheManager.shared.stats(for: userId)
+            let fetchedStats = try await UserService.shared.getUserStats(userId: userId)
             internalUserStats = fetchedStats
         } catch {
             // Silent fail
@@ -389,7 +394,7 @@ public struct UserProfileSheet: View {
         // Charger les conversations en commun
         internalIsLoadingConversations = true
         do {
-            let apiConversations = try await UserProfileCacheManager.shared.sharedConversations(with: userId)
+            let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
             internalConversations = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
         } catch {
             // Silent fail

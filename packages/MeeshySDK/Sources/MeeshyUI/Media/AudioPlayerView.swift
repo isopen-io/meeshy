@@ -43,12 +43,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { }
 
-        // Prefetch into cache (respects user data-saving preferences)
-        Task { await MediaCacheManager.shared.conditionalPrefetch(resolved) }
-
         loadTask = Task {
             do {
-                let data = try await MediaCacheManager.shared.data(for: resolved)
+                let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {

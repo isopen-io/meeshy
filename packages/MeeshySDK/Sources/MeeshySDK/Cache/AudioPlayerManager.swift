@@ -32,7 +32,7 @@ public class AudioPlayerManager: ObservableObject {
         // Download via cache and play
         loadTask = Task {
             do {
-                let data = try await MediaCacheManager.shared.data(for: urlString)
+                let data = try await CacheCoordinator.shared.audio.data(for: urlString)
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {
