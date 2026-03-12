@@ -228,13 +228,21 @@ export class MessagingService {
         };
       }
 
+      // On timeout: mark failed, do NOT fallback to REST (message:new may still arrive)
+      if (wsResult.timedOut) {
+        return { success: false, timedOut: true };
+      }
+
       // Don't fallback to REST for E2EE messages (REST can't handle E2EE yet)
       if (messageData.encryptedContent && messageData.encryptionMetadata) {
         return { success: false };
       }
 
-      // WebSocket failed → REST fallback
-      logger.warn('[MessagingService]', 'WebSocket send failed, attempting REST fallback');
+      // WebSocket ack error (not timeout) → REST fallback only if socket still connected
+      if (!socket.connected) {
+        return { success: false };
+      }
+      logger.warn('[MessagingService]', 'WebSocket ack failed, attempting REST fallback');
       const restResult = await this.sendMessageViaRest(options);
       return { success: restResult };
 
@@ -330,7 +338,7 @@ export class MessagingService {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         logger.warn('[MessagingService]', 'Timeout: Server did not respond in time');
-        resolve({ success: false });
+        resolve({ success: false, timedOut: true });
       }, timeoutMs);
 
       socket.emit(event as any, data, (response: any) => {

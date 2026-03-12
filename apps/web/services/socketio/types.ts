@@ -151,6 +151,7 @@ export interface MessageAckResponse {
   success: boolean;
   messageId?: string;
   clientMessageId?: string;
+  timedOut?: boolean;
 }
 
 /**

@@ -396,6 +396,10 @@ export function useConversationMessagesRQ(
 
   const replaceOptimisticMessage = useCallback((tempId: string, serverMessage: Message) => {
     if (!conversationId) return;
+    // Own-message invariant: server response must preserve senderId consistency
+    if (currentUser && serverMessage.senderId !== currentUser.id) {
+      console.warn('[replaceOptimisticMessage] senderId mismatch — server:', serverMessage.senderId, 'user:', currentUser.id);
+    }
     queryClient.setQueryData(queryKey, (old: typeof data) => {
       if (!old) return old;
       return {
@@ -408,7 +412,7 @@ export function useConversationMessagesRQ(
         })),
       };
     });
-  }, [queryClient, conversationId, queryKey]);
+  }, [queryClient, conversationId, queryKey, currentUser]);
 
   const markMessageFailed = useCallback((tempId: string) => {
     if (!conversationId) return;
