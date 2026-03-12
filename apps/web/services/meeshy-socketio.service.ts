@@ -9,6 +9,7 @@
 'use client';
 
 import type { Socket } from 'socket.io-client';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type {
   Message,
   User,
@@ -359,7 +360,7 @@ class MeeshySocketIOService {
       const replyNestedUser = replyToSender?.user as Record<string, unknown> | undefined;
       if (replyToSender) {
         replyToFinalSender = {
-          id: String(replyToSender.id || 'unknown'),
+          id: String(getSenderUserId(replyToSender as Record<string, unknown>) || replyToSender.id || 'unknown'),
           username: String((replyToSender as any).username || replyNestedUser?.username || ''),
           displayName: String(replyToSender.displayName || replyToSender.nickname || replyNestedUser?.displayName || (replyToSender as any).username || replyNestedUser?.username || ''),
           firstName: String((replyToSender as any).firstName || replyNestedUser?.firstName || ''),
@@ -421,9 +422,11 @@ class MeeshySocketIOService {
       } as unknown as Message;
     }
 
-    // Définir le sender par défaut
+    // Définir le sender par défaut (use resolved User ID, not Participant ID)
+    const rawSender = socketMessage.sender as Record<string, unknown> | undefined;
+    const defaultSenderId = getSenderUserId(rawSender ?? null) || socketMessage.senderId || 'unknown';
     const defaultSender = {
-      id: socketMessage.senderId || 'unknown',
+      id: defaultSenderId,
       username: '',
       firstName: '',
       lastName: '',
@@ -447,7 +450,12 @@ class MeeshySocketIOService {
     };
 
     // Construire l'objet sender (unified: sender always present from backend)
-    const sender = socketMessage.sender || defaultSender;
+    // Normalize sender.id to User ID (gateway sends Participant ID as sender.id)
+    const rawSenderObj = socketMessage.sender || defaultSender;
+    const senderUserIdResolved = getSenderUserId(rawSenderObj as Record<string, unknown>);
+    const sender = senderUserIdResolved && rawSenderObj.id !== senderUserIdResolved
+      ? { ...rawSenderObj, id: senderUserIdResolved }
+      : rawSenderObj;
 
     // Transformer les attachments si présents
     console.log('🔍 [convertSocketMessage] Raw attachments:', {
@@ -486,10 +494,13 @@ class MeeshySocketIOService {
         })
       : [];
 
+    // Resolve User ID from sender (senderId from gateway is a Participant ID)
+    const resolvedSenderId = getSenderUserId(sender as Record<string, unknown>) || socketMessage.senderId || '';
+
     return {
       id: socketMessage.id,
       conversationId: socketMessage.conversationId,
-      senderId: socketMessage.senderId || '',
+      senderId: resolvedSenderId,
       content: socketMessage.content,
       originalContent: (socketMessage as any).originalContent || socketMessage.content,
       originalLanguage: socketMessage.originalLanguage || 'fr',

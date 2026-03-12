@@ -8,7 +8,6 @@ import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
-import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface UseSocketCacheSyncOptions {
   conversationId?: string | null;
@@ -41,7 +40,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             for (const m of page.messages) {
               if (m.id === message.id) return old; // already have this server message
               // If own message:new arrives while optimistic is still 'sending', replace it
-              if (isOwnMessage && !optimisticTempId && (m as any)._tempId && (m as any)._localStatus === 'sending') {
+              // Match by content to avoid cross-replacing when multiple messages are sending
+              if (isOwnMessage && !optimisticTempId && (m as any)._tempId && (m as any)._localStatus === 'sending'
+                  && m.content === message.content) {
                 optimisticTempId = (m as any)._tempId;
               }
             }
@@ -112,9 +113,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // The backend may not have processed the message yet when we re-fetch
 
       // Auto mark-as-received for messages from other users
+      // senderId is now always a User ID (resolved in message converters)
       const currentUser = useAuthStore.getState().user;
-      const msgSenderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
-      if (currentUser && msgSenderUserId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
+      if (currentUser && message.senderId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
         apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
           .catch(() => {}); // Non-critical, fire-and-forget
       }

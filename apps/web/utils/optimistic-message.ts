@@ -1,4 +1,5 @@
-import type { Message, Participant } from '@meeshy/shared/types';
+import type { Message, Participant, Attachment } from '@meeshy/shared/types';
+import type { MessageType } from '@meeshy/shared/types/conversation';
 
 type SendPayload = {
   attachmentIds?: string[];
@@ -12,6 +13,20 @@ export type OptimisticMessage = Message & {
   readonly _sendPayload: SendPayload;
 };
 
+interface OptimisticMessageOptions {
+  content: string;
+  senderId: string;
+  conversationId: string;
+  language: string;
+  replyToId?: string;
+  replyTo?: Message;
+  sender?: { id: string; username: string; displayName: string; avatar?: string };
+  sendPayload?: SendPayload;
+  attachments?: readonly Attachment[];
+  messageType?: MessageType;
+}
+
+export function createOptimisticMessage(opts: OptimisticMessageOptions): OptimisticMessage;
 export function createOptimisticMessage(
   content: string,
   senderId: string,
@@ -20,19 +35,32 @@ export function createOptimisticMessage(
   replyToId?: string,
   sender?: { id: string; username: string; displayName: string; avatar?: string },
   sendPayload?: SendPayload,
+): OptimisticMessage;
+export function createOptimisticMessage(
+  contentOrOpts: string | OptimisticMessageOptions,
+  senderId?: string,
+  conversationId?: string,
+  language?: string,
+  replyToId?: string,
+  sender?: { id: string; username: string; displayName: string; avatar?: string },
+  sendPayload?: SendPayload,
 ): OptimisticMessage {
+  const opts: OptimisticMessageOptions = typeof contentOrOpts === 'string'
+    ? { content: contentOrOpts, senderId: senderId!, conversationId: conversationId!, language: language!, replyToId, sender, sendPayload }
+    : contentOrOpts;
+
   const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const now = new Date();
   return {
     id: tempId,
     _tempId: tempId,
     _localStatus: 'sending' as const,
-    _sendPayload: sendPayload ?? {},
-    conversationId,
-    senderId,
-    content,
-    originalLanguage: language,
-    messageType: 'text' as const,
+    _sendPayload: opts.sendPayload ?? {},
+    conversationId: opts.conversationId,
+    senderId: opts.senderId,
+    content: opts.content,
+    originalLanguage: opts.language,
+    messageType: opts.messageType ?? 'text' as const,
     messageSource: 'user' as const,
     isEdited: false,
     isEncrypted: false,
@@ -45,21 +73,23 @@ export function createOptimisticMessage(
     createdAt: now,
     updatedAt: now,
     timestamp: now,
-    replyToId,
+    replyToId: opts.replyToId,
+    replyTo: opts.replyTo,
+    attachments: opts.attachments,
     translations: [] as readonly [],
-    sender: sender ? {
-      id: sender.id,
-      displayName: sender.displayName,
-      avatar: sender.avatar,
+    sender: opts.sender ? {
+      id: opts.sender.id,
+      displayName: opts.sender.displayName,
+      avatar: opts.sender.avatar,
       isOnline: true,
       type: 'user' as const,
-      conversationId,
+      conversationId: opts.conversationId,
       role: 'member',
-      language,
+      language: opts.language,
       permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
       isActive: true,
       joinedAt: new Date(),
-      user: { id: sender.id, username: sender.username, displayName: sender.displayName, avatar: sender.avatar },
+      user: { id: opts.sender.id, username: opts.sender.username, displayName: opts.sender.displayName, avatar: opts.sender.avatar },
     } satisfies Participant : undefined,
   };
 }
