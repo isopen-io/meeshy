@@ -29,11 +29,24 @@
 **Cons**: Code dupliqu (connexion, reconnexion, auth), mais reconnexion indpendante
 
 ## 2025-02: Cache Mdia - Swift Actor
-**Statut**: Accept
+**Statut**: Superseded by Unified Cache System (2026-03)
 **Contexte**: Accs concurrent au cache depuis multiple threads
 **Decision**: `actor MediaCacheManager` avec double couche (NSCache mmoire + FileManager disque 7j TTL), dduplification in-flight
 **Alternatives rejet**: Class avec locks (error-prone), DispatchQueue (legacy), Kingfisher seul (pas de cache audio/vido)
 **Cons**: Syntaxe `await` obligatoire pour chaque accs au cache
+
+## 2026-03: Unified Cache System - CacheCoordinator + typed stores
+**Statut**: Accept
+**Contexte**: 5 cache managers indpendants (Conversation, Message, Participant, UserProfile, Media) avec logique duplique, flush/eviction incohrents, et aucune coordination centralize
+**Decision**: Systme unifi avec 3 couches:
+- **Foundation types**: `CachePolicy` (TTL/staleTTL/maxItemCount), `CacheIdentifiable`, `CacheResult<T>` (.fresh/.stale/.expired/.empty), `ReadableCacheStore`/`MutableCacheStore` protocols
+- **GRDBCacheStore<Key, Value>**: Actor gnrique L1 Dictionary + L2 GRDB SQLite, dirty tracking (2s debounce + 10s max cap), LRU eviction
+- **DiskCacheStore**: Actor L1 NSCache + L2 FileManager, SHA256 file naming, budget eviction, static UIImage cache
+- **CacheCoordinator**: Actor singleton exposant `.conversations`, `.messages`, `.participants`, `.profiles` (GRDBCacheStore) et `.images`, `.audio`, `.video` (DiskCacheStore). Souscrit  17+ vnements Socket.IO, gre lifecycle (background flush, memory warning eviction)
+- **ParticipantService**: Actor app-layer avec pagination (loadFirstPage, loadNextPage, hasMore)
+**Alternatives rejet**: Core Data (heavyweight, pas actor-native), Realm (dpendance externe massive), pure UserDefaults (pas de requetes), garder les 5 managers spars (duplication ingrable)
+**Cons**: Un seul point d'entre pour tout le cache, politiques configurable par type de donne, stale-while-revalidate pattern, tests isols via injection de dpendances (MockMessageSocket, MockSocialSocket, in-memory DatabaseWriter)
+**Fichiers supprims**: ConversationCacheManager, MessageCacheManager, ParticipantCacheManager, UserProfileCacheManager, MediaCacheManager, DBCachedParticipant, LocalStore, SQLLocalStore + 4 test files
 
 ## 2025-02: Models - Decodable + toDomain() pattern
 **Statut**: Accept
