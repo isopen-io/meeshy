@@ -70,6 +70,11 @@ final class CachePolicyTests: XCTestCase {
         XCTAssertEqual(result, .stale)
     }
 
+    func test_freshness_expiredAtExactTTLBoundary() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: 300, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 3600), .expired)
+    }
+
     func test_freshness_expiredWhenOverTTL() {
         let policy = CachePolicy(ttl: 3600, staleTTL: 300, maxItemCount: nil, storageLocation: .grdb)
         let result = policy.freshness(age: 4000)
