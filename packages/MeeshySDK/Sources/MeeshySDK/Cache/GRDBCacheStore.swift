@@ -144,8 +144,15 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
     private func markDirty(_ key: Key) {
         dirtyKeys.insert(key)
+        let now = Date()
         if firstDirtyAt == nil {
-            firstDirtyAt = Date()
+            firstDirtyAt = now
+        }
+
+        if let first = firstDirtyAt, now.timeIntervalSince(first) >= 10 {
+            persistTask?.cancel()
+            persistTask = Task { await self.flushDirtyKeys() }
+            return
         }
 
         persistTask?.cancel()
@@ -168,11 +175,11 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 let now = Date()
                 for item in items {
                     let data = try encoder.encode(item)
-                    var entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
+                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
 
-                var meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
+                let meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
                 try meta.save(db)
             }
         } catch {
@@ -242,11 +249,11 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 let now = Date()
                 for item in items {
                     let data = try encoder.encode(item)
-                    var entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
+                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
 
-                var meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
+                let meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
                 try meta.save(db)
             }
             return true
