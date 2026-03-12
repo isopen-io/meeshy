@@ -12,6 +12,7 @@ import { MessagesDisplay } from '@/components/common/messages-display';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface ConversationMessagesProps {
   messages: Message[];
@@ -169,7 +170,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // Un message est considéré non lu si :
       // 1. Ce n'est pas un message de l'utilisateur courant
       // 2. Il n'a pas de readStatus ou l'utilisateur n'est pas dans readStatus
-      const senderUserId = (msg.sender as any)?.userId ?? (msg.sender as any)?.user?.id ?? (msg.sender as any)?.id;
+      const senderUserId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as any)?.id;
       if (senderUserId === currentUser.id) return false;
       
       if (!(msg as any).readStatus || (msg as any).readStatus.length === 0) return true;
@@ -368,7 +369,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
         const lastMessage = messages[messages.length - 1];
 
         // AMÉLIORATION: Toujours scroller sur NOTRE propre message (envoi)
-        const lastSenderUserId = (lastMessage?.sender as any)?.userId ?? (lastMessage?.sender as any)?.user?.id ?? (lastMessage?.sender as any)?.id;
+        const lastSenderUserId = getSenderUserId(lastMessage?.sender as Record<string, unknown>) ?? (lastMessage?.sender as any)?.id;
         if (lastMessage && lastSenderUserId === currentUser?.id) {
           // En mode scrollDirection='down' (BubbleStream), scroller vers le haut
           if (scrollDirection === 'down') {

@@ -21,6 +21,7 @@ import {
   type TransformConversationOptions,
 } from '@/utils/v2/transform-conversation';
 import type { Conversation, Message, TypingEvent, UserStatusEvent } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { ConversationItemData } from '@/components/v2';
 
 export interface UseConversationsV2Options {
@@ -108,7 +109,7 @@ export function useConversationsV2(
                     lastMessage: message,
                     lastMessageAt: message.createdAt,
                     unreadCount:
-                      ((message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id) !== currentUserId
+                      (getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id) !== currentUserId
                         ? (conv.unreadCount ?? 0) + 1
                         : conv.unreadCount,
                   }

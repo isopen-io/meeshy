@@ -16,6 +16,7 @@ import { DeleteConfirmationView } from './bubble-message/DeleteConfirmationView'
 import { ReportMessageView } from './bubble-message/ReportMessageView';
 import { formatRelativeDate } from '@/utils/date-format';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface BubbleMessageProps {
   message: Message & {
@@ -109,7 +110,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     if (isAnonymous && currentAnonymousUserId) {
       return message.sender?.id === currentAnonymousUserId;
     }
-    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? message.sender?.id;
+    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? message.sender?.id;
     return senderUserId === currentUser.id;
   }, [message.sender, currentUser, isAnonymous, currentAnonymousUserId]);
 

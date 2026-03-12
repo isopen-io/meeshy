@@ -7,6 +7,7 @@ import type { ConversationType } from '@meeshy/shared/types';
 import { formatFullDate } from '@/utils/date-format';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 interface UseMessageInteractionsProps {
   message: Partial<Message> & { id: string; content: string; createdAt: Date | string; senderId?: string; };
@@ -44,7 +45,7 @@ export function useMessageInteractions({
   // Détermine si c'est le message de l'utilisateur connecté
   // senderId is a Participant ID; use sender.userId or sender.user.id for User ID comparison
   const isOwnMessage = useMemo(() => {
-    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id;
+    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
     return Boolean(isAnonymous
       ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
       : (currentUserId && senderUserId === currentUserId));

@@ -14,6 +14,7 @@ import { useWebSocket } from '@/hooks/use-websocket';
 import { conversationsService } from '@/services/conversations.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { Message, User, TypingEvent } from '@meeshy/shared/types';
+import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 export interface UseMessagesV2Options {
   enabled?: boolean;
@@ -97,7 +98,7 @@ export function useMessagesV2(
   const handleNewMessage = useCallback(
     (message: Message) => {
       // Only add if not from current user (avoid duplicates from optimistic updates)
-      const msgSenderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id;
+      const msgSenderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
       if (msgSenderUserId !== currentUser?.id) {
         addMessage(message);
       }
