@@ -49,6 +49,7 @@ function createMockUser(): User {
 }
 
 function createMockMessage(id: string): Message {
+  const now = new Date();
   return {
     id,
     conversationId: 'conv-1',
@@ -58,16 +59,19 @@ function createMockMessage(id: string): Message {
     messageType: 'text',
     messageSource: 'user',
     isEdited: false,
+    isEncrypted: false,
     isViewOnce: false,
     viewOnceCount: 0,
     isBlurred: false,
     deliveredCount: 0,
     readCount: 0,
     reactionCount: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
+    timestamp: now,
+    translations: [],
     sender: { id: 'user-2', username: 'sender', displayName: 'Sender' },
-  } as Message;
+  } as unknown as Message;
 }
 
 function createMockScrollContainer() {
@@ -108,9 +112,9 @@ describe('ConversationMessages', () => {
 
       let scrollListenerAddCount = 0;
 
-      mockContainer.addEventListener = jest.fn((...args: any[]) => {
-        if (args[0] === 'scroll') scrollListenerAddCount++;
-        return originalAddEventListener(...args);
+      mockContainer.addEventListener = jest.fn((type: string, listener: any, options?: any) => {
+        if (type === 'scroll') scrollListenerAddCount++;
+        return originalAddEventListener(type, listener, options);
       }) as any;
 
       const scrollRef = { current: mockContainer };

@@ -171,10 +171,10 @@ export class SocketIOOrchestrator {
           attachmentMimeTypes: pending.attachmentMimeTypes
         };
 
-        const success = await this.messagingService.sendMessage(socket, options);
-        pending.resolve(success);
+        const result = await this.messagingService.sendMessage(socket, options);
+        pending.resolve(result.success);
 
-        if (success) {
+        if (result.success) {
           logger.debug('[SocketIOOrchestrator]', 'Pending message sent successfully');
         }
       } catch (error) {
@@ -353,7 +353,8 @@ export class SocketIOOrchestrator {
       attachmentMimeTypes
     };
 
-    return this.messagingService.sendMessage(socket, options);
+    const result = await this.messagingService.sendMessage(socket, options);
+    return result.success;
   }
 
   async editMessage(messageId: string, content: string): Promise<boolean> {
