@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { toast } from 'sonner';
 import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
@@ -46,7 +46,7 @@ interface MessagesDisplayProps {
   isLoadingMore?: boolean;
 }
 
-export function MessagesDisplay({
+export const MessagesDisplay = memo(function MessagesDisplay({
   messages,
   translatedMessages,
   isLoadingMessages,
@@ -192,7 +192,7 @@ export function MessagesDisplay({
 
       toast.error(t('translation.translationRequestError'));
     }
-  }, [messages, addTranslatingState, onTranslation]);
+  }, [messages, addTranslatingState, onTranslation, isTranslating, localTranslatingStates, t]);
 
   // Gérer le changement de langue d'affichage
   const handleLanguageSwitch = useCallback((messageId: string, language: string) => {
@@ -226,30 +226,23 @@ export function MessagesDisplay({
     const messagesToUse = safeTranslatedMessages.length > 0 ? safeTranslatedMessages : safeMessages;
 
     // Transform messages to match BubbleMessage expected format
-    // Filtrer les messages sans ID valide et dédupliquer par ID
+    // Single-pass: filter invalid/duplicate IDs and transform in one loop
     const seenIds = new Set<string>();
-    const transformedMessages = messagesToUse
-      .filter(message => {
-        // Exclure les messages null/undefined ou sans ID
-        if (!message || message.id === undefined || message.id === null) return false;
-        
-        // Convertir l'ID en string et vérifier s'il est vide
-        const idStr = String(message.id).trim();
-        if (idStr === '') return false;
-        
-        // Exclure les doublons (garder le premier rencontré)
-        if (seenIds.has(idStr)) return false;
-        seenIds.add(idStr);
-        return true;
-      })
-      .map(message => ({
+    const transformedMessages: typeof messagesToUse extends (infer T)[] ? (T & { id: string; originalContent: any; originalLanguage: string; translations: any[]; readStatus: any[] })[] : never = [];
+    for (const message of messagesToUse) {
+      if (!message || message.id === undefined || message.id === null) continue;
+      const idStr = String(message.id).trim();
+      if (idStr === '' || seenIds.has(idStr)) continue;
+      seenIds.add(idStr);
+      transformedMessages.push({
         ...message,
-        id: String(message.id), // Garantir que l'ID est un string
-        originalContent: (message as any).content, // BubbleMessage expects originalContent
-        originalLanguage: (message as any).originalLanguage || 'fr', // Ensure originalLanguage exists
-        translations: (message as any).translations || [], // Ensure translations array exists
-        readStatus: (message as any).readStatus || (message as any).status || [] // Map status to readStatus
-      }));
+        id: idStr,
+        originalContent: (message as any).content,
+        originalLanguage: (message as any).originalLanguage || 'fr',
+        translations: (message as any).translations || [],
+        readStatus: (message as any).readStatus || (message as any).status || [],
+      });
+    }
 
     return reverseOrder ? [...transformedMessages].reverse() : transformedMessages;
   }, [messages, translatedMessages, reverseOrder]);
@@ -412,4 +405,4 @@ export function MessagesDisplay({
       )}
     </div>
   );
-}
+});
