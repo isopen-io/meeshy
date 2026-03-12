@@ -109,7 +109,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
       // Auto mark-as-received for messages from other users
       const currentUser = useAuthStore.getState().user;
-      const msgSenderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id;
+      const msgSenderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id;
       if (currentUser && msgSenderUserId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
         apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
           .catch(() => {}); // Non-critical, fire-and-forget

@@ -161,7 +161,7 @@ export function useSocketCallbacks({
 
         const currentConversation = prevConversations[conversationIndex];
         const isMessageFromCurrentUser =
-          currentUser && ((message.sender as any)?.userId === currentUser.id || (message.sender as any)?.user?.id === currentUser.id);
+          currentUser && ((message.sender as any)?.userId === currentUser.id || (message.sender as any)?.user?.id === currentUser.id || (message.sender as any)?.id === currentUser.id);
         const activeConvId = useNotificationStore.getState().activeConversationId;
         const isCurrentlyViewingThisConversation =
           message.conversationId === currentConvId ||
