@@ -144,6 +144,13 @@ export interface MessageSendOptions {
   mentionedUserIds?: string[];
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];
+  clientMessageId?: string;
+}
+
+export interface MessageAckResponse {
+  success: boolean;
+  messageId?: string;
+  clientMessageId?: string;
 }
 
 /**

@@ -27,6 +27,16 @@ export interface ConversationMessagesRQOptions {
   linkId?: string; // Pour les utilisateurs anonymes via liens partagés
 }
 
+export type OptimisticMessage = Message & {
+  _tempId: string;
+  _localStatus: 'sending' | 'failed';
+  _sendPayload?: {
+    attachmentIds?: string[];
+    attachmentMimeTypes?: string[];
+    mentionedUserIds?: string[];
+  };
+};
+
 export interface ConversationMessagesRQReturn {
   messages: Message[];
   isLoading: boolean;
@@ -40,6 +50,7 @@ export interface ConversationMessagesRQReturn {
   updateMessage: (messageId: string, updates: Partial<Message> | ((prev: Message) => Message)) => void;
   removeMessage: (messageId: string) => void;
   addOptimisticMessage: (message: Message & { _localStatus: 'sending'; _tempId: string }) => void;
+  replaceOptimisticMessage: (tempId: string, serverMessage: Message) => void;
   markMessageFailed: (tempId: string) => void;
   removeOptimisticMessage: (tempId: string) => void;
 }
@@ -192,38 +203,15 @@ export function useConversationMessagesRQ(
       (old: typeof data) => {
         if (!old) return old;
 
-        const allMessages = old.pages.flatMap(page => page.messages);
-
-        // Check if an optimistic message matches this server message (dedup)
-        const optimisticMatch = allMessages.find(m => {
-          const tempId = (m as any)._tempId;
-          if (!tempId) return false;
-          const timeDiff = Math.abs(new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime());
-          return m.content === message.content && m.senderId === message.senderId && timeDiff < 30000;
-        });
-
-        if (optimisticMatch) {
-          // Replace optimistic message with server version
-          wasAdded = true;
-          return {
-            ...old,
-            pages: old.pages.map(page => ({
-              ...page,
-              messages: page.messages.map(m =>
-                (m as any)._tempId === (optimisticMatch as any)._tempId ? message : m
-              ),
-            })),
-          };
-        }
-
-        // Regular dedup by ID
-        if (allMessages.some(m => m.id === message.id)) {
-          return old;
+        // ID-only dedup — no content-based matching
+        for (const page of old.pages) {
+          for (const m of page.messages) {
+            if (m.id === message.id) return old;
+          }
         }
 
         wasAdded = true;
 
-        // Ajouter le message à la première page (messages récents)
         return {
           ...old,
           pages: old.pages.map((page, index) =>
@@ -406,6 +394,22 @@ export function useConversationMessagesRQ(
     });
   }, [queryClient, conversationId, queryKey]);
 
+  const replaceOptimisticMessage = useCallback((tempId: string, serverMessage: Message) => {
+    if (!conversationId) return;
+    queryClient.setQueryData(queryKey, (old: typeof data) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(page => ({
+          ...page,
+          messages: page.messages.map(m =>
+            (m as any)._tempId === tempId ? serverMessage : m
+          ),
+        })),
+      };
+    });
+  }, [queryClient, conversationId, queryKey]);
+
   const markMessageFailed = useCallback((tempId: string) => {
     if (!conversationId) return;
     queryClient.setQueryData(queryKey, (old: typeof data) => {
@@ -449,6 +453,7 @@ export function useConversationMessagesRQ(
     updateMessage,
     removeMessage,
     addOptimisticMessage,
+    replaceOptimisticMessage,
     markMessageFailed,
     removeOptimisticMessage,
   };
