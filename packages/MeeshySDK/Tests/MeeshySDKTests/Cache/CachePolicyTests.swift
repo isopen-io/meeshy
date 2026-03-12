@@ -59,6 +59,11 @@ final class CachePolicyTests: XCTestCase {
         XCTAssertEqual(result, .fresh)
     }
 
+    func test_freshness_staleAtExactStaleTTLBoundary() {
+        let policy = CachePolicy(ttl: 3600, staleTTL: 300, maxItemCount: nil, storageLocation: .grdb)
+        XCTAssertEqual(policy.freshness(age: 300), .stale)
+    }
+
     func test_freshness_staleWhenBetweenStaleTTLAndTTL() {
         let policy = CachePolicy(ttl: 3600, staleTTL: 300, maxItemCount: nil, storageLocation: .grdb)
         let result = policy.freshness(age: 500)
