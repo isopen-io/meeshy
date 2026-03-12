@@ -462,12 +462,6 @@ class MeeshySocketIOService {
       : rawSenderObj;
 
     // Transformer les attachments si présents
-    console.log('🔍 [convertSocketMessage] Raw attachments:', {
-      hasAttachments: !!(socketMessage as any).attachments,
-      isArray: Array.isArray((socketMessage as any).attachments),
-      count: Array.isArray((socketMessage as any).attachments) ? (socketMessage as any).attachments.length : 0,
-      rawAttachments: (socketMessage as any).attachments,
-    });
     const attachments = Array.isArray((socketMessage as any).attachments)
       ? (socketMessage as any).attachments.map((att: any) => {
           return {

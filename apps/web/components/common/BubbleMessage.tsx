@@ -110,8 +110,9 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     if (isAnonymous && currentAnonymousUserId) {
       return message.sender?.id === currentAnonymousUserId;
     }
-    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? message.sender?.id;
-    return senderUserId === currentUser.id;
+    return message.senderId === currentUser.id
+      || message.sender?.id === currentUser.id
+      || getSenderUserId(message.sender as Record<string, unknown>) === currentUser.id;
   }, [message.sender, currentUser, isAnonymous, currentAnonymousUserId]);
 
   // Permissions
