@@ -354,10 +354,14 @@ export class TransformersService {
       ? msg.validatedMentions.map(m => String(m))
       : undefined;
 
+    // Resolve the User ID for this message (for alignment: isOwnMessage checks)
+    // senderId from DB is a Participant ID; the actual User ID comes from sender relation
+    const senderUserId = getSenderUserId(sender as Record<string, unknown>) || senderId;
+
     const transformedMessage: Message = {
       id: messageId,
       content: String(msg.content),
-      senderId,
+      senderId: senderUserId,
       conversationId: String(msg.conversationId),
       originalLanguage,
       messageType: (String(msg.messageType) || 'text') as MessageType,

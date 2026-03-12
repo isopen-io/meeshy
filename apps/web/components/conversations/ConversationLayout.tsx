@@ -489,7 +489,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       return;
 
     const content = newMessage.trim();
-    const replyToId = useReplyStore.getState().replyingTo?.id;
+    const replyState = useReplyStore.getState().replyingTo;
+    const replyToId = replyState?.id;
     const mentionedUserIds = messageComposerRef.current?.getMentionedUserIds?.() || [];
     const hasAttachments = attachmentIds.length > 0;
 
@@ -501,6 +502,17 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     const currentAttachmentIds = [...attachmentIds];
     const currentAttachmentMimeTypes = [...attachmentMimeTypes];
     const conversationId = selectedConversation.id;
+
+    // Resolve replyTo message from cache for immediate display
+    const replyToMessage = replyToId ? messages.find(m => m.id === replyToId) : undefined;
+
+    // Determine messageType from attachments
+    const resolvedMessageType = hasAttachments && currentAttachmentMimeTypes[0]
+      ? (currentAttachmentMimeTypes[0].startsWith('image/') ? 'image'
+        : currentAttachmentMimeTypes[0].startsWith('audio/') ? 'audio'
+        : currentAttachmentMimeTypes[0].startsWith('video/') ? 'video'
+        : 'file') as const
+      : 'text' as const;
 
     // 1. Create optimistic message and add to store IMMEDIATELY
     const optimistic = createOptimisticMessage(
@@ -516,6 +528,12 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       },
     );
+
+    // Enrich optimistic message with replyTo and messageType for immediate display
+    if (replyToMessage || resolvedMessageType !== 'text') {
+      (optimistic as any).replyTo = replyToMessage;
+      (optimistic as any).messageType = resolvedMessageType;
+    }
 
     addOptimisticMessage(optimistic);
 
@@ -547,14 +565,12 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       );
 
       if (ackResponse?.success) {
-        if (ackResponse.messageId) {
-          // Upgrade optimistic: set server ID, clear optimistic markers
-          // The full server message will arrive via message:new and replace this entry by ID
-          updateMessage(optimistic.id, (prev) => {
-            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
-            return { ...clean, id: ackResponse.messageId } as Message;
-          });
-        }
+        // Upgrade optimistic: set server ID if available, always clear optimistic markers
+        // The full server message will arrive via message:new and replace this entry by ID
+        updateMessage(optimistic.id, (prev) => {
+          const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+          return { ...clean, ...(ackResponse.messageId ? { id: ackResponse.messageId } : {}) } as Message;
+        });
       } else {
         markMessageFailed(optimistic._tempId);
       }
