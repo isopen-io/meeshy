@@ -305,6 +305,7 @@ export interface ConversationUnreadUpdatedEventData {
  */
 export interface ReactionUpdateEventData {
   readonly messageId: string;
+  readonly conversationId: string;
   readonly participantId: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';

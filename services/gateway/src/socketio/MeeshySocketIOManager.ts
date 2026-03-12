@@ -2720,22 +2720,7 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      // Créer l'événement de mise à jour
-      const updateEvent = await reactionService.createUpdateEvent(
-        data.messageId,
-        data.emoji,
-        'add',
-        participantId
-      );
-
-      // Envoyer la réponse au client
-      const successResponse: SocketIOResponse<any> = {
-        success: true,
-        data: reaction
-      };
-      if (callback) callback(successResponse);
-
-      // Broadcaster l'événement à tous les participants de la conversation
+      // Récupérer le message pour le conversationId et le broadcast
       const message = await this.prisma.message.findUnique({
         where: { id: data.messageId },
         select: {
@@ -2749,6 +2734,22 @@ export class MeeshySocketIOManager {
           }
         }
       });
+
+      // Créer l'événement de mise à jour
+      const updateEvent = await reactionService.createUpdateEvent(
+        data.messageId,
+        data.emoji,
+        'add',
+        participantId,
+        message?.conversationId ?? data.messageId
+      );
+
+      // Envoyer la réponse au client
+      const successResponse: SocketIOResponse<any> = {
+        success: true,
+        data: reaction
+      };
+      if (callback) callback(successResponse);
 
       if (message) {
         const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
@@ -2867,12 +2868,19 @@ export class MeeshySocketIOManager {
         return;
       }
 
+      // Récupérer le message pour le conversationId et le broadcast
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true }
+      });
+
       // Créer l'événement de mise à jour
       const updateEvent = await reactionService.createUpdateEvent(
         data.messageId,
         data.emoji,
         'remove',
-        participantId
+        participantId,
+        message?.conversationId ?? data.messageId
       );
 
       // Envoyer la réponse au client
@@ -2881,12 +2889,6 @@ export class MeeshySocketIOManager {
         data: { message: 'Reaction removed successfully' }
       };
       if (callback) callback(successResponse);
-
-      // Broadcaster l'événement à tous les participants de la conversation
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: { conversationId: true }
-      });
 
       if (message) {
         const normalizedConversationId = await this.normalizeConversationId(message.conversationId);
@@ -3409,7 +3411,8 @@ export class MeeshySocketIOManager {
         reaction.targetMessageId,
         reaction.emoji,
         'add',
-        reaction.asUserId
+        reaction.asUserId,
+        reaction.conversationId
       );
 
       const message = await this.prisma.message.findUnique({

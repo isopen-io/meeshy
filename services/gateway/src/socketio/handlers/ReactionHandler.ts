@@ -85,11 +85,17 @@ export class ReactionHandler {
         return;
       }
 
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true }
+      });
+
       const updateEvent = await reactionService.createUpdateEvent(
         data.messageId,
         data.emoji,
         'add',
-        participantId
+        participantId,
+        message?.conversationId ?? ''
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -99,14 +105,8 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       // Broadcaster l'événement
-      await this._broadcastReactionEvent(data.messageId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
-
-      // Invalider le cache des conversations pour tous les membres (réaction = conversation modifiée)
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: { conversationId: true }
-      });
       if (message) {
+        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
         await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
 
@@ -171,11 +171,17 @@ export class ReactionHandler {
         return;
       }
 
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true }
+      });
+
       const updateEvent = await reactionService.createUpdateEvent(
         data.messageId,
         data.emoji,
         'remove',
-        participantId
+        participantId,
+        message?.conversationId ?? ''
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -184,14 +190,8 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      await this._broadcastReactionEvent(data.messageId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
-
-      // Invalider le cache des conversations pour tous les membres (réaction supprimée = conversation modifiée)
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
-        select: { conversationId: true }
-      });
       if (message) {
+        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
         await invalidateConversationCacheAsync(message.conversationId, this.prisma);
       }
     } catch (error: unknown) {
@@ -287,23 +287,16 @@ export class ReactionHandler {
   /**
    * Broadcaster un événement de réaction
    */
-  private async _broadcastReactionEvent(
-    messageId: string,
+  private async _broadcastReactionEventWithConversationId(
+    conversationId: string,
     updateEvent: unknown,
     eventType: typeof SERVER_EVENTS.REACTION_ADDED | typeof SERVER_EVENTS.REACTION_REMOVED
   ): Promise<void> {
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      select: { conversationId: true }
-    });
-
-    if (message) {
-      const normalizedConversationId = await normalizeConversationId(
-        message.conversationId,
-        (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
-      );
-      this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
-    }
+    const normalizedConversationId = await normalizeConversationId(
+      conversationId,
+      (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
+    );
+    this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
   }
 
   /**

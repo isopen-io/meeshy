@@ -182,7 +182,7 @@ public actor CacheCoordinator {
     }
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
-        await updateMessageInAllKeys(messageId: event.messageId) { msg in
+        let mutate: @Sendable (MeeshyMessage) -> MeeshyMessage = { msg in
             var updated = msg
             let reaction = MeeshyReaction(
                 messageId: event.messageId,
@@ -192,15 +192,25 @@ public actor CacheCoordinator {
             updated.reactions.append(reaction)
             return updated
         }
+        if let convId = event.conversationId {
+            await updateMessageInKey(conversationId: convId, messageId: event.messageId, mutate: mutate)
+        } else {
+            await updateMessageInAllKeys(messageId: event.messageId, mutate: mutate)
+        }
     }
 
     private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
-        await updateMessageInAllKeys(messageId: event.messageId) { msg in
+        let mutate: @Sendable (MeeshyMessage) -> MeeshyMessage = { msg in
             var updated = msg
             updated.reactions.removeAll {
                 $0.emoji == event.emoji && $0.participantId == event.participantId
             }
             return updated
+        }
+        if let convId = event.conversationId {
+            await updateMessageInKey(conversationId: convId, messageId: event.messageId, mutate: mutate)
+        } else {
+            await updateMessageInAllKeys(messageId: event.messageId, mutate: mutate)
         }
     }
 
@@ -260,6 +270,17 @@ public actor CacheCoordinator {
     }
 
     // MARK: - Helpers
+
+    private func updateMessageInKey(
+        conversationId: String,
+        messageId: String,
+        mutate: @Sendable (MeeshyMessage) -> MeeshyMessage
+    ) async {
+        await messages.update(for: conversationId) { existing in
+            guard existing.contains(where: { $0.id == messageId }) else { return existing }
+            return existing.map { $0.id == messageId ? mutate($0) : $0 }
+        }
+    }
 
     private func updateMessageInAllKeys(
         messageId: String,
