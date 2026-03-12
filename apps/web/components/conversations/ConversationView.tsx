@@ -9,7 +9,7 @@
  * @module components/conversations/ConversationView
  */
 
-import React, { memo, forwardRef } from 'react';
+import React, { memo, forwardRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationMessages } from './ConversationMessages';
@@ -194,6 +194,12 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const globalRole = currentUser.role || 'USER';
     const effectiveRole = getEffectiveRole(globalRole, conversationRole);
 
+    // Memoize mapTypingUsers to avoid recomputing on every render (#19)
+    const mappedTypingUsers = useMemo(
+      () => mapTypingUsers(typingUsers, conversation.id),
+      [typingUsers, conversation.id]
+    );
+
     // Token pour les attachments
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;
 
@@ -222,7 +228,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             conversation={conversation}
             currentUser={currentUser}
             conversationParticipants={participants}
-            typingUsers={mapTypingUsers(typingUsers, conversation.id)}
+            typingUsers={mappedTypingUsers}
             isMobile={isMobile}
             onBackToList={onBackToList}
             onParticipantRemoved={onParticipantRemoved || (() => {})}

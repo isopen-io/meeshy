@@ -118,6 +118,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   const conversations = paginatedConversations;
 
+  // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)
+  const conversationIdSet = useMemo(() => new Set(conversations.map(c => c.id)), [conversations]);
+
   // ========== HOOKS REFACTORISÉS ==========
 
   // Sélection de conversation
@@ -192,6 +195,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const hasLoadedInitialConversations = useRef(false);
   const currentFocusedConversationRef = useRef<string | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+
+  // Volatile state ref for handleSendMessage stabilization (consumed by B1 when it rewrites handleSendMessage)
+  const volatileStateRef = useRef({ newMessage: '', attachmentIds: [] as string[], attachmentMimeTypes: [] as string[], selectedLanguage: '', isTyping: false });
 
   // Activer les mises à jour de statut utilisateur en temps réel
   useUserStatusRealtime();
@@ -279,6 +285,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       stopTyping,
     });
 
+  // Sync volatile state ref after all hooks (#18)
+  volatileStateRef.current = { newMessage, attachmentIds, attachmentMimeTypes, selectedLanguage, isTyping };
+
   // ========== EFFECTS ==========
 
   // Informer le store de notifications
@@ -311,11 +320,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   );
 
   useEffect(() => {
-    if (effectiveSelectedId && !isLoadingConversations && conversations.length > 0) {
-      const found = conversations.find(c => c.id === effectiveSelectedId);
-      if (!found) loadDirectConversation(effectiveSelectedId);
+    if (effectiveSelectedId && !isLoadingConversations && conversationIdSet.size > 0) {
+      if (!conversationIdSet.has(effectiveSelectedId)) loadDirectConversation(effectiveSelectedId);
     }
-  }, [effectiveSelectedId, conversations, isLoadingConversations, loadDirectConversation]);
+  }, [effectiveSelectedId, conversationIdSet, isLoadingConversations, loadDirectConversation]);
 
   // Charger conversations au montage
   useEffect(() => {
@@ -350,16 +358,17 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   }, [effectiveSelectedId, isMobile]);
 
   // Chargement parallèle conversation + participants (async-parallel)
+  // Uses conversationIdSet instead of conversations array, user?.id instead of user (#10, #11)
   useEffect(() => {
     const targetId = selectedConversationId || selectedConversation?.id;
-    if (!targetId || !user) return;
+    if (!targetId || !user?.id) return;
     if (targetId === previousConversationIdRef.current) return;
 
     clearMessages();
     previousConversationIdRef.current = targetId;
 
     const loadPromises: Promise<void>[] = [];
-    const needsConversation = !conversations.find(c => c.id === targetId);
+    const needsConversation = !conversationIdSet.has(targetId);
 
     if (needsConversation) loadPromises.push(loadDirectConversation(targetId));
     loadPromises.push(loadParticipants(targetId));
@@ -370,28 +379,14 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   }, [
     selectedConversationId,
     selectedConversation?.id,
-    user,
-    conversations,
+    user?.id,
+    conversationIdSet,
     loadDirectConversation,
     loadParticipants,
     clearMessages,
     instanceId,
   ]);
 
-  // Synchroniser l'ID de conversation active pour filtrer les notifications
-  // Cela permet d'éviter d'afficher des notifications pour la conversation déjà ouverte
-  useEffect(() => {
-    if (effectiveSelectedId) {
-      setActiveConversationId(effectiveSelectedId);
-      console.debug(`[ConversationLayout] Active conversation set: ${effectiveSelectedId}`);
-    }
-
-    // Cleanup: réinitialiser quand le composant se démonte ou change de conversation
-    return () => {
-      setActiveConversationId(null);
-      console.debug('[ConversationLayout] Active conversation cleared');
-    };
-  }, [effectiveSelectedId, setActiveConversationId]);
 
   // Marquer comme lu quand scroll vers le bas
   useEffect(() => {
