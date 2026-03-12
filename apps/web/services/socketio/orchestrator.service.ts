@@ -34,6 +34,8 @@ interface PendingMessage {
   content: string;
   originalLanguage?: string;
   replyToId?: string;
+  forwardedFromId?: string;
+  forwardedFromConversationId?: string;
   mentionedUserIds?: string[];
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];
@@ -168,6 +170,8 @@ export class SocketIOOrchestrator {
           content: pending.content,
           originalLanguage: pending.originalLanguage,
           replyToId: pending.replyToId,
+          forwardedFromId: pending.forwardedFromId,
+          forwardedFromConversationId: pending.forwardedFromConversationId,
           mentionedUserIds: pending.mentionedUserIds,
           attachmentIds: pending.attachmentIds,
           attachmentMimeTypes: pending.attachmentMimeTypes,
@@ -290,7 +294,9 @@ export class SocketIOOrchestrator {
     mentionedUserIds?: string[],
     attachmentIds?: string[],
     attachmentMimeTypes?: string[],
-    clientMessageId?: string
+    clientMessageId?: string,
+    forwardedFromId?: string,
+    forwardedFromConversationId?: string,
   ): Promise<MessageAckResponse> {
     this.ensureConnection();
 
@@ -325,6 +331,8 @@ export class SocketIOOrchestrator {
           content,
           originalLanguage,
           replyToId,
+          forwardedFromId,
+          forwardedFromConversationId,
           mentionedUserIds,
           attachmentIds,
           attachmentMimeTypes,
@@ -353,6 +361,8 @@ export class SocketIOOrchestrator {
       content,
       originalLanguage,
       replyToId,
+      forwardedFromId,
+      forwardedFromConversationId,
       mentionedUserIds,
       attachmentIds,
       attachmentMimeTypes,

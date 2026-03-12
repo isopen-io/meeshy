@@ -20,6 +20,8 @@ interface OptimisticMessageOptions {
   language: string;
   replyToId?: string;
   replyTo?: Message;
+  forwardedFromId?: string;
+  forwardedFromConversationId?: string;
   sender?: { id: string; username: string; displayName: string; avatar?: string };
   sendPayload?: SendPayload;
   attachments?: readonly Attachment[];
@@ -75,6 +77,8 @@ export function createOptimisticMessage(
     timestamp: now,
     replyToId: opts.replyToId,
     replyTo: opts.replyTo,
+    forwardedFromId: opts.forwardedFromId,
+    forwardedFromConversationId: opts.forwardedFromConversationId,
     attachments: opts.attachments,
     translations: [] as readonly [],
     sender: opts.sender ? {

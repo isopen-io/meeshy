@@ -183,7 +183,9 @@ class MeeshySocketIOService {
     mentionedUserIds?: string[],
     attachmentIds?: string[],
     attachmentMimeTypes?: string[],
-    clientMessageId?: string
+    clientMessageId?: string,
+    forwardedFromId?: string,
+    forwardedFromConversationId?: string,
   ) {
     return this.orchestrator.sendMessage(
       conversationOrId,
@@ -193,7 +195,9 @@ class MeeshySocketIOService {
       mentionedUserIds,
       attachmentIds,
       attachmentMimeTypes,
-      clientMessageId
+      clientMessageId,
+      forwardedFromId,
+      forwardedFromConversationId,
     );
   }
 

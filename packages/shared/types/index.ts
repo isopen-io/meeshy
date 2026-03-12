@@ -652,6 +652,8 @@ export interface SendMessageRequest {
   readonly originalLanguage?: string;
   readonly messageType?: string;
   readonly replyToId?: string;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
   readonly attachmentIds?: readonly string[];
 }
 
