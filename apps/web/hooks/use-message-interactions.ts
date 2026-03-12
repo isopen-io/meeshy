@@ -44,7 +44,7 @@ export function useMessageInteractions({
   // Détermine si c'est le message de l'utilisateur connecté
   // senderId is a Participant ID; use sender.userId or sender.user.id for User ID comparison
   const isOwnMessage = useMemo(() => {
-    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id;
+    const senderUserId = (message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id;
     return Boolean(isAnonymous
       ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
       : (currentUserId && senderUserId === currentUserId));

@@ -171,7 +171,9 @@ export class TransformersService {
       // sender can be a flat User object (Socket.IO) or a Participant with nested .user (REST API)
       const nestedUser = sender.user as Record<string, unknown> | undefined;
 
-      const id = sender.id || defaultId;
+      // For REST API responses, sender is a Participant with nested .user
+      // Use the User ID (nestedUser.id or sender.userId) instead of the Participant record ID
+      const id = nestedUser?.id || sender.userId || sender.id || defaultId;
       const username = sender.username || nestedUser?.username;
       const firstName = sender.firstName || nestedUser?.firstName || '';
       const lastName = sender.lastName || nestedUser?.lastName || '';

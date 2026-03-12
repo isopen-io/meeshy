@@ -108,7 +108,7 @@ export function useConversationsV2(
                     lastMessage: message,
                     lastMessageAt: message.createdAt,
                     unreadCount:
-                      ((message.sender as any)?.userId ?? (message.sender as any)?.user?.id) !== currentUserId
+                      ((message.sender as any)?.userId ?? (message.sender as any)?.user?.id ?? (message.sender as any)?.id) !== currentUserId
                         ? (conv.unreadCount ?? 0) + 1
                         : conv.unreadCount,
                   }

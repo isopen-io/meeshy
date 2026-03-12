@@ -496,7 +496,7 @@ export default function V2ChatsPage() {
           </div>
         ) : (
           displayMessages.map((msg, index) => {
-            const isSent = ((msg.sender as any)?.userId ?? (msg.sender as any)?.user?.id) === currentUser?.id;
+            const isSent = ((msg.sender as any)?.userId ?? (msg.sender as any)?.user?.id ?? (msg.sender as any)?.id) === currentUser?.id;
             const showTimestamp = index === 0 || new Date(msg.createdAt).toDateString() !== new Date(displayMessages[index - 1].createdAt).toDateString();
             const status = isSent ? getMessageStatus(msg) : undefined;
             const reactions = messageReactions[msg.id] || {};
