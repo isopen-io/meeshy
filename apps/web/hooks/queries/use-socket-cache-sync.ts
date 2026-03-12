@@ -32,11 +32,32 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
           if (!old) return old;
 
-          // ID-only dedup — single-pass nested loop, no content-based matching
+          // Single-pass: ID dedup + own-message optimistic replacement
+          const currentUser = useAuthStore.getState().user;
+          const isOwnMessage = currentUser && message.senderId === currentUser.id;
+          let optimisticTempId: string | null = null;
+
           for (const page of old.pages) {
             for (const m of page.messages) {
-              if (m.id === message.id) return old;
+              if (m.id === message.id) return old; // already have this server message
+              // If own message:new arrives while optimistic is still 'sending', replace it
+              if (isOwnMessage && !optimisticTempId && (m as any)._tempId && (m as any)._localStatus === 'sending') {
+                optimisticTempId = (m as any)._tempId;
+              }
             }
+          }
+
+          // Replace optimistic if found (prevents duplicate when message:new arrives before ACK)
+          if (optimisticTempId) {
+            return {
+              ...old,
+              pages: old.pages.map(page => ({
+                ...page,
+                messages: page.messages.map(m =>
+                  (m as any)._tempId === optimisticTempId ? message : m
+                ),
+              })),
+            };
           }
 
           return {

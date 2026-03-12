@@ -16,6 +16,7 @@ import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import type { Message, User } from '@meeshy/shared/types';
+export type { OptimisticMessage } from '@/utils/optimistic-message';
 
 export interface ConversationMessagesRQOptions {
   limit?: number;
@@ -26,16 +27,6 @@ export interface ConversationMessagesRQOptions {
   disableAutoFill?: boolean;
   linkId?: string; // Pour les utilisateurs anonymes via liens partagés
 }
-
-export type OptimisticMessage = Message & {
-  _tempId: string;
-  _localStatus: 'sending' | 'failed';
-  _sendPayload?: {
-    attachmentIds?: string[];
-    attachmentMimeTypes?: string[];
-    mentionedUserIds?: string[];
-  };
-};
 
 export interface ConversationMessagesRQReturn {
   messages: Message[];

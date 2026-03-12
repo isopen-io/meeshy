@@ -229,7 +229,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage,
     markMessageFailed,
     removeOptimisticMessage,
-    replaceOptimisticMessage,
   } = useConversationMessagesRQ(selectedConversation?.id || null, user!, {
     limit: 20,
     enabled: !!selectedConversation?.id,
@@ -549,13 +548,12 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
       if (ackResponse?.success) {
         if (ackResponse.messageId) {
-          replaceOptimisticMessage(optimistic._tempId, {
-            ...optimistic,
-            id: ackResponse.messageId,
-            _tempId: undefined,
-            _localStatus: undefined,
-            _sendPayload: undefined,
-          } as unknown as Message);
+          // Upgrade optimistic: set server ID, clear optimistic markers
+          // The full server message will arrive via message:new and replace this entry by ID
+          updateMessage(optimistic.id, (prev) => {
+            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+            return { ...clean, id: ackResponse.messageId } as Message;
+          });
         }
       } else {
         markMessageFailed(optimistic._tempId);
@@ -593,7 +591,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     t,
     addOptimisticMessage,
     markMessageFailed,
-    replaceOptimisticMessage,
+    updateMessage,
   ]);
 
   const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
@@ -626,13 +624,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       );
       if (result?.success) {
         if (result.messageId) {
-          replaceOptimisticMessage(optimistic._tempId, {
-            ...optimistic,
-            id: result.messageId,
-            _tempId: undefined,
-            _localStatus: undefined,
-            _sendPayload: undefined,
-          } as unknown as Message);
+          updateMessage(optimistic.id, (prev) => {
+            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+            return { ...clean, id: result.messageId } as Message;
+          });
         }
       } else {
         markMessageFailed(optimistic._tempId);
@@ -640,7 +635,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     } catch {
       markMessageFailed(optimistic._tempId);
     }
-  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed, replaceOptimisticMessage]);
+  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed, updateMessage]);
 
   const handleCancelMessage = useCallback((tempId: string) => {
     if (!selectedConversation) return;
@@ -911,6 +906,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 onAttachmentsChange={handleAttachmentsChange}
                 onRetryFailedMessage={handleRetryFailedMessage}
                 onRestoreFailedMessage={handleRestoreFailedMessage}
+                onRetryMessage={handleRetryMessage}
+                onCancelMessage={handleCancelMessage}
                 onBackToList={handleBackToList}
                 onStartCall={handleStartCall}
                 onOpenGallery={() => setGalleryOpen(true)}

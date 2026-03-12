@@ -243,8 +243,7 @@ export class MessagingService {
         return { success: false };
       }
       logger.warn('[MessagingService]', 'WebSocket ack failed, attempting REST fallback');
-      const restResult = await this.sendMessageViaRest(options);
-      return { success: restResult };
+      return this.sendMessageViaRest(options);
 
     } catch (error) {
       console.error('[MessagingService] Error sending message:', error);
@@ -304,11 +303,11 @@ export class MessagingService {
   /**
    * REST fallback when WebSocket send fails
    */
-  private async sendMessageViaRest(options: MessageSendOptions): Promise<boolean> {
+  private async sendMessageViaRest(options: MessageSendOptions): Promise<MessageAckResponse> {
     try {
       const { conversationsService } = await import('../conversations');
 
-      await conversationsService.sendMessage(options.conversationId, {
+      const response = await conversationsService.sendMessage(options.conversationId, {
         content: options.content,
         originalLanguage: options.originalLanguage,
         messageType: options.attachmentIds?.length
@@ -319,10 +318,14 @@ export class MessagingService {
       });
 
       logger.info('[MessagingService]', 'Message sent via REST fallback');
-      return true;
+      return {
+        success: true,
+        messageId: (response as any)?.data?.id ?? (response as any)?.id ?? response?.id,
+        clientMessageId: options.clientMessageId,
+      };
     } catch (error) {
       console.error('[MessagingService] REST fallback also failed:', error);
-      return false;
+      return { success: false };
     }
   }
 
