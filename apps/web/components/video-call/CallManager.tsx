@@ -383,163 +383,99 @@ export function CallManager() {
     // Toast métier désactivé - utiliser le système de notifications v2
   }, [incomingCall, clearCallTimeout]);
 
+  // Stable refs for all handlers - prevents useEffect re-fires on every render
+  const handleIncomingCallRef = useRef(handleIncomingCall);
+  const handleParticipantJoinedRef = useRef(handleParticipantJoined);
+  const handleParticipantLeftRef = useRef(handleParticipantLeft);
+  const handleCallEndedRef = useRef(handleCallEnded);
+  const handleMediaToggleRef = useRef(handleMediaToggle);
+  const handleCallErrorRef = useRef(handleCallError);
+
+  // Keep refs in sync (no dep array = runs every render, which is correct for refs)
+  useEffect(() => {
+    handleIncomingCallRef.current = handleIncomingCall;
+    handleParticipantJoinedRef.current = handleParticipantJoined;
+    handleParticipantLeftRef.current = handleParticipantLeft;
+    handleCallEndedRef.current = handleCallEnded;
+    handleMediaToggleRef.current = handleMediaToggle;
+    handleCallErrorRef.current = handleCallError;
+  });
+
   /**
    * Setup Socket.IO listeners
-   * Poll for socket availability and re-setup listeners when it becomes available
-   * Uses exponential backoff and retry limits to prevent infinite loops
+   * Attaches once on user.id change, uses connect event instead of polling
    */
   useEffect(() => {
+    if (isChecking || !user?.id) return;
+
     let isSubscribed = true;
-    let retryTimeoutId: NodeJS.Timeout | null = null;
     let debugListenerRef: ((eventName: string, ...args: any[]) => void) | null = null;
-    let retryCount = 0;
-    const MAX_RETRIES = 30; // Stop after 30 attempts
-    let lastLogTime = 0;
-    const LOG_THROTTLE_MS = 5000; // Only log every 5 seconds to avoid spam
 
-    const setupListeners = () => {
-      // CRITICAL: Don't attempt setup while auth is still checking
-      // This prevents infinite retry loops during app startup
-      if (isChecking) {
-        return false; // Silently wait - no logs needed during normal startup
-      }
+    const attachListeners = (socket: any) => {
+      if (!isSubscribed || !socket?.connected) return;
 
-      // Wait for user to be loaded before setting up listeners
-      if (!user || !user.id) {
-        const now = Date.now();
-        // Throttle logging to avoid spam
-        if (now - lastLogTime > LOG_THROTTLE_MS) {
-          logger.warn('[CallManager]', 'User not loaded yet, waiting before setting up listeners...');
-          lastLogTime = now;
-        }
-        return false;
-      }
+      // Cleanup existing listeners to avoid duplicates
+      socket.off(SERVER_EVENTS.CALL_INITIATED);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
+      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
+      socket.off(SERVER_EVENTS.CALL_ENDED);
+      socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
+      socket.off(SERVER_EVENTS.CALL_ERROR);
+      if (debugListenerRef) socket.offAny(debugListenerRef);
 
-      const socket = meeshySocketIOService.getSocket();
-
-      if (!socket) {
-        const now = Date.now();
-        // Throttle logging to avoid spam
-        if (now - lastLogTime > LOG_THROTTLE_MS) {
-          logger.warn('[CallManager]', 'No socket available, will retry...');
-          lastLogTime = now;
-        }
-        return false;
-      }
-
-      if (!socket.connected) {
-        const now = Date.now();
-        // Throttle logging to avoid spam
-        if (now - lastLogTime > LOG_THROTTLE_MS) {
-          logger.warn('[CallManager]', 'Socket not connected, will retry...');
-          lastLogTime = now;
-        }
-        return false;
-      }
-
-      logger.info('[CallManager]', 'Setting up Socket.IO listeners', {
-        socketId: socket.id
-      });
-
-      // Remove any existing listeners first to avoid duplicates
-      (socket as any).off(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
-      (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-      (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
-      (socket as any).off(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
-      (socket as any).off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
-      (socket as any).off(SERVER_EVENTS.CALL_ERROR, handleCallError);
-
-      // DEBUG: Add catch-all listener to see ALL socket events
+      // Debug listener for call events
       debugListenerRef = (eventName: string, ...args: any[]) => {
         if (eventName.startsWith('call:')) {
-          console.log('📡 [CallManager] Socket event received:', eventName, args);
+          console.log('📡 [CallManager] Socket event:', eventName, args);
         }
       };
-      (socket as any).onAny(debugListenerRef);
+      socket.onAny(debugListenerRef);
 
-      // Listen for call events
-      (socket as any).on(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
-      (socket as any).on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-      (socket as any).on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
-      (socket as any).on(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
-      (socket as any).on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
-      (socket as any).on(SERVER_EVENTS.CALL_ERROR, handleCallError);
+      // Attach via refs (stable references that don't cause re-fires)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
+      socket.on(SERVER_EVENTS.CALL_INITIATED, (data: any) => handleIncomingCallRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, (data: any) => handleParticipantJoinedRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, (data: any) => handleParticipantLeftRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_ENDED, (data: any) => handleCallEndedRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: any) => handleMediaToggleRef.current(data));
+      socket.on(SERVER_EVENTS.CALL_ERROR, (data: any) => handleCallErrorRef.current(data));
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
-        userId: user.id,
+        userId: user?.id,
         listenersCount: 6
       });
-      logger.info('[CallManager]', '✅ All call listeners registered', {
-        socketId: socket.id,
-        userId: user.id
-      });
-
-      return true;
     };
 
-    const attemptSetup = () => {
-      if (!isSubscribed) return;
+    // Try immediately if socket already connected
+    const socket = meeshySocketIOService.getSocket();
+    if (socket?.connected) {
+      attachListeners(socket);
+    }
 
-      const success = setupListeners();
-
-      if (!success) {
-        retryCount++;
-
-        // Stop retrying after MAX_RETRIES attempts
-        if (retryCount > MAX_RETRIES) {
-          // Log only once at debug level to avoid spam
-          if (retryCount === MAX_RETRIES + 1) {
-            logger.debug('[CallManager]', `Stopped retrying listener setup after ${MAX_RETRIES} attempts. This is normal if user is not logged in or socket is not connected.`);
-          }
-          return;
-        }
-
-        // Exponential backoff: 1s, 1.5s, 2.25s, 3.375s, ... max 5s
-        const delay = Math.min(1000 * Math.pow(1.5, retryCount - 1), 5000);
-
-        retryTimeoutId = setTimeout(attemptSetup, delay);
-      } else {
-        if (retryCount > 0) {
-          logger.info('[CallManager]', `✅ Listeners setup successful after ${retryCount} retries`);
-        }
-      }
+    // Listen for future connections (instead of polling with setTimeout)
+    const onConnect = () => {
+      const s = meeshySocketIOService.getSocket();
+      if (s) attachListeners(s);
     };
-
-    // Start initial attempt
-    attemptSetup();
+    socket?.on('connect', onConnect);
 
     return () => {
       isSubscribed = false;
-      if (retryTimeoutId) {
-        clearTimeout(retryTimeoutId);
-      }
-
-      // Cleanup listeners
-      const socket = meeshySocketIOService.getSocket();
-      if (socket) {
-        logger.debug('[CallManager]', 'Cleaning up Socket.IO listeners');
-        if (debugListenerRef) {
-          (socket as any).offAny(debugListenerRef);
-        }
-        (socket as any).off(SERVER_EVENTS.CALL_INITIATED, handleIncomingCall);
-        (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
-        (socket as any).off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
-        (socket as any).off(SERVER_EVENTS.CALL_ENDED, handleCallEnded);
-        (socket as any).off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, handleMediaToggle);
-        (socket as any).off(SERVER_EVENTS.CALL_ERROR, handleCallError);
+      const s = meeshySocketIOService.getSocket();
+      if (s) {
+        s.off('connect', onConnect);
+        if (debugListenerRef) s.offAny(debugListenerRef);
+        s.off(SERVER_EVENTS.CALL_INITIATED);
+        s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
+        s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
+        s.off(SERVER_EVENTS.CALL_ENDED);
+        s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
+        s.off(SERVER_EVENTS.CALL_ERROR);
       }
     };
-  }, [
-    user,
-    isChecking,
-    handleIncomingCall,
-    handleParticipantJoined,
-    handleParticipantLeft,
-    handleCallEnded,
-    handleMediaToggle,
-    handleCallError,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isChecking]);
 
   /**
    * Cleanup on unmount

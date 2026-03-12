@@ -31,10 +31,32 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
           if (!old) return old;
 
-          // Check if message already exists
           const allMessages = old.pages.flatMap((page) => page.messages);
+
+          // Check if message already exists by server ID
           if (allMessages.some((m) => m.id === message.id)) {
             return old;
+          }
+
+          // Check for optimistic message match (dedup by content + sender + time)
+          const optimisticMatch = allMessages.find(m => {
+            const tempId = (m as any)._tempId;
+            if (!tempId) return false;
+            const timeDiff = Math.abs(new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime());
+            return m.content === message.content && m.senderId === message.senderId && timeDiff < 30000;
+          });
+
+          if (optimisticMatch) {
+            // Replace optimistic message with server version
+            return {
+              ...old,
+              pages: old.pages.map(page => ({
+                ...page,
+                messages: page.messages.map(m =>
+                  (m as any)._tempId === (optimisticMatch as any)._tempId ? message : m
+                ),
+              })),
+            };
           }
 
           return {

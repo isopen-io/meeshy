@@ -39,6 +39,9 @@ export interface ConversationMessagesRQReturn {
   addMessage: (message: Message) => boolean;
   updateMessage: (messageId: string, updates: Partial<Message> | ((prev: Message) => Message)) => void;
   removeMessage: (messageId: string) => void;
+  addOptimisticMessage: (message: Message & { _localStatus: 'sending'; _tempId: string }) => void;
+  markMessageFailed: (tempId: string) => void;
+  removeOptimisticMessage: (tempId: string) => void;
 }
 
 // Instance du service anonyme (créée à la demande)
@@ -189,8 +192,31 @@ export function useConversationMessagesRQ(
       (old: typeof data) => {
         if (!old) return old;
 
-        // Vérifier si le message existe déjà
         const allMessages = old.pages.flatMap(page => page.messages);
+
+        // Check if an optimistic message matches this server message (dedup)
+        const optimisticMatch = allMessages.find(m => {
+          const tempId = (m as any)._tempId;
+          if (!tempId) return false;
+          const timeDiff = Math.abs(new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime());
+          return m.content === message.content && m.senderId === message.senderId && timeDiff < 30000;
+        });
+
+        if (optimisticMatch) {
+          // Replace optimistic message with server version
+          wasAdded = true;
+          return {
+            ...old,
+            pages: old.pages.map(page => ({
+              ...page,
+              messages: page.messages.map(m =>
+                (m as any)._tempId === (optimisticMatch as any)._tempId ? message : m
+              ),
+            })),
+          };
+        }
+
+        // Regular dedup by ID
         if (allMessages.some(m => m.id === message.id)) {
           return old;
         }
@@ -366,6 +392,50 @@ export function useConversationMessagesRQ(
     return () => clearTimeout(timeoutId);
   }, [disableAutoFill, messages.length, isLoading, isFetchingNextPage, hasNextPage, loadMore, containerRef]);
 
+  // Optimistic message support
+  const addOptimisticMessage = useCallback((message: Message & { _localStatus: 'sending'; _tempId: string }) => {
+    if (!conversationId) return;
+    queryClient.setQueryData(queryKey, (old: typeof data) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page, index) =>
+          index === 0 ? { ...page, messages: [message, ...page.messages] } : page
+        ),
+      };
+    });
+  }, [queryClient, conversationId, queryKey]);
+
+  const markMessageFailed = useCallback((tempId: string) => {
+    if (!conversationId) return;
+    queryClient.setQueryData(queryKey, (old: typeof data) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(page => ({
+          ...page,
+          messages: page.messages.map(m =>
+            (m as any)._tempId === tempId ? { ...m, _localStatus: 'failed' } : m
+          ),
+        })),
+      };
+    });
+  }, [queryClient, conversationId, queryKey]);
+
+  const removeOptimisticMessage = useCallback((tempId: string) => {
+    if (!conversationId) return;
+    queryClient.setQueryData(queryKey, (old: typeof data) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map(page => ({
+          ...page,
+          messages: page.messages.filter(m => (m as any)._tempId !== tempId),
+        })),
+      };
+    });
+  }, [queryClient, conversationId, queryKey]);
+
   return {
     messages,
     isLoading,
@@ -378,5 +448,8 @@ export function useConversationMessagesRQ(
     addMessage,
     updateMessage,
     removeMessage,
+    addOptimisticMessage,
+    markMessageFailed,
+    removeOptimisticMessage,
   };
 }

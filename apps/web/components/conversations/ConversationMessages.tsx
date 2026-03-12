@@ -35,6 +35,8 @@ interface ConversationMessagesProps {
   onReplyMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
+  onRetryMessage?: (tempId: string, content: string, language: string, replyToId?: string) => void;
+  onCancelMessage?: (tempId: string) => void;
   onLoadMore?: () => void;
   t: (key: string) => string;
   tCommon?: (key: string) => string; // Traductions du namespace common
@@ -66,6 +68,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   onReplyMessage,
   onNavigateToMessage,
   onImageClick,
+  onRetryMessage,
+  onCancelMessage,
   onLoadMore,
   t,
   tCommon,
@@ -473,6 +477,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           userRole={userRole as any}
           addTranslatingState={addTranslatingState}
           isTranslating={isTranslating}
+          onRetryMessage={onRetryMessage}
+          onCancelMessage={onCancelMessage}
         />
       </div>
 

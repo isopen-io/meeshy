@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
+import { FailedMessageBar } from '@/components/messages/FailedMessageBar';
 import { messageTranslationService } from '@/services/message-translation.service';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useI18n } from '@/hooks/useI18n';
@@ -32,6 +33,10 @@ interface MessagesDisplayProps {
   isAnonymous?: boolean; // Add isAnonymous for anonymous reactions
   currentAnonymousUserId?: string; // Add anonymous user ID for reactions
   
+  // Optimistic message handlers
+  onRetryMessage?: (tempId: string, content: string, language: string, replyToId?: string) => void;
+  onCancelMessage?: (tempId: string) => void;
+
   // Additional props for unified handling
   addTranslatingState?: (messageId: string, targetLanguage: string) => void;
   isTranslating?: (messageId: string, targetLanguage: string) => boolean;
@@ -63,6 +68,8 @@ export function MessagesDisplay({
   conversationId,
   isAnonymous = false,
   currentAnonymousUserId,
+  onRetryMessage,
+  onCancelMessage,
   addTranslatingState,
   isTranslating,
   containerRef,
@@ -346,31 +353,48 @@ export function MessagesDisplay({
         const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
         const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
 
+        const localStatus = (message as any)._localStatus as string | undefined;
+        const tempId = (message as any)._tempId as string | undefined;
+        const isSending = localStatus === 'sending';
+        const isFailed = localStatus === 'failed';
+
         return (
-          <BubbleMessage
-            key={message.id}
-            message={message as any}
-            currentUser={currentUser}
-            userLanguage={userLanguage}
-            usedLanguages={usedLanguages}
-            onForceTranslation={handleForceTranslation}
-            onEditMessage={onEditMessage}
-            onDeleteMessage={onDeleteMessage}
-            onReplyMessage={onReplyMessage}
-            onNavigateToMessage={onNavigateToMessage}
-            onImageClick={onImageClick}
-            onLanguageSwitch={handleLanguageSwitch}
-            currentDisplayLanguage={state.currentDisplayLanguage}
-            isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
-            translationError={state.translationError}
-            conversationType={conversationType}
-            userRole={userRole}
-            conversationId={conversationId}
-            isAnonymous={isAnonymous}
-            currentAnonymousUserId={currentAnonymousUserId}
-            isFirstInGroup={isFirstInGroup}
-            isLastInGroup={isLastInGroup}
-          />
+          <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
+            <BubbleMessage
+              message={message as any}
+              currentUser={currentUser}
+              userLanguage={userLanguage}
+              usedLanguages={usedLanguages}
+              onForceTranslation={handleForceTranslation}
+              onEditMessage={onEditMessage}
+              onDeleteMessage={onDeleteMessage}
+              onReplyMessage={onReplyMessage}
+              onNavigateToMessage={onNavigateToMessage}
+              onImageClick={onImageClick}
+              onLanguageSwitch={handleLanguageSwitch}
+              currentDisplayLanguage={state.currentDisplayLanguage}
+              isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+              translationError={state.translationError}
+              conversationType={conversationType}
+              userRole={userRole}
+              conversationId={conversationId}
+              isAnonymous={isAnonymous}
+              currentAnonymousUserId={currentAnonymousUserId}
+              isFirstInGroup={isFirstInGroup}
+              isLastInGroup={isLastInGroup}
+            />
+            {isFailed && tempId && onRetryMessage && onCancelMessage && (
+              <FailedMessageBar
+                tempId={tempId}
+                content={message.content || (message as any).originalContent || ''}
+                originalLanguage={message.originalLanguage || 'fr'}
+                replyToId={(message as any).replyToId}
+                onRetry={onRetryMessage}
+                onCancel={onCancelMessage}
+                t={t}
+              />
+            )}
+          </div>
         );
       })}
 
