@@ -719,6 +719,7 @@ export class MentionService {
             sender: {
               select: {
                 id: true,
+                userId: true,
                 displayName: true,
                 avatar: true,
                 user: {

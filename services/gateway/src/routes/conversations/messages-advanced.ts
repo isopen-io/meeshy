@@ -229,6 +229,7 @@ export function registerMessagesAdvancedRoutes(
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               type: true,
@@ -252,6 +253,7 @@ export function registerMessagesAdvancedRoutes(
               sender: {
                 select: {
                   id: true,
+                  userId: true,
                   displayName: true,
                   avatar: true,
                   type: true,
@@ -795,6 +797,7 @@ export function registerMessagesAdvancedRoutes(
           sender: {
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               role: true,

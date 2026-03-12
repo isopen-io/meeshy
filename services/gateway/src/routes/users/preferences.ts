@@ -172,6 +172,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                 createdAt: true,
                 sender: {
                   select: {
+                    userId: true,
                     displayName: true,
                     user: { select: { username: true } }
                   }

@@ -326,6 +326,7 @@ export function registerCoreRoutes(
               sender: {
                 select: {
                   id: true,
+                  userId: true,
                   displayName: true,
                   avatar: true,
                   type: true,
