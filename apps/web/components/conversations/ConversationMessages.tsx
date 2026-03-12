@@ -13,6 +13,7 @@ import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 interface ConversationMessagesProps {
   messages: Message[];
@@ -82,16 +83,20 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // Hook pour fixer les z-index des popovers Radix UI
   useFixRadixZIndex();
 
-  // Définir le callback pour récupérer un message par ID (utilise la liste translatedMessages existante)
+  // Stable ref for the getMessageById callback — identity never changes, but always reads latest translatedMessages
+  const getMessageByIdRef = useRef((messageId: string) =>
+    (translatedMessages as Message[]).find(msg => msg.id === messageId)
+  );
+  getMessageByIdRef.current = (messageId: string) =>
+    (translatedMessages as Message[]).find(msg => msg.id === messageId);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const meeshySocketIOService = require('@/services/meeshy-socketio.service').meeshySocketIOService;
-      const getMessageById = (messageId: string) => {
-        return (translatedMessages as Message[]).find(msg => msg.id === messageId);
-      };
-      meeshySocketIOService.setGetMessageByIdCallback(getMessageById);
+      meeshySocketIOService.setGetMessageByIdCallback(
+        (messageId: string) => getMessageByIdRef.current(messageId)
+      );
     }
-  }, [translatedMessages]);
+  }, []);
 
   // Utiliser le ref externe SI fourni, sinon créer un ref local
   const internalScrollAreaRef = useRef<HTMLDivElement>(null);

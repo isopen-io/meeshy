@@ -232,8 +232,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const currentFocusedConversationRef = useRef<string | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
 
-  // Volatile state ref for handleSendMessage stabilization (#18)
-  // B1 can use this ref to avoid re-creating handleSendMessage on every state change
+  // Volatile state ref for handleSendMessage stabilization (consumed by B1 when it rewrites handleSendMessage)
   const volatileStateRef = useRef({ newMessage: '', attachmentIds: [] as string[], attachmentMimeTypes: [] as string[], selectedLanguage: '', isTyping: false });
 
   // Activer les mises à jour de statut utilisateur en temps réel
@@ -424,20 +423,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     instanceId,
   ]);
 
-  // Synchroniser l'ID de conversation active pour filtrer les notifications
-  // Cela permet d'éviter d'afficher des notifications pour la conversation déjà ouverte
-  useEffect(() => {
-    if (effectiveSelectedId) {
-      setActiveConversationId(effectiveSelectedId);
-      console.debug(`[ConversationLayout] Active conversation set: ${effectiveSelectedId}`);
-    }
-
-    // Cleanup: réinitialiser quand le composant se démonte ou change de conversation
-    return () => {
-      setActiveConversationId(null);
-      console.debug('[ConversationLayout] Active conversation cleared');
-    };
-  }, [effectiveSelectedId, setActiveConversationId]);
 
   // Marquer comme lu quand scroll vers le bas
   useEffect(() => {

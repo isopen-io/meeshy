@@ -192,7 +192,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
 
       toast.error(t('translation.translationRequestError'));
     }
-  }, [messages, addTranslatingState, onTranslation, isTranslating, localTranslatingStates, t]);
+  }, [messages, addTranslatingState, isTranslating, localTranslatingStates, t]);
 
   // Gérer le changement de langue d'affichage
   const handleLanguageSwitch = useCallback((messageId: string, language: string) => {

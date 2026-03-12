@@ -515,16 +515,17 @@ export function CallManager() {
     };
   }, [isInCall, reset, clearCallTimeout]);
 
-  // Debug render state
-  console.log('🎨 [CallManager] Rendering:', {
-    incomingCall: !!incomingCall,
-    incomingCallId: incomingCall?.callId,
-    isInCall,
-    currentCallId: currentCall?.id,
-    userId: user?.id,
-    willShowNotification: !!incomingCall,
-    willShowInterface: !!(isInCall && currentCall && user?.id)
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[CallManager] Rendering:', {
+      incomingCall: !!incomingCall,
+      incomingCallId: incomingCall?.callId,
+      isInCall,
+      currentCallId: currentCall?.id,
+      userId: user?.id,
+      willShowNotification: !!incomingCall,
+      willShowInterface: !!(isInCall && currentCall && user?.id)
+    });
+  }
 
   return (
     <>
