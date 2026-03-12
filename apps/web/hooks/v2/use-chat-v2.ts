@@ -235,7 +235,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
 
     try {
       const lang = language || currentUser?.systemLanguage || 'fr';
-      const success = await socketSendMessage(
+      const result = await socketSendMessage(
         content,
         lang,
         undefined, // replyToId
@@ -243,7 +243,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
         attachmentIds
       );
 
-      return success;
+      return result?.success ?? false;
     } finally {
       setIsSending(false);
     }

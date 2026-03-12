@@ -217,7 +217,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
 
       // Envoyer via Socket.IO avec la langue correcte
       // socketMessaging.sendMessage prend (content, language, replyToId, mentionedUserIds, attachmentIds, attachmentMimeTypes)
-      const success = await socketMessaging.sendMessage(
+      const result = await socketMessaging.sendMessage(
         content,
         sourceLanguage,
         replyToId,
@@ -226,7 +226,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
         attachmentMimeTypes
       );
 
-      if (success) {
+      if (result?.success) {
         // Arrêter la frappe
         stopTyping();
         

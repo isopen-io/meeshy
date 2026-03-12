@@ -229,6 +229,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage,
     markMessageFailed,
     removeOptimisticMessage,
+    replaceOptimisticMessage,
   } = useConversationMessagesRQ(selectedConversation?.id || null, user!, {
     limit: 20,
     enabled: !!selectedConversation?.id,
@@ -534,18 +535,29 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       });
     }, 50);
 
-    // 4. Send via socket in background
+    // 4. Send via socket in background with clientMessageId for dedup
     try {
-      const success = await sendMessageViaSocket(
+      const ackResponse = await sendMessageViaSocket(
         content,
         selectedLanguage,
         replyToId,
         mentionedUserIds,
         hasAttachments ? currentAttachmentIds : undefined,
-        hasAttachments ? currentAttachmentMimeTypes : undefined
+        hasAttachments ? currentAttachmentMimeTypes : undefined,
+        optimistic._tempId
       );
 
-      if (!success) {
+      if (ackResponse?.success) {
+        if (ackResponse.messageId) {
+          replaceOptimisticMessage(optimistic._tempId, {
+            ...optimistic,
+            id: ackResponse.messageId,
+            _tempId: undefined,
+            _localStatus: undefined,
+            _sendPayload: undefined,
+          } as unknown as Message);
+        }
+      } else {
         markMessageFailed(optimistic._tempId);
       }
 
@@ -581,6 +593,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     t,
     addOptimisticMessage,
     markMessageFailed,
+    replaceOptimisticMessage,
   ]);
 
   const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
@@ -602,21 +615,32 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage(optimistic);
 
     try {
-      const success = await sendMessageViaSocket(
+      const result = await sendMessageViaSocket(
         content,
         language,
         replyToId,
         sendPayload.mentionedUserIds,
         sendPayload.attachmentIds,
         sendPayload.attachmentMimeTypes,
+        optimistic._tempId
       );
-      if (!success) {
+      if (result?.success) {
+        if (result.messageId) {
+          replaceOptimisticMessage(optimistic._tempId, {
+            ...optimistic,
+            id: result.messageId,
+            _tempId: undefined,
+            _localStatus: undefined,
+            _sendPayload: undefined,
+          } as unknown as Message);
+        }
+      } else {
         markMessageFailed(optimistic._tempId);
       }
     } catch {
       markMessageFailed(optimistic._tempId);
     }
-  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed]);
+  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed, replaceOptimisticMessage]);
 
   const handleCancelMessage = useCallback((tempId: string) => {
     if (!selectedConversation) return;
@@ -668,7 +692,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       }
 
       try {
-        const success = await sendMessageViaSocket(
+        const result = await sendMessageViaSocket(
           failedMsg.content,
           failedMsg.originalLanguage,
           failedMsg.replyToId,
@@ -676,9 +700,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           failedMsg.attachmentIds.length > 0 ? failedMsg.attachmentIds : undefined,
           undefined
         );
-        return !!success;
+        return result?.success ?? false;
       } catch (error) {
-        console.error('❌ Erreur lors du renvoi:', error);
+        console.error('[ConversationLayout] Erreur lors du renvoi:', error);
         return false;
       }
     },

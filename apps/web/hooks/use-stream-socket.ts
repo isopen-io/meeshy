@@ -63,8 +63,9 @@ interface UseStreamSocketReturn {
     replyToId?: string,
     mentionedUserIds?: string[],
     attachmentIds?: string[],
-    attachmentMimeTypes?: string[]
-  ) => Promise<boolean>;
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string
+  ) => ReturnType<ReturnType<typeof useSocketIOMessaging>['sendMessage']>;
   startTyping: () => void;
   stopTyping: () => void;
   reconnect: () => void;

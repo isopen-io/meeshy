@@ -90,7 +90,7 @@ describe('useSocketIOMessaging', () => {
     jest.clearAllMocks();
 
     // Default mock implementations
-    mockSendMessage.mockResolvedValue(true);
+    mockSendMessage.mockResolvedValue({ success: true, messageId: 'server-msg-1' });
     mockEditMessage.mockResolvedValue(true);
     mockDeleteMessage.mockResolvedValue(true);
 
@@ -205,17 +205,18 @@ describe('useSocketIOMessaging', () => {
         useSocketIOMessaging({ conversationId: mockConversationId })
       );
 
-      let success: boolean = false;
+      let ackResult: any;
 
       await act(async () => {
-        success = await result.current.sendMessage('Hello world', 'en');
+        ackResult = await result.current.sendMessage('Hello world', 'en');
       });
 
-      expect(success).toBe(true);
+      expect(ackResult).toEqual({ success: true, messageId: 'server-msg-1' });
       expect(mockSendMessage).toHaveBeenCalledWith(
         mockConversationId,
         'Hello world',
         'en',
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -239,6 +240,7 @@ describe('useSocketIOMessaging', () => {
         'original-msg-id',
         undefined,
         undefined,
+        undefined,
         undefined
       );
     });
@@ -258,6 +260,7 @@ describe('useSocketIOMessaging', () => {
         'en',
         undefined,
         ['user-789'],
+        undefined,
         undefined,
         undefined
       );
@@ -286,22 +289,44 @@ describe('useSocketIOMessaging', () => {
         undefined,
         undefined,
         ['attach-1'],
-        ['image/png']
+        ['image/png'],
+        undefined
       );
     });
 
-    it('should return false if no conversationId', async () => {
+    it('should send message with clientMessageId', async () => {
+      const { result } = renderHook(() =>
+        useSocketIOMessaging({ conversationId: mockConversationId })
+      );
+
+      await act(async () => {
+        await result.current.sendMessage('Hello', 'en', undefined, undefined, undefined, undefined, 'client-msg-123');
+      });
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        mockConversationId,
+        'Hello',
+        'en',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'client-msg-123'
+      );
+    });
+
+    it('should return { success: false } if no conversationId', async () => {
       const { result } = renderHook(() =>
         useSocketIOMessaging({ conversationId: undefined })
       );
 
-      let success: boolean = true;
+      let ackResult: any;
 
       await act(async () => {
-        success = await result.current.sendMessage('Hello', 'en');
+        ackResult = await result.current.sendMessage('Hello', 'en');
       });
 
-      expect(success).toBe(false);
+      expect(ackResult).toEqual({ success: false });
       expect(mockSendMessage).not.toHaveBeenCalled();
     });
   });
