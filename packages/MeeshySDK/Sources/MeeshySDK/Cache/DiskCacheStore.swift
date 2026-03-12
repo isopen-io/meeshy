@@ -188,6 +188,36 @@ public actor DiskCacheStore: ReadableCacheStore {
         logger.debug("Budget eviction: trimmed to \(totalSize) bytes (max \(maxBytes))")
     }
 
+    // MARK: - UIImage Cache
+
+    nonisolated(unsafe) private static let _imageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 150
+        cache.totalCostLimit = 80 * 1024 * 1024
+        return cache
+    }()
+
+    nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
+        let key = fileKey(for: urlString) as NSString
+        return _imageCache.object(forKey: key)
+    }
+
+    public func image(for urlString: String) async -> UIImage? {
+        let fileKey = Self.fileKey(for: urlString)
+
+        if let cached = Self._imageCache.object(forKey: fileKey as NSString) {
+            return cached
+        }
+
+        let result = await load(for: urlString)
+        guard let data = result.value?.first,
+              let image = UIImage(data: data) else { return nil }
+
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+        return image
+    }
+
     // MARK: - File Key
 
     nonisolated static func fileKey(for urlString: String) -> String {
