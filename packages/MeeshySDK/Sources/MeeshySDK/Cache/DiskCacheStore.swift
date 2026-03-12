@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import UIKit
 import os
 
 public actor DiskCacheStore: ReadableCacheStore {

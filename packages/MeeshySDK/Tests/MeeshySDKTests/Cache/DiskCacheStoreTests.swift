@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import MeeshySDK
 
 final class DiskCacheStoreTests: XCTestCase {
@@ -134,5 +135,41 @@ final class DiskCacheStoreTests: XCTestCase {
         let store = makeStore()
         let cached = await store.isCached("https://example.com/miss.dat")
         XCTAssertFalse(cached)
+    }
+
+    // MARK: - UIImage Cache Tests
+
+    private func make1x1PNGData() -> Data {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1))
+        return renderer.pngData { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+    }
+
+    func test_image_storePNG_thenLoadViaImage() async {
+        let store = makeStore()
+        let pngData = make1x1PNGData()
+        let key = "https://example.com/icon.png"
+
+        await store.save(pngData, for: key)
+        let image = await store.image(for: key)
+        XCTAssertNotNil(image)
+
+        let cached = DiskCacheStore.cachedImage(for: key)
+        XCTAssertNotNil(cached)
+    }
+
+    func test_image_corruptData_returnsNil() async {
+        let store = makeStore()
+        let key = "https://example.com/corrupt.png"
+        await store.save(Data("not an image".utf8), for: key)
+        let image = await store.image(for: key)
+        XCTAssertNil(image)
+    }
+
+    func test_cachedImage_missingKey_returnsNil() {
+        let result = DiskCacheStore.cachedImage(for: "https://example.com/nope.png")
+        XCTAssertNil(result)
     }
 }
