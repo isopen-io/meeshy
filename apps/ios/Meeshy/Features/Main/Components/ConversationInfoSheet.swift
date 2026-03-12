@@ -908,13 +908,12 @@ struct ConversationInfoSheet: View {
         defer { isLoadingParticipants = false }
 
         do {
-            let fetched = try await ParticipantCacheManager.shared.loadFirstPage(
-                for: conversation.id,
-                forceRefresh: await ParticipantCacheManager.shared.isExpired(for: conversation.id)
+            let fetched = try await ParticipantService.shared.loadFirstPage(
+                for: conversation.id
             )
             participants = fetched
-            hasMoreParticipants = await ParticipantCacheManager.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantCacheManager.shared.totalCount(for: conversation.id) {
+            hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
+            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
                 totalParticipants = serverTotal
             }
         } catch {
@@ -928,10 +927,10 @@ struct ConversationInfoSheet: View {
         defer { isLoadingMoreParticipants = false }
 
         do {
-            let allFetched = try await ParticipantCacheManager.shared.loadNextPage(for: conversation.id)
+            let allFetched = try await ParticipantService.shared.loadNextPage(for: conversation.id)
             participants = allFetched
-            hasMoreParticipants = await ParticipantCacheManager.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantCacheManager.shared.totalCount(for: conversation.id) {
+            hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
+            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
                 totalParticipants = serverTotal
             }
         } catch {
