@@ -309,3 +309,7 @@ public struct SavedAccount: Codable, Identifiable, Sendable {
         self.lastActiveAt = lastActiveAt
     }
 }
+
+// MARK: - CacheIdentifiable Conformance
+
+extension MeeshyUser: CacheIdentifiable {}
