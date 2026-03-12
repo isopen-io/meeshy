@@ -1,0 +1,5 @@
+import Foundation
+
+public protocol CacheIdentifiable: Sendable {
+    var id: String { get }
+}
