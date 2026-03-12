@@ -72,7 +72,7 @@ struct DownloadBadgeView: View {
             while !Task.isCancelled && !downloader.isCached {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                let cached = await MediaCacheManager.shared.isCached(resolved)
+                let cached = await CacheCoordinator.shared.video.isCached(resolved)
                 if cached {
                     downloader.isCached = true
                     break
@@ -135,7 +135,7 @@ final class AttachmentDownloader: ObservableObject {
 
     func checkCache(_ urlString: String) async {
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let cached = await MediaCacheManager.shared.isCached(resolved)
+        let cached = await CacheCoordinator.shared.video.isCached(resolved)
         if cached { isCached = true }
     }
 
@@ -190,7 +190,7 @@ final class AttachmentDownloader: ObservableObject {
                 }
 
                 let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                await MediaCacheManager.shared.store(data, for: resolvedKey)
+                await CacheCoordinator.shared.video.store(data, for: resolvedKey)
 
                 let finalSize = Int64(data.count)
                 await MainActor.run { [weak self] in
@@ -245,7 +245,7 @@ struct CachedPlayIcon: View {
         .task {
             let resolved = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
             while !Task.isCancelled && !isCached {
-                let cached = await MediaCacheManager.shared.isCached(resolved)
+                let cached = await CacheCoordinator.shared.video.isCached(resolved)
                 if cached {
                     isCached = true
                     break
@@ -362,7 +362,7 @@ struct AudioMediaView: View {
         .task {
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !isCached {
-                let cached = await MediaCacheManager.shared.isCached(resolved)
+                let cached = await CacheCoordinator.shared.audio.isCached(resolved)
                 if cached {
                     isCached = true
                     break

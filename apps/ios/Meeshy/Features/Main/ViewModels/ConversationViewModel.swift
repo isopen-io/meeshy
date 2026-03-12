@@ -266,7 +266,6 @@ class ConversationViewModel: ObservableObject {
     private let conversationService: ConversationServiceProviding
     private let reactionService: ReactionServiceProviding
     private let reportService: ReportServiceProviding
-    private let mediaCache: MediaCaching
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
 
@@ -394,8 +393,7 @@ class ConversationViewModel: ObservableObject {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         reactionService: ReactionServiceProviding = ReactionService.shared,
-        reportService: ReportServiceProviding = ReportService.shared,
-        mediaCache: MediaCaching = MediaCacheManager.shared
+        reportService: ReportServiceProviding = ReportService.shared
     ) {
         self.conversationId = conversationId
         self.initialUnreadCount = unreadCount
@@ -406,7 +404,6 @@ class ConversationViewModel: ObservableObject {
         self.conversationService = conversationService
         self.reactionService = reactionService
         self.reportService = reportService
-        self.mediaCache = mediaCache
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""
@@ -459,7 +456,7 @@ class ConversationViewModel: ObservableObject {
 
         // Show cached messages immediately while fetching from API
         if messages.isEmpty {
-            let cached = await MessageCacheManager.shared.loadMessages(for: conversationId)
+            let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
             if !cached.isEmpty {
                 messages = cached
             }
@@ -495,7 +492,7 @@ class ConversationViewModel: ObservableObject {
             // Update cache in background
             let conversationId = self.conversationId
             Task.detached(priority: .utility) { [messages] in
-                await MessageCacheManager.shared.saveMessages(messages, for: conversationId)
+                await CacheCoordinator.shared.messages.save(messages, for: conversationId)
             }
         } catch {
             self.error = error.localizedDescription
@@ -915,7 +912,7 @@ class ConversationViewModel: ObservableObject {
             for urlStr in urls {
                 Task {
                     let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                    await mediaCache.remove(for: resolved)
+                    await CacheCoordinator.shared.images.remove(for: resolved)
                 }
             }
         }

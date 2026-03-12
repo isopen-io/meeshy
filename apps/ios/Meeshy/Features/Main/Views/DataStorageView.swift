@@ -151,7 +151,10 @@ struct DataStorageView: View {
     private func clearCache() {
         isClearing = true
         Task {
-            await MediaCacheManager.shared.clearAll()
+            await CacheCoordinator.shared.images.clearAll()
+            await CacheCoordinator.shared.audio.clearAll()
+            await CacheCoordinator.shared.video.clearAll()
+            await CacheCoordinator.shared.thumbnails.clearAll()
             HapticFeedback.success()
             ToastManager.shared.showSuccess("Cache vide")
             isClearing = false

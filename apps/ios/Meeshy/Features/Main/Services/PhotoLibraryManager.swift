@@ -65,10 +65,10 @@ final class PhotoLibraryManager {
 
         do {
             if isVideo {
-                let localURL = try await MediaCacheManager.shared.localFileURL(for: urlString)
+                let localURL = try await CacheCoordinator.shared.video.localFileURLOrThrow(for: urlString)
                 return await saveVideo(at: localURL)
             } else {
-                let data = try await MediaCacheManager.shared.data(for: urlString)
+                let data = try await CacheCoordinator.shared.images.data(for: urlString)
                 return await saveImage(data)
             }
         } catch {

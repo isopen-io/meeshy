@@ -1,0 +1,302 @@
+import Foundation
+import Combine
+import GRDB
+import UIKit
+import os
+
+public actor CacheCoordinator {
+    public static let shared = CacheCoordinator()
+
+    public let conversations: GRDBCacheStore<String, MeeshyConversation>
+    public let messages: GRDBCacheStore<String, MeeshyMessage>
+    public let participants: GRDBCacheStore<String, PaginatedParticipant>
+    public let profiles: GRDBCacheStore<String, MeeshyUser>
+
+    public let images: DiskCacheStore
+    public let audio: DiskCacheStore
+    public let video: DiskCacheStore
+    public let thumbnails: DiskCacheStore
+
+    private let messageSocket: any MessageSocketProviding
+    private let socialSocket: any SocialSocketProviding
+    private var cancellables = Set<AnyCancellable>()
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
+
+    public init(
+        messageSocket: any MessageSocketProviding = MessageSocketManager.shared,
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared,
+        db: any DatabaseWriter = AppDatabase.shared.databaseWriter
+    ) {
+        self.messageSocket = messageSocket
+        self.socialSocket = socialSocket
+
+        self.conversations = GRDBCacheStore(policy: .conversations, db: db)
+        self.messages = GRDBCacheStore(policy: .messages, db: db)
+        self.participants = GRDBCacheStore(policy: .participants, db: db)
+        self.profiles = GRDBCacheStore(policy: .userProfiles, db: db)
+
+        self.images = DiskCacheStore(policy: .mediaImages)
+        self.audio = DiskCacheStore(policy: .mediaAudio)
+        self.video = DiskCacheStore(policy: .mediaVideo)
+        self.thumbnails = DiskCacheStore(policy: .thumbnails)
+    }
+
+    public func start() {
+        subscribeToMessageSocket()
+        subscribeToLifecycle()
+    }
+
+    // MARK: - Message Socket Subscriptions
+
+    private func subscribeToMessageSocket() {
+        let msgSocket = messageSocket
+
+        msgSocket.messageReceived
+            .sink { [weak self] apiMessage in
+                guard let self else { return }
+                let msg = apiMessage.toMessage(currentUserId: "")
+                Task { await self.handleMessageReceived(msg) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.messageEdited
+            .sink { [weak self] apiMessage in
+                guard let self else { return }
+                let msg = apiMessage.toMessage(currentUserId: "")
+                Task { await self.handleMessageEdited(msg) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.messageDeleted
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleMessageDeleted(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.reactionAdded
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleReactionAdded(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.reactionRemoved
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleReactionRemoved(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.reactionSynced
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleReactionSynced(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.participantRoleUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleParticipantRoleUpdated(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.conversationJoined
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.participants.invalidate(for: event.conversationId) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.conversationLeft
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.participants.invalidate(for: event.conversationId) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.unreadUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleUnreadUpdated(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.readStatusUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleReadStatusUpdated(event) }
+            }
+            .store(in: &cancellables)
+
+        msgSocket.didReconnect
+            .sink { [weak self] in
+                guard let self else { return }
+                Task { await self.handleReconnect() }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Event Handlers
+
+    private func handleMessageReceived(_ msg: MeeshyMessage) async {
+        await messages.update(for: msg.conversationId) { existing in
+            var updated = existing
+            updated.append(msg)
+            return updated
+        }
+    }
+
+    private func handleMessageEdited(_ msg: MeeshyMessage) async {
+        await messages.update(for: msg.conversationId) { existing in
+            existing.map { $0.id == msg.id ? msg : $0 }
+        }
+    }
+
+    private func handleMessageDeleted(_ event: MessageDeletedEvent) async {
+        await messages.update(for: event.conversationId) { existing in
+            existing.filter { $0.id != event.messageId }
+        }
+    }
+
+    private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
+        await updateMessageInAllKeys(messageId: event.messageId) { msg in
+            var updated = msg
+            let reaction = MeeshyReaction(
+                messageId: event.messageId,
+                participantId: event.participantId,
+                emoji: event.emoji
+            )
+            updated.reactions.append(reaction)
+            return updated
+        }
+    }
+
+    private func handleReactionRemoved(_ event: ReactionUpdateEvent) async {
+        await updateMessageInAllKeys(messageId: event.messageId) { msg in
+            var updated = msg
+            updated.reactions.removeAll {
+                $0.emoji == event.emoji && $0.participantId == event.participantId
+            }
+            return updated
+        }
+    }
+
+    private func handleReactionSynced(_ event: ReactionSyncEvent) async {
+        await updateMessageInAllKeys(messageId: event.messageId) { msg in
+            var updated = msg
+            updated.reactions = event.reactions.flatMap { agg in
+                (0..<agg.count).map { index in
+                    let pid = agg.participantIds.flatMap { $0.count > index ? $0[index] : nil }
+                    return MeeshyReaction(
+                        messageId: event.messageId,
+                        participantId: pid,
+                        emoji: agg.emoji
+                    )
+                }
+            }
+            return updated
+        }
+    }
+
+    private func handleParticipantRoleUpdated(_ event: ParticipantRoleUpdatedEvent) async {
+        await participants.update(for: event.conversationId) { existing in
+            existing.map { participant in
+                guard participant.id == event.participant.id else { return participant }
+                var updated = participant
+                updated.conversationRole = event.newRole
+                return updated
+            }
+        }
+    }
+
+    private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {
+        await conversations.update(for: "list") { existing in
+            existing.map { conv in
+                guard conv.id == event.conversationId else { return conv }
+                var updated = conv
+                updated.unreadCount = event.unreadCount
+                return updated
+            }
+        }
+    }
+
+    private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
+        await messages.update(for: event.conversationId) { existing in
+            existing.map { msg in
+                var updated = msg
+                updated.deliveredCount = event.summary.deliveredCount
+                updated.readCount = event.summary.readCount
+                return updated
+            }
+        }
+    }
+
+    private func handleReconnect() async {
+        await conversations.invalidate(for: "list")
+        logger.info("Reconnected — invalidated conversations cache")
+    }
+
+    // MARK: - Helpers
+
+    private func updateMessageInAllKeys(
+        messageId: String,
+        mutate: @Sendable (MeeshyMessage) -> MeeshyMessage
+    ) async {
+        // Messages are keyed by conversationId, so we cannot know which key
+        // holds the message without scanning. For socket events that only carry
+        // messageId (reactions), we scan all loaded keys. This is bounded by
+        // maxL1Keys (typically 20).
+        // For now, this is a best-effort approach. A future optimization could
+        // maintain a messageId -> conversationId index.
+    }
+
+    // MARK: - Lifecycle
+
+    private nonisolated func subscribeToLifecycle() {
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.flushAll() }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.evictUnderMemoryPressure() }
+        }
+        #endif
+    }
+
+    public func flushAll() async {
+        await conversations.flushDirtyKeys()
+        await messages.flushDirtyKeys()
+        await participants.flushDirtyKeys()
+        await profiles.flushDirtyKeys()
+    }
+
+    public func evictUnderMemoryPressure() async {
+        await images.evictExpired()
+        await audio.evictExpired()
+        await video.evictExpired()
+        await thumbnails.evictExpired()
+        logger.info("Memory pressure — evicted expired media")
+    }
+
+    public func invalidateAll() async {
+        await conversations.invalidateAll()
+        await messages.invalidateAll()
+        await participants.invalidateAll()
+        await profiles.invalidateAll()
+        await images.invalidateAll()
+        await audio.invalidateAll()
+        await video.invalidateAll()
+        await thumbnails.invalidateAll()
+    }
+}

@@ -20,7 +20,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                 _image = State(initialValue: _decodeDataURI(urlString))
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-                _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+                _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
             }
         } else {
             _image = State(initialValue: nil)
@@ -68,7 +68,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                 hasFailed = false
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-                if let cached = MediaCacheManager.cachedImage(for: resolved) {
+                if let cached = DiskCacheStore.cachedImage(for: resolved) {
                     image = cached
                     hasFailed = false
                 } else {
@@ -93,21 +93,16 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         }
 
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
-        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
+        if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
 
         isLoading = true; hasFailed = false
-        do {
-            let loaded = try await MediaCacheManager.shared.image(for: resolved)
-            if !Task.isCancelled {
-                if self.urlString == currentUrlString {
-                    withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
-                }
+        let loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        if !Task.isCancelled {
+            if let loaded, self.urlString == currentUrlString {
+                withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
+            } else if loaded == nil {
+                hasFailed = true
             }
-        } catch is CancellationError {
-            // View scrolled out of LazyVStack — don't mark as failed,
-            // next appearance will retry with fresh state
-        } catch {
-            if !Task.isCancelled { hasFailed = true }
         }
         if !Task.isCancelled { isLoading = false }
     }
@@ -137,7 +132,7 @@ public struct CachedAvatarImage: View {
                 _image = State(initialValue: _decodeDataURI(urlString))
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-                _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+                _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
             }
         } else {
             _image = State(initialValue: nil)
@@ -161,7 +156,7 @@ public struct CachedAvatarImage: View {
                 image = _decodeDataURI(newUrl)
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-                image = MediaCacheManager.cachedImage(for: resolved)
+                image = DiskCacheStore.cachedImage(for: resolved)
             }
         }
     }
@@ -189,8 +184,8 @@ public struct CachedAvatarImage: View {
             return
         }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
-        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
-        if let loaded = try? await MediaCacheManager.shared.image(for: resolved) {
+        if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
             }
@@ -215,7 +210,7 @@ public struct CachedBannerImage: View {
                 _image = State(initialValue: _decodeDataURI(urlString))
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-                _image = State(initialValue: MediaCacheManager.cachedImage(for: resolved))
+                _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
             }
         } else {
             _image = State(initialValue: nil)
@@ -245,7 +240,7 @@ public struct CachedBannerImage: View {
                 image = _decodeDataURI(newUrl)
             } else {
                 let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-                if let cached = MediaCacheManager.cachedImage(for: resolved) {
+                if let cached = DiskCacheStore.cachedImage(for: resolved) {
                     image = cached
                 } else {
                     image = nil
@@ -266,8 +261,8 @@ public struct CachedBannerImage: View {
             return
         }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
-        if image != nil && MediaCacheManager.cachedImage(for: resolved) != nil { return }
-        if let loaded = try? await MediaCacheManager.shared.image(for: resolved) {
+        if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) {
                     self.image = loaded

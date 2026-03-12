@@ -38,7 +38,14 @@ MeeshySDK/                      -> Target core (logique mtier)
     NotificationModels.swift   -> Notification types
     SampleData.swift           -> Donnes de dmo
   Cache/
-    MediaCacheManager.swift    -> Actor cache mdia (NSCache + FileManager)
+    CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
+    CacheIdentifiable.swift    -> Protocol for cached models (requires `id: String`)
+    CacheResult.swift          -> .fresh(T,age) / .stale(T,age) / .expired / .empty
+    CacheStoreProtocols.swift  -> ReadableCacheStore + MutableCacheStore protocols
+    GRDBCacheStore.swift       -> Generic actor: L1 Dictionary + L2 GRDB, dirty tracking, LRU
+    DiskCacheStore.swift       -> Actor: L1 NSCache + L2 FileManager, SHA256 naming, budget eviction
+    CacheBox.swift             -> NSCache wrapper for Sendable values
+    CacheCoordinator.swift     -> Actor singleton: typed stores, Socket.IO subscriptions, lifecycle
     AudioPlayerManager.swift   -> Lecture audio
     PhotoLibraryManager.swift  -> Accs photos
   Theme/
@@ -80,7 +87,7 @@ AuthManager.shared
 APIClient.shared
 MessageSocketManager.shared
 SocialSocketManager.shared
-MediaCacheManager.shared  // Actor, pas class
+CacheCoordinator.shared   // Actor singleton, typed stores
 PushNotificationManager.shared
 ```
 
@@ -95,10 +102,16 @@ PushNotificationManager.shared
 - Events publis via Combine `PassthroughSubject`
 - Convention: `entity:action-word` (hyphens, pas underscores)
 
-### Cache Mdia
-- `actor MediaCacheManager` (thread-safe via Swift actors)
-- Double couche: NSCache (mmoire) + FileManager (disque, 7j TTL)
-- Dduplification in-flight (vite tlchargements parallles du mme fichier)
+### Unified Cache System
+- **CacheCoordinator** (actor singleton): single entry point for all cached data
+  - `.conversations`, `.messages`, `.participants`, `.profiles` → `GRDBCacheStore` (L1 Dictionary + L2 GRDB SQLite)
+  - `.images`, `.audio`, `.video` → `DiskCacheStore` (L1 NSCache + L2 FileManager)
+- **CachePolicy**: configurable TTL, staleTTL (stale-while-revalidate), maxItemCount per data type
+- **CacheResult<T>**: `.fresh(T, age)` / `.stale(T, age)` / `.expired` / `.empty`
+- **GRDBCacheStore**: dirty tracking with 2s debounce + 10s max cap, LRU eviction
+- **DiskCacheStore**: SHA256 file naming, budget eviction, static UIImage cache
+- **Socket.IO subscriptions**: CacheCoordinator subscribes to 17+ events for real-time cache updates
+- **Lifecycle**: background flush, memory warning eviction via NotificationCenter
 
 ### Accent Color — Couleur dynamique par conversation
 

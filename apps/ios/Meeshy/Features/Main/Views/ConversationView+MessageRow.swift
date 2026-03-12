@@ -85,7 +85,7 @@ extension ConversationView {
                     onMediaTap: { attachment in
                         // User explicitly tapped media -> always cache (not conditional)
                         if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                            Task { await MediaCacheManager.shared.prefetch(resolved) }
+                            Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
                         }
                         scrollState.galleryStartAttachment = attachment
                     },
@@ -234,13 +234,13 @@ extension ConversationView {
 
             for urlStr in urls {
                 guard let resolved = MeeshyConfig.resolveMediaURL(urlStr) else { continue }
-                Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+                Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved.absoluteString) }
             }
         }
 
         if let avatarURL = msg.senderAvatarURL, !avatarURL.isEmpty {
             if let resolved = MeeshyConfig.resolveMediaURL(avatarURL) {
-                Task { await MediaCacheManager.shared.prefetch(resolved.absoluteString) }
+                Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved.absoluteString) }
             }
         }
     }

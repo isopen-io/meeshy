@@ -12,8 +12,6 @@ final class ConversationViewModelTests: XCTestCase {
     private var mockConversationService: MockConversationService!
     private var mockReactionService: MockReactionService!
     private var mockReportService: MockReportService!
-    private var mockMediaCache: MockMediaCache!
-
     private let testConversationId = "000000000000000000000001"
     private let testUserId = "000000000000000000000099"
 
@@ -26,7 +24,6 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = MockConversationService()
         mockReactionService = MockReactionService()
         mockReportService = MockReportService()
-        mockMediaCache = MockMediaCache()
     }
 
     override func tearDown() {
@@ -35,7 +32,6 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = nil
         mockReactionService = nil
         mockReportService = nil
-        mockMediaCache = nil
         super.tearDown()
     }
 
@@ -61,8 +57,7 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService,
-            mediaCache: mockMediaCache
+            reportService: mockReportService
         )
     }
 
@@ -500,8 +495,7 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService,
-            mediaCache: mockMediaCache
+            reportService: mockReportService
         )
         sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
         sut.messageTranslations["msg-t"] = [
@@ -540,8 +534,7 @@ final class ConversationViewModelTests: XCTestCase {
             messageService: mockMessageService,
             conversationService: mockConversationService,
             reactionService: mockReactionService,
-            reportService: mockReportService,
-            mediaCache: mockMediaCache
+            reportService: mockReportService
         )
         sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
         sut.messageTranslations["msg-t"] = [

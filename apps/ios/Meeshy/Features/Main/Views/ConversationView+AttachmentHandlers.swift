@@ -108,7 +108,7 @@ extension ConversationView {
                     )
                     uploadedIds.append(result.id)
                     if let audioData {
-                        await MediaCacheManager.shared.store(audioData, for: result.fileUrl)
+                        await CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
@@ -124,11 +124,11 @@ extension ConversationView {
                         )
                         uploadedIds.append(result.id)
                         if let fileData {
-                            await MediaCacheManager.shared.store(fileData, for: result.fileUrl)
+                            await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
                             if let thumbUrl = result.thumbnailUrl,
                                let thumbId = composerState.pendingThumbnails[attachment.id],
                                let thumbData = thumbId.jpegData(compressionQuality: 0.8) {
-                                await MediaCacheManager.shared.store(thumbData, for: thumbUrl)
+                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbUrl)
                             }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))

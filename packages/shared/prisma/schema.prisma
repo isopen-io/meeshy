@@ -1933,7 +1933,7 @@ model UserSession {
 
   /// Session Data
   sessionToken String  @unique // JWT token hash (SHA-256)
-  refreshToken String? @unique // For refresh token rotation
+  refreshToken String? // For refresh token rotation (sparse unique index created manually in MongoDB)
 
   /// Device Information (parsed from User-Agent)
   deviceType     String? // mobile, tablet, desktop, smarttv

@@ -57,8 +57,9 @@ public struct VideoThumbnailView: View {
         let resolvedUrl = url.absoluteString
         let thumbKey = "thumb:\(resolvedUrl)"
 
-        // 1. Check MediaCacheManager for persisted thumbnail
-        if let cachedData = try? await MediaCacheManager.shared.cachedData(for: thumbKey),
+        // 1. Check thumbnail cache for persisted thumbnail
+        let thumbStore = await CacheCoordinator.shared.thumbnails
+        if let cachedData = thumbStore.cachedData(for: thumbKey),
            let image = UIImage(data: cachedData) {
             withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
             return
@@ -89,9 +90,9 @@ public struct VideoThumbnailView: View {
             let (cgImage, _) = try await generator.image(at: time)
             let image = UIImage(cgImage: cgImage)
 
-            // Store JPEG data in MediaCacheManager with thumb: prefix
+            // Store JPEG data in thumbnail cache with thumb: prefix
             if let jpegData = image.jpegData(compressionQuality: 0.7) {
-                await MediaCacheManager.shared.store(jpegData, for: thumbKey)
+                await CacheCoordinator.shared.thumbnails.store(jpegData, for: thumbKey)
             }
 
             await MainActor.run {

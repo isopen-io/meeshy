@@ -89,6 +89,18 @@ public final class AppDatabase: @unchecked Sendable {
             }
         }
 
+        migrator.registerMigration("v3_unified_cache") { db in
+            try db.drop(table: "cached_participants")
+            try db.create(table: "cache_entries") { t in
+                t.column("key", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("encodedData", .blob).notNull()
+                t.column("updatedAt", .datetime).notNull()
+                t.primaryKey(["key", "itemId"])
+            }
+            try db.create(index: "idx_cache_entries_key", on: "cache_entries", columns: ["key"])
+        }
+
         try migrator.migrate(writer)
     }
 }

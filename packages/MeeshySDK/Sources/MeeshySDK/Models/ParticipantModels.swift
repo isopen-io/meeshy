@@ -187,3 +187,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public var name: String { nickname ?? displayName }
     public var resolvedAvatar: String? { avatar ?? user?.resolvedAvatar }
 }
+
+// MARK: - CacheIdentifiable Conformance
+
+extension PaginatedParticipant: CacheIdentifiable {}

@@ -165,7 +165,7 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
         )
 
         if let audioData {
-            await MediaCacheManager.shared.store(audioData, for: result.fileUrl)
+            await CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)
         }
 
         try? FileManager.default.removeItem(at: audioURL)
@@ -187,11 +187,11 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
         )
 
         if let fileData {
-            await MediaCacheManager.shared.store(fileData, for: result.fileUrl)
+            await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
             if let thumbUrl = result.thumbnailUrl,
                let thumbnail,
                let thumbData = thumbnail.jpegData(compressionQuality: 0.8) {
-                await MediaCacheManager.shared.store(thumbData, for: thumbUrl)
+                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbUrl)
             }
         }
 

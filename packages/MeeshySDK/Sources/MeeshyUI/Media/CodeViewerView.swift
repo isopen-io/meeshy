@@ -205,7 +205,7 @@ public struct CodeViewerView: View {
         }
 
         do {
-            let data = try await MediaCacheManager.shared.data(for: url.absoluteString)
+            let data = try await CacheCoordinator.shared.images.data(for: url.absoluteString)
             codeContent = String(data: data, encoding: .utf8)
         } catch {
             codeContent = nil

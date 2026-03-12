@@ -713,3 +713,8 @@ public struct SharedContact: Codable, Identifiable, Sendable {
         self.emails = emails
     }
 }
+
+// MARK: - CacheIdentifiable Conformance
+
+extension MeeshyConversation: CacheIdentifiable {}
+extension MeeshyMessage: CacheIdentifiable {}
