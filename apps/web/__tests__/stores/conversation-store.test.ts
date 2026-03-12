@@ -7,60 +7,91 @@ import { act } from '@testing-library/react';
 import { useConversationStore } from '../../stores/conversation-store';
 import type { Conversation, Message, MessageTranslation } from '@meeshy/shared/types';
 
+function createTestConversation(overrides: Partial<Conversation> = {}): Conversation {
+  return {
+    id: 'test-conv-id',
+    identifier: 'test-conv-identifier',
+    type: 'direct',
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 0,
+    participants: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    unreadCount: 0,
+    ...overrides,
+  } as Conversation;
+}
+
+function createTestMessage(overrides: Partial<Message> = {}): Message {
+  return {
+    id: 'test-msg-id',
+    conversationId: 'conv-123',
+    senderId: 'user-1',
+    content: 'Test message',
+    originalLanguage: 'en',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    timestamp: new Date(),
+    createdAt: new Date(),
+    ...overrides,
+  } as Message;
+}
+
+function createTestTranslation(overrides: Partial<MessageTranslation> = {}): MessageTranslation {
+  return {
+    id: 'test-translation-id',
+    messageId: 'msg-123',
+    targetLanguage: 'fr',
+    translatedContent: 'Bonjour, monde!',
+    translationModel: 'basic',
+    createdAt: new Date(),
+    ...overrides,
+  } as MessageTranslation;
+}
+
 describe('ConversationStore', () => {
-  const mockConversation = {
+  const mockConversation = createTestConversation({
     id: 'conv-123',
     identifier: 'conv-identifier-123',
     type: 'direct',
-    name: 'Test Conversation',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    creatorId: 'user-1',
-    members: [],
+    title: 'Test Conversation',
     unreadCount: 0,
-  } as any as Conversation;
+  });
 
-  const mockConversation2 = {
+  const mockConversation2 = createTestConversation({
     id: 'conv-456',
     identifier: 'conv-identifier-456',
     type: 'group',
-    name: 'Group Conversation',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    creatorId: 'user-1',
-    members: [],
+    title: 'Group Conversation',
     unreadCount: 5,
-  } as any as Conversation;
+  });
 
-  const mockMessage = {
+  const mockMessage = createTestMessage({
     id: 'msg-123',
     conversationId: 'conv-123',
     senderId: 'user-1',
     content: 'Hello, world!',
-    originalLanguage: 'en',
-    isEdited: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any as Message;
+  });
 
-  const mockMessage2 = {
+  const mockMessage2 = createTestMessage({
     id: 'msg-456',
     conversationId: 'conv-123',
     senderId: 'user-2',
     content: 'Hi there!',
-    originalLanguage: 'en',
-    isEdited: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any as Message;
+  });
 
-  const mockTranslation = {
-    targetLanguage: 'fr',
-    translatedContent: 'Bonjour, monde!',
-    translatedAt: new Date(),
-  } as any as MessageTranslation;
+  const mockTranslation = createTestTranslation();
 
   beforeEach(() => {
     // Reset the store to initial state
@@ -154,22 +185,22 @@ describe('ConversationStore', () => {
       it('should update an existing conversation', () => {
         act(() => {
           useConversationStore.getState().addConversation(mockConversation);
-          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' } as any);
+          useConversationStore.getState().updateConversation('conv-123', { title: 'Updated Name' } as Partial<Conversation>);
         });
 
         const state = useConversationStore.getState();
-        expect((state.conversations[0] as any).name).toBe('Updated Name');
+        expect(state.conversations[0].title).toBe('Updated Name');
       });
 
       it('should also update currentConversation if it matches', () => {
         act(() => {
           useConversationStore.getState().addConversation(mockConversation);
           useConversationStore.getState().selectConversation('conv-123');
-          useConversationStore.getState().updateConversation('conv-123', { name: 'Updated Name' } as any);
+          useConversationStore.getState().updateConversation('conv-123', { title: 'Updated Name' } as Partial<Conversation>);
         });
 
         const state = useConversationStore.getState();
-        expect((state.currentConversation as any)?.name).toBe('Updated Name');
+        expect(state.currentConversation?.title).toBe('Updated Name');
       });
 
       it('should not affect currentConversation if different conversation is updated', () => {
@@ -177,11 +208,11 @@ describe('ConversationStore', () => {
           useConversationStore.getState().addConversation(mockConversation);
           useConversationStore.getState().addConversation(mockConversation2);
           useConversationStore.getState().selectConversation('conv-123');
-          useConversationStore.getState().updateConversation('conv-456', { name: 'Updated Group' } as any);
+          useConversationStore.getState().updateConversation('conv-456', { title: 'Updated Group' } as Partial<Conversation>);
         });
 
         const state = useConversationStore.getState();
-        expect((state.currentConversation as any)?.name).toBe('Test Conversation');
+        expect(state.currentConversation?.title).toBe('Test Conversation');
       });
     });
 
@@ -433,11 +464,9 @@ describe('ConversationStore', () => {
       });
 
       it('should update existing translation for same language', () => {
-        const existingTranslation = {
-          targetLanguage: 'fr',
+        const existingTranslation = createTestTranslation({
           translatedContent: 'Old translation',
-          translatedAt: new Date(),
-        } as any as MessageTranslation;
+        });
 
         const messageWithTranslation = { ...mockMessage, translations: [existingTranslation] };
 

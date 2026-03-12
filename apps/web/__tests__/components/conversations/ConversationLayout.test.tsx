@@ -228,7 +228,11 @@ jest.mock('@/hooks/conversations/use-video-call', () => ({
 
 jest.mock('@/hooks/conversations/use-socket-callbacks', () => ({
   useSocketCallbacks: jest.fn(() => ({
-    setupSocketCallbacks: jest.fn(),
+    onNewMessage: jest.fn(),
+    onMessageEdited: jest.fn(),
+    onMessageDeleted: jest.fn(),
+    onTranslation: jest.fn(),
+    onUserTyping: jest.fn(),
   })),
 }));
 
@@ -365,6 +369,9 @@ describe('ConversationLayout', () => {
       addMessage: jest.fn(),
       updateMessage: jest.fn(),
       removeMessage: jest.fn(),
+      addOptimisticMessage: jest.fn(),
+      markMessageFailed: jest.fn(),
+      removeOptimisticMessage: jest.fn(),
     });
 
     (useSocketIOMessaging as jest.Mock).mockReturnValue({
