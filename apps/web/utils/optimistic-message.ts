@@ -1,4 +1,4 @@
-import type { Message } from '@meeshy/shared/types';
+import type { Message, Participant } from '@meeshy/shared/types';
 
 type SendPayload = {
   attachmentIds?: string[];
@@ -7,9 +7,9 @@ type SendPayload = {
 };
 
 export type OptimisticMessage = Message & {
-  _tempId: string;
-  _localStatus: 'sending' | 'failed';
-  _sendPayload: SendPayload;
+  readonly _tempId: string;
+  readonly _localStatus: 'sending' | 'failed';
+  readonly _sendPayload: SendPayload;
 };
 
 export function createOptimisticMessage(
@@ -22,32 +22,44 @@ export function createOptimisticMessage(
   sendPayload?: SendPayload,
 ): OptimisticMessage {
   const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const now = new Date();
   return {
     id: tempId,
     _tempId: tempId,
-    _localStatus: 'sending',
+    _localStatus: 'sending' as const,
     _sendPayload: sendPayload ?? {},
     conversationId,
     senderId,
     content,
     originalLanguage: language,
-    messageType: 'text',
-    messageSource: 'user',
+    messageType: 'text' as const,
+    messageSource: 'user' as const,
     isEdited: false,
+    isEncrypted: false,
     isViewOnce: false,
     viewOnceCount: 0,
     isBlurred: false,
     deliveredCount: 0,
     readCount: 0,
     reactionCount: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
+    timestamp: now,
     replyToId,
+    translations: [] as readonly [],
     sender: sender ? {
       id: sender.id,
-      username: sender.username,
       displayName: sender.displayName,
       avatar: sender.avatar,
-    } : undefined,
+      isOnline: true,
+      type: 'user' as const,
+      conversationId,
+      role: 'member',
+      language,
+      permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true },
+      isActive: true,
+      joinedAt: new Date(),
+      user: { id: sender.id, username: sender.username, displayName: sender.displayName, avatar: sender.avatar },
+    } satisfies Participant : undefined,
   };
 }
