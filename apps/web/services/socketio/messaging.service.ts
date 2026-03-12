@@ -162,6 +162,8 @@ export class MessagingService {
       content,
       originalLanguage,
       replyToId,
+      forwardedFromId,
+      forwardedFromConversationId,
       mentionedUserIds,
       attachmentIds,
       attachmentMimeTypes,
@@ -177,6 +179,8 @@ export class MessagingService {
         content,
         ...(originalLanguage && { originalLanguage }),
         ...(replyToId && { replyToId }),
+        ...(forwardedFromId && { forwardedFromId }),
+        ...(forwardedFromConversationId && { forwardedFromConversationId }),
         ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds }),
         ...(clientMessageId && { clientMessageId }),
       };
@@ -314,6 +318,8 @@ export class MessagingService {
           ? this.determineMessageTypeFromMime(options.attachmentMimeTypes?.[0] ?? '')
           : 'text',
         replyToId: options.replyToId,
+        forwardedFromId: options.forwardedFromId,
+        forwardedFromConversationId: options.forwardedFromConversationId,
         attachmentIds: options.attachmentIds,
       });
 

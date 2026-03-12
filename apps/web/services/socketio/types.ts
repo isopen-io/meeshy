@@ -141,6 +141,8 @@ export interface MessageSendOptions {
   content: string;
   originalLanguage?: string;
   replyToId?: string;
+  forwardedFromId?: string;
+  forwardedFromConversationId?: string;
   mentionedUserIds?: string[];
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];

@@ -188,14 +188,15 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     mentionedUserIds?: string[],
     attachmentIds?: string[],
     attachmentMimeTypes?: string[],
-    clientMessageId?: string
+    clientMessageId?: string,
+    forwardedFromId?: string,
+    forwardedFromConversationId?: string,
   ) => {
     if (!conversationId) {
       console.error('[useSocketIOMessaging] Pas de conversationId');
       return { success: false } as const;
     }
 
-    // Passer l'identifiant directement - le service gère la conversion
     return await meeshySocketIOService.sendMessage(
       conversationId,
       content,
@@ -204,7 +205,9 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
       mentionedUserIds,
       attachmentIds,
       attachmentMimeTypes,
-      clientMessageId
+      clientMessageId,
+      forwardedFromId,
+      forwardedFromConversationId,
     );
   }, [conversationId]);
 

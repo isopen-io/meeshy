@@ -515,25 +515,21 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       : 'text' as const;
 
     // 1. Create optimistic message and add to store IMMEDIATELY
-    const optimistic = createOptimisticMessage(
+    const optimistic = createOptimisticMessage({
       content,
-      user.id,
+      senderId: user.id,
       conversationId,
-      selectedLanguage,
+      language: selectedLanguage,
       replyToId,
-      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
-      {
+      replyTo: replyToMessage,
+      messageType: resolvedMessageType,
+      sender: { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+      sendPayload: {
         attachmentIds: hasAttachments ? currentAttachmentIds : undefined,
         attachmentMimeTypes: hasAttachments ? currentAttachmentMimeTypes : undefined,
         mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       },
-    );
-
-    // Enrich optimistic message with replyTo and messageType for immediate display
-    if (replyToMessage || resolvedMessageType !== 'text') {
-      (optimistic as any).replyTo = replyToMessage;
-      (optimistic as any).messageType = resolvedMessageType;
-    }
+    });
 
     addOptimisticMessage(optimistic);
 
@@ -613,19 +609,28 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
     if (!selectedConversation || !user) return;
 
-    // Read _sendPayload from the failed optimistic message before removing it
     const failedMessage = messages.find(
       (m): m is OptimisticMessage => '_tempId' in m && (m as OptimisticMessage)._tempId === tempId
     );
     const sendPayload = failedMessage?._sendPayload ?? {};
+    const forwardedFromId = (failedMessage as any)?.forwardedFromId;
+    const forwardedFromConversationId = (failedMessage as any)?.forwardedFromConversationId;
 
     removeOptimisticMessage(tempId);
 
-    const optimistic = createOptimisticMessage(
-      content, user.id, selectedConversation.id, language, replyToId,
-      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+    const optimistic = createOptimisticMessage({
+      content,
+      senderId: user.id,
+      conversationId: selectedConversation.id,
+      language,
+      replyToId,
+      replyTo: (failedMessage as any)?.replyTo,
+      forwardedFromId,
+      forwardedFromConversationId,
+      messageType: (failedMessage as any)?.messageType,
+      sender: { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
       sendPayload,
-    );
+    });
     addOptimisticMessage(optimistic);
 
     try {
@@ -636,15 +641,15 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         sendPayload.mentionedUserIds,
         sendPayload.attachmentIds,
         sendPayload.attachmentMimeTypes,
-        optimistic._tempId
+        optimistic._tempId,
+        forwardedFromId,
+        forwardedFromConversationId,
       );
       if (result?.success) {
-        if (result.messageId) {
-          updateMessage(optimistic.id, (prev) => {
-            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
-            return { ...clean, id: result.messageId } as Message;
-          });
-        }
+        updateMessage(optimistic.id, (prev) => {
+          const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+          return { ...clean, ...(result.messageId ? { id: result.messageId } : {}) } as Message;
+        });
       } else {
         markMessageFailed(optimistic._tempId);
       }
