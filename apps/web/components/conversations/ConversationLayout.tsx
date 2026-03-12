@@ -118,6 +118,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   const conversations = paginatedConversations;
 
+  // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)
+  const conversationIdSet = useMemo(() => new Set(conversations.map(c => c.id)), [conversations]);
+
   // ========== HOOKS REFACTORISÉS ==========
 
   // Sélection de conversation
@@ -192,6 +195,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const hasLoadedInitialConversations = useRef(false);
   const currentFocusedConversationRef = useRef<string | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+
+  // Volatile state ref for handleSendMessage stabilization (consumed by B1 when it rewrites handleSendMessage)
+  const volatileStateRef = useRef({ newMessage: '', attachmentIds: [] as string[], attachmentMimeTypes: [] as string[], selectedLanguage: '', isTyping: false });
 
   // Activer les mises à jour de statut utilisateur en temps réel
   useUserStatusRealtime();
@@ -279,6 +285,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       stopTyping,
     });
 
+  // Sync volatile state ref after all hooks (#18)
+  volatileStateRef.current = { newMessage, attachmentIds, attachmentMimeTypes, selectedLanguage, isTyping };
+
   // ========== EFFECTS ==========
 
   // Informer le store de notifications
@@ -311,11 +320,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   );
 
   useEffect(() => {
-    if (effectiveSelectedId && !isLoadingConversations && conversations.length > 0) {
-      const found = conversations.find(c => c.id === effectiveSelectedId);
-      if (!found) loadDirectConversation(effectiveSelectedId);
+    if (effectiveSelectedId && !isLoadingConversations && conversationIdSet.size > 0) {
+      if (!conversationIdSet.has(effectiveSelectedId)) loadDirectConversation(effectiveSelectedId);
     }
-  }, [effectiveSelectedId, conversations, isLoadingConversations, loadDirectConversation]);
+  }, [effectiveSelectedId, conversationIdSet, isLoadingConversations, loadDirectConversation]);
 
   // Charger conversations au montage
   useEffect(() => {
@@ -350,16 +358,17 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   }, [effectiveSelectedId, isMobile]);
 
   // Chargement parallèle conversation + participants (async-parallel)
+  // Uses conversationIdSet instead of conversations array, user?.id instead of user (#10, #11)
   useEffect(() => {
     const targetId = selectedConversationId || selectedConversation?.id;
-    if (!targetId || !user) return;
+    if (!targetId || !user?.id) return;
     if (targetId === previousConversationIdRef.current) return;
 
     clearMessages();
     previousConversationIdRef.current = targetId;
 
     const loadPromises: Promise<void>[] = [];
-    const needsConversation = !conversations.find(c => c.id === targetId);
+    const needsConversation = !conversationIdSet.has(targetId);
 
     if (needsConversation) loadPromises.push(loadDirectConversation(targetId));
     loadPromises.push(loadParticipants(targetId));
@@ -370,28 +379,14 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   }, [
     selectedConversationId,
     selectedConversation?.id,
-    user,
-    conversations,
+    user?.id,
+    conversationIdSet,
     loadDirectConversation,
     loadParticipants,
     clearMessages,
     instanceId,
   ]);
 
-  // Synchroniser l'ID de conversation active pour filtrer les notifications
-  // Cela permet d'éviter d'afficher des notifications pour la conversation déjà ouverte
-  useEffect(() => {
-    if (effectiveSelectedId) {
-      setActiveConversationId(effectiveSelectedId);
-      console.debug(`[ConversationLayout] Active conversation set: ${effectiveSelectedId}`);
-    }
-
-    // Cleanup: réinitialiser quand le composant se démonte ou change de conversation
-    return () => {
-      setActiveConversationId(null);
-      console.debug('[ConversationLayout] Active conversation cleared');
-    };
-  }, [effectiveSelectedId, setActiveConversationId]);
 
   // Marquer comme lu quand scroll vers le bas
   useEffect(() => {
@@ -539,18 +534,28 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       });
     }, 50);
 
-    // 4. Send via socket in background
+    // 4. Send via socket in background with clientMessageId for dedup
     try {
-      const success = await sendMessageViaSocket(
+      const ackResponse = await sendMessageViaSocket(
         content,
         selectedLanguage,
         replyToId,
         mentionedUserIds,
         hasAttachments ? currentAttachmentIds : undefined,
-        hasAttachments ? currentAttachmentMimeTypes : undefined
+        hasAttachments ? currentAttachmentMimeTypes : undefined,
+        optimistic._tempId
       );
 
-      if (!success) {
+      if (ackResponse?.success) {
+        if (ackResponse.messageId) {
+          // Upgrade optimistic: set server ID, clear optimistic markers
+          // The full server message will arrive via message:new and replace this entry by ID
+          updateMessage(optimistic.id, (prev) => {
+            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+            return { ...clean, id: ackResponse.messageId } as Message;
+          });
+        }
+      } else {
         markMessageFailed(optimistic._tempId);
       }
 
@@ -586,6 +591,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     t,
     addOptimisticMessage,
     markMessageFailed,
+    updateMessage,
   ]);
 
   const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
@@ -607,21 +613,29 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     addOptimisticMessage(optimistic);
 
     try {
-      const success = await sendMessageViaSocket(
+      const result = await sendMessageViaSocket(
         content,
         language,
         replyToId,
         sendPayload.mentionedUserIds,
         sendPayload.attachmentIds,
         sendPayload.attachmentMimeTypes,
+        optimistic._tempId
       );
-      if (!success) {
+      if (result?.success) {
+        if (result.messageId) {
+          updateMessage(optimistic.id, (prev) => {
+            const { _tempId, _localStatus, _sendPayload, ...clean } = prev as any;
+            return { ...clean, id: result.messageId } as Message;
+          });
+        }
+      } else {
         markMessageFailed(optimistic._tempId);
       }
     } catch {
       markMessageFailed(optimistic._tempId);
     }
-  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed]);
+  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed, updateMessage]);
 
   const handleCancelMessage = useCallback((tempId: string) => {
     if (!selectedConversation) return;
@@ -673,7 +687,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       }
 
       try {
-        const success = await sendMessageViaSocket(
+        const result = await sendMessageViaSocket(
           failedMsg.content,
           failedMsg.originalLanguage,
           failedMsg.replyToId,
@@ -681,9 +695,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           failedMsg.attachmentIds.length > 0 ? failedMsg.attachmentIds : undefined,
           undefined
         );
-        return !!success;
+        return result?.success ?? false;
       } catch (error) {
-        console.error('❌ Erreur lors du renvoi:', error);
+        console.error('[ConversationLayout] Erreur lors du renvoi:', error);
         return false;
       }
     },
@@ -892,6 +906,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 onAttachmentsChange={handleAttachmentsChange}
                 onRetryFailedMessage={handleRetryFailedMessage}
                 onRestoreFailedMessage={handleRestoreFailedMessage}
+                onRetryMessage={handleRetryMessage}
+                onCancelMessage={handleCancelMessage}
                 onBackToList={handleBackToList}
                 onStartCall={handleStartCall}
                 onOpenGallery={() => setGalleryOpen(true)}

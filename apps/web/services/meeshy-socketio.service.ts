@@ -181,8 +181,9 @@ class MeeshySocketIOService {
     replyToId?: string,
     mentionedUserIds?: string[],
     attachmentIds?: string[],
-    attachmentMimeTypes?: string[]
-  ): Promise<boolean> {
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string
+  ) {
     return this.orchestrator.sendMessage(
       conversationOrId,
       content,
@@ -190,7 +191,8 @@ class MeeshySocketIOService {
       replyToId,
       mentionedUserIds,
       attachmentIds,
-      attachmentMimeTypes
+      attachmentMimeTypes,
+      clientMessageId
     );
   }
 

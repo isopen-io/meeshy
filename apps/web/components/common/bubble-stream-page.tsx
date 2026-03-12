@@ -468,7 +468,7 @@ export function BubbleStreamPage({
         currentAttachmentMimeTypes.length > 0 ? currentAttachmentMimeTypes : undefined
       );
 
-      if (sendResult) {
+      if (sendResult?.success) {
         toast.success(tCommon('messages.messageSent'));
 
         // Clear mentions

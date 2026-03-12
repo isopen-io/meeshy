@@ -187,11 +187,12 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     replyToId?: string,
     mentionedUserIds?: string[],
     attachmentIds?: string[],
-    attachmentMimeTypes?: string[]
-  ): Promise<boolean> => {
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string
+  ) => {
     if (!conversationId) {
-      console.error('❌ [useSocketIOMessaging] Pas de conversationId');
-      return false;
+      console.error('[useSocketIOMessaging] Pas de conversationId');
+      return { success: false } as const;
     }
 
     // Passer l'identifiant directement - le service gère la conversion
@@ -202,7 +203,8 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
       replyToId,
       mentionedUserIds,
       attachmentIds,
-      attachmentMimeTypes
+      attachmentMimeTypes,
+      clientMessageId
     );
   }, [conversationId]);
 

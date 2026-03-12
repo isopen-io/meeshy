@@ -25,7 +25,8 @@ import type {
   UnsubscribeFn,
   EncryptionHandlers,
   GetMessageByIdCallback,
-  MessageSendOptions
+  MessageSendOptions,
+  MessageAckResponse
 } from './types';
 
 /**
@@ -150,10 +151,10 @@ export class MessagingService {
   async sendMessage(
     socket: TypedSocket | null,
     options: MessageSendOptions
-  ): Promise<boolean> {
+  ): Promise<MessageAckResponse> {
     if (!socket || !socket.connected) {
       logger.warn('[MessagingService]', 'Socket not connected');
-      return false;
+      return { success: false };
     }
 
     const {
@@ -163,7 +164,8 @@ export class MessagingService {
       replyToId,
       mentionedUserIds,
       attachmentIds,
-      attachmentMimeTypes
+      attachmentMimeTypes,
+      clientMessageId,
     } = options;
 
     try {
@@ -175,7 +177,8 @@ export class MessagingService {
         content,
         ...(originalLanguage && { originalLanguage }),
         ...(replyToId && { replyToId }),
-        ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds })
+        ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds }),
+        ...(clientMessageId && { clientMessageId }),
       };
 
       // E2EE: Encrypt content if conversation is encrypted
@@ -217,22 +220,34 @@ export class MessagingService {
       // Send with timeout (WebSocket primary)
       const wsResult = await this.emitWithTimeout(socket, eventType, messageData, 10000);
 
-      if (wsResult) {
-        return true;
+      if (wsResult.success) {
+        return {
+          success: true,
+          messageId: wsResult.messageId,
+          clientMessageId: wsResult.clientMessageId,
+        };
+      }
+
+      // On timeout: mark failed, do NOT fallback to REST (message:new may still arrive)
+      if (wsResult.timedOut) {
+        return { success: false, timedOut: true };
       }
 
       // Don't fallback to REST for E2EE messages (REST can't handle E2EE yet)
       if (messageData.encryptedContent && messageData.encryptionMetadata) {
-        return false;
+        return { success: false };
       }
 
-      // WebSocket failed → REST fallback
-      logger.warn('[MessagingService]', 'WebSocket send failed, attempting REST fallback');
+      // WebSocket ack error (not timeout) → REST fallback only if socket still connected
+      if (!socket.connected) {
+        return { success: false };
+      }
+      logger.warn('[MessagingService]', 'WebSocket ack failed, attempting REST fallback');
       return this.sendMessageViaRest(options);
 
     } catch (error) {
       console.error('[MessagingService] Error sending message:', error);
-      return false;
+      return { success: false };
     }
   }
 
@@ -288,11 +303,11 @@ export class MessagingService {
   /**
    * REST fallback when WebSocket send fails
    */
-  private async sendMessageViaRest(options: MessageSendOptions): Promise<boolean> {
+  private async sendMessageViaRest(options: MessageSendOptions): Promise<MessageAckResponse> {
     try {
       const { conversationsService } = await import('../conversations');
 
-      await conversationsService.sendMessage(options.conversationId, {
+      const response = await conversationsService.sendMessage(options.conversationId, {
         content: options.content,
         originalLanguage: options.originalLanguage,
         messageType: options.attachmentIds?.length
@@ -303,10 +318,14 @@ export class MessagingService {
       });
 
       logger.info('[MessagingService]', 'Message sent via REST fallback');
-      return true;
+      return {
+        success: true,
+        messageId: (response as any)?.data?.id ?? (response as any)?.id ?? response?.id,
+        clientMessageId: options.clientMessageId,
+      };
     } catch (error) {
       console.error('[MessagingService] REST fallback also failed:', error);
-      return false;
+      return { success: false };
     }
   }
 
@@ -318,21 +337,25 @@ export class MessagingService {
     event: string,
     data: any,
     timeoutMs: number
-  ): Promise<boolean> {
+  ): Promise<MessageAckResponse> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         logger.warn('[MessagingService]', 'Timeout: Server did not respond in time');
-        resolve(false);
+        resolve({ success: false, timedOut: true });
       }, timeoutMs);
 
       socket.emit(event as any, data, (response: any) => {
         clearTimeout(timeout);
         if (response?.success) {
-          resolve(true);
+          resolve({
+            success: true,
+            messageId: response.data?.messageId,
+            clientMessageId: response.data?.clientMessageId,
+          });
         } else {
           const errorMsg = response?.message || response?.error || 'Error sending message';
           logger.warn('[MessagingService]', `Send failed: ${errorMsg}`);
-          resolve(false);
+          resolve({ success: false });
         }
       });
     });

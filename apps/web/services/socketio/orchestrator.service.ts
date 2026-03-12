@@ -16,6 +16,7 @@ import type {
   EncryptionHandlers,
   GetMessageByIdCallback,
   MessageSendOptions,
+  MessageAckResponse,
   UnsubscribeFn
 } from './types';
 
@@ -37,7 +38,8 @@ interface PendingMessage {
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];
   timestamp: number;
-  resolve: (success: boolean) => void;
+  clientMessageId?: string;
+  resolve: (result: MessageAckResponse) => void;
 }
 
 /**
@@ -156,7 +158,7 @@ export class SocketIOOrchestrator {
       // Check if message has expired
       if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
         logger.warn('[SocketIOOrchestrator]', 'Pending message expired, discarding');
-        pending.resolve(false);
+        pending.resolve({ success: false });
         continue;
       }
 
@@ -168,18 +170,19 @@ export class SocketIOOrchestrator {
           replyToId: pending.replyToId,
           mentionedUserIds: pending.mentionedUserIds,
           attachmentIds: pending.attachmentIds,
-          attachmentMimeTypes: pending.attachmentMimeTypes
+          attachmentMimeTypes: pending.attachmentMimeTypes,
+          clientMessageId: pending.clientMessageId,
         };
 
-        const success = await this.messagingService.sendMessage(socket, options);
-        pending.resolve(success);
+        const result = await this.messagingService.sendMessage(socket, options);
+        pending.resolve(result);
 
-        if (success) {
+        if (result.success) {
           logger.debug('[SocketIOOrchestrator]', 'Pending message sent successfully');
         }
       } catch (error) {
         logger.error('[SocketIOOrchestrator]', 'Error sending pending message', { error });
-        pending.resolve(false);
+        pending.resolve({ success: false });
       }
     }
 
@@ -286,8 +289,9 @@ export class SocketIOOrchestrator {
     replyToId?: string,
     mentionedUserIds?: string[],
     attachmentIds?: string[],
-    attachmentMimeTypes?: string[]
-  ): Promise<boolean> {
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string
+  ): Promise<MessageAckResponse> {
     this.ensureConnection();
 
     // Extract conversation ID first
@@ -310,12 +314,12 @@ export class SocketIOOrchestrator {
         logger.warn('[SocketIOOrchestrator]', 'Message queue full, oldest message will be discarded');
         const oldest = this.pendingMessages.shift();
         if (oldest) {
-          oldest.resolve(false);
+          oldest.resolve({ success: false });
         }
       }
 
       // Add to queue and return a promise that resolves when message is sent
-      return new Promise<boolean>((resolve) => {
+      return new Promise<MessageAckResponse>((resolve) => {
         const pending: PendingMessage = {
           conversationId,
           content,
@@ -324,6 +328,7 @@ export class SocketIOOrchestrator {
           mentionedUserIds,
           attachmentIds,
           attachmentMimeTypes,
+          clientMessageId,
           timestamp: Date.now(),
           resolve
         };
@@ -337,7 +342,7 @@ export class SocketIOOrchestrator {
           if (index !== -1) {
             this.pendingMessages.splice(index, 1);
             logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
-            resolve(false);
+            resolve({ success: false });
           }
         }, this.MESSAGE_QUEUE_TIMEOUT);
       });
@@ -350,7 +355,8 @@ export class SocketIOOrchestrator {
       replyToId,
       mentionedUserIds,
       attachmentIds,
-      attachmentMimeTypes
+      attachmentMimeTypes,
+      clientMessageId,
     };
 
     return this.messagingService.sendMessage(socket, options);
@@ -513,7 +519,7 @@ export class SocketIOOrchestrator {
     while (this.pendingMessages.length > 0) {
       const pending = this.pendingMessages.shift();
       if (pending) {
-        pending.resolve(false);
+        pending.resolve({ success: false });
       }
     }
 

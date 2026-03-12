@@ -458,10 +458,32 @@ export function CallManager() {
       const s = meeshySocketIOService.getSocket();
       if (s) attachListeners(s);
     };
-    socket?.on('connect', onConnect);
+
+    // If socket exists, listen for connect event
+    if (socket) {
+      socket.on('connect', onConnect);
+    }
+
+    // If socket is null at mount, poll until it becomes available (#4)
+    let socketPollInterval: ReturnType<typeof setInterval> | null = null;
+    if (!socket) {
+      socketPollInterval = setInterval(() => {
+        if (!isSubscribed) return;
+        const s = meeshySocketIOService.getSocket();
+        if (s) {
+          if (socketPollInterval) clearInterval(socketPollInterval);
+          socketPollInterval = null;
+          s.on('connect', onConnect);
+          if (s.connected) {
+            attachListeners(s);
+          }
+        }
+      }, 1000);
+    }
 
     return () => {
       isSubscribed = false;
+      if (socketPollInterval) clearInterval(socketPollInterval);
       const s = meeshySocketIOService.getSocket();
       if (s) {
         s.off('connect', onConnect);
@@ -493,16 +515,17 @@ export function CallManager() {
     };
   }, [isInCall, reset, clearCallTimeout]);
 
-  // Debug render state
-  console.log('🎨 [CallManager] Rendering:', {
-    incomingCall: !!incomingCall,
-    incomingCallId: incomingCall?.callId,
-    isInCall,
-    currentCallId: currentCall?.id,
-    userId: user?.id,
-    willShowNotification: !!incomingCall,
-    willShowInterface: !!(isInCall && currentCall && user?.id)
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[CallManager] Rendering:', {
+      incomingCall: !!incomingCall,
+      incomingCallId: incomingCall?.callId,
+      isInCall,
+      currentCallId: currentCall?.id,
+      userId: user?.id,
+      willShowNotification: !!incomingCall,
+      willShowInterface: !!(isInCall && currentCall && user?.id)
+    });
+  }
 
   return (
     <>

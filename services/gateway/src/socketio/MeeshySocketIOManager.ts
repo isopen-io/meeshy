@@ -295,7 +295,8 @@ export class MeeshySocketIOManager {
         originalLanguage?: string;
         messageType?: string;
         replyToId?: string;
-      }, callback?: (response: SocketIOResponse<{ messageId: string }>) => void) => {
+        clientMessageId?: string;
+      }, callback?: (response: SocketIOResponse<{ messageId: string; clientMessageId?: string; message?: any }>) => void) => {
         try {
 
           const userIdOrToken = this.socketToUser.get(socket.id);
@@ -399,19 +400,21 @@ export class MeeshySocketIOManager {
           );
 
           // Réponse via callback - typage strict SocketIOResponse
+          // Include clientMessageId in ack so sender can replace optimistic message
           if (callback) {
             if (response.success && response.data) {
-              const socketResponse: SocketIOResponse<{ messageId: string }> = { 
-                success: true, 
-                data: { messageId: response.data.id } 
+              const ackData: { messageId: string; clientMessageId?: string } = {
+                messageId: response.data.id,
               };
-              callback(socketResponse);
+              if (data.clientMessageId) {
+                ackData.clientMessageId = data.clientMessageId;
+              }
+              callback({ success: true, data: ackData });
             } else {
-              const socketResponse: SocketIOResponse<{ messageId: string }> = {
+              callback({
                 success: false,
-                error: response.error || 'Failed to send message'
-              };
-              callback(socketResponse);
+                error: response.error || 'Failed to send message',
+              });
             }
           }
 
@@ -543,7 +546,8 @@ export class MeeshySocketIOManager {
         originalLanguage?: string;
         attachmentIds: string[];
         replyToId?: string;
-      }, callback?: (response: SocketIOResponse<{ messageId: string }>) => void) => {
+        clientMessageId?: string;
+      }, callback?: (response: SocketIOResponse<{ messageId: string; clientMessageId?: string }>) => void) => {
         try {
           const userIdOrToken = this.socketToUser.get(socket.id);
           if (!userIdOrToken) {
@@ -723,20 +727,21 @@ export class MeeshySocketIOManager {
             }
           }
 
-          // Réponse via callback
+          // Réponse via callback — include clientMessageId for sender-side dedup
           if (callback) {
             if (response.success && response.data) {
-              const socketResponse: SocketIOResponse<{ messageId: string }> = { 
-                success: true, 
-                data: { messageId: response.data.id } 
+              const ackData: { messageId: string; clientMessageId?: string } = {
+                messageId: response.data.id,
               };
-              callback(socketResponse);
+              if (data.clientMessageId) {
+                ackData.clientMessageId = data.clientMessageId;
+              }
+              callback({ success: true, data: ackData });
             } else {
-              const socketResponse: SocketIOResponse<{ messageId: string }> = {
+              callback({
                 success: false,
-                error: response.error || 'Failed to send message'
-              };
-              callback(socketResponse);
+                error: response.error || 'Failed to send message',
+              });
             }
           }
 

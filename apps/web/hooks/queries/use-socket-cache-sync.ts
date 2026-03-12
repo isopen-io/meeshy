@@ -32,29 +32,29 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
           if (!old) return old;
 
-          const allMessages = old.pages.flatMap((page) => page.messages);
+          // Single-pass: ID dedup + own-message optimistic replacement
+          const currentUser = useAuthStore.getState().user;
+          const isOwnMessage = currentUser && message.senderId === currentUser.id;
+          let optimisticTempId: string | null = null;
 
-          // Check if message already exists by server ID
-          if (allMessages.some((m) => m.id === message.id)) {
-            return old;
+          for (const page of old.pages) {
+            for (const m of page.messages) {
+              if (m.id === message.id) return old; // already have this server message
+              // If own message:new arrives while optimistic is still 'sending', replace it
+              if (isOwnMessage && !optimisticTempId && (m as any)._tempId && (m as any)._localStatus === 'sending') {
+                optimisticTempId = (m as any)._tempId;
+              }
+            }
           }
 
-          // Check for optimistic message match (dedup by content + sender + time)
-          const optimisticMatch = allMessages.find(m => {
-            const tempId = (m as any)._tempId;
-            if (!tempId) return false;
-            const timeDiff = Math.abs(new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime());
-            return m.content === message.content && m.senderId === message.senderId && timeDiff < 30000;
-          });
-
-          if (optimisticMatch) {
-            // Replace optimistic message with server version
+          // Replace optimistic if found (prevents duplicate when message:new arrives before ACK)
+          if (optimisticTempId) {
             return {
               ...old,
               pages: old.pages.map(page => ({
                 ...page,
                 messages: page.messages.map(m =>
-                  (m as any)._tempId === (optimisticMatch as any)._tempId ? message : m
+                  (m as any)._tempId === optimisticTempId ? message : m
                 ),
               })),
             };
@@ -81,26 +81,29 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
-      // Update conversations list with latest message AND move to top
+      // Update conversations list with latest message AND move to top (single pass)
       queryClient.setQueryData<Conversation[]>(
         queryKeys.conversations.list(),
         (old) => {
           if (!old) return old;
 
-          const conversationIndex = old.findIndex(conv => conv.id === targetConversationId);
-          if (conversationIndex === -1) return old;
+          let updated: Conversation | null = null;
+          const rest: Conversation[] = [];
+          for (const conv of old) {
+            if (conv.id === targetConversationId) {
+              updated = {
+                ...conv,
+                lastMessage: message,
+                lastMessageAt: message.createdAt,
+                updatedAt: message.createdAt,
+              };
+            } else {
+              rest.push(conv);
+            }
+          }
 
-          const conversation = old[conversationIndex];
-          const updatedConversation = {
-            ...conversation,
-            lastMessage: message,
-            lastMessageAt: message.createdAt,
-            updatedAt: message.createdAt,
-          };
-
-          // Move conversation to top of list
-          const otherConversations = old.filter((_, idx) => idx !== conversationIndex);
-          return [updatedConversation, ...otherConversations];
+          if (!updated) return old;
+          return [updated, ...rest];
         }
       );
 

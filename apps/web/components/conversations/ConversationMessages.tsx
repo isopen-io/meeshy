@@ -13,6 +13,7 @@ import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
 interface ConversationMessagesProps {
   messages: Message[];
@@ -82,16 +83,20 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // Hook pour fixer les z-index des popovers Radix UI
   useFixRadixZIndex();
 
-  // Définir le callback pour récupérer un message par ID (utilise la liste translatedMessages existante)
+  // Stable ref for the getMessageById callback — identity never changes, but always reads latest translatedMessages
+  const getMessageByIdRef = useRef((messageId: string) =>
+    (translatedMessages as Message[]).find(msg => msg.id === messageId)
+  );
+  getMessageByIdRef.current = (messageId: string) =>
+    (translatedMessages as Message[]).find(msg => msg.id === messageId);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const meeshySocketIOService = require('@/services/meeshy-socketio.service').meeshySocketIOService;
-      const getMessageById = (messageId: string) => {
-        return (translatedMessages as Message[]).find(msg => msg.id === messageId);
-      };
-      meeshySocketIOService.setGetMessageByIdCallback(getMessageById);
+      meeshySocketIOService.setGetMessageByIdCallback(
+        (messageId: string) => getMessageByIdRef.current(messageId)
+      );
     }
-  }, [translatedMessages]);
+  }, []);
 
   // Utiliser le ref externe SI fourni, sinon créer un ref local
   const internalScrollAreaRef = useRef<HTMLDivElement>(null);
@@ -182,6 +187,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     return firstUnread || null;
   }, [messages, currentUser]);
 
+  // Stable ref for handleScroll to prevent listener detach/reattach (#16)
+  const handleScrollRef = useRef<((e: React.UIEvent<HTMLDivElement>) => void) | null>(null);
+
   // Gestionnaire de scroll pour le chargement infini ET le bouton flottant
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -229,18 +237,22 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     }
   }, [onLoadMore, hasMore, isLoadingMore, scrollDirection]);
 
+  // Keep handleScrollRef in sync with latest handleScroll
+  handleScrollRef.current = handleScroll;
+
   // Attacher handleScroll au conteneur externe si fourni
+  // Uses handleScrollRef to avoid detach/reattach on hasMore/isLoadingMore changes (#16)
   useEffect(() => {
     if (scrollContainerRef?.current) {
       const container = scrollContainerRef.current;
 
       // Wrapper pour convertir Event natif en React UIEvent avec currentTarget correct
+      // Delegates to handleScrollRef.current so the listener itself never changes
       const handleNativeScroll = () => {
-        // Créer un objet UIEvent avec le currentTarget correct
         const syntheticEvent = {
           currentTarget: container
         } as React.UIEvent<HTMLDivElement>;
-        handleScroll(syntheticEvent);
+        handleScrollRef.current?.(syntheticEvent);
       };
       container.addEventListener('scroll', handleNativeScroll);
 
@@ -255,7 +267,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       if (process.env.NODE_ENV === 'development') {
       }
     }
-  }, [scrollContainerRef, handleScroll, scrollDirection]);
+  }, [scrollContainerRef, scrollDirection]);
 
   // Vérifier la position quand les messages changent
   useEffect(() => {
@@ -353,6 +365,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   }, [conversationId, scrollDirection, scrollAreaRef]);
 
   // AMÉLIORATION 3: Nouveaux messages - Auto-scroll sur envoi/réception
+  // Use messages.length as dep instead of messages array to avoid re-runs on content changes (#13)
   useEffect(() => {
     if (messages.length > 0 && !isFirstLoadRef.current) {
       const currentCount = messages.length;
@@ -408,7 +421,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       // Mettre à jour le compteur
       previousMessageCountRef.current = currentCount;
     }
-  }, [messages, currentUser?.id, scrollDirection, scrollToBottom, scrollToTop, isLoadingMore, scrollAreaRef]);
+  }, [messages.length, currentUser?.id, scrollDirection, scrollToBottom, scrollToTop, isLoadingMore, scrollAreaRef]);
 
 
   // Choisir l'action du bouton selon la direction
