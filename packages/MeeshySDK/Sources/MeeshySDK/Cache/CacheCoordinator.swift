@@ -21,6 +21,8 @@ public actor CacheCoordinator {
     private let socialSocket: any SocialSocketProviding
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
+    private var isStarted = false
+    private var currentUserId: String = ""
 
     public init(
         messageSocket: any MessageSocketProviding = MessageSocketManager.shared,
@@ -42,8 +44,23 @@ public actor CacheCoordinator {
     }
 
     public func start() {
+        guard !isStarted else { return }
+        isStarted = true
+        resolveCurrentUserId()
         subscribeToMessageSocket()
         subscribeToLifecycle()
+    }
+
+    private func resolveCurrentUserId() {
+        Task { @MainActor in
+            if let userId = AuthManager.shared.currentUser?.id {
+                await self.setCurrentUserId(userId)
+            }
+        }
+    }
+
+    private func setCurrentUserId(_ id: String) {
+        currentUserId = id
     }
 
     // MARK: - Message Socket Subscriptions
@@ -54,16 +71,20 @@ public actor CacheCoordinator {
         msgSocket.messageReceived
             .sink { [weak self] apiMessage in
                 guard let self else { return }
-                let msg = apiMessage.toMessage(currentUserId: "")
-                Task { await self.handleMessageReceived(msg) }
+                Task {
+                    let msg = apiMessage.toMessage(currentUserId: await self.currentUserId)
+                    await self.handleMessageReceived(msg)
+                }
             }
             .store(in: &cancellables)
 
         msgSocket.messageEdited
             .sink { [weak self] apiMessage in
                 guard let self else { return }
-                let msg = apiMessage.toMessage(currentUserId: "")
-                Task { await self.handleMessageEdited(msg) }
+                Task {
+                    let msg = apiMessage.toMessage(currentUserId: await self.currentUserId)
+                    await self.handleMessageEdited(msg)
+                }
             }
             .store(in: &cancellables)
 
@@ -244,12 +265,13 @@ public actor CacheCoordinator {
         messageId: String,
         mutate: @Sendable (MeeshyMessage) -> MeeshyMessage
     ) async {
-        // Messages are keyed by conversationId, so we cannot know which key
-        // holds the message without scanning. For socket events that only carry
-        // messageId (reactions), we scan all loaded keys. This is bounded by
-        // maxL1Keys (typically 20).
-        // For now, this is a best-effort approach. A future optimization could
-        // maintain a messageId -> conversationId index.
+        let keys = await messages.loadedKeys()
+        for key in keys {
+            await messages.update(for: key) { existing in
+                guard existing.contains(where: { $0.id == messageId }) else { return existing }
+                return existing.map { $0.id == messageId ? mutate($0) : $0 }
+            }
+        }
     }
 
     // MARK: - Lifecycle

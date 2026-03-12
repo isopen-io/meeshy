@@ -126,6 +126,10 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    public func loadedKeys() -> [Key] {
+        Array(memoryCache.keys)
+    }
+
     // MARK: - Private actor-isolated
 
     private func touchKey(_ key: Key) {
