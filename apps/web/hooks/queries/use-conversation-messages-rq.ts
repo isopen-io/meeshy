@@ -39,7 +39,7 @@ export interface ConversationMessagesRQReturn {
   addMessage: (message: Message) => boolean;
   updateMessage: (messageId: string, updates: Partial<Message> | ((prev: Message) => Message)) => void;
   removeMessage: (messageId: string) => void;
-  addOptimisticMessage: (message: Message & { _localStatus: 'sending'; _tempId: string }) => void;
+  addOptimisticMessage: (message: Message & { _localStatus: string; _tempId: string }) => void;
   markMessageFailed: (tempId: string) => void;
   removeOptimisticMessage: (tempId: string) => void;
 }
@@ -393,7 +393,7 @@ export function useConversationMessagesRQ(
   }, [disableAutoFill, messages.length, isLoading, isFetchingNextPage, hasNextPage, loadMore, containerRef]);
 
   // Optimistic message support
-  const addOptimisticMessage = useCallback((message: Message & { _localStatus: 'sending'; _tempId: string }) => {
+  const addOptimisticMessage = useCallback((message: Message & { _localStatus: string; _tempId: string }) => {
     if (!conversationId) return;
     queryClient.setQueryData(queryKey, (old: typeof data) => {
       if (!old) return old;

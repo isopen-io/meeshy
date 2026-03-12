@@ -117,11 +117,8 @@ jest.mock('@/hooks/queries/use-conversations-pagination-rq', () => ({
   useConversationsPaginationRQ: jest.fn(),
 }));
 
-jest.mock('@/hooks/use-notifications', () => ({
-  useNotifications: () => ({
-    notifications: [],
-    markAsRead: jest.fn(),
-  }),
+jest.mock('@/hooks/queries/use-notifications-manager-rq', () => ({
+  useNotificationsManagerRQ: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-virtual-keyboard', () => ({
@@ -140,7 +137,8 @@ jest.mock('@/hooks/queries', () => ({
   useInvalidateOnReconnect: jest.fn(),
 }));
 
-jest.mock('@/hooks/conversations', () => ({
+// Mock individual conversation hooks (direct imports, not barrel)
+jest.mock('@/hooks/conversations/useConversationSelection', () => ({
   useConversationSelection: jest.fn(() => ({
     effectiveSelectedId: null,
     selectedConversation: null,
@@ -148,6 +146,9 @@ jest.mock('@/hooks/conversations', () => ({
     handleBackToList: jest.fn(),
     setLocalSelectedConversationId: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/useConversationUI', () => ({
   useConversationUI: jest.fn(() => ({
     isMobile: false,
     showConversationList: true,
@@ -165,6 +166,9 @@ jest.mock('@/hooks/conversations', () => ({
     setSelectedAttachmentId: jest.fn(),
     handleImageClick: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/useConversationTyping', () => ({
   useConversationTyping: jest.fn(() => ({
     typingUsers: [],
     isTyping: false,
@@ -172,6 +176,9 @@ jest.mock('@/hooks/conversations', () => ({
     handleTypingStop: jest.fn(),
     handleTextInput: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/useComposerDrafts', () => ({
   useComposerDrafts: jest.fn(() => ({
     message: '',
     setMessage: jest.fn(),
@@ -182,12 +189,18 @@ jest.mock('@/hooks/conversations', () => ({
     clearDraft: jest.fn(),
     handleAttachmentsChange: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/useMessageActions', () => ({
   useMessageActions: jest.fn(() => ({
     handleEditMessage: jest.fn(),
     handleDeleteMessage: jest.fn(),
     handleNavigateToMessage: jest.fn(),
     imageAttachments: [],
   })),
+}));
+
+jest.mock('@/hooks/conversations/use-translation-state', () => ({
   useTranslationState: jest.fn(() => ({
     translatedMessages: [],
     setTranslatedMessages: jest.fn(),
@@ -196,17 +209,30 @@ jest.mock('@/hooks/conversations', () => ({
     usedLanguages: ['en'],
     addUsedLanguages: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/use-participants', () => ({
   useParticipants: jest.fn(() => ({
     participants: [],
     participantsRef: { current: [] },
     loadParticipants: jest.fn(),
   })),
+}));
+
+jest.mock('@/hooks/conversations/use-video-call', () => ({
   useVideoCall: jest.fn(() => ({
     startCall: jest.fn(),
     isCallActive: false,
   })),
+}));
+
+jest.mock('@/hooks/conversations/use-socket-callbacks', () => ({
   useSocketCallbacks: jest.fn(() => ({
-    setupSocketCallbacks: jest.fn(),
+    onNewMessage: jest.fn(),
+    onMessageEdited: jest.fn(),
+    onMessageDeleted: jest.fn(),
+    onTranslation: jest.fn(),
+    onUserTyping: jest.fn(),
   })),
 }));
 
@@ -343,6 +369,9 @@ describe('ConversationLayout', () => {
       addMessage: jest.fn(),
       updateMessage: jest.fn(),
       removeMessage: jest.fn(),
+      addOptimisticMessage: jest.fn(),
+      markMessageFailed: jest.fn(),
+      removeOptimisticMessage: jest.fn(),
     });
 
     (useSocketIOMessaging as jest.Mock).mockReturnValue({
@@ -393,7 +422,7 @@ describe('ConversationLayout', () => {
 
   describe('With Selected Conversation', () => {
     beforeEach(() => {
-      const { useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationSelection as jest.Mock).mockReturnValue({
         effectiveSelectedId: 'conv-1',
         selectedConversation: mockConversation,
@@ -430,7 +459,8 @@ describe('ConversationLayout', () => {
 
   describe('Mobile View', () => {
     beforeEach(() => {
-      const { useConversationUI, useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationUI } = require('@/hooks/conversations/useConversationUI');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationUI as jest.Mock).mockReturnValue({
         isMobile: true,
         showConversationList: true,
@@ -468,7 +498,7 @@ describe('ConversationLayout', () => {
 
   describe('Connection Status', () => {
     it('should show connection status indicator when disconnected', () => {
-      const { useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationSelection as jest.Mock).mockReturnValue({
         effectiveSelectedId: 'conv-1',
         selectedConversation: mockConversation,
@@ -493,7 +523,7 @@ describe('ConversationLayout', () => {
   describe('Create Conversation Modal', () => {
     it('should open create modal when create button clicked', () => {
       const setIsCreateModalOpen = jest.fn();
-      const { useConversationUI } = require('@/hooks/conversations');
+      const { useConversationUI } = require('@/hooks/conversations/useConversationUI');
       (useConversationUI as jest.Mock).mockReturnValue({
         isMobile: false,
         showConversationList: true,
@@ -518,43 +548,12 @@ describe('ConversationLayout', () => {
     });
   });
 
-  describe('Details Sidebar', () => {
-    it('should render details sidebar when open', () => {
-      const { useConversationUI, useConversationSelection } = require('@/hooks/conversations');
-      (useConversationUI as jest.Mock).mockReturnValue({
-        isMobile: false,
-        showConversationList: true,
-        setShowConversationList: jest.fn(),
-        conversationListWidth: 350,
-        isResizing: false,
-        handleResizeMouseDown: jest.fn(),
-        isCreateModalOpen: false,
-        setIsCreateModalOpen: jest.fn(),
-        isDetailsOpen: true,
-        setIsDetailsOpen: jest.fn(),
-        galleryOpen: false,
-        setGalleryOpen: jest.fn(),
-        selectedAttachmentId: null,
-        setSelectedAttachmentId: jest.fn(),
-        handleImageClick: jest.fn(),
-      });
-      (useConversationSelection as jest.Mock).mockReturnValue({
-        effectiveSelectedId: 'conv-1',
-        selectedConversation: mockConversation,
-        handleSelectConversation: jest.fn(),
-        handleBackToList: jest.fn(),
-        setLocalSelectedConversationId: jest.fn(),
-      });
-
-      render(<ConversationLayout />);
-
-      expect(screen.getByTestId('details-sidebar')).toBeInTheDocument();
-    });
-  });
+  // Details Sidebar test removed — sidebar was extracted from ConversationLayout
 
   describe('Gallery', () => {
     it('should render attachment gallery when open', () => {
-      const { useConversationUI, useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationUI } = require('@/hooks/conversations/useConversationUI');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationUI as jest.Mock).mockReturnValue({
         isMobile: false,
         showConversationList: true,
@@ -611,7 +610,7 @@ describe('ConversationLayout', () => {
         new Error('Failed to load participants')
       );
 
-      const { useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationSelection as jest.Mock).mockReturnValue({
         effectiveSelectedId: 'conv-1',
         selectedConversation: mockConversation,
@@ -634,7 +633,7 @@ describe('ConversationLayout', () => {
   describe('URL Selected Conversation', () => {
     it('should select conversation from URL param', () => {
       const setLocalSelectedConversationId = jest.fn();
-      const { useConversationSelection } = require('@/hooks/conversations');
+      const { useConversationSelection } = require('@/hooks/conversations/useConversationSelection');
       (useConversationSelection as jest.Mock).mockReturnValue({
         effectiveSelectedId: null,
         selectedConversation: null,

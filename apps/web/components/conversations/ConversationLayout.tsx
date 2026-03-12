@@ -48,19 +48,19 @@ import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 import type { Conversation, Message, UserRoleEnum } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 
+import { createOptimisticMessage } from '@/utils/optimistic-message';
+import type { OptimisticMessage } from '@/utils/optimistic-message';
 
-// Hooks refactorisés (Single Responsibility)
-import {
-  useConversationSelection,
-  useConversationUI,
-  useConversationTyping,
-  useComposerDrafts,
-  useMessageActions,
-  useTranslationState,
-  useParticipants,
-  useVideoCall,
-  useSocketCallbacks,
-} from '@/hooks/conversations';
+// Hooks refactorisés (Single Responsibility) — direct imports for tree-shaking (#17)
+import { useConversationSelection } from '@/hooks/conversations/useConversationSelection';
+import { useConversationUI } from '@/hooks/conversations/useConversationUI';
+import { useConversationTyping } from '@/hooks/conversations/useConversationTyping';
+import { useComposerDrafts } from '@/hooks/conversations/useComposerDrafts';
+import { useMessageActions } from '@/hooks/conversations/useMessageActions';
+import { useTranslationState } from '@/hooks/conversations/use-translation-state';
+import { useParticipants } from '@/hooks/conversations/use-participants';
+import { useVideoCall } from '@/hooks/conversations/use-video-call';
+import { useSocketCallbacks } from '@/hooks/conversations/use-socket-callbacks';
 
 // Dynamic imports (bundle-dynamic-imports) - chargés uniquement quand nécessaires
 const AttachmentGallery = dynamic(
@@ -82,43 +82,7 @@ const AuthCheckingLoader = (
   </div>
 );
 
-function createOptimisticMessage(
-  content: string,
-  senderId: string,
-  conversationId: string,
-  language: string,
-  replyToId?: string,
-  sender?: { id: string; username: string; displayName: string; avatar?: string }
-): Message & { _localStatus: 'sending'; _tempId: string } {
-  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  return {
-    id: tempId,
-    _tempId: tempId,
-    _localStatus: 'sending',
-    conversationId,
-    senderId,
-    content,
-    originalLanguage: language,
-    messageType: 'text',
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: false,
-    viewOnceCount: 0,
-    isBlurred: false,
-    deliveredCount: 0,
-    readCount: 0,
-    reactionCount: 0,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    replyToId,
-    sender: sender ? {
-      id: sender.id,
-      username: sender.username,
-      displayName: sender.displayName,
-      avatar: sender.avatar,
-    } : undefined,
-  } as any;
-}
+// createOptimisticMessage and OptimisticMessage type imported from @/utils/optimistic-message
 
 export function ConversationLayout({ selectedConversationId }: ConversationLayoutProps) {
   const user = useUser();
@@ -550,7 +514,12 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       conversationId,
       selectedLanguage,
       replyToId,
-      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar }
+      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+      {
+        attachmentIds: hasAttachments ? currentAttachmentIds : undefined,
+        attachmentMimeTypes: hasAttachments ? currentAttachmentMimeTypes : undefined,
+        mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
+      },
     );
 
     addOptimisticMessage(optimistic);
@@ -622,23 +591,37 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const handleRetryMessage = useCallback(async (tempId: string, content: string, language: string, replyToId?: string) => {
     if (!selectedConversation || !user) return;
 
+    // Read _sendPayload from the failed optimistic message before removing it
+    const failedMessage = messages.find(
+      (m): m is OptimisticMessage => '_tempId' in m && (m as OptimisticMessage)._tempId === tempId
+    );
+    const sendPayload = failedMessage?._sendPayload ?? {};
+
     removeOptimisticMessage(tempId);
 
     const optimistic = createOptimisticMessage(
       content, user.id, selectedConversation.id, language, replyToId,
-      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar }
+      { id: user.id, username: user.username, displayName: user.displayName || user.username, avatar: user.avatar },
+      sendPayload,
     );
     addOptimisticMessage(optimistic);
 
     try {
-      const success = await sendMessageViaSocket(content, language, replyToId);
+      const success = await sendMessageViaSocket(
+        content,
+        language,
+        replyToId,
+        sendPayload.mentionedUserIds,
+        sendPayload.attachmentIds,
+        sendPayload.attachmentMimeTypes,
+      );
       if (!success) {
         markMessageFailed(optimistic._tempId);
       }
     } catch {
       markMessageFailed(optimistic._tempId);
     }
-  }, [selectedConversation, user, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed]);
+  }, [selectedConversation, user, messages, sendMessageViaSocket, removeOptimisticMessage, addOptimisticMessage, markMessageFailed]);
 
   const handleCancelMessage = useCallback((tempId: string) => {
     if (!selectedConversation) return;
