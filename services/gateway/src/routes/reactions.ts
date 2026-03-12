@@ -171,21 +171,23 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Récupérer la conversation pour savoir à qui broadcaster
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true }
+      });
+
       // Créer l'événement de mise à jour
       const updateEvent = await reactionService.createUpdateEvent(
         messageId,
         emoji,
         'add',
-        participantId
+        participantId,
+        message?.conversationId ?? messageId
       );
 
       // Broadcast via Socket.IO à tous les participants de la conversation
       if (socketIOHandler) {
-        // Récupérer la conversation pour savoir à qui broadcaster
-        const message = await prisma.message.findUnique({
-          where: { id: messageId },
-          select: { conversationId: true }
-        });
 
         if (message) {
           // Broadcaster l'événement à tous les participants de la conversation
@@ -336,20 +338,23 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Récupérer la conversation pour broadcaster
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true }
+      });
+
       // Créer l'événement de mise à jour
       const updateEvent = await reactionService.createUpdateEvent(
         messageId,
         decodedEmoji,
         'remove',
-        removeParticipantId
+        removeParticipantId,
+        message?.conversationId ?? messageId
       );
 
       // Broadcast via Socket.IO
       if (socketIOHandler) {
-        const message = await prisma.message.findUnique({
-          where: { id: messageId },
-          select: { conversationId: true }
-        });
 
         if (message) {
           (socketIOHandler as any).io?.to(ROOMS.conversation(message.conversationId)).emit(

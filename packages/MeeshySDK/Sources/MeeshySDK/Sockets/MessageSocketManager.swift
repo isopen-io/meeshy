@@ -24,6 +24,7 @@ public struct ReactionAggregationEvent: Decodable, Sendable {
 
 public struct ReactionUpdateEvent: Decodable, Sendable {
     public let messageId: String
+    public let conversationId: String?
     public let participantId: String?
     public let emoji: String
     public let action: String?

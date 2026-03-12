@@ -92,16 +92,41 @@ final class UserModelsTests: XCTestCase {
     func testAPIConversationMemberDecoding() throws {
         let json = """
         {
+            "id": "part1",
+            "conversationId": "conv1",
+            "type": "user",
             "userId": "user1",
+            "displayName": "Alice",
+            "avatar": null,
             "role": "admin",
+            "language": "en",
+            "permissions": {
+                "canSendMessages": true,
+                "canSendFiles": true,
+                "canSendImages": true,
+                "canSendVideos": true,
+                "canSendAudios": true,
+                "canSendLocations": true,
+                "canSendLinks": true
+            },
+            "isActive": true,
+            "isOnline": true,
+            "joinedAt": "2026-01-15T10:30:00.000Z",
+            "leftAt": null,
+            "bannedAt": null,
+            "nickname": null,
+            "lastActiveAt": null,
             "user": {"id":"user1","username":"alice","displayName":"Alice"}
         }
         """.data(using: .utf8)!
 
-        let member = try makeDecoder().decode(APIConversationMember.self, from: json)
+        let member = try makeDecoder().decode(APIParticipant.self, from: json)
         XCTAssertEqual(member.userId, "user1")
         XCTAssertEqual(member.role, "admin")
         XCTAssertEqual(member.user?.username, "alice")
+        XCTAssertEqual(member.displayName, "Alice")
+        XCTAssertEqual(member.type, .user)
+        XCTAssertTrue(member.isActive)
     }
 
     // MARK: - APIConversationLastMessage

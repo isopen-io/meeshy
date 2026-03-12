@@ -765,13 +765,15 @@ describe('ReactionService', () => {
         testMessageId,
         '👍',
         'add',
-        testParticipantId
+        testParticipantId,
+        'conv123'
       );
 
       expect(result.messageId).toBe(testMessageId);
       expect(result.emoji).toBe('👍');
       expect(result.action).toBe('add');
       expect(result.participantId).toBe(testParticipantId);
+      expect(result.conversationId).toBe('conv123');
       expect(result.aggregation).toBeDefined();
       expect(result.timestamp).toBeInstanceOf(Date);
     });
@@ -783,7 +785,8 @@ describe('ReactionService', () => {
         testMessageId,
         '👍',
         'remove',
-        testParticipantId
+        testParticipantId,
+        'conv123'
       );
 
       expect(result.action).toBe('remove');
@@ -799,7 +802,8 @@ describe('ReactionService', () => {
         testMessageId,
         '👍',
         'add',
-        testParticipantId2
+        testParticipantId2,
+        'conv456'
       );
 
       expect(result.participantId).toBe(testParticipantId2);

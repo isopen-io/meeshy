@@ -1096,6 +1096,7 @@ export function registerMessagesAdvancedRoutes(
           emoji,
           'add',
           currentParticipant.id,
+          conversationId,
         );
 
         if (socketIOHandler) {
@@ -1265,6 +1266,7 @@ export function registerMessagesAdvancedRoutes(
           emoji,
           'remove',
           currentParticipant.id,
+          conversationId,
         );
 
         if (socketIOHandler) {

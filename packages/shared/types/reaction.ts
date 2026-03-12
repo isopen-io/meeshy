@@ -51,6 +51,7 @@ export interface ReactionSync {
  */
 export interface ReactionUpdateEvent {
   readonly messageId: string;
+  readonly conversationId: string;
   readonly participantId: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
