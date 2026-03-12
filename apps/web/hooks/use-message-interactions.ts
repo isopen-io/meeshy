@@ -45,10 +45,13 @@ export function useMessageInteractions({
   // Détermine si c'est le message de l'utilisateur connecté
   // senderId is a Participant ID; use sender.userId or sender.user.id for User ID comparison
   const isOwnMessage = useMemo(() => {
-    const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id;
     return Boolean(isAnonymous
       ? (currentAnonymousUserId && message.senderId === currentAnonymousUserId)
-      : (currentUserId && senderUserId === currentUserId));
+      : (currentUserId && (
+          message.senderId === currentUserId
+          || (message.sender as any)?.id === currentUserId
+          || getSenderUserId(message.sender as Record<string, unknown>) === currentUserId
+        )));
   }, [isAnonymous, currentAnonymousUserId, currentUserId, message.sender, message.senderId]);
 
   // Permissions de modification (edit)
