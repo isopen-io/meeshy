@@ -125,7 +125,22 @@ public actor DiskCacheStore: ReadableCacheStore {
         return fileManager.fileExists(atPath: diskFilePath(for: fileKey).path)
     }
 
-    // MARK: - WritableCacheStore Compat
+    // MARK: - MediaCaching-Compatible API
+
+    public func data(for urlString: String) async throws -> Data {
+        let result = await load(for: urlString)
+        guard let data = result.value?.first else {
+            throw DiskCacheError.notCached(urlString)
+        }
+        return data
+    }
+
+    public func localFileURLOrThrow(for urlString: String) async throws -> URL {
+        guard let url = localFileURL(for: urlString) else {
+            throw DiskCacheError.notCached(urlString)
+        }
+        return url
+    }
 
     public func store(_ data: Data, for key: String) async {
         await save(data, for: key)
@@ -137,6 +152,16 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public func clearAll() async {
         await invalidateAll()
+    }
+
+    public enum DiskCacheError: Error, LocalizedError {
+        case notCached(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .notCached(let key): return "No cached data for key: \(key)"
+            }
+        }
     }
 
     // MARK: - Eviction

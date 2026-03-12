@@ -172,4 +172,39 @@ final class DiskCacheStoreTests: XCTestCase {
         let result = DiskCacheStore.cachedImage(for: "https://example.com/nope.png")
         XCTAssertNil(result)
     }
+
+    // MARK: - MediaCaching-Compatible API Tests
+
+    func test_data_returnsDataAfterSave() async throws {
+        let store = makeStore()
+        let expected = Data("hello media".utf8)
+        await store.save(expected, for: "https://example.com/media.mp3")
+        let result = try await store.data(for: "https://example.com/media.mp3")
+        XCTAssertEqual(result, expected)
+    }
+
+    func test_data_throwsForMissingKey() async {
+        let store = makeStore()
+        do {
+            _ = try await store.data(for: "https://example.com/missing.mp3")
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertTrue(error is DiskCacheStore.DiskCacheError)
+        }
+    }
+
+    func test_isCached_trueAfterStore() async {
+        let store = makeStore()
+        await store.store(Data("compat".utf8), for: "https://example.com/compat.dat")
+        let cached = await store.isCached("https://example.com/compat.dat")
+        XCTAssertTrue(cached)
+    }
+
+    func test_isCached_falseAfterRemove() async {
+        let store = makeStore()
+        await store.store(Data("temp".utf8), for: "https://example.com/temp.dat")
+        await store.remove(for: "https://example.com/temp.dat")
+        let cached = await store.isCached("https://example.com/temp.dat")
+        XCTAssertFalse(cached)
+    }
 }
