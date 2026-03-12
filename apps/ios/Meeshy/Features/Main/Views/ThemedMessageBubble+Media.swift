@@ -514,7 +514,7 @@ struct BubbleCarouselView: View {
             let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
             guard !urlStr.isEmpty else { continue }
             Task {
-                _ = try? await MediaCacheManager.shared.image(
+                _ = await CacheCoordinator.shared.images.image(
                     for: MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
                 )
             }

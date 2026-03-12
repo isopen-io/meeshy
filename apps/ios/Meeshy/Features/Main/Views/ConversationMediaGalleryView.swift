@@ -382,7 +382,7 @@ struct ConversationMediaGalleryView: View {
         guard !urlStr.isEmpty,
               let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
         else { return }
-        Task { await MediaCacheManager.shared.prefetch(resolved) }
+        Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
     }
 
     private func prefetchNeighbors(around index: Int) {

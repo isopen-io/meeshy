@@ -780,12 +780,12 @@ extension StoryViewerView {
             }
         }
 
-        // Prefetch dans un contexte async (MediaCacheManager est un actor)
+        // Prefetch dans un contexte async (CacheCoordinator stores)
         let uniqueURLs = Array(Set(urls))
         Task {
-            let cache = MediaCacheManager.shared
+            let images = await CacheCoordinator.shared.images
             for url in uniqueURLs {
-                await cache.prefetch(url)
+                _ = try? await images.data(for: url)
             }
         }
     }

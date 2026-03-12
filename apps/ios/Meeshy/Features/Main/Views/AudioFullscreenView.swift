@@ -833,7 +833,7 @@ private struct AudioFullscreenPage: View {
         let url = currentAudioUrl
         let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
         Task {
-            if let data = try? await MediaCacheManager.shared.data(for: resolved) {
+            if let data = try? await CacheCoordinator.shared.audio.data(for: resolved) {
                 waveformAnalyzer.analyze(data: data)
             }
         }
