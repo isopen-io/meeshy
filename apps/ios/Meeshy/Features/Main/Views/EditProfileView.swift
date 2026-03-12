@@ -447,7 +447,7 @@ struct EditProfileView: View {
 
                 await authManager?.checkExistingSession()
                 if let userId = authManager?.currentUser?.id {
-                    await UserProfileCacheManager.shared.invalidate(userId: userId)
+                    await CacheCoordinator.shared.profiles.invalidate(for: userId)
                 }
 
                 HapticFeedback.success()

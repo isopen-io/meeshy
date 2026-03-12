@@ -17,7 +17,6 @@ final class UserProfileViewModel: ObservableObject {
     // MARK: - Dependencies
 
     private let authManager: AuthManaging
-    private let profileCache: UserProfileCaching
     private let blockService: BlockServiceProviding
 
     var isCurrentUser: Bool {
@@ -28,11 +27,9 @@ final class UserProfileViewModel: ObservableObject {
     init(
         user: ProfileSheetUser,
         authManager: AuthManaging = AuthManager.shared,
-        profileCache: UserProfileCaching = UserProfileCacheManager.shared,
         blockService: BlockServiceProviding = BlockService.shared
     ) {
         self.authManager = authManager
-        self.profileCache = profileCache
         self.blockService = blockService
         self.profileUser = user
         self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
@@ -43,8 +40,15 @@ final class UserProfileViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        let cached = await CacheCoordinator.shared.profiles.load(for: userId)
+        if let cachedUser = cached.value?.first {
+            fullUser = cachedUser
+            return
+        }
+
         do {
-            let user = try await profileCache.profile(for: userId)
+            let user = try await UserService.shared.getProfile(idOrUsername: userId)
+            await CacheCoordinator.shared.profiles.save([user], for: userId)
             fullUser = user
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
@@ -58,7 +62,7 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoadingStats = false }
 
         do {
-            let stats = try await profileCache.stats(for: userId)
+            let stats = try await UserService.shared.getUserStats(userId: userId)
             userStats = stats
         } catch {
             statsError = "Impossible de charger les statistiques"
