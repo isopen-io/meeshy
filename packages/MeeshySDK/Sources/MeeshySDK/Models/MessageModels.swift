@@ -2,6 +2,15 @@ import Foundation
 
 // MARK: - API Message Models
 
+public struct APIMessageSenderUser: Decodable, Sendable {
+    public let id: String?
+    public let username: String?
+    public let displayName: String?
+    public let firstName: String?
+    public let lastName: String?
+    public let avatar: String?
+}
+
 public struct APIMessageSender: Decodable, Sendable {
     public let id: String
     public let username: String?
@@ -11,8 +20,24 @@ public struct APIMessageSender: Decodable, Sendable {
     public let userId: String?
     public let firstName: String?
     public let lastName: String?
+    public let user: APIMessageSenderUser?
 
-    public var name: String { displayName ?? username ?? id }
+    public var name: String {
+        nonEmpty(displayName) ?? nonEmpty(user?.displayName) ?? nonEmpty(username) ?? nonEmpty(user?.username) ?? id
+    }
+
+    public var resolvedAvatar: String? {
+        nonEmpty(avatar) ?? nonEmpty(user?.avatar)
+    }
+
+    public var resolvedUserId: String? {
+        userId ?? user?.id
+    }
+
+    private func nonEmpty(_ s: String?) -> String? {
+        guard let s, !s.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return s
+    }
 }
 
 public struct APIAttachmentTranscription: Decodable, Sendable {
@@ -261,8 +286,9 @@ extension APIMessage {
             )
         }()
 
-        let senderDisplayName = sender?.displayName ?? sender?.username ?? sender?.name
+        let senderDisplayName = sender?.name
         let senderColor = senderDisplayName.map { DynamicColorGenerator.colorForName($0) }
+        let resolvedUsername = sender?.username ?? sender?.user?.username
 
         return MeeshyMessage(
             id: id, conversationId: conversationId, senderId: senderId,
@@ -277,9 +303,9 @@ extension APIMessage {
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments, reactions: uiReactions, replyTo: uiReplyTo,
             forwardedFrom: uiForwardRef,
-            senderName: senderDisplayName, senderUsername: sender?.username, senderColor: senderColor,
-            senderAvatarURL: sender?.avatar, senderUserId: sender?.userId,
-            isMe: senderId == currentUserId
+            senderName: senderDisplayName, senderUsername: resolvedUsername, senderColor: senderColor,
+            senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
+            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
         )
     }
 }

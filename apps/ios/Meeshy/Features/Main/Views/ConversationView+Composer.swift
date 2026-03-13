@@ -15,6 +15,8 @@ extension ConversationView {
             mode: .message,
             accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : accentColor,
             secondaryColor: secondaryColor,
+            selectedLanguage: composerState.selectedLanguage,
+            onLanguageChange: { composerState.selectedLanguage = $0 },
             onFocusChange: { focused in
                 isTyping = focused
                 if focused {

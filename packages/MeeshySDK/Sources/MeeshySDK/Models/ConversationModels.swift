@@ -2,6 +2,18 @@ import Foundation
 
 // MARK: - API Conversation Models
 
+public struct APIConversationUserNested: Decodable, Sendable {
+    public let id: String?
+    public let username: String?
+    public let displayName: String?
+    public let firstName: String?
+    public let lastName: String?
+    public let avatar: String?
+    public let avatarUrl: String?
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+}
+
 public struct APIConversationUser: Decodable, Sendable {
     public let id: String
     public let userId: String?
@@ -14,9 +26,24 @@ public struct APIConversationUser: Decodable, Sendable {
     public let isOnline: Bool?
     public let lastActiveAt: Date?
     public let type: String?
+    public let user: APIConversationUserNested?
 
-    public var name: String { displayName ?? username ?? id }
-    public var resolvedAvatar: String? { avatar ?? avatarUrl }
+    public var name: String {
+        nonEmpty(displayName) ?? nonEmpty(user?.displayName) ?? nonEmpty(username) ?? nonEmpty(user?.username) ?? id
+    }
+
+    public var resolvedAvatar: String? {
+        nonEmpty(avatar) ?? nonEmpty(avatarUrl) ?? nonEmpty(user?.avatar) ?? nonEmpty(user?.avatarUrl)
+    }
+
+    public var resolvedUserId: String? {
+        userId ?? user?.id
+    }
+
+    private func nonEmpty(_ s: String?) -> String? {
+        guard let s, !s.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return s
+    }
 }
 
 public struct APIMessageCount: Decodable, Sendable {
@@ -100,18 +127,12 @@ extension APIConversation {
 
         let displayName: String = {
             if convType == .direct {
-                if let user = otherUser {
-                    return user.displayName ?? user.username ?? user.id
-                }
                 if let participant = otherParticipant {
-                    let dn = participant.displayName.trimmingCharacters(in: .whitespaces)
-                    if !dn.isEmpty { return dn }
-                    return participant.user?.displayName ?? participant.user?.username ?? participant.id
+                    return participant.user?.name ?? participant.name
                 }
-                // Fallback: use lastMessage sender if it belongs to the other person
                 if let sender = lastMessage?.sender,
-                   (sender.userId ?? sender.id) != currentUserId {
-                    return sender.displayName ?? sender.username ?? sender.id
+                   (sender.resolvedUserId ?? sender.id) != currentUserId {
+                    return sender.name
                 }
             }
             if let t = title, !t.isEmpty { return t }
@@ -120,9 +141,9 @@ extension APIConversation {
 
         let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar ?? {
             if convType == .direct, let sender = lastMessage?.sender {
-                let senderUserId = sender.userId ?? sender.id
+                let senderUserId = sender.resolvedUserId ?? sender.id
                 if senderUserId != currentUserId {
-                    return sender.avatar ?? sender.avatarUrl
+                    return sender.resolvedAvatar
                 }
             }
             return nil

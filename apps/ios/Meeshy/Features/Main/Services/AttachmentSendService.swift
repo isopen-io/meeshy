@@ -32,6 +32,7 @@ protocol AttachmentSendServiceProviding {
         mediaFiles: [String: URL],
         thumbnails: [String: UIImage],
         replyToId: String?,
+        originalLanguage: String?,
         onProgress: @escaping (UploadQueueProgress) -> Void
     ) async throws -> AttachmentSendResult
 }
@@ -61,6 +62,7 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
         mediaFiles: [String: URL],
         thumbnails: [String: UIImage],
         replyToId: String?,
+        originalLanguage: String?,
         onProgress: @escaping (UploadQueueProgress) -> Void
     ) async throws -> AttachmentSendResult {
         try await ensureSocketConnected()
@@ -121,12 +123,14 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
                 content: content,
                 attachmentIds: uploadedIds,
                 replyToId: replyToId,
+                originalLanguage: originalLanguage,
                 isEncrypted: false
             )
             sendSuccess = true
         } else {
             let request = SendMessageRequest(
                 content: content,
+                originalLanguage: originalLanguage,
                 replyToId: replyToId,
                 attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds
             )

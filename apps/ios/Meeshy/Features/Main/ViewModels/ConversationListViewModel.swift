@@ -648,7 +648,7 @@ class ConversationListViewModel: ObservableObject {
                 conversationId: conversationId, offset: 0, limit: 5, includeReplies: false
             )
             let userId = currentUserId
-            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username) }
             previewMessages[conversationId] = msgs
         } catch { }
     }
@@ -656,6 +656,7 @@ class ConversationListViewModel: ObservableObject {
     private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
         let toFetch = Array(apiConversations.prefix(20))
         let messageService = self.messageService
+        let username = AuthManager.shared.currentUser?.username
 
         Task.detached(priority: .utility) {
             await withTaskGroup(of: Void.self) { group in
@@ -674,7 +675,7 @@ class ConversationListViewModel: ObservableObject {
                             )
                             if response.success {
                                 let messages = response.data.reversed().map {
-                                    $0.toMessage(currentUserId: userId)
+                                    $0.toMessage(currentUserId: userId, currentUsername: username)
                                 }
                                 await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
