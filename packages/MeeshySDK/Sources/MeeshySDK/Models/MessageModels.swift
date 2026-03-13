@@ -4,13 +4,15 @@ import Foundation
 
 public struct APIMessageSender: Decodable, Sendable {
     public let id: String
-    public let username: String
+    public let username: String?
     public let displayName: String?
     public let avatar: String?
     public let type: String?
     public let userId: String?
     public let firstName: String?
     public let lastName: String?
+
+    public var name: String { displayName ?? username ?? id }
 }
 
 public struct APIAttachmentTranscription: Decodable, Sendable {
@@ -211,7 +213,7 @@ extension APIMessage {
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
-                thumbnailColor: DynamicColorGenerator.colorForName(sender?.username ?? "?")
+                thumbnailColor: DynamicColorGenerator.colorForName(sender?.name ?? "?")
             )
         }
 
@@ -233,7 +235,7 @@ extension APIMessage {
         let uiReplyTo: ReplyReference? = {
             guard let reply = replyTo else { return nil }
             let isReplyMe = reply.senderId == currentUserId
-            let authorName = reply.sender?.displayName ?? reply.sender?.username ?? "?"
+            let authorName = reply.sender?.name ?? "?"
             let firstAtt = reply.attachments?.first
             return ReplyReference(
                 messageId: reply.id, authorName: authorName,
@@ -245,7 +247,7 @@ extension APIMessage {
 
         let uiForwardRef: ForwardReference? = {
             guard let fwd = forwardedFrom else { return nil }
-            let fwdSenderName = fwd.sender?.displayName ?? fwd.sender?.username ?? "?"
+            let fwdSenderName = fwd.sender?.name ?? "?"
             let firstAtt = fwd.attachments?.first
             return ForwardReference(
                 originalMessageId: fwd.id,
@@ -259,7 +261,7 @@ extension APIMessage {
             )
         }()
 
-        let senderDisplayName = sender?.displayName ?? sender?.username
+        let senderDisplayName = sender?.displayName ?? sender?.username ?? sender?.name
         let senderColor = senderDisplayName.map { DynamicColorGenerator.colorForName($0) }
 
         return MeeshyMessage(

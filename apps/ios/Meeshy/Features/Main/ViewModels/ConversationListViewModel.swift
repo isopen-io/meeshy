@@ -378,7 +378,9 @@ class ConversationListViewModel: ObservableObject {
                     Task { await self.loadAllRemainingBackground() }
                 }
             }
-        } catch { }
+        } catch {
+            print("[ConversationListVM] Error loading conversations: \(error)")
+        }
 
         await categoriesTask
         isLoading = false

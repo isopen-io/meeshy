@@ -95,8 +95,6 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>AccentColor</string>
-		<key>UIImageName</key>
-		<string>MeeshyLogo</string>
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>

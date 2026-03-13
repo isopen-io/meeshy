@@ -23,6 +23,24 @@ public struct UserStats: Codable, Sendable {
         self.languagesUsed = languagesUsed; self.memberDays = memberDays
         self.languages = languages; self.achievements = achievements
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        totalMessages = (try? container.decode(Int.self, forKey: .totalMessages)) ?? 0
+        totalConversations = (try? container.decode(Int.self, forKey: .totalConversations)) ?? 0
+        totalTranslations = (try? container.decode(Int.self, forKey: .totalTranslations)) ?? 0
+        friendRequestsReceived = (try? container.decode(Int.self, forKey: .friendRequestsReceived)) ?? 0
+        languagesUsed = (try? container.decode(Int.self, forKey: .languagesUsed)) ?? 0
+        memberDays = (try? container.decode(Int.self, forKey: .memberDays)) ?? 0
+        languages = (try? container.decode([String].self, forKey: .languages)) ?? []
+        achievements = (try? container.decode([Achievement].self, forKey: .achievements)) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case totalMessages, totalConversations, totalTranslations
+        case friendRequestsReceived, languagesUsed, memberDays
+        case languages, achievements
+    }
 }
 
 // MARK: - Achievement

@@ -81,16 +81,6 @@
         }
       }
     },
-    "%@ nouveau%@ post%@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ nouveau%2$@ post%3$@"
-          }
-        }
-      }
-    },
     "%@ pages" : {
 
     },
@@ -809,9 +799,6 @@
     "Appel en cours..." : {
 
     },
-    "Appuyez pour enregistrer" : {
-
-    },
     "Appuyez pour vérifier le numéro de sécurité" : {
 
     },
@@ -853,9 +840,6 @@
 
     },
     "Aucun utilisateur trouve" : {
-
-    },
-    "Aucun utilisateur trouvé" : {
 
     },
     "Aucune" : {
@@ -925,9 +909,6 @@
     "Bienvenue sur Meeshy! En utilisant notre application, tu acceptes les conditions suivantes:\n\n1. UTILISATION RESPONSABLE\nMeeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illegal.\n\n2. TON COMPTE\nTu es responsable de ton compte. Garde ton mot de passe secret!\n\n3. TES DONNEES\nOn protege tes donnees avec le chiffrement de bout en bout. Tes messages sont prives.\n\n4. TRADUCTION\nLa traduction est automatique et peut ne pas etre parfaite. C'est un outil, pas une science exacte!\n\n5. RESPECT\nTraite les autres comme tu voudrais etre traite. On est une communaute!\n\nOn est ensemble!" : {
 
     },
-    "Bio" : {
-
-    },
     "Bio (optionnel)" : {
 
     },
@@ -991,9 +972,6 @@
       }
     },
     "Blur" : {
-
-    },
-    "Break the language barrier" : {
 
     },
     "Cache media" : {
@@ -1738,9 +1716,6 @@
     "Cree le %@" : {
 
     },
-    "Créer" : {
-
-    },
     "Creer le lien" : {
 
     },
@@ -2005,9 +1980,6 @@
       }
     },
     "Entrez votre adresse email" : {
-
-    },
-    "Envoi de la photo..." : {
 
     },
     "Envoye a %@" : {
@@ -2396,9 +2368,6 @@
         }
       }
     },
-    "Modifier le profil" : {
-
-    },
     "Moi" : {
 
     },
@@ -2481,9 +2450,6 @@
           }
         }
       }
-    },
-    "Nouvelle conversation" : {
-
     },
     "Numéro de sécurité" : {
 
@@ -2700,9 +2666,6 @@
         }
       }
     },
-    "Profil mis a jour" : {
-
-    },
     "Public" : {
 
     },
@@ -2801,9 +2764,6 @@
 
     },
     "Retour" : {
-
-    },
-    "Sauvegarder" : {
 
     },
     "Se connecter" : {
@@ -3308,12 +3268,6 @@
 
     },
     "Traduit depuis %@" : {
-
-    },
-    "Transcription" : {
-
-    },
-    "Transcription en cours..." : {
 
     },
     "Transcrire" : {

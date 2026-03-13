@@ -602,10 +602,7 @@ struct ConversationListView: View {
                             subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
                             actionLabel: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion"),
                             onAction: {
-                                NotificationCenter.default.post(
-                                    name: Notification.Name("navigateToNewConversation"),
-                                    object: nil
-                                )
+                                router.push(.newConversation)
                             }
                         )
                         .padding(.top, 60)

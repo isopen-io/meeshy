@@ -356,31 +356,31 @@ struct SplashScreen: View {
             }
         }
         .onAppear {
-            // Staggered entrance
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            // Staggered entrance — fast and punchy
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                 showLogo = true
             }
 
             // Title: fade in + descend with bounce overshoot
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.55).delay(0.5)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.2)) {
                 showTitle = true
             }
 
             // Subtitle: same bounce, slightly later
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.55).delay(0.9)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) {
                 showSubtitle = true
             }
 
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 glowPulse = true
             }
 
-            withAnimation(.easeInOut(duration: 2.0)) {
+            withAnimation(.easeInOut(duration: 1.0)) {
                 backgroundScale = 1.0
             }
 
-            // Transition to main app (give enough time for all bounce animations)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+            // Transition to main app
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 onFinish()
             }
         }
