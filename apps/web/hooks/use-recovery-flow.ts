@@ -18,7 +18,7 @@ interface ExistingAccountInfo {
   maskedUsername?: string;
   maskedEmail?: string;
   maskedPhone?: string;
-  avatarUrl?: string;
+  avatar?: string;
 }
 
 interface UseRecoveryFlowProps {

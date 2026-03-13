@@ -13,7 +13,7 @@ export interface ExistingAccountInfo {
   maskedUsername?: string;
   maskedEmail?: string;
   maskedPhone?: string;
-  avatarUrl?: string;
+  avatar?: string;
 }
 
 interface UseRegistrationValidationOptions {
@@ -97,7 +97,7 @@ export function useRegistrationValidation({
               maskedDisplayName: data.data.accountInfo.maskedDisplayName,
               maskedUsername: data.data.accountInfo.maskedUsername,
               maskedPhone: data.data.accountInfo.maskedPhone,
-              avatarUrl: data.data.accountInfo.avatarUrl,
+              avatar: data.data.accountInfo.avatar,
             });
           } else {
             setExistingAccount({ type: 'email' });
@@ -130,7 +130,7 @@ export function useRegistrationValidation({
               maskedDisplayName: data.data.accountInfo.maskedDisplayName,
               maskedUsername: data.data.accountInfo.maskedUsername,
               maskedEmail: data.data.accountInfo.maskedEmail,
-              avatarUrl: data.data.accountInfo.avatarUrl,
+              avatar: data.data.accountInfo.avatar,
             });
           } else {
             setExistingAccount({ type: 'phone' });

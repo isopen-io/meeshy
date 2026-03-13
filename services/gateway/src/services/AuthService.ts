@@ -71,7 +71,7 @@ export interface RegisterResult {
     maskedDisplayName: string;
     maskedUsername: string;
     maskedEmail: string;
-    avatarUrl?: string;
+    avatar?: string;
     phoneNumber: string;
     phoneCountryCode: string;
   };
@@ -540,7 +540,7 @@ export class AuthService {
               maskedDisplayName: maskDisplayName(existingUserByPhone.displayName),
               maskedUsername: maskUsername(existingUserByPhone.username),
               maskedEmail: maskEmail(existingUserByPhone.email),
-              avatarUrl: existingUserByPhone.avatar || undefined,
+              avatar: existingUserByPhone.avatar || undefined,
               phoneNumber: cleanPhoneNumber,
               phoneCountryCode: phoneCountryCode || 'FR'
             }

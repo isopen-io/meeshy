@@ -10,7 +10,7 @@ interface ExistingAccountInfo {
   maskedUsername?: string;
   maskedEmail?: string;
   maskedPhone?: string;
-  avatarUrl?: string;
+  avatar?: string;
 }
 
 interface RecoveryChoiceStepProps {
@@ -66,8 +66,8 @@ export function RecoveryChoiceStep({
           className="p-4 rounded-2xl backdrop-blur-sm bg-gradient-to-r from-violet-50/80 to-purple-50/80 dark:from-violet-900/30 dark:to-purple-900/30 border border-violet-200/50 dark:border-violet-700/50"
         >
           <div className="flex items-center gap-4">
-            {existingAccount.avatarUrl ? (
-              <img src={existingAccount.avatarUrl} alt="" className="w-14 h-14 rounded-full ring-2 ring-violet-500" />
+            {existingAccount.avatar ? (
+              <img src={existingAccount.avatar} alt="" className="w-14 h-14 rounded-full ring-2 ring-violet-500" />
             ) : (
               <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
                 {existingAccount.maskedDisplayName?.[0] || '?'}

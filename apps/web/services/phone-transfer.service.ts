@@ -24,7 +24,7 @@ export interface PhoneTransferOwnerInfo {
   maskedDisplayName: string;
   maskedUsername: string;
   maskedEmail: string;
-  avatarUrl?: string;
+  avatar?: string;
   phoneNumber: string;
   phoneCountryCode: string;
 }

@@ -282,7 +282,7 @@ describe('PhoneResetFlow', () => {
         displayName: 'John Doe',
         username: 'j***n',
         email: 'j***@example.com',
-        avatarUrl: undefined,
+        avatar: undefined,
       };
     });
 

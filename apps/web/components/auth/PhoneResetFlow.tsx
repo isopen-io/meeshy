@@ -149,9 +149,9 @@ const IdentityCard = ({ maskedUserInfo }: { maskedUserInfo: MaskedUserInfo }) =>
     <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border border-white/30 dark:border-gray-600/50 rounded-xl p-4 text-center">
       {/* Avatar */}
       <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-3 overflow-hidden">
-        {maskedUserInfo.avatarUrl ? (
+        {maskedUserInfo.avatar ? (
           <img
-            src={maskedUserInfo.avatarUrl}
+            src={maskedUserInfo.avatar}
             alt="Avatar"
             className="w-16 h-16 rounded-full object-cover"
           />

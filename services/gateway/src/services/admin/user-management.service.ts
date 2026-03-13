@@ -300,11 +300,11 @@ export class UserManagementService {
   /**
    * Met à jour l'avatar d'un utilisateur
    */
-  async updateAvatar(userId: string, avatarUrl: string): Promise<FullUser> {
+  async updateAvatar(userId: string, avatar: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        avatar: avatarUrl,
+        avatar,
         updatedAt: new Date()
       },
     });

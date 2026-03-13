@@ -21,7 +21,7 @@ interface PhoneOwnerInfo {
   maskedDisplayName: string;
   maskedUsername: string;
   maskedEmail: string;
-  avatarUrl?: string;
+  avatar?: string;
   phoneNumber: string;
   phoneCountryCode: string;
 }
@@ -221,8 +221,8 @@ export function PhoneExistsModal({
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <Avatar className="w-12 h-12">
-                  {phoneOwnerInfo.avatarUrl && (
-                    <AvatarImage src={phoneOwnerInfo.avatarUrl} alt={phoneOwnerInfo.maskedDisplayName} />
+                  {phoneOwnerInfo.avatar && (
+                    <AvatarImage src={phoneOwnerInfo.avatar} alt={phoneOwnerInfo.maskedDisplayName} />
                   )}
                   <AvatarFallback className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                     {getInitials(phoneOwnerInfo.maskedDisplayName)}

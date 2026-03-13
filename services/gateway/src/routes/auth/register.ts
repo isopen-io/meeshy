@@ -106,7 +106,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
               maskedDisplayName: result.phoneOwnerInfo.maskedDisplayName,
               maskedUsername: result.phoneOwnerInfo.maskedUsername,
               maskedEmail: result.phoneOwnerInfo.maskedEmail,
-              avatarUrl: result.phoneOwnerInfo.avatarUrl,
+              avatar: result.phoneOwnerInfo.avatar,
               phoneNumber: result.phoneOwnerInfo.phoneNumber,
               phoneCountryCode: result.phoneOwnerInfo.phoneCountryCode
             },
