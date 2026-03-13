@@ -29,13 +29,6 @@ import type {
 import { conversationListCache, invalidateConversationCacheAsync } from '../../services/ConversationListCache';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 
-/** Strip data URIs from avatar fields (can be 2MB+ each) */
-function sanitizeAvatar(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (value.startsWith('data:')) return null;
-  return value;
-}
-
 /**
  * Résout l'ID de conversation réel à partir d'un identifiant (peut être un ObjectID ou un identifier)
  */
@@ -467,11 +460,8 @@ export function registerCoreRoutes(
           .slice(0, 5)
           .map((m: any) => ({
             ...m,
-            avatar: sanitizeAvatar(m.avatar),
-            user: m.userId ? (userMap.get(m.userId) ? {
-              ...userMap.get(m.userId),
-              avatar: sanitizeAvatar(userMap.get(m.userId)?.avatar)
-            } : m.user ? { ...m.user, avatar: sanitizeAvatar(m.user?.avatar) } : null) : null
+            avatar: m.avatar,
+            user: m.userId ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null) : null
           }));
 
         // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
@@ -507,8 +497,7 @@ export function registerCoreRoutes(
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
                 displayName: sender.displayName ?? sender.user?.displayName ?? null,
-                avatar: sanitizeAvatar(sender.avatar) ?? sanitizeAvatar(sender.user?.avatar) ?? null,
-                avatarUrl: sanitizeAvatar(sender.user?.avatarUrl) ?? sanitizeAvatar(sender.avatarUrl) ?? null,
+                avatar: sender.avatar ?? sender.user?.avatar ?? null,
                 isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
                 lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
               } : null

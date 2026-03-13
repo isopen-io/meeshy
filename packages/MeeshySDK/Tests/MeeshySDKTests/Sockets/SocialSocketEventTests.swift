@@ -341,8 +341,7 @@ final class SocialSocketEventTests: XCTestCase {
                 "id": "a1",
                 "username": "alice",
                 "displayName": "Alice",
-                "avatar": "https://cdn.meeshy.me/a.jpg",
-                "avatarUrl": "https://cdn.meeshy.me/a_full.jpg"
+                "avatar": "https://cdn.meeshy.me/a.jpg"
             },
             "likeCount": 10,
             "commentCount": 5,
@@ -369,7 +368,6 @@ final class SocialSocketEventTests: XCTestCase {
         XCTAssertNotNil(post.updatedAt)
         XCTAssertNotNil(post.expiresAt)
         XCTAssertEqual(post.author.id, "a1")
-        XCTAssertEqual(post.author.avatarUrl, "https://cdn.meeshy.me/a_full.jpg")
         XCTAssertEqual(post.likeCount, 10)
         XCTAssertEqual(post.commentCount, 5)
         XCTAssertEqual(post.repostCount, 2)

@@ -7,7 +7,6 @@ public struct APIAuthor: Decodable, Sendable {
     public let username: String?
     public let displayName: String?
     public let avatar: String?
-    public let avatarUrl: String?
 
     public var name: String { displayName ?? username ?? "Anonymous" }
 }
@@ -148,7 +147,7 @@ extension APIPost {
         let feedComments: [FeedComment] = (comments ?? []).map { c in
             let commentTranslatedContent: String? = userLanguage.flatMap { lang in c.translations?[lang]?.text }
             return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorAvatarURL: c.author.avatar ?? c.author.avatarUrl,
+                        authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
@@ -157,7 +156,7 @@ extension APIPost {
         var repost: RepostContent?
         if let r = repostOf {
             repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
-                                   authorAvatarURL: r.author.avatar ?? r.author.avatarUrl,
+                                   authorAvatarURL: r.author.avatar,
                                    content: r.content ?? "",
                                    timestamp: r.createdAt, likes: r.likeCount ?? 0)
         }
@@ -168,7 +167,7 @@ extension APIPost {
         let postTranslatedContent: String? = userLanguage.flatMap { lang in translations?[lang]?.text }
 
         return FeedPost(id: id, author: author.name, authorId: author.id,
-                        authorAvatarURL: author.avatar ?? author.avatarUrl,
+                        authorAvatarURL: author.avatar,
                         type: type, content: content ?? "",
                         timestamp: createdAt, likes: likeCount ?? 0,
                         comments: feedComments, commentCount: commentCount ?? feedComments.count,

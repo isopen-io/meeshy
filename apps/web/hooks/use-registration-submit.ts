@@ -13,7 +13,7 @@ export interface PhoneOwnerInfo {
   maskedDisplayName: string;
   maskedUsername: string;
   maskedEmail: string;
-  avatarUrl?: string;
+  avatar?: string;
   phoneNumber: string;
   phoneCountryCode: string;
 }

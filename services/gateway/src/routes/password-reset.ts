@@ -520,7 +520,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
                 username: { type: 'string', description: 'Masked username (e.g., t******5)' },
                 email: { type: 'string', description: 'Masked email (e.g., je....n@f*****om)' },
                 hasAvatar: { type: 'boolean' },
-                avatarUrl: { type: 'string' }
+                avatar: { type: 'string' }
               }
             },
             error: { type: 'string' }

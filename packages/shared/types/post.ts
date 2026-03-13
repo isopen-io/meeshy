@@ -19,7 +19,6 @@ export interface PostAuthor {
   readonly username: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
-  readonly avatarUrl?: string | null;
 }
 
 export interface PostMedia {

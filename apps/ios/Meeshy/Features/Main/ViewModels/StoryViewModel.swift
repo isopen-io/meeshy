@@ -172,7 +172,7 @@ class StoryViewModel: ObservableObject {
                     id: post.author.id,
                     username: post.author.name,
                     avatarColor: DynamicColorGenerator.colorForName(post.author.name),
-                    avatarURL: post.author.avatar ?? post.author.avatarUrl,
+                    avatarURL: post.author.avatar,
                     stories: [newItem]
                 )
                 storyGroups.insert(newGroup, at: 0)
@@ -296,7 +296,7 @@ class StoryViewModel: ObservableObject {
                 id: post.author.id,
                 username: post.author.name,
                 avatarColor: DynamicColorGenerator.colorForName(post.author.name),
-                avatarURL: post.author.avatar ?? post.author.avatarUrl,
+                avatarURL: post.author.avatar,
                 stories: [newItem]
             ), at: 0)
         }

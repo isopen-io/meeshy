@@ -11,7 +11,7 @@ export interface MaskedUserInfo {
   displayName: string;
   username: string;
   email: string;
-  avatarUrl?: string;
+  avatar?: string;
 }
 
 // Phone reset flow steps

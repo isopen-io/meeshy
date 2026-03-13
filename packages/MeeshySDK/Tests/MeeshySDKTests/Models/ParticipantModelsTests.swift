@@ -607,14 +607,14 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.resolvedAvatar, "https://example.com/self-avatar.jpg")
     }
 
-    func testResolvedAvatarWithUserHavingAvatarUrlFallback() throws {
+    func testResolvedAvatarWithUserHavingNoAvatar() throws {
         let json = """
         {
             "id": "aaa000000000000000000012",
             "conversationId": "bbb000000000000000000001",
             "type": "user",
             "userId": "ccc000000000000000000012",
-            "displayName": "AvatarUrl",
+            "displayName": "NoAvatar",
             "role": "member",
             "language": "en",
             "permissions": {
@@ -630,8 +630,7 @@ final class ParticipantModelsTests: XCTestCase {
             "joinedAt": "2026-01-01T00:00:00.000Z",
             "user": {
                 "id": "ccc000000000000000000012",
-                "username": "avatarurl",
-                "avatarUrl": "https://example.com/avatar-url.jpg"
+                "username": "noavatar"
             }
         }
         """
@@ -639,7 +638,7 @@ final class ParticipantModelsTests: XCTestCase {
         let participant = try makeISO8601Decoder().decode(APIParticipant.self, from: data)
 
         XCTAssertNil(participant.avatar)
-        XCTAssertEqual(participant.resolvedAvatar, "https://example.com/avatar-url.jpg")
+        XCTAssertNil(participant.resolvedAvatar)
     }
 
     // MARK: - APIParticipant All Optional Fields Nil
@@ -969,7 +968,6 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.user?.firstName, "Full")
         XCTAssertEqual(participant.user?.lastName, "User")
         XCTAssertNil(participant.user?.avatar)
-        XCTAssertNil(participant.user?.avatarUrl)
     }
 
     // MARK: - APIParticipant isActive States

@@ -11,7 +11,7 @@ describe('PasswordResetStore', () => {
     displayName: 'J*** D**',
     username: 'j***doe',
     email: 'j***@e***.com',
-    avatarUrl: 'https://example.com/avatar.png',
+    avatar: 'https://example.com/avatar.png',
   };
 
   beforeEach(() => {

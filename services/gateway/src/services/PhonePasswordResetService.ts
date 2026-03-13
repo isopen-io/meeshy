@@ -55,7 +55,7 @@ export interface MaskedUserInfo {
   displayName: string; // Full name (not masked) - "John Doe"
   username: string;    // Masked: "j******s"
   email: string;       // Masked: "je....n@e*****om"
-  avatarUrl?: string;  // undefined if no avatar
+  avatar?: string;  // undefined if no avatar
 }
 
 export interface IdentityVerificationRequest {
@@ -266,7 +266,7 @@ export class PhonePasswordResetService {
           displayName: user.displayName || user.username, // Full name, not masked
           username: maskUsername(user.username),
           email: maskEmail(user.email),
-          avatarUrl: user.avatar || undefined
+          avatar: user.avatar || undefined
         }
       };
 

@@ -30,7 +30,6 @@ final class UserModelsTests: XCTestCase {
             "firstName": "Alice",
             "lastName": "Wonderland",
             "avatar": "https://img.test/alice.png",
-            "avatarUrl": "https://cdn.test/alice.png",
             "isOnline": true,
             "lastActiveAt": "2026-01-15T10:30:00.000Z"
         }
@@ -43,7 +42,6 @@ final class UserModelsTests: XCTestCase {
         XCTAssertEqual(user.firstName, "Alice")
         XCTAssertEqual(user.lastName, "Wonderland")
         XCTAssertEqual(user.avatar, "https://img.test/alice.png")
-        XCTAssertEqual(user.avatarUrl, "https://cdn.test/alice.png")
         XCTAssertEqual(user.isOnline, true)
         XCTAssertNotNil(user.lastActiveAt)
     }
@@ -65,26 +63,19 @@ final class UserModelsTests: XCTestCase {
     }
 
     func testAPIConversationUserResolvedAvatar() throws {
-        let bothAvatars = """
-        {"id":"u1","username":"a","avatar":"primary.png","avatarUrl":"fallback.png"}
+        let withAvatar = """
+        {"id":"u1","username":"a","avatar":"primary.png"}
         """.data(using: .utf8)!
 
-        let user1 = try makeDecoder().decode(APIConversationUser.self, from: bothAvatars)
+        let user1 = try makeDecoder().decode(APIConversationUser.self, from: withAvatar)
         XCTAssertEqual(user1.resolvedAvatar, "primary.png")
 
-        let onlyUrl = """
-        {"id":"u2","username":"b","avatar":null,"avatarUrl":"fallback.png"}
+        let noAvatar = """
+        {"id":"u2","username":"b","avatar":null}
         """.data(using: .utf8)!
 
-        let user2 = try makeDecoder().decode(APIConversationUser.self, from: onlyUrl)
-        XCTAssertEqual(user2.resolvedAvatar, "fallback.png")
-
-        let neither = """
-        {"id":"u3","username":"c","avatar":null,"avatarUrl":null}
-        """.data(using: .utf8)!
-
-        let user3 = try makeDecoder().decode(APIConversationUser.self, from: neither)
-        XCTAssertNil(user3.resolvedAvatar)
+        let user2 = try makeDecoder().decode(APIConversationUser.self, from: noAvatar)
+        XCTAssertNil(user2.resolvedAvatar)
     }
 
     // MARK: - APIConversationMember

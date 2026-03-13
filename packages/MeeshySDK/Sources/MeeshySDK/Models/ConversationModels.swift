@@ -9,7 +9,6 @@ public struct APIConversationUserNested: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
-    public let avatarUrl: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
 }
@@ -22,7 +21,6 @@ public struct APIConversationUser: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
-    public let avatarUrl: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
     public let type: String?
@@ -33,7 +31,7 @@ public struct APIConversationUser: Decodable, Sendable {
     }
 
     public var resolvedAvatar: String? {
-        nonEmpty(avatar) ?? nonEmpty(avatarUrl) ?? nonEmpty(user?.avatar) ?? nonEmpty(user?.avatarUrl)
+        nonEmpty(avatar) ?? nonEmpty(user?.avatar)
     }
 
     public var resolvedUserId: String? {
