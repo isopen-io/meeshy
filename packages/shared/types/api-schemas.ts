@@ -1084,9 +1084,16 @@ export const conversationParticipantMinimalSchema = {
   description: 'Conversation member data',
   properties: {
     id: { type: 'string', description: 'Membership ID' },
-    userId: { type: 'string', description: 'User ID' },
+    conversationId: { type: 'string', description: 'Conversation ID' },
+    userId: { type: 'string', nullable: true, description: 'User ID' },
+    type: { type: 'string', nullable: true, description: 'Participant type (registered/anonymous)' },
+    displayName: { type: 'string', nullable: true, description: 'Display name' },
+    avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     role: { type: 'string', description: 'Member role' },
+    language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
+    isOnline: { type: 'boolean', nullable: true, description: 'Online status' },
+    lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' },
     canSendMessage: { type: 'boolean', description: 'Can send messages' },
     canSendFiles: { type: 'boolean', description: 'Can send files' },
     canSendImages: { type: 'boolean', description: 'Can send images' },
@@ -1138,6 +1145,11 @@ export const conversationMinimalSchema = {
       type: 'array',
       items: conversationParticipantMinimalSchema,
       description: 'Conversation members (limited)'
+    },
+    participants: {
+      type: 'array',
+      items: conversationParticipantMinimalSchema,
+      description: 'Conversation participants (limited) — used by iOS SDK for DM name resolution'
     },
     userPreferences: {
       type: 'array',
