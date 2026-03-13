@@ -28,17 +28,6 @@ import { invalidateConversationCacheAsync } from '../../services/ConversationLis
 const logger = enhancedLogger.child({ module: 'messages' });
 
 /**
- * Strip data URIs from avatar fields — they can be 2MB+ each and
- * multiply across every message in the response, causing 26MB+ payloads
- * and 60-120s serialization time.
- */
-function sanitizeAvatar(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (value.startsWith('data:')) return null;
-  return value;
-}
-
-/**
  * Résout l'ID de conversation réel à partir d'un identifiant
  */
 async function resolveConversationId(prisma: PrismaClient, identifier: string): Promise<string | null> {
@@ -765,8 +754,7 @@ export function registerMessagesRoutes(
             firstName: message.sender.user?.firstName ?? null,
             lastName: message.sender.user?.lastName ?? null,
             displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
-            avatar: sanitizeAvatar(message.sender.avatar) ?? sanitizeAvatar(message.sender.user?.avatar) ?? null,
-            avatarUrl: sanitizeAvatar(message.sender.user?.avatarUrl) ?? sanitizeAvatar(message.sender.avatarUrl) ?? null,
+            avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
@@ -797,7 +785,7 @@ export function registerMessagesRoutes(
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
               displayName: replySender.displayName ?? replySender.user?.displayName ?? null,
-              avatar: sanitizeAvatar(replySender.avatar) ?? sanitizeAvatar(replySender.user?.avatar) ?? null,
+              avatar: replySender.avatar ?? replySender.user?.avatar ?? null,
             } : null,
           };
         }
@@ -865,7 +853,7 @@ export function registerMessagesRoutes(
                   ...original.sender,
                   username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
                   displayName: (original.sender as any).displayName ?? (original.sender as any).user?.displayName ?? null,
-                  avatar: sanitizeAvatar((original.sender as any).avatar) ?? sanitizeAvatar((original.sender as any).user?.avatar) ?? null,
+                  avatar: (original.sender as any).avatar ?? (original.sender as any).user?.avatar ?? null,
                 } : null,
                 attachments: original.attachments
               };
