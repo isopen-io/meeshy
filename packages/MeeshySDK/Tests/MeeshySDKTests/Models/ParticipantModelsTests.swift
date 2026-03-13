@@ -414,8 +414,8 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.displayName, "Alice")
         XCTAssertEqual(participant.role, "admin")
         XCTAssertEqual(participant.language, "fr")
-        XCTAssertTrue(participant.permissions.canSendMessages)
-        XCTAssertTrue(participant.isActive)
+        XCTAssertEqual(participant.permissions?.canSendMessages, true)
+        XCTAssertEqual(participant.isActive, true)
         XCTAssertEqual(participant.isOnline, true)
         XCTAssertNil(participant.leftAt)
         XCTAssertNil(participant.bannedAt)
@@ -455,7 +455,7 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.displayName, "Guest_42")
         XCTAssertEqual(participant.nickname, "Guest_42")
         XCTAssertEqual(participant.name, "Guest_42")
-        XCTAssertFalse(participant.permissions.canSendFiles)
+        XCTAssertEqual(participant.permissions?.canSendFiles, false)
     }
 
     // MARK: - APIParticipant JSON Decoding - Bot Type
@@ -708,7 +708,7 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.avatar, "https://example.com/full.jpg")
         XCTAssertEqual(participant.role, "admin")
         XCTAssertEqual(participant.language, "fr")
-        XCTAssertTrue(participant.isActive)
+        XCTAssertEqual(participant.isActive, true)
         XCTAssertEqual(participant.isOnline, false)
         XCTAssertNotNil(participant.joinedAt)
         XCTAssertNotNil(participant.leftAt)
@@ -735,7 +735,7 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertEqual(participant.displayName, "Minimal")
         XCTAssertEqual(participant.role, "member")
         XCTAssertEqual(participant.language, "en")
-        XCTAssertTrue(participant.isActive)
+        XCTAssertEqual(participant.isActive, true)
     }
 
     // MARK: - APIParticipant Date Decoding
@@ -747,11 +747,11 @@ final class ParticipantModelsTests: XCTestCase {
         let data = json.data(using: .utf8)!
         let participant = try makeISO8601Decoder().decode(APIParticipant.self, from: data)
 
-        XCTAssertNotNil(participant.joinedAt)
+        let joinedAt = try XCTUnwrap(participant.joinedAt)
         let calendar = Calendar(identifier: .gregorian)
         var utcCalendar = calendar
         utcCalendar.timeZone = TimeZone(identifier: "UTC")!
-        let components = utcCalendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: participant.joinedAt)
+        let components = utcCalendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: joinedAt)
         XCTAssertEqual(components.year, 2026)
         XCTAssertEqual(components.month, 3)
         XCTAssertEqual(components.day, 9)
@@ -792,7 +792,7 @@ final class ParticipantModelsTests: XCTestCase {
         XCTAssertNotNil(participant.leftAt)
         XCTAssertNotNil(participant.bannedAt)
         XCTAssertNotNil(participant.lastActiveAt)
-        XCTAssertFalse(participant.isActive)
+        XCTAssertEqual(participant.isActive, false)
     }
 
     // MARK: - APIParticipant Identifiable
@@ -867,7 +867,7 @@ final class ParticipantModelsTests: XCTestCase {
         let participant = try makeISO8601Decoder().decode(APIParticipant.self, from: data)
 
         XCTAssertEqual(participant.displayName, longName)
-        XCTAssertEqual(participant.displayName.count, 1000)
+        XCTAssertEqual(participant.displayName?.count, 1000)
     }
 
     // MARK: - Edge Cases - AnonymousProfile Special Characters
@@ -998,7 +998,7 @@ final class ParticipantModelsTests: XCTestCase {
         let data = json.data(using: .utf8)!
         let participant = try makeISO8601Decoder().decode(APIParticipant.self, from: data)
 
-        XCTAssertFalse(participant.isActive)
+        XCTAssertEqual(participant.isActive, false)
         XCTAssertNotNil(participant.leftAt)
     }
 }

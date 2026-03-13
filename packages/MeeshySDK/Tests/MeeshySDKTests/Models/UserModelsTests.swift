@@ -117,7 +117,7 @@ final class UserModelsTests: XCTestCase {
         XCTAssertEqual(member.user?.username, "alice")
         XCTAssertEqual(member.displayName, "Alice")
         XCTAssertEqual(member.type, .user)
-        XCTAssertTrue(member.isActive)
+        XCTAssertEqual(member.isActive, true)
     }
 
     // MARK: - APIConversationLastMessage
