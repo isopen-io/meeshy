@@ -174,8 +174,16 @@ export function registerSearchRoutes(
 
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
+        // Sanitize participant avatars (strip data URIs)
+        const sanitizedParticipants = conversation.participants.map((m: any) => ({
+          ...m,
+          avatar: sanitizeAvatar(m.avatar),
+          user: m.user ? { ...m.user, avatar: sanitizeAvatar(m.user.avatar) } : null
+        }));
+
         return {
           ...conversation,
+          participants: sanitizedParticipants,
           title: displayTitle,
           lastMessage: (() => {
             const msg = conversation.messages[0];
