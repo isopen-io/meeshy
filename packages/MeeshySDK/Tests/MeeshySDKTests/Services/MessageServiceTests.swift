@@ -31,7 +31,7 @@ final class MessageServiceTests: XCTestCase {
             pinnedAt: nil, pinnedBy: nil, isViewOnce: false, isBlurred: false,
             expiresAt: nil, isEncrypted: false, encryptionMode: nil,
             createdAt: Date(), updatedAt: nil,
-            sender: APIMessageSender(id: "user1", username: "alice", displayName: "Alice", avatar: nil, type: nil, userId: "userId1", firstName: nil, lastName: nil),
+            sender: APIMessageSender(id: "user1", username: "alice", displayName: "Alice", avatar: nil, type: nil, userId: "userId1", firstName: nil, lastName: nil, user: nil),
             attachments: nil, replyTo: nil, forwardedFrom: nil,
             forwardedFromConversation: nil, reactionSummary: nil,
             reactionCount: nil, currentUserReactions: nil,

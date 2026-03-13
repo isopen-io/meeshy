@@ -38,9 +38,9 @@ final class ConversationServiceTests: XCTestCase {
             isActive: true, isOnline: true, joinedAt: Date(),
             leftAt: nil, bannedAt: nil, nickname: nil, lastActiveAt: nil,
             user: APIConversationUser(
-                id: userId, username: "testuser", displayName: "Test User",
+                id: userId, userId: nil, username: "testuser", displayName: "Test User",
                 firstName: nil, lastName: nil, avatar: nil,
-                isOnline: true, lastActiveAt: nil
+                isOnline: true, lastActiveAt: nil, type: nil, user: nil
             )
         )
     }
