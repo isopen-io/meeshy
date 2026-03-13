@@ -251,7 +251,7 @@ class ConversationViewModel: ObservableObject {
     private let isDirect: Bool
     private let participantUserId: String?
     private let initialUnreadCount: Int
-    private let limit = 50
+    private let limit = 30
     private var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
     private var socketHandler: ConversationSocketHandler?
@@ -268,6 +268,7 @@ class ConversationViewModel: ObservableObject {
     private let reportService: ReportServiceProviding
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
+    private var currentUsername: String? { authManager.currentUser?.username }
 
     // MARK: - Mention Display Names (username → displayName)
 
@@ -469,7 +470,7 @@ class ConversationViewModel: ObservableObject {
 
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
-            var loadedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var loadedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             await decryptMessagesIfNeeded(&loadedMessages)
             messages = loadedMessages
             extractAttachmentTranscriptions(from: response.data)
@@ -526,7 +527,7 @@ class ConversationViewModel: ObservableObject {
                 )
 
                 let userId = currentUserId
-                var olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                var olderMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
                 await decryptMessagesIfNeeded(&olderMessages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
@@ -599,7 +600,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
 
@@ -705,7 +706,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: detectKeyboardLanguage(),
+                originalLanguage: originalLanguage ?? detectKeyboardLanguage(),
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
@@ -999,11 +1000,11 @@ class ConversationViewModel: ObservableObject {
 
         do {
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 50, includeReplies: true
+                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
             )
 
             let userId = currentUserId
-            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             await decryptMessagesIfNeeded(&fetchedMessages)
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
@@ -1119,7 +1120,7 @@ class ConversationViewModel: ObservableObject {
             )
 
             let userId = currentUserId
-            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+            var fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             await decryptMessagesIfNeeded(&fetchedMessages)
             messages = fetchedMessages
             extractAttachmentTranscriptions(from: response.data)
@@ -1152,7 +1153,7 @@ class ConversationViewModel: ObservableObject {
                 )
 
                 let userId = currentUserId
-                var newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId) }
+                var newMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
                 await decryptMessagesIfNeeded(&newMessages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)

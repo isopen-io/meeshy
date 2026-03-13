@@ -238,7 +238,7 @@ struct ThreadView: View {
                     URLQueryItem(name: "limit", value: "50"),
                 ]
             )
-            replies = response.data.map { $0.toMessage(currentUserId: AuthManager.shared.currentUser?.id ?? "") }
+            replies = response.data.map { $0.toMessage(currentUserId: AuthManager.shared.currentUser?.id ?? "", currentUsername: AuthManager.shared.currentUser?.username) }
         } catch {}
         isLoading = false
     }

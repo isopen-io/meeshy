@@ -61,7 +61,8 @@ extension ConversationView {
             composerState.pendingReplyReference = nil
             viewModel.stopTypingEmission()
             HapticFeedback.light()
-            Task { await viewModel.sendMessage(content: content, replyToId: replyId) }
+            let lang = composerState.selectedLanguage
+            Task { await viewModel.sendMessage(content: content, replyToId: replyId, originalLanguage: lang) }
             return
         }
 
@@ -152,12 +153,14 @@ extension ConversationView {
 
                 // Auto-send at 100%
                 var sendSuccess = false
+                let lang = composerState.selectedLanguage
                 if !uploadedIds.isEmpty || !content.isEmpty {
                     sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
-                        localAttachments: localAttachments.isEmpty ? nil : localAttachments
+                        localAttachments: localAttachments.isEmpty ? nil : localAttachments,
+                        originalLanguage: lang
                     )
                 }
 
@@ -394,11 +397,12 @@ extension ConversationView {
     func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         let text = messageText
+        let lang = composerState.selectedLanguage
         messageText = ""
         viewModel.stopTypingEmission()
         HapticFeedback.light()
         Task {
-            await viewModel.sendMessage(content: text)
+            await viewModel.sendMessage(content: text, originalLanguage: lang)
         }
     }
 }

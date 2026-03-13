@@ -131,7 +131,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationStopConversationIds.append(conversationId)
     }
 
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, isEncrypted: Bool) {
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, originalLanguage: String?, isEncrypted: Bool) {
         sendWithAttachmentsCallCount += 1
     }
 

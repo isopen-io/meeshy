@@ -17,7 +17,7 @@ struct SearchResultItem: Identifiable {
 // MARK: - APIMessage -> Message Conversion
 
 extension APIMessage {
-    func toMessage(currentUserId: String) -> Message {
+    func toMessage(currentUserId: String, currentUsername: String? = nil) -> Message {
         let msgType: Message.MessageType = {
             switch messageType?.lowercased() {
             case "image": return .image
@@ -55,7 +55,7 @@ extension APIMessage {
                 uploadedBy: senderId,
                 latitude: apiAtt.latitude,
                 longitude: apiAtt.longitude,
-                thumbnailColor: DynamicColorGenerator.colorForName(sender?.username ?? "?")
+                thumbnailColor: DynamicColorGenerator.colorForName(sender?.name ?? "?")
             )
         }
 
@@ -76,8 +76,8 @@ extension APIMessage {
 
         let uiReplyTo: ReplyReference? = {
             guard let reply = replyTo else { return nil }
-            let isReplyMe = reply.senderId == currentUserId
-            let authorName = reply.sender?.displayName ?? reply.sender?.username ?? "?"
+            let isReplyMe = (reply.sender?.resolvedUserId ?? reply.senderId) == currentUserId
+            let authorName = reply.sender?.name ?? "?"
             let firstAttachment = reply.attachments?.first
             let attType: String? = firstAttachment.flatMap { att in
                 guard let mime = att.mimeType else { return nil }
@@ -102,7 +102,7 @@ extension APIMessage {
 
         let uiForwardedFrom: ForwardReference? = {
             guard let fwd = forwardedFrom, let fwdSender = fwd.sender else { return nil }
-            let senderName = fwdSender.displayName ?? fwdSender.username ?? fwdSender.id
+            let senderName = fwdSender.name
             let previewText = (fwd.content ?? "").isEmpty ? "[Media]" : (fwd.content ?? "")
             let firstAtt = fwd.attachments?.first
             let attType: String? = firstAtt.flatMap { att in
@@ -117,7 +117,7 @@ extension APIMessage {
             return ForwardReference(
                 originalMessageId: fwd.id,
                 senderName: senderName,
-                senderAvatar: fwdSender.avatar,
+                senderAvatar: fwdSender.resolvedAvatar,
                 previewText: previewText,
                 conversationId: forwardedFromConversationId,
                 conversationName: convName,
@@ -134,7 +134,7 @@ extension APIMessage {
         }()
 
         let status: Message.DeliveryStatus = {
-            guard senderId == currentUserId else { return .sent }
+            guard (sender?.resolvedUserId ?? senderId) == currentUserId else { return .sent }
             if readByAllAt != nil { return .read }
             if deliveredToAllAt != nil { return .delivered }
             return .sent
@@ -166,11 +166,12 @@ extension APIMessage {
             reactions: uiReactions,
             replyTo: uiReplyTo,
             forwardedFrom: uiForwardedFrom,
-            senderName: sender?.displayName ?? sender?.username,
-            senderColor: DynamicColorGenerator.colorForName(sender?.username ?? "?"),
-            senderAvatarURL: sender?.avatar,
+            senderName: sender?.name,
+            senderColor: DynamicColorGenerator.colorForName(sender?.name ?? "?"),
+            senderAvatarURL: sender?.resolvedAvatar,
             deliveryStatus: status,
-            isMe: senderId == currentUserId,
+            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
+                || (currentUsername != nil && sender?.username == currentUsername),
             deliveredToAllAt: deliveredToAllAt,
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0,

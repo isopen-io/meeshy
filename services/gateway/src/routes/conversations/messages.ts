@@ -767,9 +767,16 @@ export function registerMessagesRoutes(
           mappedMessage.statusEntries = message.statusEntries;
         }
         if (includeReplies && message.replyTo) {
+          const replySender = (message as any).replyTo.sender;
           mappedMessage.replyTo = {
             ...message.replyTo,
-            originalLanguage: message.replyTo.originalLanguage || 'fr'
+            originalLanguage: message.replyTo.originalLanguage || 'fr',
+            sender: replySender ? {
+              ...replySender,
+              username: replySender.user?.username ?? replySender.username ?? null,
+              displayName: replySender.displayName ?? replySender.user?.displayName ?? null,
+              avatar: replySender.avatar ?? replySender.user?.avatar ?? null,
+            } : null,
           };
         }
 

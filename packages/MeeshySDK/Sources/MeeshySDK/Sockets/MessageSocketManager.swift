@@ -378,7 +378,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, isEncrypted: Bool)
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, originalLanguage: String?, isEncrypted: Bool)
     func emitCallInitiate(conversationId: String, isVideo: Bool)
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -641,6 +641,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         content: String?,
         attachmentIds: [String],
         replyToId: String?,
+        originalLanguage: String? = nil,
         isEncrypted: Bool = false
     ) {
         var payload: [String: Any] = [
@@ -650,6 +651,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ]
         if let content, !content.isEmpty { payload["content"] = content }
         if let replyToId { payload["replyToId"] = replyToId }
+        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
         socket?.emit("message:send-with-attachments", payload)
     }
 

@@ -88,6 +88,9 @@ struct ConversationComposerState {
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
     
+    // Language (source language for outgoing messages — initialized onAppear from keyboard detection)
+    var selectedLanguage: String = "fr"
+
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
     var editingMessageId: String? = nil
@@ -381,6 +384,9 @@ struct ConversationView: View {
             .task { await viewModel.loadMessages(); MessageSocketManager.shared.connect() }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
+                if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+                    composerState.selectedLanguage = String(kbd.prefix(2))
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { overlayState.longPressEnabled = true }
             }
             .onChange(of: scrollState.isNearBottom) { _, _ in

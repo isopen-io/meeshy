@@ -157,7 +157,7 @@ final class ConversationSocketHandler {
                            let idx = delegate.messageIndex(for: apiMsg.id),
                            delegate.messages[idx].attachments.isEmpty {
                             await MainActor.run {
-                                delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId)
+                                delegate.messages[idx] = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                             }
                         }
                         return
@@ -165,7 +165,7 @@ final class ConversationSocketHandler {
 
                     if apiMsg.senderId == userId { return }
 
-                    var msg = apiMsg.toMessage(currentUserId: userId)
+                    var msg = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                     var msgArray = [msg]
                     await delegate.decryptMessagesIfNeeded(&msgArray)
                     msg = msgArray[0]
