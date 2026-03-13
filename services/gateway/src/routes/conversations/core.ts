@@ -462,13 +462,16 @@ export function registerCoreRoutes(
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
-        // Merge user data for registered participants, keep anonymous participants with their own data
+        // Merge user data for all participants (never filter out — SDK needs them for DM name resolution)
         const membersWithUser = conversation.participants
-          .filter((m: any) => m.userId ? userMap.has(m.userId) : m.type === 'anonymous')
           .slice(0, 5)
           .map((m: any) => ({
             ...m,
-            user: m.userId ? (userMap.get(m.userId) || null) : null
+            avatar: sanitizeAvatar(m.avatar),
+            user: m.userId ? (userMap.get(m.userId) ? {
+              ...userMap.get(m.userId),
+              avatar: sanitizeAvatar(userMap.get(m.userId)?.avatar)
+            } : m.user ? { ...m.user, avatar: sanitizeAvatar(m.user?.avatar) } : null) : null
           }));
 
         // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
