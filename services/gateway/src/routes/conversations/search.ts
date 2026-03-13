@@ -9,6 +9,13 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
 
+/** Strip data URIs from avatar fields (can be 2MB+ each) */
+function sanitizeAvatar(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith('data:')) return null;
+  return value;
+}
+
 /**
  * Enregistre les routes de recherche de conversations
  */
@@ -182,8 +189,8 @@ export function registerSearchRoutes(
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
                 displayName: sender.displayName ?? sender.user?.displayName ?? null,
-                avatar: sender.avatar ?? sender.user?.avatar ?? null,
-                avatarUrl: sender.user?.avatarUrl ?? sender.avatarUrl ?? null,
+                avatar: sanitizeAvatar(sender.avatar) ?? sanitizeAvatar(sender.user?.avatar) ?? null,
+                avatarUrl: sanitizeAvatar(sender.user?.avatarUrl) ?? sanitizeAvatar(sender.avatarUrl) ?? null,
                 isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
                 lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
               } : null
