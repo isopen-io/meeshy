@@ -137,15 +137,7 @@ extension APIConversation {
             return "Conversation"
         }()
 
-        let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar ?? {
-            if convType == .direct, let sender = lastMessage?.sender {
-                let senderUserId = sender.resolvedUserId ?? sender.id
-                if senderUserId != currentUserId {
-                    return sender.resolvedAvatar
-                }
-            }
-            return nil
-        }()
+        let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
         let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
