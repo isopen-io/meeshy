@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -69,9 +69,9 @@ async function main() {
     (id, avatar) => prisma.conversation.update({ where: { id }, data: { avatar } }).then(() => {})
   );
 
-  await migrateModel('ConversationMember',
-    () => prisma.conversationMember.findMany({ where: { avatar: { startsWith: 'data:' } }, select: { id: true, avatar: true } }),
-    (id, avatar) => prisma.conversationMember.update({ where: { id }, data: { avatar } }).then(() => {})
+  await migrateModel('Participant',
+    () => prisma.participant.findMany({ where: { avatar: { startsWith: 'data:' } }, select: { id: true, avatar: true } }),
+    (id, avatar) => prisma.participant.update({ where: { id }, data: { avatar } }).then(() => {})
   );
 
   await migrateModel('Community',
