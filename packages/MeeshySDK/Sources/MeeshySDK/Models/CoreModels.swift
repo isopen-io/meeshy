@@ -123,6 +123,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var sectionId: String? = nil
     public var isMuted: Bool = false
     public var participantUserId: String? = nil
+    public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
     public var lastSeenAt: Date? = nil
 
@@ -183,6 +184,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(isMuted)
         h.combine(isPinned)
         h.combine(avatar)
+        h.combine(participantUsername)
         h.combine(participantAvatarURL)
         h.combine(tags)
         h.combine(reaction)
@@ -204,7 +206,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageExpiresAt: Date? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, isPinned: Bool = false, sectionId: String? = nil,
-                isMuted: Bool = false, participantUserId: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 currentUserRole: String? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general) {
@@ -215,7 +217,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
-        self.participantUserId = participantUserId; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
+        self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
         self.currentUserRole = currentUserRole; self.reaction = reaction
         self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments

@@ -35,6 +35,11 @@ extension ConversationView {
             headerPresenceState: headerPresenceState,
             onNavigateToDM: { userId, name in
                 Task { await self.navigateToDM(with: userId, name: name) }
+            },
+            onViewProfile: {
+                if let conv = conversation, let profileUser = ProfileSheetUser.from(conversation: conv) {
+                    router.deepLinkProfileUser = profileUser
+                }
             }
         )
     }
@@ -198,6 +203,7 @@ private struct ConversationHeaderAvatarView: View {
     let headerMoodEmoji: String?
     let headerPresenceState: PresenceState
     var onNavigateToDM: (String, String) -> Void
+    var onViewProfile: (() -> Void)?
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -210,7 +216,7 @@ private struct ConversationHeaderAvatarView: View {
         return .none
     }
 
-    private func headerAvatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
+    private func avatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
         if storyViewModel.hasStories(forUserId: userId) {
             items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
@@ -218,32 +224,25 @@ private struct ConversationHeaderAvatarView: View {
                 headerState.showStoryViewerFromHeader = true
             })
         }
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+        if isDirect {
+            items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle.fill") {
+                onViewProfile?()
+            })
+        }
+        items.append(AvatarContextMenuItem(label: "Conversation", icon: "info.circle.fill") {
             composerState.showConversationInfo = true
         })
-        items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
-            onNavigateToDM(userId, name)
-        })
+        if !isDirect {
+            items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
+                onNavigateToDM(userId, name)
+            })
+        }
         return items
     }
 
-    private var collapsedAvatarContextMenu: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        if let userId = conversation?.participantUserId, storyViewModel.hasStories(forUserId: userId) {
-            items.append(.init(label: "Voir les stories", icon: "play.circle.fill") {
-                if let uid = conversation?.participantUserId {
-                    headerState.storyUserIdForHeader = uid
-                    headerState.showStoryViewerFromHeader = true
-                }
-            })
-        }
-        items.append(.init(label: "Voir le profil", icon: "person.fill") {
-            composerState.showConversationInfo = true
-        })
-        items.append(.init(label: "Infos conversation", icon: "info.circle.fill") {
-            composerState.showConversationInfo = true
-        })
-        return items
+    private var directContextMenu: [AvatarContextMenuItem] {
+        guard let userId = conversation?.participantUserId else { return [] }
+        return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
     }
 
     var body: some View {
@@ -269,7 +268,7 @@ private struct ConversationHeaderAvatarView: View {
                         headerState.showStoryViewerFromHeader = true
                     },
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
-                    contextMenuItems: headerAvatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
+                    contextMenuItems: directContextMenu
                 )
             } else if !topActiveMembers.isEmpty {
                 HStack(spacing: -6) {
@@ -293,7 +292,7 @@ private struct ConversationHeaderAvatarView: View {
                                 headerState.showStoryViewerFromHeader = true
                             },
                             onMoodTap: statusViewModel.moodTapHandler(for: member.id),
-                            contextMenuItems: headerAvatarContextMenu(for: member.id, name: member.name)
+                            contextMenuItems: avatarContextMenu(for: member.id, name: member.name)
                         )
                     }
                 }
@@ -332,7 +331,7 @@ private struct ConversationHeaderAvatarView: View {
                     }
                 },
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "") : nil,
-                contextMenuItems: collapsedAvatarContextMenu
+                contextMenuItems: directContextMenu
             )
         }
     }

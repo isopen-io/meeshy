@@ -107,7 +107,8 @@ extension ProfileSheetUser {
         }
         return ProfileSheetUser(
             userId: participantId,
-            username: conversation.name,
+            username: conversation.participantUsername ?? conversation.name,
+            displayName: conversation.name,
             avatarURL: conversation.participantAvatarURL,
             accentColor: conversation.accentColor
         )
