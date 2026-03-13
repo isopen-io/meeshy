@@ -4,6 +4,7 @@ import Foundation
 
 public struct APIConversationUser: Decodable, Sendable {
     public let id: String
+    public let userId: String?
     public let username: String?
     public let displayName: String?
     public let firstName: String?
@@ -12,6 +13,7 @@ public struct APIConversationUser: Decodable, Sendable {
     public let avatarUrl: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    public let type: String?
 
     public var name: String { displayName ?? username ?? id }
     public var resolvedAvatar: String? { avatar ?? avatarUrl }
@@ -106,12 +108,25 @@ extension APIConversation {
                     if !dn.isEmpty { return dn }
                     return participant.user?.displayName ?? participant.user?.username ?? participant.id
                 }
+                // Fallback: use lastMessage sender if it belongs to the other person
+                if let sender = lastMessage?.sender,
+                   (sender.userId ?? sender.id) != currentUserId {
+                    return sender.displayName ?? sender.username ?? sender.id
+                }
             }
             if let t = title, !t.isEmpty { return t }
             return "Conversation"
         }()
 
-        let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
+        let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar ?? {
+            if convType == .direct, let sender = lastMessage?.sender {
+                let senderUserId = sender.userId ?? sender.id
+                if senderUserId != currentUserId {
+                    return sender.avatar ?? sender.avatarUrl
+                }
+            }
+            return nil
+        }()
         let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
