@@ -566,7 +566,17 @@ private struct ConversationAvatarView: View {
 
     private var isDirect: Bool { conversation.type == .direct }
 
-    /// Menu long-press pour les conversations non-DM (groupe, public, global, etc.)
+    private var directContextMenuItems: [AvatarContextMenuItem] {
+        var items: [AvatarContextMenuItem] = []
+        items.append(AvatarContextMenuItem(label: "Conversation", icon: "info.circle.fill") {
+            onViewConversationInfo?()
+        })
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle.fill") {
+            onViewProfile?()
+        })
+        return items
+    }
+
     private var groupContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
         items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
@@ -609,9 +619,7 @@ private struct ConversationAvatarView: View {
                         }
                     }
                 },
-                // DM : MeeshyAvatar génère automatiquement "Voir le profil" + "Voir la story"
-                // Groupe : menu personnalisé avec infos + lien de partage
-                contextMenuItems: isDirect ? [] : groupContextMenuItems
+                contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
             )
 
             // Last seen tooltip
