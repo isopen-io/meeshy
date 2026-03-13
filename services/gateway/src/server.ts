@@ -646,6 +646,30 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     });
     logger.info('✅ Client identification hook registered');
 
+    // Request timing — log slow requests (>2s) as warnings
+    this.server.addHook('onRequest', (request, _reply, done) => {
+      (request as any).__startTime = performance.now();
+      done();
+    });
+    this.server.addHook('onResponse', (request, reply, done) => {
+      const start = (request as any).__startTime;
+      if (start) {
+        const durationMs = Math.round(performance.now() - start);
+        const level = durationMs > 5000 ? 'warn' : durationMs > 2000 ? 'info' : 'debug';
+        if (level !== 'debug') {
+          logger[level](`⏱️ ${request.method} ${request.url} → ${reply.statusCode} (${durationMs}ms)`, {
+            module: 'RequestTiming',
+            durationMs,
+            method: request.method,
+            url: request.url,
+            statusCode: reply.statusCode
+          });
+        }
+      }
+      done();
+    });
+    logger.info('✅ Request timing hook registered');
+
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
 

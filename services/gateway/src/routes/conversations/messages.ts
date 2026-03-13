@@ -197,6 +197,8 @@ export function registerMessagesRoutes(
     },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
+    const reqStart = performance.now();
+    const timings: Record<string, number> = {};
     try {
       const { id } = request.params;
       const {
@@ -222,7 +224,9 @@ export function registerMessagesRoutes(
       const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
 
       // Résoudre l'ID de conversation réel
+      let t0 = performance.now();
       const conversationId = await resolveConversationId(prisma, id);
+      timings.resolveConversationId = performance.now() - t0;
       if (!conversationId) {
         return reply.status(403).send({
           success: false,
@@ -231,7 +235,9 @@ export function registerMessagesRoutes(
       }
 
       // Vérifier les permissions d'accès
+      t0 = performance.now();
       const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      timings.canAccessConversation = performance.now() - t0;
 
       if (!canAccess) {
         return reply.status(403).send({
@@ -241,6 +247,7 @@ export function registerMessagesRoutes(
       }
 
       // Resolve the current user's participantId in this conversation
+      t0 = performance.now();
       const isAnonymousUser = authRequest.authContext.type === 'anonymous';
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
@@ -248,6 +255,7 @@ export function registerMessagesRoutes(
             select: { id: true }
           })
         : null;
+      timings.resolveParticipant = performance.now() - t0;
       const currentParticipantId = isAnonymousUser
         ? authRequest.authContext.participantId
         : currentParticipant?.id;
@@ -552,6 +560,7 @@ export function registerMessagesRoutes(
       // Évite le problème N+1 séquentiel (count -> messages -> user)
       const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !isAnonymousUser;
 
+      t0 = performance.now();
       const [totalCount, messages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination) - skip when using cursor or around
         (before || isAroundMode)
@@ -582,11 +591,13 @@ export function registerMessagesRoutes(
             })
           : Promise.resolve(null)
       ]);
+      timings.mainQuery = performance.now() - t0;
 
       // ===== RÉCUPÉRER LES RÉACTIONS DE L'UTILISATEUR CONNECTÉ =====
       // Permet d'afficher les réactions de l'utilisateur sans requête de sync Socket.IO
       let userReactionsMap: Map<string, string[]> = new Map();
 
+      t0 = performance.now();
       if (authRequest.authContext.isAuthenticated && messages.length > 0) {
         const messageIds: string[] = (messages as any[]).map(m => m.id);
 
@@ -609,6 +620,7 @@ export function registerMessagesRoutes(
           userReactionsMap.set(reaction.messageId, existing);
         }
       }
+      timings.userReactions = performance.now() - t0;
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
@@ -784,6 +796,7 @@ export function registerMessagesRoutes(
       });
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====
+      t0 = performance.now();
       // Charger les détails du message d'origine et de la conversation source
       const forwardedIds = mappedMessages
         .filter((m: any) => m.forwardedFromId)
@@ -863,16 +876,15 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
-      if (messages.length > 0 && !authRequest.authContext.isAnonymous) {
-        const messageIds = messages.map(m => m.id);
+      timings.forwardedEnrichment = performance.now() - t0;
 
+      // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
+      t0 = performance.now();
+      if (messages.length > 0 && !authRequest.authContext.isAnonymous) {
         try {
-          // Utiliser le nouveau MessageReadStatusService (système de curseur)
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
           const readStatusService = new MessageReadStatusService(prisma);
 
-          // Marquer les messages comme reçus (curseur automatiquement placé sur le dernier message)
           if (currentParticipantId) {
             await readStatusService.markMessagesAsReceived(currentParticipantId, conversationId);
           }
@@ -880,6 +892,7 @@ export function registerMessagesRoutes(
           logger.warn('Error marking messages as received:', error);
         }
       }
+      timings.markAsReceived = performance.now() - t0;
 
       // Construire les métadonnées de cursor pagination
       const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
@@ -920,10 +933,26 @@ export function registerMessagesRoutes(
         }
       }
 
+      timings.total = performance.now() - reqStart;
+      const timingsStr = Object.entries(timings)
+        .map(([k, v]) => `${k}=${Math.round(v)}ms`)
+        .join(', ');
+      const level = timings.total > 5000 ? 'warn' : 'info';
+      logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
+        durationMs: Math.round(timings.total),
+        messageCount: messages.length,
+        limit,
+        offset,
+        before: before || null,
+        around: around || null,
+        timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)]))
+      });
+
       reply.send(responsePayload);
 
     } catch (error) {
-      logger.error('Error fetching messages', error);
+      const totalMs = Math.round(performance.now() - reqStart);
+      logger.error(`Error fetching messages (after ${totalMs}ms)`, error);
       reply.status(500).send({
         success: false,
         error: 'Error retrieving messages'
