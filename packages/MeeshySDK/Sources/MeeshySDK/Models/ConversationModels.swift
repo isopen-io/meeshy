@@ -138,6 +138,7 @@ extension APIConversation {
         }()
 
         let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
+        let participantUsername: String? = otherUser?.username ?? otherParticipant?.user?.username
         let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
 
@@ -199,6 +200,7 @@ extension APIConversation {
             sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,
             participantUserId: otherParticipant?.userId,
+            participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,
             currentUserRole: currentRole,
             reaction: prefs?.reaction
