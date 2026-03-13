@@ -1094,6 +1094,11 @@ export const conversationParticipantMinimalSchema = {
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
     isOnline: { type: 'boolean', nullable: true, description: 'Online status' },
     lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' },
+    permissions: {
+      type: 'object',
+      nullable: true,
+      description: 'Participant permissions'
+    },
     canSendMessage: { type: 'boolean', description: 'Can send messages' },
     canSendFiles: { type: 'boolean', description: 'Can send files' },
     canSendImages: { type: 'boolean', description: 'Can send images' },
