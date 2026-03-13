@@ -37,6 +37,17 @@ public struct ParticipantPermissions: Codable, Sendable {
         self.canSendLinks = canSendLinks
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        canSendMessages = (try? container.decode(Bool.self, forKey: .canSendMessages)) ?? true
+        canSendFiles = (try? container.decode(Bool.self, forKey: .canSendFiles)) ?? true
+        canSendImages = (try? container.decode(Bool.self, forKey: .canSendImages)) ?? true
+        canSendVideos = (try? container.decode(Bool.self, forKey: .canSendVideos)) ?? true
+        canSendAudios = (try? container.decode(Bool.self, forKey: .canSendAudios)) ?? true
+        canSendLocations = (try? container.decode(Bool.self, forKey: .canSendLocations)) ?? true
+        canSendLinks = (try? container.decode(Bool.self, forKey: .canSendLinks)) ?? true
+    }
+
     public static let defaultUser = ParticipantPermissions()
 
     public static let defaultAnonymous = ParticipantPermissions(
@@ -129,17 +140,17 @@ private extension String {
 
 public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let id: String
-    public let conversationId: String
-    public let type: ParticipantType
+    public let conversationId: String?
+    public let type: ParticipantType?
     public let userId: String?
-    public let displayName: String
+    public let displayName: String?
     public let avatar: String?
-    public let role: String
-    public let language: String
-    public let permissions: ParticipantPermissions
-    public let isActive: Bool
+    public let role: String?
+    public let language: String?
+    public let permissions: ParticipantPermissions?
+    public let isActive: Bool?
     public let isOnline: Bool?
-    public let joinedAt: Date
+    public let joinedAt: Date?
     public let leftAt: Date?
     public let bannedAt: Date?
     public let nickname: String?
@@ -148,22 +159,22 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
 
     public init(
         id: String,
-        conversationId: String,
-        type: ParticipantType,
-        userId: String?,
-        displayName: String,
-        avatar: String?,
-        role: String,
-        language: String,
-        permissions: ParticipantPermissions,
-        isActive: Bool,
-        isOnline: Bool?,
-        joinedAt: Date,
-        leftAt: Date?,
-        bannedAt: Date?,
-        nickname: String?,
-        lastActiveAt: Date?,
-        user: APIConversationUser?
+        conversationId: String? = nil,
+        type: ParticipantType? = nil,
+        userId: String? = nil,
+        displayName: String? = nil,
+        avatar: String? = nil,
+        role: String? = nil,
+        language: String? = nil,
+        permissions: ParticipantPermissions? = nil,
+        isActive: Bool? = nil,
+        isOnline: Bool? = nil,
+        joinedAt: Date? = nil,
+        leftAt: Date? = nil,
+        bannedAt: Date? = nil,
+        nickname: String? = nil,
+        lastActiveAt: Date? = nil,
+        user: APIConversationUser? = nil
     ) {
         self.id = id
         self.conversationId = conversationId
@@ -184,7 +195,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         self.user = user
     }
 
-    public var name: String { nickname ?? displayName }
+    public var name: String { nickname ?? displayName ?? "Unknown" }
     public var resolvedAvatar: String? { avatar ?? user?.resolvedAvatar }
 }
 
