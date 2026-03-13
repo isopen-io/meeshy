@@ -235,12 +235,25 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
 
         let result = await load(for: urlString)
-        guard let data = result.value?.first,
-              let image = UIImage(data: data) else { return nil }
+        if let data = result.value?.first, let image = UIImage(data: data) {
+            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+            Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            return image
+        }
 
-        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-        Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
-        return image
+        guard let url = URL(string: urlString), url.scheme == "https" || url.scheme == "http" else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode),
+                  let image = UIImage(data: data) else { return nil }
+            await save(data, for: urlString)
+            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+            Self._imageCache.setObject(image, forKey: fileKey as NSString, cost: cost)
+            return image
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - File Key
