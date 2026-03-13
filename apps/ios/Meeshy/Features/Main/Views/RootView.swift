@@ -798,14 +798,10 @@ private struct ProfileFetchingSheet: View {
                 switch error {
                 case .serverError(404, _):
                     fetchError = "Utilisateur introuvable."
-                case .networkError:
-                    fetchError = "Erreur reseau. Verifiez votre connexion."
                 default:
-                    fetchError = "Impossible de charger ce profil."
+                    break
                 }
-            } catch {
-                fetchError = "Impossible de charger ce profil."
-            }
+            } catch {}
             isLoading = false
         }
     }
