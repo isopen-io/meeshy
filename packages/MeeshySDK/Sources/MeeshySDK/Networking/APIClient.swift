@@ -225,13 +225,17 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
 
         do {
+            let networkStart = CFAbsoluteTimeGetCurrent()
             let (data, response) = try await session.data(for: urlRequest)
+            let networkMs = (CFAbsoluteTimeGetCurrent() - networkStart) * 1000
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
             }
 
             let statusCode = httpResponse.statusCode
+
+            let decodeStart = CFAbsoluteTimeGetCurrent()
 
             guard (200...299).contains(statusCode) else {
                 let errBody = try? decoder.decode(ErrorBody.self, from: data)
@@ -259,7 +263,13 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
             }
 
-            return try decoder.decode(T.self, from: data)
+            let result = try decoder.decode(T.self, from: data)
+            let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
+            let totalMs = networkMs + decodeMs
+            if totalMs > 1000 {
+                print("⏱️ [APIClient] \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
+            }
+            return result
         } catch let error as MeeshyError {
             throw error
         } catch let error as DecodingError {

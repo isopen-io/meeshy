@@ -455,24 +455,34 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
+        let totalStart = CFAbsoluteTimeGetCurrent()
+        var timings: [(String, Double)] = []
+
         // Show cached messages immediately while fetching from API
+        let cacheStart = CFAbsoluteTimeGetCurrent()
         if messages.isEmpty {
             let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
             if !cached.isEmpty {
                 messages = cached
             }
         }
+        timings.append(("cache", (CFAbsoluteTimeGetCurrent() - cacheStart) * 1000))
 
         do {
+            let apiStart = CFAbsoluteTimeGetCurrent()
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: limit, includeReplies: true
             )
+            timings.append(("api", (CFAbsoluteTimeGetCurrent() - apiStart) * 1000))
 
+            let mapStart = CFAbsoluteTimeGetCurrent()
             let userId = currentUserId
             // API returns newest first, reverse to oldest-first for display
             var loadedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             await decryptMessagesIfNeeded(&loadedMessages)
             messages = loadedMessages
+            timings.append(("map+decrypt", (CFAbsoluteTimeGetCurrent() - mapStart) * 1000))
+
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             self.nextMessageCursor = response.cursorPagination?.nextCursor
@@ -497,7 +507,12 @@ class ConversationViewModel: ObservableObject {
             }
         } catch {
             self.error = error.localizedDescription
+            timings.append(("error", 0))
         }
+
+        let totalMs = (CFAbsoluteTimeGetCurrent() - totalStart) * 1000
+        let timingsStr = timings.map { "\($0.0)=\(Int($0.1))ms" }.joined(separator: ", ")
+        print("⏱️ [ConversationVM] loadMessages total=\(Int(totalMs))ms count=\(messages.count) [\(timingsStr)]")
 
         isLoadingInitial = false
     }
