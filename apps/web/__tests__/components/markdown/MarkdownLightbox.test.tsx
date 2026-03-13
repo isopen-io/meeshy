@@ -26,18 +26,7 @@ jest.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
-// Mock react-markdown
-jest.mock('react-markdown', () => ({
-  __esModule: true,
-  default: ({ children, components }: any) => (
-    <div data-testid="react-markdown">{children}</div>
-  ),
-}));
-
-// Mock remark/rehype plugins
-jest.mock('remark-gfm', () => () => {});
-jest.mock('rehype-raw', () => () => {});
-jest.mock('rehype-sanitize', () => () => {});
+// react-markdown and remark/rehype plugins are mocked via moduleNameMapper -> __mocks__/react-markdown.js
 
 // Mock react-syntax-highlighter
 jest.mock('react-syntax-highlighter', () => ({

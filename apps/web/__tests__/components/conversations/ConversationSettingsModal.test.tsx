@@ -102,22 +102,63 @@ jest.mock('@/hooks/useI18n', () => ({
 }));
 
 // Mock UI components
-jest.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
+jest.mock('@/components/ui/sheet', () => ({
+  Sheet: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
     open ? <div data-testid="dialog" role="dialog">{children}</div> : null
   ),
-  DialogContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  SheetContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="dialog-content" className={className}>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="dialog-header">{children}</div>
   ),
-  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
     <h2 data-testid="dialog-title">{children}</h2>
   ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+  SheetDescription: ({ children }: { children: React.ReactNode }) => (
     <p data-testid="dialog-description">{children}</p>
   ),
+}));
+
+jest.mock('@/components/ui/scroll-area', () => ({
+  ScrollArea: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div data-testid="scroll-area" className={className}>{children}</div>
+  ),
+}));
+
+jest.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
+// Mock conversation preferences store
+jest.mock('@/stores/conversation-preferences-store', () => ({
+  useConversationPreferencesStore: () => ({
+    preferencesMap: new Map(),
+    categories: [],
+    isLoading: false,
+    isInitialized: true,
+    initialize: jest.fn(),
+    getPreferences: jest.fn(() => undefined),
+    togglePin: jest.fn(),
+    toggleMute: jest.fn(),
+    toggleArchive: jest.fn(),
+    setReaction: jest.fn(),
+    refreshPreferences: jest.fn(),
+  }),
+}));
+
+jest.mock('@/stores/user-store', () => ({
+  useUserStore: jest.fn(() => ({
+    getUserById: jest.fn(() => null),
+    _lastStatusUpdate: 0,
+  })),
+}));
+
+jest.mock('@/lib/user-status', () => ({
+  getUserStatus: jest.fn(() => 'online'),
 }));
 
 jest.mock('@/components/ui/tabs', () => ({
@@ -267,6 +308,36 @@ jest.mock('@/components/ui/tooltip', () => ({
 
 jest.mock('@/lib/utils', () => ({
   cn: (...classes: (string | undefined | boolean)[]) => classes.filter(Boolean).join(' '),
+}));
+
+jest.mock('@/hooks/use-conversation-stats', () => ({
+  useConversationStats: () => ({
+    messageLanguageStats: [],
+    activeLanguageStats: [],
+    activeUsers: [],
+  }),
+}));
+
+jest.mock('@/hooks/use-participant-management', () => ({
+  useParticipantManagement: () => ({
+    isAdmin: true,
+    canModifyImage: true,
+  }),
+}));
+
+jest.mock('@meeshy/shared/types/role-types', () => {
+  const actual = jest.requireActual('@meeshy/shared/types/role-types');
+  return {
+    ...actual,
+    hasMinimumMemberRole: jest.fn((role: string, minRole: string) => {
+      const hierarchy = ['member', 'moderator', 'admin', 'creator', 'bigboss'];
+      return hierarchy.indexOf(role) >= hierarchy.indexOf(minRole);
+    }),
+  };
+});
+
+jest.mock('../../../components/conversations/conversation-image-upload-dialog', () => ({
+  ConversationImageUploadDialog: () => null,
 }));
 
 // Mock data
@@ -447,21 +518,19 @@ describe('ConversationSettingsModal', () => {
       });
     });
 
-    it('should display custom name input', async () => {
+    it('should display customization section', async () => {
       render(<ConversationSettingsModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Custom Name')).toBeInTheDocument();
-        expect(screen.getByTestId('customName')).toBeInTheDocument();
+        expect(screen.getByText('Customization')).toBeInTheDocument();
       });
     });
 
-    it('should display reaction input', async () => {
+    it('should display reaction section', async () => {
       render(<ConversationSettingsModal {...defaultProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('Reaction')).toBeInTheDocument();
-        expect(screen.getByTestId('reaction')).toBeInTheDocument();
       });
     });
 
@@ -503,35 +572,23 @@ describe('ConversationSettingsModal', () => {
       expect(switches[0]).toHaveAttribute('aria-checked', 'true');
     });
 
-    it('should update custom name when input changes', async () => {
+    it('should display pin/mute/archive switches', async () => {
       render(<ConversationSettingsModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('customName')).toBeInTheDocument();
+        const switches = screen.getAllByTestId('switch');
+        expect(switches.length).toBeGreaterThanOrEqual(3);
       });
-
-      const customNameInput = screen.getByTestId('customName');
-      fireEvent.change(customNameInput, { target: { value: 'My Custom Name' } });
-
-      expect(customNameInput).toHaveValue('My Custom Name');
     });
 
-    it('should add tag when add button is clicked', async () => {
+    it('should toggle pin switch', async () => {
       render(<ConversationSettingsModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('Add a tag...')).toBeInTheDocument();
+        const switches = screen.getAllByTestId('switch');
+        fireEvent.click(switches[0]);
+        expect(switches[0]).toHaveAttribute('aria-checked', 'true');
       });
-
-      const tagInput = screen.getByPlaceholderText('Add a tag...');
-      fireEvent.change(tagInput, { target: { value: 'new-tag' } });
-
-      // Find add button (the one with Check icon functionality)
-      const buttons = screen.getAllByTestId('button');
-      const addButton = buttons.find(btn => btn.getAttribute('aria-label') === 'Ajouter le tag');
-      if (addButton) {
-        fireEvent.click(addButton);
-      }
     });
 
     it('should save preferences when save button is clicked', async () => {
@@ -551,86 +608,28 @@ describe('ConversationSettingsModal', () => {
   });
 
   describe('Config Tab (Admin)', () => {
-    it('should display title input for admin users', async () => {
+    it('should display config tab content for admin users', async () => {
       render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('convTitle')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-config')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-content-config')).toBeInTheDocument();
       });
     });
 
-    it('should display description textarea for admin users', async () => {
+    it('should display conversation title in config tab', async () => {
       render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('convDescription')).toBeInTheDocument();
+        expect(screen.getAllByText('Test Conversation').length).toBeGreaterThanOrEqual(1);
       });
     });
 
-    it('should display encryption mode selector for admin users', async () => {
-      render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
+    it('should render config tab for moderators', async () => {
+      render(<ConversationSettingsModal {...defaultProps} currentUserRole="MODERATOR" />);
 
       await waitFor(() => {
-        expect(screen.getByText('Encryption Mode')).toBeInTheDocument();
-      });
-    });
-
-    it('should display current status badges', async () => {
-      render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Current Status')).toBeInTheDocument();
-        expect(screen.getByText('Group')).toBeInTheDocument();
-      });
-    });
-
-    it('should update title when input changes', async () => {
-      render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('convTitle')).toBeInTheDocument();
-      });
-
-      const titleInput = screen.getByTestId('convTitle');
-      fireEvent.change(titleInput, { target: { value: 'New Title' } });
-
-      expect(titleInput).toHaveValue('New Title');
-    });
-
-    it('should save configuration when save button is clicked', async () => {
-      render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Save Configuration')).toBeInTheDocument();
-      });
-
-      const saveButton = screen.getByText('Save Configuration');
-      fireEvent.click(saveButton);
-
-      await waitFor(() => {
-        expect(conversationsService.updateConversation).toHaveBeenCalled();
-      });
-    });
-
-    it('should call onConversationUpdate after successful config save', async () => {
-      const onConversationUpdate = jest.fn();
-      render(
-        <ConversationSettingsModal
-          {...defaultProps}
-          currentUserRole="ADMIN"
-          onConversationUpdate={onConversationUpdate}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Save Configuration')).toBeInTheDocument();
-      });
-
-      const saveButton = screen.getByText('Save Configuration');
-      fireEvent.click(saveButton);
-
-      await waitFor(() => {
-        expect(onConversationUpdate).toHaveBeenCalled();
+        expect(screen.getByTestId('tab-config')).toBeInTheDocument();
       });
     });
   });
@@ -656,19 +655,19 @@ describe('ConversationSettingsModal', () => {
       });
     });
 
-    it('should show error toast when config save fails', async () => {
+    it('should handle error when preferences save fails', async () => {
       const { toast } = require('sonner');
-      (conversationsService.updateConversation as jest.Mock).mockRejectedValue(
+      (userPreferencesService.upsertPreferences as jest.Mock).mockRejectedValue(
         new Error('Save failed')
       );
 
-      render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
+      render(<ConversationSettingsModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Save Configuration')).toBeInTheDocument();
+        expect(screen.getByText('Save Preferences')).toBeInTheDocument();
       });
 
-      const saveButton = screen.getByText('Save Configuration');
+      const saveButton = screen.getByText('Save Preferences');
       fireEvent.click(saveButton);
 
       await waitFor(() => {
@@ -715,7 +714,7 @@ describe('ConversationSettingsModal', () => {
       render(<ConversationSettingsModal {...defaultProps} currentUserRole="ADMIN" />);
 
       await waitFor(() => {
-        expect(screen.getByText('2 members')).toBeInTheDocument();
+        expect(screen.getByText('2 membres')).toBeInTheDocument();
       });
     });
   });

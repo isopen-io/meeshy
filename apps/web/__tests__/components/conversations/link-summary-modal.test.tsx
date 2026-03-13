@@ -225,8 +225,7 @@ describe('LinkSummaryModal', () => {
     });
 
     it('should reset copied state after 2 seconds', async () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+      jest.useFakeTimers();
 
       render(<LinkSummaryModal {...defaultProps} />);
 

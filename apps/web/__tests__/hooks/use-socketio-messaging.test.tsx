@@ -220,6 +220,8 @@ describe('useSocketIOMessaging', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
+        undefined,
         undefined
       );
     });
@@ -238,6 +240,8 @@ describe('useSocketIOMessaging', () => {
         'Reply',
         'en',
         'original-msg-id',
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -260,6 +264,8 @@ describe('useSocketIOMessaging', () => {
         'en',
         undefined,
         ['user-789'],
+        undefined,
+        undefined,
         undefined,
         undefined,
         undefined
@@ -290,6 +296,8 @@ describe('useSocketIOMessaging', () => {
         undefined,
         ['attach-1'],
         ['image/png'],
+        undefined,
+        undefined,
         undefined
       );
     });
@@ -311,7 +319,9 @@ describe('useSocketIOMessaging', () => {
         undefined,
         undefined,
         undefined,
-        'client-msg-123'
+        'client-msg-123',
+        undefined,
+        undefined
       );
     });
 

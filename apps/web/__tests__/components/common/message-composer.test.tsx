@@ -235,19 +235,19 @@ describe('MessageComposer', () => {
     it('renders microphone button', () => {
       render(<MessageComposer {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: /Enregistrer un message vocal/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Record voice message/i })).toBeInTheDocument();
     });
 
     it('renders attachment button', () => {
       render(<MessageComposer {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: /Ajouter des fichiers/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Attach file/i })).toBeInTheDocument();
     });
 
-    it('renders send button', () => {
-      render(<MessageComposer {...defaultProps} />);
+    it('renders send button when there is content', () => {
+      render(<MessageComposer {...defaultProps} value="Hello" />);
 
-      expect(screen.getByRole('button', { name: /Envoyer/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Send message/i })).toBeInTheDocument();
     });
 
     it('applies custom className', () => {
@@ -285,24 +285,24 @@ describe('MessageComposer', () => {
   });
 
   describe('Send Button State', () => {
-    it('disables send button when value is empty', () => {
+    it('hides send button when value is empty', () => {
       render(<MessageComposer {...defaultProps} value="" />);
 
-      const sendButton = screen.getByRole('button', { name: /Envoyer/i });
-      expect(sendButton).toBeDisabled();
+      const sendButton = screen.queryByRole('button', { name: /Send message/i });
+      expect(sendButton).not.toBeInTheDocument();
     });
 
     it('enables send button when value has content', () => {
       render(<MessageComposer {...defaultProps} value="Hello" />);
 
-      const sendButton = screen.getByRole('button', { name: /Envoyer/i });
+      const sendButton = screen.getByRole('button', { name: /Send message/i });
       expect(sendButton).not.toBeDisabled();
     });
 
     it('disables send button when composing is disabled', () => {
       render(<MessageComposer {...defaultProps} value="Hello" isComposingEnabled={false} />);
 
-      const sendButton = screen.getByRole('button', { name: /Envoyer/i });
+      const sendButton = screen.getByRole('button', { name: /Send message/i });
       expect(sendButton).toBeDisabled();
     });
 
@@ -312,7 +312,7 @@ describe('MessageComposer', () => {
 
       render(<MessageComposer {...defaultProps} value="Hello" onSend={onSend} />);
 
-      const sendButton = screen.getByRole('button', { name: /Envoyer/i });
+      const sendButton = screen.getByRole('button', { name: /Send message/i });
       await user.click(sendButton);
 
       expect(onSend).toHaveBeenCalled();
@@ -348,13 +348,13 @@ describe('MessageComposer', () => {
     it('disables microphone button when isComposingEnabled is false', () => {
       render(<MessageComposer {...defaultProps} isComposingEnabled={false} />);
 
-      expect(screen.getByRole('button', { name: /Enregistrer un message vocal/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Record voice message/i })).toBeDisabled();
     });
 
     it('disables attachment button when isComposingEnabled is false', () => {
       render(<MessageComposer {...defaultProps} isComposingEnabled={false} />);
 
-      expect(screen.getByRole('button', { name: /Ajouter des fichiers/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Attach file/i })).toBeDisabled();
     });
   });
 
@@ -411,23 +411,23 @@ describe('MessageComposer', () => {
 
   describe('Accessibility', () => {
     it('has accessible send button', () => {
-      render(<MessageComposer {...defaultProps} />);
+      render(<MessageComposer {...defaultProps} value="Hello" />);
 
-      const sendButton = screen.getByRole('button', { name: /Envoyer/i });
+      const sendButton = screen.getByRole('button', { name: /Send message/i });
       expect(sendButton).toBeInTheDocument();
     });
 
     it('has accessible microphone button', () => {
       render(<MessageComposer {...defaultProps} />);
 
-      const micButton = screen.getByRole('button', { name: /Enregistrer un message vocal/i });
+      const micButton = screen.getByRole('button', { name: /Record voice message/i });
       expect(micButton).toBeInTheDocument();
     });
 
     it('has accessible attachment button', () => {
       render(<MessageComposer {...defaultProps} />);
 
-      const attachButton = screen.getByRole('button', { name: /Ajouter des fichiers/i });
+      const attachButton = screen.getByRole('button', { name: /Attach file/i });
       expect(attachButton).toBeInTheDocument();
     });
 

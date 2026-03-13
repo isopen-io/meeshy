@@ -22,4 +22,6 @@ module.exports = {
   Comic_Neue: createFontMock('Comic_Neue', '--font-comic-neue'),
   Lexend: createFontMock('Lexend', '--font-lexend'),
   Roboto: createFontMock('Roboto', '--font-roboto'),
+  DM_Sans: createFontMock('DM_Sans', '--font-dm-sans'),
+  Playfair_Display: createFontMock('Playfair_Display', '--font-playfair-display'),
 };

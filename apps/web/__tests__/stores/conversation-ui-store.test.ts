@@ -106,6 +106,8 @@ describe('ConversationUIStore', () => {
       });
 
       it('should auto-remove typing user after 5 seconds', () => {
+        jest.useFakeTimers();
+
         act(() => {
           useConversationUIStore.getState().addTypingUser('conv-123', 'user-1');
         });

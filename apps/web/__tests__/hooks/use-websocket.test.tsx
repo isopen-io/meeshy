@@ -34,6 +34,7 @@ const mockOnMessageDeleted = jest.fn(() => jest.fn());
 const mockOnTranslation = jest.fn(() => jest.fn());
 const mockOnTyping = jest.fn(() => jest.fn());
 const mockOnUserStatus = jest.fn(() => jest.fn());
+const mockOnAuthenticated = jest.fn(() => jest.fn());
 
 jest.mock('@/services/websocket.service', () => ({
   webSocketService: {
@@ -55,6 +56,7 @@ jest.mock('@/services/websocket.service', () => ({
     onTranslation: (...args: any[]) => (mockOnTranslation as any)(...args),
     onTyping: (...args: any[]) => (mockOnTyping as any)(...args),
     onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
+    onAuthenticated: (...args: any[]) => (mockOnAuthenticated as any)(...args),
   },
 }));
 
@@ -84,6 +86,7 @@ describe('useWebSocket', () => {
 
   describe('Initial State', () => {
     it('should return isConnected from service after polling', () => {
+      jest.useFakeTimers();
       mockIsConnected.mockReturnValue(true);
 
       const { result } = renderHook(() => useWebSocket());
@@ -390,6 +393,7 @@ describe('useWebSocket', () => {
 
   describe('Connection State Polling', () => {
     it('should poll connection state', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() => useWebSocket());
 
       mockIsConnected.mockReturnValue(false);

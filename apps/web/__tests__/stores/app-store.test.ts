@@ -189,6 +189,8 @@ describe('AppStore', () => {
       });
 
       it('should auto-remove notification after default duration (5000ms)', () => {
+        jest.useFakeTimers();
+
         act(() => {
           useAppStore.getState().addNotification({
             type: 'info',
@@ -206,6 +208,8 @@ describe('AppStore', () => {
       });
 
       it('should auto-remove notification after custom duration', () => {
+        jest.useFakeTimers();
+
         act(() => {
           useAppStore.getState().addNotification({
             type: 'info',
@@ -228,6 +232,8 @@ describe('AppStore', () => {
       });
 
       it('should not auto-remove if duration is 0', () => {
+        jest.useFakeTimers();
+
         act(() => {
           useAppStore.getState().addNotification({
             type: 'info',

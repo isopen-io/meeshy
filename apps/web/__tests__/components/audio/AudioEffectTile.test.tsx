@@ -327,7 +327,7 @@ describe('AudioEffectTile', () => {
       const { container } = render(<AudioEffectTile {...defaultProps} />);
 
       const card = container.firstChild;
-      expect(card).toHaveClass('transition-all');
+      expect(card).toHaveClass('transition-[transform,box-shadow]');
     });
   });
 

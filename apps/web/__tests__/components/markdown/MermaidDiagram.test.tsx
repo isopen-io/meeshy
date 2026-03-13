@@ -10,12 +10,14 @@ import '@testing-library/jest-dom';
 // Mock mermaid library
 const mockRender = jest.fn();
 const mockInitialize = jest.fn();
+const mockParse = jest.fn();
 
 jest.mock('mermaid', () => ({
   __esModule: true,
   default: {
     initialize: (...args: any[]) => mockInitialize(...args),
     render: (...args: any[]) => mockRender(...args),
+    parse: (...args: any[]) => mockParse(...args),
   },
 }));
 
@@ -49,6 +51,7 @@ import { MermaidDiagram } from '../../../components/markdown/MermaidDiagramImpl'
 describe('MermaidDiagram', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParse.mockResolvedValue(true);
     mockRender.mockResolvedValue({
       svg: '<svg data-testid="mermaid-svg"><text>Mock Diagram</text></svg>',
     });

@@ -226,6 +226,8 @@ describe('useSocketCallbacks', () => {
     });
 
     it('should refresh conversations when conversation not found', () => {
+      jest.useFakeTimers();
+
       mockSetConversations.mockImplementation((updater) => {
         return updater([]); // Empty conversations list
       });

@@ -146,7 +146,7 @@ describe('AuthStore', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', 3600 as any);
+        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', undefined, 3600);
       });
 
       const state = useAuthStore.getState();
@@ -179,7 +179,7 @@ describe('AuthStore', () => {
       // First set auth state
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        useAuthStore.getState().setTokens('test-token', 'test-refresh', 3600 as any);
+        useAuthStore.getState().setTokens('test-token', 'test-refresh', undefined, 3600);
       });
 
       // Then clear it

@@ -85,6 +85,7 @@ describe('useConversationUI', () => {
     });
 
     it('should update on window resize with debounce', () => {
+      jest.useFakeTimers();
       Object.defineProperty(window, 'innerWidth', { value: 1024 });
 
       const { result } = renderHook(() =>
@@ -112,6 +113,7 @@ describe('useConversationUI', () => {
     });
 
     it('should handle resize at boundary (768px)', () => {
+      jest.useFakeTimers();
       Object.defineProperty(window, 'innerWidth', { value: 768 });
 
       const { result } = renderHook(() =>
@@ -182,6 +184,7 @@ describe('useConversationUI', () => {
     });
 
     it('should update visibility when switching between mobile and desktop', () => {
+      jest.useFakeTimers();
       Object.defineProperty(window, 'innerWidth', { value: 600 });
 
       const { result, rerender } = renderHook(
@@ -369,14 +372,6 @@ describe('useConversationUI', () => {
       expect(result.current.isCreateModalOpen).toBe(false);
     });
 
-    it('should return isDetailsOpen false initially', () => {
-      const { result } = renderHook(() =>
-        useConversationUI({ selectedConversationId: null })
-      );
-
-      expect((result.current as any).isDetailsOpen).toBe(false);
-    });
-
     it('should allow toggling create modal', () => {
       const { result } = renderHook(() =>
         useConversationUI({ selectedConversationId: null })
@@ -395,23 +390,7 @@ describe('useConversationUI', () => {
       expect(result.current.isCreateModalOpen).toBe(false);
     });
 
-    it('should allow toggling details panel', () => {
-      const { result } = renderHook(() =>
-        useConversationUI({ selectedConversationId: null })
-      );
-
-      act(() => {
-        (result.current as any).setIsDetailsOpen(true);
-      });
-
-      expect((result.current as any).isDetailsOpen).toBe(true);
-
-      act(() => {
-        (result.current as any).setIsDetailsOpen(false);
-      });
-
-      expect((result.current as any).isDetailsOpen).toBe(false);
-    });
+    // isDetailsOpen/setIsDetailsOpen removed from this hook (extracted to ConversationLayout)
   });
 
   describe('Gallery State', () => {
@@ -571,7 +550,6 @@ describe('useConversationUI', () => {
       const firstSetters = {
         setShowConversationList: result.current.setShowConversationList,
         setIsCreateModalOpen: result.current.setIsCreateModalOpen,
-        setIsDetailsOpen: (result.current as any).setIsDetailsOpen,
         setGalleryOpen: result.current.setGalleryOpen,
         setSelectedAttachmentId: result.current.setSelectedAttachmentId,
       };
@@ -580,7 +558,6 @@ describe('useConversationUI', () => {
 
       expect(result.current.setShowConversationList).toBe(firstSetters.setShowConversationList);
       expect(result.current.setIsCreateModalOpen).toBe(firstSetters.setIsCreateModalOpen);
-      expect((result.current as any).setIsDetailsOpen).toBe(firstSetters.setIsDetailsOpen);
       expect(result.current.setGalleryOpen).toBe(firstSetters.setGalleryOpen);
       expect(result.current.setSelectedAttachmentId).toBe(firstSetters.setSelectedAttachmentId);
     });

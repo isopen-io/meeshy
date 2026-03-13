@@ -120,7 +120,7 @@ describe('useFontPreference', () => {
     it('should return default font initially', () => {
       const { result } = renderHook(() => useFontPreference());
 
-      expect(result.current.currentFont).toBe('inter');
+      expect(result.current.currentFont).toBe('nunito');
     });
 
     it('should return isLoading true initially', () => {
@@ -232,7 +232,7 @@ describe('useFontPreference', () => {
       });
 
       // Should fallback to default/localStorage
-      expect(result.current.currentFont).toBe('inter');
+      expect(result.current.currentFont).toBe('nunito');
     });
 
     it('should not fetch if not authenticated', async () => {
@@ -359,7 +359,7 @@ describe('useFontPreference', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.currentFont).toBe('inter');
+        expect(result.current.currentFont).toBe('nunito');
       });
     });
   });

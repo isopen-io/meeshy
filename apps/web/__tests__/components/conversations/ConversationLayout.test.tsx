@@ -37,8 +37,8 @@ jest.mock('next/dynamic', () => {
 
 // Mock stores
 jest.mock('@/stores', () => ({
-  useUser: jest.fn(),
-  useIsAuthChecking: jest.fn(),
+  useUser: jest.fn(() => null),
+  useIsAuthChecking: jest.fn(() => false),
 }));
 
 jest.mock('@/stores/notification-store', () => ({

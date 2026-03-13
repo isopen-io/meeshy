@@ -16,9 +16,8 @@ import { renderHook, act } from '@testing-library/react';
 import { useLongPress, type UseLongPressOptions } from '@/hooks/use-long-press';
 import React from 'react';
 
-// Mock timers
-// Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+// Use fake timers for setTimeout-based long press detection
+jest.useFakeTimers();
 
 describe('useLongPress', () => {
   let callback: jest.Mock;

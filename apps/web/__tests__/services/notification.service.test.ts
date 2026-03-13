@@ -53,13 +53,13 @@ describe('NotificationService - Structure Groupée V2', () => {
           action: 'view_message',
         },
 
-        // STATE - Statut lecture
-        // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
-        // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
-        isRead: false,
-        readAt: null,
-        createdAt: '2024-01-15T10:30:00Z',
-        expiresAt: null,
+        // STATE - Statut lecture (groupé)
+        state: {
+          isRead: false,
+          readAt: null,
+          createdAt: '2024-01-15T10:30:00Z',
+          expiresAt: null,
+        },
 
         // DELIVERY - Suivi multi-canal
         delivery: {
@@ -138,9 +138,10 @@ describe('NotificationService - Structure Groupée V2', () => {
         userId: 'user_123',
         type: (NotificationTypeEnum as any).SYSTEM_ANNOUNCEMENT,
         content: 'System message',
-        // Le backend envoie les champs à la racine
-        isRead: false,
-        createdAt: '2024-01-15T10:30:00Z',
+        state: {
+          isRead: false,
+          createdAt: '2024-01-15T10:30:00Z',
+        },
       };
 
       (apiService.get as jest.Mock).mockResolvedValue({
@@ -174,12 +175,12 @@ describe('NotificationService - Structure Groupée V2', () => {
         userId: 'user_123',
         type: NotificationTypeEnum.NEW_MESSAGE,
         content: 'Test message',
-        // IMPORTANT: Le backend envoie isRead, readAt, createdAt à la racine (pas dans state)
-        // car ces champs sont à la racine dans le schema Prisma pour performance des indexes
-        isRead: true,
-        readAt: '2024-01-15T11:00:00Z',
-        createdAt: '2024-01-15T10:30:00Z',
-        expiresAt: '2024-02-15T10:30:00Z',
+        state: {
+          isRead: true,
+          readAt: '2024-01-15T11:00:00Z',
+          createdAt: '2024-01-15T10:30:00Z',
+          expiresAt: '2024-02-15T10:30:00Z',
+        },
       };
 
       (apiService.get as jest.Mock).mockResolvedValue({
@@ -217,12 +218,12 @@ describe('NotificationService - Structure Groupée V2', () => {
         type: NotificationTypeEnum.NEW_MESSAGE,
         content: 'Test message',
 
-        // Champs legacy à la racine (backward compat)
-        isRead: true,
-        readAt: '2024-01-15T11:00:00Z',
-        createdAt: '2024-01-15T10:30:00Z',
-
-        // Pas de state groupé
+        // Champs dans state groupé
+        state: {
+          isRead: true,
+          readAt: '2024-01-15T11:00:00Z',
+          createdAt: '2024-01-15T10:30:00Z',
+        },
       };
 
       (apiService.get as jest.Mock).mockResolvedValue({
@@ -345,10 +346,11 @@ describe('NotificationService - Structure Groupée V2', () => {
         userId: 'user_123',
         type: NotificationTypeEnum.NEW_MESSAGE,
         content: 'Test',
-        // Le backend envoie les champs à la racine
-        isRead: true,
-        readAt: '2024-01-15T11:00:00Z',
-        createdAt: '2024-01-15T10:30:00Z',
+        state: {
+          isRead: true,
+          readAt: '2024-01-15T11:00:00Z',
+          createdAt: '2024-01-15T10:30:00Z',
+        },
         context: {},
         metadata: {},
         delivery: { emailSent: false, pushSent: false },
@@ -480,10 +482,11 @@ describe('NotificationService - Structure Groupée V2', () => {
           mentionText: '@bob',
           messagePreview: 'Salut @bob comment ça va?',
         },
-        // Le backend envoie les champs à la racine
-        isRead: false,
-        readAt: null,
-        createdAt: '2024-01-15T10:30:00Z',
+        state: {
+          isRead: false,
+          readAt: null,
+          createdAt: '2024-01-15T10:30:00Z',
+        },
         delivery: { emailSent: false, pushSent: false },
       };
 
@@ -527,10 +530,11 @@ describe('NotificationService - Structure Groupée V2', () => {
           callType: 'video',
           duration: 0,
         },
-        // Le backend envoie les champs à la racine
-        isRead: false,
-        readAt: null,
-        createdAt: '2024-01-15T10:30:00Z',
+        state: {
+          isRead: false,
+          readAt: null,
+          createdAt: '2024-01-15T10:30:00Z',
+        },
         delivery: { emailSent: false, pushSent: true },
       };
 

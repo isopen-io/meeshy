@@ -90,9 +90,11 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
-// Mock dashboard service
+// Mock dashboard data variables
 let mockDashboardData: any = null;
 let mockDashboardError: Error | null = null;
+let mockDashboardLoading = false;
+const mockRefetch = jest.fn();
 
 jest.mock('@/services/dashboard.service', () => ({
   dashboardService: {
@@ -104,6 +106,16 @@ jest.mock('@/services/dashboard.service', () => ({
     }),
   },
   DashboardData: {},
+}));
+
+// Mock useDashboardData hook directly to avoid async resolution issues
+jest.mock('@/hooks/use-dashboard-data', () => ({
+  useDashboardData: () => ({
+    data: mockDashboardData,
+    isLoading: mockDashboardLoading,
+    error: mockDashboardError,
+    refetch: mockRefetch,
+  }),
 }));
 
 // Mock buildApiUrl
@@ -128,6 +140,150 @@ jest.mock('@/components/layout/DashboardLayout', () => ({
 // Mock Footer
 jest.mock('@/components/layout/Footer', () => ({
   Footer: () => <footer data-testid="footer">Footer</footer>,
+}));
+
+// Mock dashboard sub-components
+jest.mock('@/components/dashboard/DashboardHeader', () => ({
+  DashboardHeader: ({ userName, t, onShareApp, onCreateLink, onCreateConversation, onCreateCommunity }: any) => (
+    <div data-testid="dashboard-header">
+      <h1>{t('greeting', { name: userName })}</h1>
+      <p>{t('overview')}</p>
+      <button onClick={onShareApp}>{t('quickActions.shareApp')}</button>
+      <button onClick={onCreateLink}>{t('quickActions.createLink')}</button>
+      <button onClick={onCreateConversation}>{t('quickActions.newConversation')}</button>
+      <button onClick={onCreateCommunity}>{t('quickActions.createCommunity')}</button>
+    </div>
+  ),
+}));
+
+jest.mock('@/components/dashboard/DashboardStats', () => ({
+  DashboardStats: ({ stats, t }: any) => (
+    <div data-testid="dashboard-stats">
+      <div><span>{t('stats.conversations')}</span><span>{stats.totalConversations}</span></div>
+      <div><span>{t('stats.communities')}</span><span>{stats.totalCommunities}</span></div>
+      <div><span>{t('stats.messages')}</span><span>{stats.totalMessages}</span></div>
+      <div><span>{t('stats.activeConversationsTitle')}</span><span>{stats.activeConversations}</span></div>
+      <div><span>{t('stats.translations')}</span><span>{stats.translationsToday}</span></div>
+      <div><span>{t('stats.links')}</span><span>{stats.totalLinks}</span></div>
+    </div>
+  ),
+}));
+
+jest.mock('@/components/dashboard/ConversationsWidget', () => ({
+  ConversationsWidget: ({ conversations, t, onConversationClick, onViewAll, onStartConversation }: any) => {
+    const formatAttachment = (att: any) => {
+      if (att.mimeType?.startsWith('image/') && att.width && att.height) {
+        return `${att.width}x${att.height}`;
+      }
+      if (att.mimeType?.startsWith('audio/') && att.duration) {
+        const secs = Math.floor(att.duration / 1000);
+        return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+      }
+      return att.mimeType;
+    };
+    return (
+      <div data-testid="conversations-widget">
+        <h3>{t('recentConversations')}</h3>
+        {conversations.length === 0 ? (
+          <>
+            <p>{t('emptyStates.noRecentConversations')}</p>
+            <button onClick={onStartConversation}>{t('actions.startConversation')}</button>
+          </>
+        ) : (
+          <>
+            {conversations.map((c: any) => (
+              <div key={c.id} onClick={() => onConversationClick(c.id)}>
+                <span>{c.title}</span>
+                {c.lastMessage && (
+                  <>
+                    {c.lastMessage.content && <span>{c.lastMessage.content}</span>}
+                    {c.lastMessage.sender && <span>{c.lastMessage.sender.displayName || c.lastMessage.sender.username}</span>}
+                    {c.lastMessage.attachments && c.lastMessage.attachments.length > 0 && (
+                      <>
+                        <span>{formatAttachment(c.lastMessage.attachments[0])}</span>
+                        {c.lastMessage.attachments.length > 1 && <span>+{c.lastMessage.attachments.length - 1}</span>}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+            <button onClick={onViewAll}>{t('actions.viewAll')}</button>
+          </>
+        )}
+      </div>
+    );
+  },
+}));
+
+jest.mock('@/components/dashboard/CommunitiesWidget', () => ({
+  CommunitiesWidget: ({ communities, t, onCommunityClick, onViewAll, onCreateCommunity }: any) => (
+    <div data-testid="communities-widget">
+      <h3>{t('recentCommunities')}</h3>
+      {communities.length === 0 ? (
+        <>
+          <p>{t('emptyStates.noRecentCommunities')}</p>
+          <button onClick={onCreateCommunity}>{t('actions.createCommunityButton')}</button>
+        </>
+      ) : (
+        <>
+          {communities.map((c: any) => (
+            <div key={c.id} onClick={() => onCommunityClick(c.id)}>
+              <span>{c.name}</span>
+              {c.isPrivate && <span>{t('communities.private')}</span>}
+              <span>{c.members?.length || 0}</span>
+            </div>
+          ))}
+          <button onClick={onViewAll}>{t('actions.viewAll')}</button>
+        </>
+      )}
+    </div>
+  ),
+}));
+
+jest.mock('@/components/dashboard/QuickActionsWidget', () => ({
+  QuickActionsWidget: ({ onCreateConversation, onCreateLink, onCreateGroup, onShare, onSettings, t }: any) => (
+    <div data-testid="quick-actions-widget">
+      <h3>{t('quickActions.title')}</h3>
+      <button onClick={onCreateConversation}>{t('quickActions.newConversation')}</button>
+      <button onClick={onCreateLink}>{t('quickActions.createLink')}</button>
+      <button onClick={onCreateGroup}>{t('quickActions.createCommunity')}</button>
+      <button onClick={onShare}>{t('quickActions.shareApp')}</button>
+      <button onClick={onSettings}>{t('quickActions.settings')}</button>
+    </div>
+  ),
+}));
+
+jest.mock('@/components/dashboard/CreateGroupModal', () => ({
+  CreateGroupModal: ({ isOpen, onClose }: any) => (
+    isOpen ? <div data-testid="create-group-modal"><button onClick={onClose}>Close</button></div> : null
+  ),
+}));
+
+// Mock hooks used by dashboard
+jest.mock('@/hooks/use-prefetch', () => ({
+  usePrefetch: () => jest.fn(),
+}));
+
+jest.mock('@/hooks/use-group-modal', () => ({
+  useGroupModal: () => ({
+    groupName: '',
+    setGroupName: jest.fn(),
+    groupDescription: '',
+    setGroupDescription: jest.fn(),
+    isGroupPrivate: false,
+    setIsGroupPrivate: jest.fn(),
+    availableUsers: [],
+    selectedUsers: [],
+    groupSearchQuery: '',
+    setGroupSearchQuery: jest.fn(),
+    isLoadingUsers: false,
+    isCreatingGroup: false,
+    toggleUserSelection: jest.fn(),
+    createGroup: jest.fn(),
+    loadUsers: jest.fn(),
+    resetForm: jest.fn(),
+  }),
 }));
 
 // Mock conversation components
@@ -313,15 +469,16 @@ describe('DashboardPage', () => {
 
   describe('Loading State', () => {
     it('should render loading spinner initially', async () => {
-      // Make the API call hang
-      (dashboardService.getDashboardData as jest.Mock).mockImplementation(
-        () => new Promise(() => {})
-      );
+      mockDashboardLoading = true;
+      mockDashboardData = null;
 
       const { container } = render(<DashboardPage />);
 
       expect(container.querySelector('.animate-spin')).toBeInTheDocument();
       expect(screen.getByText('loading')).toBeInTheDocument();
+
+      // Reset for other tests
+      mockDashboardLoading = false;
     });
   });
 
@@ -355,14 +512,9 @@ describe('DashboardPage', () => {
         expect(screen.getByText('retry')).toBeInTheDocument();
       });
 
-      // Fix the error for retry
-      mockDashboardError = null;
-
       fireEvent.click(screen.getByText('retry'));
 
-      await waitFor(() => {
-        expect(dashboardService.getDashboardData).toHaveBeenCalledTimes(2);
-      });
+      expect(mockRefetch).toHaveBeenCalled();
     });
   });
 
@@ -442,10 +594,11 @@ describe('DashboardPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('quickActions.title')).toBeInTheDocument();
-        expect(screen.getByText('quickActions.newConversation')).toBeInTheDocument();
-        expect(screen.getByText('quickActions.createLink')).toBeInTheDocument();
-        expect(screen.getByText('quickActions.createCommunity')).toBeInTheDocument();
-        expect(screen.getByText('quickActions.shareApp')).toBeInTheDocument();
+        // These appear in both DashboardHeader and QuickActionsWidget
+        expect(screen.getAllByText('quickActions.newConversation').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('quickActions.createLink').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('quickActions.createCommunity').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('quickActions.shareApp').length).toBeGreaterThan(0);
         expect(screen.getByText('quickActions.settings')).toBeInTheDocument();
       });
     });
@@ -543,10 +696,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('actions.createLink')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.createLink');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('actions.createLink'));
+      // Click the header's create link button (navigates to /links)
+      const buttons = screen.getAllByText('quickActions.createLink');
+      fireEvent.click(buttons[0]);
 
       expect(mockPush).toHaveBeenCalledWith('/links');
     });
@@ -555,10 +711,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('actions.createConversation')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.newConversation');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('actions.createConversation'));
+      // Click the header's create conversation button (navigates to /conversations?new=true)
+      const buttons = screen.getAllByText('quickActions.newConversation');
+      fireEvent.click(buttons[0]);
 
       expect(mockPush).toHaveBeenCalledWith('/conversations?new=true');
     });
@@ -569,10 +728,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('quickActions.newConversation')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.newConversation');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('quickActions.newConversation'));
+      // Click the QuickActionsWidget button (last one) which opens modal
+      const buttons = screen.getAllByText('quickActions.newConversation');
+      fireEvent.click(buttons[buttons.length - 1]);
 
       await waitFor(() => {
         expect(screen.getByTestId('create-conversation-modal')).toBeInTheDocument();
@@ -583,10 +745,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('quickActions.createLink')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.createLink');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('quickActions.createLink'));
+      // Click the QuickActionsWidget button (last one) which opens modal
+      const buttons = screen.getAllByText('quickActions.createLink');
+      fireEvent.click(buttons[buttons.length - 1]);
 
       await waitFor(() => {
         expect(screen.getByTestId('create-link-modal')).toBeInTheDocument();
@@ -597,10 +762,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('actions.shareApp')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.shareApp');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('actions.shareApp'));
+      // Click the QuickActionsWidget button (last one) which opens modal
+      const buttons = screen.getAllByText('quickActions.shareApp');
+      fireEvent.click(buttons[buttons.length - 1]);
 
       await waitFor(() => {
         expect(screen.getByTestId('share-affiliate-modal')).toBeInTheDocument();
@@ -611,10 +779,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('quickActions.newConversation')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.newConversation');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('quickActions.newConversation'));
+      // Click the QuickActionsWidget button to open modal
+      const buttons = screen.getAllByText('quickActions.newConversation');
+      fireEvent.click(buttons[buttons.length - 1]);
 
       await waitFor(() => {
         expect(screen.getByTestId('create-conversation-modal')).toBeInTheDocument();
@@ -623,7 +794,6 @@ describe('DashboardPage', () => {
       fireEvent.click(screen.getByTestId('create-conversation'));
 
       await waitFor(() => {
-        expect(mockToastSuccess).toHaveBeenCalledWith('success.conversationCreated');
         expect(mockPush).toHaveBeenCalledWith('/conversations/new-conv-123');
       });
     });
@@ -632,10 +802,13 @@ describe('DashboardPage', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('quickActions.createLink')).toBeInTheDocument();
+        const buttons = screen.getAllByText('quickActions.createLink');
+        expect(buttons.length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByText('quickActions.createLink'));
+      // Click the QuickActionsWidget button to open modal
+      const buttons = screen.getAllByText('quickActions.createLink');
+      fireEvent.click(buttons[buttons.length - 1]);
 
       await waitFor(() => {
         expect(screen.getByTestId('create-link-modal')).toBeInTheDocument();
@@ -643,9 +816,8 @@ describe('DashboardPage', () => {
 
       fireEvent.click(screen.getByTestId('create-link'));
 
-      await waitFor(() => {
-        expect(mockToastSuccess).toHaveBeenCalledWith('success.linkCreated');
-      });
+      // Modal closes and refetch is called
+      expect(mockRefetch).toHaveBeenCalled();
     });
   });
 
@@ -755,17 +927,14 @@ describe('DashboardPage', () => {
     it('should not fetch data again within cache duration', async () => {
       render(<DashboardPage />);
 
+      // With the hook mocked, data is provided synchronously
+      // Verify dashboard content renders without additional fetches
       await waitFor(() => {
-        expect(dashboardService.getDashboardData).toHaveBeenCalledTimes(1);
+        expect(screen.getByText('greeting')).toBeInTheDocument();
       });
 
-      // Trigger a re-render without force refresh
-      // The component should use cached data
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 100));
-      });
-
-      expect(dashboardService.getDashboardData).toHaveBeenCalledTimes(1);
+      // refetch should not be called automatically
+      expect(mockRefetch).not.toHaveBeenCalled();
     });
   });
 

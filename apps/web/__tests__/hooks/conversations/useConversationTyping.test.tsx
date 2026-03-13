@@ -18,8 +18,7 @@ import { useConversationTyping } from '@/hooks/conversations/useConversationTypi
 import type { Participant } from '@meeshy/shared/types';
 
 // Use fake timers for timeout testing
-// Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+jest.useFakeTimers();
 
 describe('useConversationTyping', () => {
   const mockConversationId = 'conv-123';
@@ -598,6 +597,7 @@ describe('useConversationTyping', () => {
       const updatedParticipants: Participant[] = [
         {
           ...mockParticipants[0],
+          displayName: 'Updated Name',
           user: {
             ...(mockParticipants[0].user as Record<string, unknown>),
             displayName: 'Updated Name',
@@ -646,7 +646,7 @@ describe('useConversationTyping', () => {
           conversationId: mockConversationId,
           type: 'user',
           userId: 'user-456',
-          displayName: 'User 456',
+          displayName: undefined,
           language: 'fr',
           permissions: defaultPermissions,
           isOnline: true,
@@ -654,7 +654,7 @@ describe('useConversationTyping', () => {
           user: undefined,
           role: 'member',
           joinedAt: new Date(),
-        } as Participant,
+        } as unknown as Participant,
       ];
 
       const { result } = renderHook(() =>

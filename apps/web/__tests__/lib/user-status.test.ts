@@ -18,23 +18,23 @@ describe('User Status Module', () => {
     });
 
     describe('isOnline property handling', () => {
-      it('should return offline when isOnline is explicitly false', () => {
+      it('should use lastActiveAt even when isOnline is explicitly false', () => {
         const user = {
           id: '1',
           isOnline: false,
           lastActiveAt: new Date().toISOString(),
         };
 
-        expect(getUserStatus(user as any)).toBe('offline');
+        expect(getUserStatus(user as any)).toBe('online');
       });
 
-      it('should return online when isOnline is true and no lastActiveAt', () => {
+      it('should return offline when isOnline is true but no lastActiveAt', () => {
         const user = {
           id: '1',
           isOnline: true,
         };
 
-        expect(getUserStatus(user as any)).toBe('online');
+        expect(getUserStatus(user as any)).toBe('offline');
       });
     });
 
@@ -202,14 +202,14 @@ describe('User Status Module', () => {
         expect(getUserStatus(participant as any)).toBe('online');
       });
 
-      it('should prioritize isOnline=false over recent activity', () => {
+      it('should use lastActiveAt regardless of isOnline=false', () => {
         const user = {
           id: '1',
           isOnline: false,
           lastActiveAt: new Date().toISOString(), // Just now
         };
 
-        expect(getUserStatus(user as any)).toBe('offline');
+        expect(getUserStatus(user as any)).toBe('online');
       });
 
       it('should use lastActiveAt when isOnline is undefined', () => {

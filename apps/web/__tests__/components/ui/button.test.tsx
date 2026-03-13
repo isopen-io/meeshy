@@ -377,10 +377,10 @@ describe('Button', () => {
   });
 
   describe('Transition', () => {
-    it('should have transition-all class', () => {
+    it('should have transition class', () => {
       render(<Button>Animated</Button>);
 
-      expect(screen.getByRole('button')).toHaveClass('transition-all');
+      expect(screen.getByRole('button')).toHaveClass('transition-[color,background-color,border-color,opacity,box-shadow]');
     });
   });
 

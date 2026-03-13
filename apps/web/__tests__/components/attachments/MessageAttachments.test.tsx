@@ -144,6 +144,30 @@ jest.mock('@/components/pptx/PPTXLightbox', () => ({
     ) : null,
 }));
 
+// Mock DocumentAttachment to avoid next/dynamic issues
+jest.mock('@/components/attachments/DocumentAttachment', () => ({
+  DocumentAttachment: ({ attachment, documentType, onOpenLightbox }: any) => {
+    const testIdMap: Record<string, string> = {
+      pdf: 'pdf-viewer',
+      pptx: 'pptx-viewer',
+      markdown: 'markdown-viewer',
+      text: 'text-viewer',
+    };
+    const labelMap: Record<string, string> = {
+      pdf: 'Open PDF',
+      pptx: 'Open PPTX',
+      markdown: 'Open Markdown',
+      text: 'Open Text',
+    };
+    return (
+      <div data-testid={testIdMap[documentType] || 'document-viewer'}>
+        {attachment.originalName}
+        <button onClick={() => onOpenLightbox(attachment)}>{labelMap[documentType] || 'Open'}</button>
+      </div>
+    );
+  },
+}));
+
 // Mock audio/video players
 jest.mock('@/components/audio/SimpleAudioPlayer', () => ({
   SimpleAudioPlayer: ({ attachment }: any) => (
@@ -449,7 +473,7 @@ describe('MessageAttachments', () => {
   });
 
   describe('Markdown Attachments', () => {
-    it('renders Markdown viewer', async () => {
+    it('renders Markdown as text viewer (markdown is treated as text)', async () => {
       const attachments = [
         createMockAttachment({
           mimeType: 'text/markdown',
@@ -459,10 +483,10 @@ describe('MessageAttachments', () => {
 
       render(<MessageAttachments attachments={attachments} />);
 
-      expect(screen.getByTestId('markdown-viewer')).toBeInTheDocument();
+      expect(screen.getByTestId('text-viewer')).toBeInTheDocument();
     });
 
-    it('opens Markdown lightbox', async () => {
+    it('opens text lightbox for markdown files', async () => {
       const attachments = [
         createMockAttachment({
           mimeType: 'text/markdown',
@@ -472,10 +496,10 @@ describe('MessageAttachments', () => {
 
       render(<MessageAttachments attachments={attachments} />);
 
-      fireEvent.click(screen.getByText('Open Markdown'));
+      fireEvent.click(screen.getByText('Open Text'));
 
       await waitFor(() => {
-        expect(screen.getByTestId('markdown-lightbox')).toBeInTheDocument();
+        expect(screen.getByTestId('text-lightbox')).toBeInTheDocument();
       });
     });
   });

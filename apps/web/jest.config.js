@@ -23,7 +23,12 @@ const customJestConfig = {
     }]
   ],
   moduleNameMapper: {
-    // Handle module aliases (this will be automatically configured for you soon)
+    // Specific @/ mocks MUST come before the generic @/ alias (first match wins in Jest)
+    // Mock MermaidDiagramImpl to avoid loading mermaid in tests
+    '^@/components/markdown/MermaidDiagramImpl$': '<rootDir>/__mocks__/components/markdown/MermaidDiagramImpl.tsx',
+    // Mock MarkdownMessage to avoid react-markdown ESM issues
+    '^@/components/messages/MarkdownMessage$': '<rootDir>/__mocks__/components/messages/MarkdownMessage.tsx',
+    // Handle module aliases
     '^@/(.*)$': '<rootDir>/$1',
     '^@meeshy/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
     // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
@@ -43,10 +48,11 @@ const customJestConfig = {
     '^@ffmpeg/ffmpeg$': '<rootDir>/__mocks__/@ffmpeg/ffmpeg.js',
     // Mock mermaid to avoid ESM issues
     '^mermaid$': '<rootDir>/__mocks__/mermaid.js',
-    // Mock MermaidDiagramImpl to avoid loading mermaid in tests
-    '^@/components/markdown/MermaidDiagramImpl$': '<rootDir>/__mocks__/components/markdown/MermaidDiagramImpl.tsx',
-    // Mock MarkdownMessage to avoid react-markdown ESM issues
-    '^@/components/messages/MarkdownMessage$': '<rootDir>/__mocks__/components/messages/MarkdownMessage.tsx',
+    // Mock react-markdown and its plugins to avoid ESM issues
+    '^react-markdown$': '<rootDir>/__mocks__/react-markdown.js',
+    '^remark-gfm$': '<rootDir>/__mocks__/react-markdown.js',
+    '^rehype-raw$': '<rootDir>/__mocks__/react-markdown.js',
+    '^rehype-sanitize$': '<rootDir>/__mocks__/react-markdown.js',
     // Mock react-syntax-highlighter to avoid ESM issues
     '^react-syntax-highlighter$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
     '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter/dist/esm/$1.js',
@@ -78,6 +84,7 @@ const customJestConfig = {
     '/__tests__/integration/',
     '\\.md$',
     '/_archived/',
+    '/e2e/',
   ],
 }
 

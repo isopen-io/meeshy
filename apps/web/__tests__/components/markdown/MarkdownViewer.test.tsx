@@ -29,18 +29,8 @@ jest.mock('next-themes', () => ({
   })),
 }));
 
-// Mock react-markdown
-jest.mock('react-markdown', () => ({
-  __esModule: true,
-  default: ({ children, components }: any) => (
-    <div data-testid="react-markdown">{children}</div>
-  ),
-}));
-
-// Mock remark/rehype plugins
-jest.mock('remark-gfm', () => () => {});
-jest.mock('rehype-raw', () => () => {});
-jest.mock('rehype-sanitize', () => () => {});
+// react-markdown is mocked via moduleNameMapper -> __mocks__/react-markdown.js
+// remark/rehype plugins are mocked via moduleNameMapper -> __mocks__/react-markdown.js
 
 // Mock MermaidDiagram
 jest.mock('@/components/markdown/MermaidDiagram', () => ({

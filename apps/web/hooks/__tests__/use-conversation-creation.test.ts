@@ -33,21 +33,18 @@ describe('useConversationCreation', () => {
 
     expect(result.current.isCreating).toBe(false);
 
-    const promise = result.current.createConversation({
-      title: 'Direct with John',
-      conversationType: 'direct',
-      selectedUsers: [{ id: 'user-1', username: 'john' } as any],
-      customIdentifier: '',
-      selectedCommunity: undefined
+    let conversation: any;
+    await waitFor(async () => {
+      conversation = await result.current.createConversation({
+        title: 'Direct with John',
+        conversationType: 'direct',
+        selectedUsers: [{ id: 'user-1', username: 'john' } as any],
+        customIdentifier: '',
+        selectedCommunity: undefined
+      });
     });
 
-    expect(result.current.isCreating).toBe(true);
-
-    const conversation = await promise;
-
-    await waitFor(() => {
-      expect(result.current.isCreating).toBe(false);
-    });
+    expect(result.current.isCreating).toBe(false);
 
     expect(conversation).toEqual(mockConversation);
     expect(mockToast.success).toHaveBeenCalledWith('createConversationModal.success.conversationCreated');

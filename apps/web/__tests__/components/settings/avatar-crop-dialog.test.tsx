@@ -11,7 +11,20 @@ import { AvatarCropDialog } from '@/components/settings/avatar-crop-dialog';
 // Mock des hooks
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, fallback?: string) => fallback || key,
+    t: (key: string, fallback?: string) => {
+      const translations: Record<string, string> = {
+        'profile.cropAvatar.cropAvatarTitle': 'Recadrer votre photo de profil',
+        'profile.cropAvatar.zoom': 'Zoom',
+        'profile.cropAvatar.rotation': 'Rotation',
+        'profile.cropAvatar.reset': 'Reinitialiser',
+        'profile.cropAvatar.cancel': 'Annuler',
+        'profile.cropAvatar.saveAvatar': 'Enregistrer',
+        'profile.cropAvatar.uploading': 'Telechargement...',
+        'profile.cropAvatar.processing': 'Traitement...',
+        'profile.cropAvatar.cropInstructions': "Utilisez la souris pour deplacer l'image, les curseurs pour zoomer et tourner. L'image sera recadree en carre.",
+      };
+      return translations[key] || fallback || key;
+    },
   }),
 }));
 

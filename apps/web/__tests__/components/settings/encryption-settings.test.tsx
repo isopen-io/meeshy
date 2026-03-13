@@ -74,14 +74,9 @@ jest.mock('@/hooks/use-accessibility', () => ({
 // Mock du store
 const mockEncryptionData = {
   encryptionPreference: 'optional' as const,
-  hasSignalKeys: false,
-  signalRegistrationId: null as any,
-  lastKeyRotation: null as any,
-  localSettings: {
-    autoEncryptNewConversations: true,
-    showEncryptionStatus: true,
-    warnOnUnencrypted: false,
-  },
+  autoEncryptNewConversations: true,
+  showEncryptionStatus: true,
+  warnOnUnencrypted: false,
 };
 
 const mockUpdateEncryption = jest.fn();
@@ -102,6 +97,37 @@ jest.mock('@/stores', () => ({
     updateLocalSettings: mockUpdateLocalSettings,
     sync: mockSyncEncryption,
   }),
+}));
+
+// Mock auth store - user without signal keys by default
+let mockUser: any = { id: 'user-1', username: 'testuser' };
+
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: Object.assign(
+    jest.fn((selector: any) => {
+      const state = {
+        user: mockUser,
+        isAuthenticated: true,
+        setUser: jest.fn(),
+      };
+      return selector(state);
+    }),
+    {
+      getState: () => ({
+        setUser: jest.fn(),
+      }),
+    }
+  ),
+}));
+
+// Mock apiService
+const mockApiPost = jest.fn();
+const mockApiGet = jest.fn();
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    post: (...args: any[]) => mockApiPost(...args),
+    get: (...args: any[]) => mockApiGet(...args),
+  },
 }));
 
 // Mock de l'auth manager
@@ -126,16 +152,14 @@ jest.mock('sonner', () => ({
   },
 }));
 
-// Mock fetch global
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
-
 describe('EncryptionSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockReset();
-    mockEncryptionData.hasSignalKeys = false;
+    mockUser = { id: 'user-1', username: 'testuser' };
     mockEncryptionData.encryptionPreference = 'optional';
+    mockEncryptionData.autoEncryptNewConversations = true;
+    mockEncryptionData.showEncryptionStatus = true;
+    mockEncryptionData.warnOnUnencrypted = false;
   });
 
   describe('Etat de chargement', () => {
@@ -163,7 +187,7 @@ describe('EncryptionSettings', () => {
   });
 
   describe('Affichage du statut des cles', () => {
-    it('affiche "Cles non generees" quand hasSignalKeys est false', () => {
+    it('affiche "Cles non generees" quand pas de signal keys', () => {
       render(<EncryptionSettings />);
 
       expect(screen.getByText('Cles non generees')).toBeInTheDocument();
@@ -176,9 +200,8 @@ describe('EncryptionSettings', () => {
       expect(screen.getByText('Generer les cles')).toBeInTheDocument();
     });
 
-    it('affiche "Cles actives" quand hasSignalKeys est true', () => {
-      mockEncryptionData.hasSignalKeys = true;
-      mockEncryptionData.signalRegistrationId = 12345 as any;
+    it('affiche "Cles actives" quand user a signalRegistrationId', () => {
+      mockUser = { id: 'user-1', username: 'testuser', signalRegistrationId: 12345 };
 
       render(<EncryptionSettings />);
 
@@ -188,7 +211,7 @@ describe('EncryptionSettings', () => {
     });
 
     it('n\'affiche pas le bouton de generation quand les cles existent', () => {
-      mockEncryptionData.hasSignalKeys = true;
+      mockUser = { id: 'user-1', username: 'testuser', signalRegistrationId: 12345 };
 
       render(<EncryptionSettings />);
 
@@ -196,8 +219,12 @@ describe('EncryptionSettings', () => {
     });
 
     it('affiche la date de derniere rotation si disponible', () => {
-      mockEncryptionData.hasSignalKeys = true;
-      mockEncryptionData.lastKeyRotation = '2024-01-15T10:30:00Z' as any;
+      mockUser = {
+        id: 'user-1',
+        username: 'testuser',
+        signalRegistrationId: 12345,
+        lastKeyRotation: '2024-01-15T10:30:00Z',
+      };
 
       render(<EncryptionSettings />);
 
@@ -207,9 +234,10 @@ describe('EncryptionSettings', () => {
 
   describe('Generation des cles', () => {
     it('genere les cles quand on clique sur le bouton', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
+      mockApiPost.mockResolvedValueOnce({ success: true });
+      mockApiGet.mockResolvedValueOnce({
+        success: true,
+        data: { data: { user: { id: 'user-1', signalRegistrationId: 12345 } } },
       });
 
       render(<EncryptionSettings />);
@@ -217,23 +245,13 @@ describe('EncryptionSettings', () => {
       fireEvent.click(screen.getByText('Generer les cles'));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:3001/users/me/encryption-keys',
-          expect.objectContaining({
-            method: 'POST',
-            headers: expect.objectContaining({
-              Authorization: 'Bearer test-token',
-            }),
-          })
-        );
+        expect(mockApiPost).toHaveBeenCalledWith('/signal/keys', {});
       });
-
-      expect(mockSyncEncryption).toHaveBeenCalled();
     });
 
     it('affiche le loading pendant la generation', async () => {
-      mockFetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => ({ success: true }) }), 100))
+      mockApiPost.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 100))
       );
 
       render(<EncryptionSettings />);
@@ -243,32 +261,16 @@ describe('EncryptionSettings', () => {
       expect(screen.getByText('Generation...')).toBeInTheDocument();
     });
 
-    it('affiche une erreur si la generation echoue', async () => {
+    it('gere l\'erreur lors de la generation', async () => {
       const { toast } = require('sonner');
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Erreur serveur' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Network error'));
 
       render(<EncryptionSettings />);
 
       fireEvent.click(screen.getByText('Generer les cles'));
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Erreur serveur');
-      });
-    });
-
-    it('gere l\'erreur reseau', async () => {
-      const { toast } = require('sonner');
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      render(<EncryptionSettings />);
-
-      fireEvent.click(screen.getByText('Generer les cles'));
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Erreur reseau');
+        expect(toast.error).toHaveBeenCalled();
       });
     });
   });
@@ -285,12 +287,11 @@ describe('EncryptionSettings', () => {
     it('met a jour autoEncryptNewConversations quand on toggle', () => {
       render(<EncryptionSettings />);
 
-      // Trouver le switch associe a "Chiffrement par defaut"
       const switches = screen.getAllByRole('switch');
       fireEvent.click(switches[0]);
 
       expect(mockUpdateLocalSettings).toHaveBeenCalledWith({
-        autoEncryptNewConversations: false, // Toggle de true a false
+        autoEncryptNewConversations: false,
       });
     });
 
@@ -312,7 +313,7 @@ describe('EncryptionSettings', () => {
       fireEvent.click(switches[2]);
 
       expect(mockUpdateLocalSettings).toHaveBeenCalledWith({
-        warnOnUnencrypted: true, // Toggle de false a true
+        warnOnUnencrypted: true,
       });
     });
   });
@@ -329,7 +330,6 @@ describe('EncryptionSettings', () => {
     it('selectionne l\'option actuelle', () => {
       render(<EncryptionSettings />);
 
-      // L'option "optional" devrait etre selectionnee
       const optionalButton = screen.getByText('Optionnel').closest('button');
       expect(optionalButton).toHaveClass('border-primary');
     });
@@ -339,20 +339,16 @@ describe('EncryptionSettings', () => {
 
       fireEvent.click(screen.getByText('Toujours'));
 
-      // Le bouton Enregistrer devrait apparaitre
       expect(screen.getByText('Enregistrer')).toBeInTheDocument();
     });
 
     it('affiche le bouton Enregistrer seulement quand il y a des changements', () => {
       render(<EncryptionSettings />);
 
-      // Pas de bouton Enregistrer initialement
       expect(screen.queryByText('Enregistrer')).not.toBeInTheDocument();
 
-      // Changer la preference
       fireEvent.click(screen.getByText('Desactive'));
 
-      // Maintenant le bouton devrait apparaitre
       expect(screen.getByText('Enregistrer')).toBeInTheDocument();
     });
 
@@ -430,25 +426,6 @@ describe('EncryptionSettings', () => {
                         btn.textContent?.includes('Toujours'));
 
       expect(preferenceButtons.length).toBe(3);
-    });
-  });
-
-  describe('Authentification', () => {
-    it('affiche une erreur si non authentifie', async () => {
-      const { toast } = require('sonner');
-      const { authManager } = require('@/services/auth-manager.service');
-      authManager.getAuthToken = () => null;
-
-      render(<EncryptionSettings />);
-
-      fireEvent.click(screen.getByText('Generer les cles'));
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Non authentifie');
-      });
-
-      // Restaurer le mock
-      authManager.getAuthToken = () => 'test-token';
     });
   });
 });

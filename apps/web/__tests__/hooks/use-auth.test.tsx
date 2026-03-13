@@ -95,9 +95,9 @@ const localStorageMock = (() => {
 
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-// Mock window.location - avoid spreading originalLocation which causes JSDOM errors
+// Mock window.location
+const savedLocation = window.location;
 beforeAll(() => {
-  delete (window as any).location;
   window.location = {
     href: '',
     pathname: '/',
@@ -113,6 +113,10 @@ beforeAll(() => {
     replace: jest.fn(),
     toString: () => 'http://localhost/',
   } as any;
+});
+
+afterAll(() => {
+  window.location = savedLocation;
 });
 
 describe('useAuth', () => {
@@ -276,7 +280,7 @@ describe('useAuth', () => {
         result.current.login(mockUser as any, mockToken);
       });
 
-      expect(mockSetCredentials).toHaveBeenCalledWith(mockUser, mockToken);
+      expect(mockSetCredentials).toHaveBeenCalledWith(mockUser, mockToken, undefined, undefined, undefined);
     });
 
     it('should sync with global store on login', async () => {
@@ -287,7 +291,7 @@ describe('useAuth', () => {
       });
 
       expect(mockSetUser).toHaveBeenCalledWith(mockUser);
-      expect(mockSetTokens).toHaveBeenCalledWith(mockToken);
+      expect(mockSetTokens).toHaveBeenCalledWith(mockToken, undefined, undefined, undefined);
     });
   });
 

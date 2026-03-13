@@ -20,19 +20,21 @@ jest.mock('@/hooks/use-accessibility', () => ({
 const mockChangeFontFamily = jest.fn();
 const mockResetToDefault = jest.fn();
 
+const mockUseFontPreference = jest.fn(() => ({
+  currentFont: 'inter',
+  changeFontFamily: mockChangeFontFamily,
+  resetToDefault: mockResetToDefault,
+  isLoading: false,
+  error: null,
+  fontConfig: {
+    id: 'inter',
+    name: 'Inter',
+    description: 'Police moderne et lisible',
+  },
+}));
+
 jest.mock('@/hooks/use-font-preference', () => ({
-  useFontPreference: () => ({
-    currentFont: 'inter',
-    changeFontFamily: mockChangeFontFamily,
-    resetToDefault: mockResetToDefault,
-    isLoading: false,
-    error: null,
-    fontConfig: {
-      id: 'inter',
-      name: 'Inter',
-      description: 'Police moderne et lisible',
-    },
-  }),
+  useFontPreference: (...args: any[]) => mockUseFontPreference(...args),
 }));
 
 // Mock des polices disponibles
@@ -115,19 +117,19 @@ describe('FontSelector', () => {
       render(<FontSelector />);
 
       expect(screen.getByText(/Police actuelle/)).toBeInTheDocument();
-      expect(screen.getByText('Inter')).toBeInTheDocument();
+      expect(screen.getAllByText('Inter').length).toBeGreaterThanOrEqual(1);
     });
 
     it('affiche le bouton Par defaut', () => {
       render(<FontSelector />);
 
-      expect(screen.getByText('Par defaut')).toBeInTheDocument();
+      expect(screen.getByText('Par défaut')).toBeInTheDocument();
     });
 
     it('affiche la section des polices recommandees', () => {
       render(<FontSelector />);
 
-      expect(screen.getByText(/Polices recommandees/)).toBeInTheDocument();
+      expect(screen.getByText(/Polices recommand/)).toBeInTheDocument();
     });
 
     it('affiche la section des autres polices', () => {
@@ -147,8 +149,8 @@ describe('FontSelector', () => {
     it('affiche les polices recommandees', () => {
       render(<FontSelector />);
 
-      expect(screen.getByText('Inter')).toBeInTheDocument();
-      expect(screen.getByText('Comic Neue')).toBeInTheDocument();
+      expect(screen.getAllByText('Inter').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Comic Neue').length).toBeGreaterThanOrEqual(1);
     });
 
     it('affiche les autres polices', () => {
@@ -160,9 +162,9 @@ describe('FontSelector', () => {
     it('affiche les badges de categorie', () => {
       render(<FontSelector />);
 
-      expect(screen.getByText(/Moderne/)).toBeInTheDocument();
-      expect(screen.getByText(/Amical/)).toBeInTheDocument();
-      expect(screen.getByText(/Pro/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Moderne/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Amical/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Pro/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('affiche les badges d\'age', () => {
@@ -184,7 +186,8 @@ describe('FontSelector', () => {
       render(<FontSelector />);
 
       // La police Inter est selectionnee
-      const interCard = screen.getByText('Inter').closest('[role="button"]');
+      const interElements = screen.getAllByText('Inter');
+      const interCard = interElements.find(el => el.closest('[role="button"]'))?.closest('[role="button"]');
       expect(interCard).toHaveAttribute('aria-pressed', 'true');
     });
   });
@@ -234,7 +237,7 @@ describe('FontSelector', () => {
     it('appelle resetToDefault quand on clique sur Par defaut', () => {
       render(<FontSelector />);
 
-      fireEvent.click(screen.getByText('Par defaut'));
+      fireEvent.click(screen.getByText('Par défaut'));
 
       expect(mockResetToDefault).toHaveBeenCalled();
     });
@@ -242,8 +245,7 @@ describe('FontSelector', () => {
 
   describe('Etat de chargement', () => {
     it('affiche un spinner pendant le chargement', () => {
-      const { useFontPreference } = require('@/hooks/use-font-preference');
-      useFontPreference.mockReturnValue({
+      mockUseFontPreference.mockReturnValue({
         currentFont: 'inter',
         changeFontFamily: mockChangeFontFamily,
         resetToDefault: mockResetToDefault,
@@ -260,8 +262,7 @@ describe('FontSelector', () => {
 
   describe('Gestion des erreurs', () => {
     it('affiche un message d\'erreur si present', () => {
-      const { useFontPreference } = require('@/hooks/use-font-preference');
-      useFontPreference.mockReturnValue({
+      mockUseFontPreference.mockReturnValue({
         currentFont: 'inter',
         changeFontFamily: mockChangeFontFamily,
         resetToDefault: mockResetToDefault,
@@ -280,7 +281,8 @@ describe('FontSelector', () => {
     it('les cartes de police sont accessibles au clavier', () => {
       render(<FontSelector />);
 
-      const fontCards = screen.getAllByRole('button');
+      // Only check font card divs with role="button", not native <button> elements
+      const fontCards = screen.getAllByRole('button').filter(el => el.tagName !== 'BUTTON');
       fontCards.forEach((card) => {
         expect(card).toHaveAttribute('tabindex', '0');
       });

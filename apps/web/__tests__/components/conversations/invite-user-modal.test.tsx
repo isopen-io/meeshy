@@ -207,9 +207,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(apiService.get).toHaveBeenCalledWith(
@@ -218,15 +217,14 @@ describe('InviteUserModal', () => {
       });
     });
 
-    it('should not search with less than 2 characters', () => {
+    it('should not search with less than 2 characters', async () => {
       render(<InviteUserModal {...defaultProps} />);
 
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'j' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       expect(apiService.get).not.toHaveBeenCalled();
     });
@@ -237,9 +235,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -256,9 +253,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'user' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         // Current user should not appear in results
@@ -274,9 +270,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('Aucun utilisateur trouvé')).toBeInTheDocument();
@@ -294,8 +289,9 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
+      // Wait for the 300ms debounce to fire and the API mock to be called
+      await waitFor(() => {
+        expect(resolveSearch).toBeDefined();
       });
 
       // Resolve the search
@@ -312,9 +308,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -336,9 +331,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -358,9 +352,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -391,9 +384,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -417,9 +409,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -455,9 +446,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -488,9 +478,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -517,9 +506,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -556,9 +544,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -592,9 +579,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalled();
@@ -610,9 +596,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -649,9 +634,8 @@ describe('InviteUserModal', () => {
       const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
       fireEvent.change(searchInput, { target: { value: 'john' } });
 
-      act(() => {
-        jest.advanceTimersByTime(350);
-      });
+      // Wait for the 300ms debounce to fire (using real timers)
+      await new Promise(resolve => setTimeout(resolve, 350));
 
       await waitFor(() => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();

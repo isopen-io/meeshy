@@ -267,7 +267,7 @@ describe('AudioEffectsBadge', () => {
       render(<AudioEffectsBadge timeline={timeline} />);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('transition-all');
+      expect(button).toHaveClass('transition-colors');
     });
 
     it('should have group class for nested hover', () => {

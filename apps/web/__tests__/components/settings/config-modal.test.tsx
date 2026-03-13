@@ -80,24 +80,25 @@ describe('ConfigModal', () => {
     it('affiche le modal quand isOpen est true', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      expect(screen.getByText('Parametres et Configuration')).toBeInTheDocument();
+      expect(screen.getByText(/Param.tres et Configuration/)).toBeInTheDocument();
     });
 
     it('n\'affiche pas le modal quand isOpen est false', () => {
       render(<ConfigModal {...defaultProps} isOpen={false} />);
 
-      expect(screen.queryByText('Parametres et Configuration')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Param.tres et Configuration/)).not.toBeInTheDocument();
     });
 
     it('affiche tous les onglets dans la sidebar (desktop)', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      expect(screen.getByText('Profil utilisateur')).toBeInTheDocument();
-      expect(screen.getByText('Langues & Traduction')).toBeInTheDocument();
-      expect(screen.getByText('Apparence')).toBeInTheDocument();
-      expect(screen.getByText('Statistiques')).toBeInTheDocument();
-      expect(screen.getByText('Notifications')).toBeInTheDocument();
-      expect(screen.getByText('Confidentialite')).toBeInTheDocument();
+      // Each tab label appears twice (sidebar + mobile select option), use getAllByText
+      expect(screen.getAllByText('Profil utilisateur').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Langues & Traduction').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Apparence').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Statistiques').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Notifications').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Confidentialit/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('affiche le contenu de l\'onglet par defaut (user)', () => {
@@ -111,8 +112,8 @@ describe('ConfigModal', () => {
     it('change le contenu quand on clique sur un onglet', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      // Cliquer sur l'onglet Langues
-      fireEvent.click(screen.getByText('Langues & Traduction'));
+      // Cliquer sur l'onglet Langues (use first match = sidebar)
+      fireEvent.click(screen.getAllByText('Langues & Traduction')[0]);
 
       expect(screen.getByTestId('language-settings')).toBeInTheDocument();
       expect(screen.queryByTestId('user-settings')).not.toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('ConfigModal', () => {
     it('affiche Theme Settings quand on clique sur Apparence', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      fireEvent.click(screen.getByText('Apparence'));
+      fireEvent.click(screen.getAllByText('Apparence')[0]);
 
       expect(screen.getByTestId('theme-settings')).toBeInTheDocument();
     });
@@ -129,7 +130,7 @@ describe('ConfigModal', () => {
     it('affiche Translation Stats quand on clique sur Statistiques', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      fireEvent.click(screen.getByText('Statistiques'));
+      fireEvent.click(screen.getAllByText('Statistiques')[0]);
 
       expect(screen.getByTestId('translation-stats')).toBeInTheDocument();
     });
@@ -137,7 +138,7 @@ describe('ConfigModal', () => {
     it('affiche Notification Settings quand on clique sur Notifications', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      fireEvent.click(screen.getByText('Notifications'));
+      fireEvent.click(screen.getAllByText('Notifications')[0]);
 
       expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
     });
@@ -145,7 +146,7 @@ describe('ConfigModal', () => {
     it('affiche Privacy Settings quand on clique sur Confidentialite', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      fireEvent.click(screen.getByText('Confidentialite'));
+      fireEvent.click(screen.getAllByText(/Confidentialit/)[0]);
 
       expect(screen.getByTestId('privacy-settings')).toBeInTheDocument();
     });
@@ -153,13 +154,13 @@ describe('ConfigModal', () => {
     it('met en surbrillance l\'onglet actif', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      const userTab = screen.getByText('Profil utilisateur').closest('button');
-      expect(userTab).toHaveClass('bg-secondary');
+      const userTab = screen.getAllByText('Profil utilisateur')[0].closest('button');
+      expect(userTab?.className).toContain('bg-secondary');
 
-      fireEvent.click(screen.getByText('Apparence'));
+      fireEvent.click(screen.getAllByText('Apparence')[0]);
 
-      const themeTab = screen.getByText('Apparence').closest('button');
-      expect(themeTab).toHaveClass('bg-secondary');
+      const themeTab = screen.getAllByText('Apparence')[0].closest('button');
+      expect(themeTab?.className).toContain('bg-secondary');
     });
   });
 
@@ -167,14 +168,14 @@ describe('ConfigModal', () => {
     it('affiche un select pour mobile', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      const select = screen.getByRole('combobox', { name: /section des parametres/i });
+      const select = screen.getByRole('combobox', { name: /section des param/i });
       expect(select).toBeInTheDocument();
     });
 
     it('change le contenu via le select mobile', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      const select = screen.getByRole('combobox', { name: /section des parametres/i });
+      const select = screen.getByRole('combobox', { name: /section des param/i });
       fireEvent.change(select, { target: { value: 'theme' } });
 
       expect(screen.getByTestId('theme-settings')).toBeInTheDocument();
@@ -210,7 +211,7 @@ describe('ConfigModal', () => {
     it('le select mobile a un label accessible', () => {
       render(<ConfigModal {...defaultProps} />);
 
-      expect(screen.getByLabelText(/selectionner une section/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/lectionner une section/i)).toBeInTheDocument();
     });
 
     it('le dialogue a un titre accessible', () => {
@@ -243,7 +244,7 @@ describe('ConfigModal', () => {
       const onUserUpdate = jest.fn();
       render(<ConfigModal {...defaultProps} onUserUpdate={onUserUpdate} />);
 
-      fireEvent.click(screen.getByText('Langues & Traduction'));
+      fireEvent.click(screen.getAllByText('Langues & Traduction')[0]);
 
       expect(screen.getByTestId('language-settings')).toBeInTheDocument();
     });
@@ -271,11 +272,11 @@ describe('ConfigModal', () => {
       render(<ConfigModal {...defaultProps} />);
 
       // Selectionner un onglet
-      fireEvent.click(screen.getByText('Apparence'));
+      fireEvent.click(screen.getAllByText('Apparence')[0]);
       expect(screen.getByTestId('theme-settings')).toBeInTheDocument();
 
       // Faire une autre interaction (simuler un hover par exemple)
-      fireEvent.mouseEnter(screen.getByText('Apparence'));
+      fireEvent.mouseEnter(screen.getAllByText('Apparence')[0]);
 
       // L'onglet devrait toujours etre affiche
       expect(screen.getByTestId('theme-settings')).toBeInTheDocument();

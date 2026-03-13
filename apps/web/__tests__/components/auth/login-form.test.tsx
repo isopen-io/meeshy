@@ -50,11 +50,15 @@ jest.mock('@/hooks/useI18n', () => ({
         'login.errors.unknownError': 'Unknown error',
         'login.success.loginSuccess': 'Login successful!',
         'login.usernameLabel': 'Username or phone',
+        'login.usernamePlaceholder': 'Pseudonyme ou numero de telephone',
         'login.passwordLabel': 'Password',
+        'login.passwordPlaceholder': 'Mot de passe',
         'login.forgotPassword': 'Forgot password?',
         'login.rememberDevice': 'Remember this device',
         'login.loggingIn': 'Logging in...',
         'login.loginButton': 'Login',
+        'login.showPassword': 'Show password',
+        'login.hidePassword': 'Hide password',
         'login.noAccount': "Don't have an account?",
         'login.registerLink': 'Sign up',
       };
@@ -107,6 +111,12 @@ jest.mock('sonner', () => ({
 }));
 const mockToast = jest.requireMock('sonner').toast;
 
+// Mock geolocation
+jest.mock('@/lib/geolocation', () => ({
+  requestBrowserGeolocation: jest.fn(),
+  getGeolocationHeaders: jest.fn(() => ({})),
+}));
+
 // Mock buildApiUrl and API_ENDPOINTS
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((endpoint: string) => `http://localhost:3000${endpoint}`),
@@ -122,21 +132,28 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 // Mock window.location
-const originalLocation = window.location;
+const savedLocation = window.location;
 
 beforeAll(() => {
-  delete (window as any).location;
   window.location = {
-    ...originalLocation,
     href: '',
     pathname: '/login',
     search: '',
+    hash: '',
+    host: 'localhost:3000',
+    hostname: 'localhost',
+    port: '3000',
+    protocol: 'http:',
+    origin: 'http://localhost:3000',
     reload: jest.fn(),
+    assign: jest.fn(),
+    replace: jest.fn(),
+    toString: () => 'http://localhost:3000',
   } as any;
 });
 
 afterAll(() => {
-  window.location = originalLocation as any;
+  window.location = savedLocation;
 });
 
 describe('LoginForm', () => {
@@ -190,13 +207,14 @@ describe('LoginForm', () => {
   describe('Form Validation', () => {
     it('shows error when username is empty', async () => {
       const user = userEvent.setup();
-      render(<LoginForm />);
+      const { container } = render(<LoginForm />);
 
       const passwordInput = screen.getByPlaceholderText(/Mot de passe/i);
       await user.type(passwordInput, 'password123');
 
-      const submitButton = screen.getByRole('button', { name: /Login/i });
-      await user.click(submitButton);
+      // Use fireEvent.submit to bypass HTML5 required constraint validation
+      const form = container.querySelector('form')!;
+      fireEvent.submit(form);
 
       await waitFor(() => {
         expect(mockToast.error).toHaveBeenCalledWith('Username and password are required');
@@ -205,13 +223,14 @@ describe('LoginForm', () => {
 
     it('shows error when password is empty', async () => {
       const user = userEvent.setup();
-      render(<LoginForm />);
+      const { container } = render(<LoginForm />);
 
       const usernameInput = screen.getByPlaceholderText(/Pseudonyme ou numero de telephone/i);
       await user.type(usernameInput, 'testuser');
 
-      const submitButton = screen.getByRole('button', { name: /Login/i });
-      await user.click(submitButton);
+      // Use fireEvent.submit to bypass HTML5 required constraint validation
+      const form = container.querySelector('form')!;
+      fireEvent.submit(form);
 
       await waitFor(() => {
         expect(mockToast.error).toHaveBeenCalledWith('Username and password are required');
@@ -250,7 +269,7 @@ describe('LoginForm', () => {
       const user = userEvent.setup();
       render(<LoginForm />);
 
-      const toggleButton = screen.getByRole('button', { name: /Afficher/i });
+      const toggleButton = screen.getByRole('button', { name: /Show password/i });
       await user.click(toggleButton);
 
       const passwordInput = screen.getByPlaceholderText(/Mot de passe/i);
@@ -261,7 +280,7 @@ describe('LoginForm', () => {
       const user = userEvent.setup();
       render(<LoginForm />);
 
-      const toggleButton = screen.getByRole('button', { name: /Afficher/i });
+      const toggleButton = screen.getByRole('button', { name: /Show password/i });
       await user.click(toggleButton);
       await user.click(toggleButton);
 
@@ -355,7 +374,7 @@ describe('LoginForm', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockLogin).toHaveBeenCalledWith(mockUser, mockToken);
+        expect(mockLogin).toHaveBeenCalledWith(mockUser, mockToken, undefined, undefined);
       });
     });
 
@@ -442,7 +461,7 @@ describe('LoginForm', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockLogin).toHaveBeenCalledWith(mockUser, 'test-access-token');
+        expect(mockLogin).toHaveBeenCalledWith(mockUser, 'test-access-token', undefined, undefined);
       });
     });
   });
@@ -619,9 +638,9 @@ describe('LoginForm', () => {
     it('has proper input labels', () => {
       render(<LoginForm />);
 
-      // Check for sr-only labels
-      expect(screen.getByLabelText(/Username or phone|Pseudonyme/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Password|Mot de passe/i)).toBeInTheDocument();
+      // Check for sr-only labels - use exact label text from i18n mock
+      expect(screen.getByLabelText('Username or phone')).toBeInTheDocument();
+      expect(screen.getByLabelText('Password')).toBeInTheDocument();
     });
 
     it('shows error in alert role', async () => {
