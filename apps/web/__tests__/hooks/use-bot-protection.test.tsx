@@ -13,9 +13,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useBotProtection, getBotProtectionPayload } from '@/hooks/use-bot-protection';
 
-// Mock timers
-// Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+// Tests that need to control timers will call jest.useFakeTimers() individually
 
 describe('useBotProtection', () => {
   beforeEach(() => {
@@ -68,6 +66,7 @@ describe('useBotProtection', () => {
 
   describe('JavaScript Verification', () => {
     it('should set jsVerified to true after 100ms', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() => useBotProtection());
 
       expect(result.current.jsVerified).toBe(false);
@@ -81,30 +80,39 @@ describe('useBotProtection', () => {
   });
 
   describe('Time Elapsed', () => {
-    it('should update timeElapsed periodically', () => {
-      const { result } = renderHook(() => useBotProtection());
+    it('should return timeElapsed as difference from load time', () => {
+      jest.useFakeTimers();
+      const { result, rerender } = renderHook(() => useBotProtection());
 
+      // Initially 0 (rendered at the same time as loadTimeRef was set)
       expect(result.current.timeElapsed).toBe(0);
 
+      // Advance time and re-render to get updated timeElapsed
       act(() => {
         jest.advanceTimersByTime(500);
       });
 
-      expect(result.current.timeElapsed).toBeGreaterThan(0);
+      // Re-render to pick up the new Date.now()
+      rerender();
+
+      expect(result.current.timeElapsed).toBeGreaterThanOrEqual(500);
     });
 
-    it('should continue increasing timeElapsed', () => {
-      const { result } = renderHook(() => useBotProtection());
+    it('should continue increasing timeElapsed on subsequent renders', () => {
+      jest.useFakeTimers();
+      const { result, rerender } = renderHook(() => useBotProtection());
 
       act(() => {
         jest.advanceTimersByTime(500);
       });
+      rerender();
 
       const firstTime = result.current.timeElapsed;
 
       act(() => {
         jest.advanceTimersByTime(500);
       });
+      rerender();
 
       expect(result.current.timeElapsed).toBeGreaterThan(firstTime);
     });
@@ -124,6 +132,7 @@ describe('useBotProtection', () => {
 
   describe('validateSubmission', () => {
     it('should return isHuman true when all checks pass', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() =>
         useBotProtection({ minSubmitTime: 100 })
       );
@@ -145,6 +154,7 @@ describe('useBotProtection', () => {
     });
 
     it('should fail when honeypot is filled', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() => useBotProtection());
 
       act(() => {
@@ -159,6 +169,7 @@ describe('useBotProtection', () => {
     });
 
     it('should fail when submitted too quickly', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() =>
         useBotProtection({ minSubmitTime: 2000 })
       );
@@ -189,6 +200,7 @@ describe('useBotProtection', () => {
     });
 
     it('should use custom minSubmitTime', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() =>
         useBotProtection({ minSubmitTime: 5000 })
       );
@@ -211,6 +223,7 @@ describe('useBotProtection', () => {
 
   describe('Reset', () => {
     it('should reset all protection state', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() => useBotProtection());
 
       // Fill honeypot
@@ -281,16 +294,16 @@ describe('useBotProtection', () => {
   });
 
   describe('Cleanup', () => {
-    it('should clean up interval on unmount', () => {
-      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    it('should clean up timeout on unmount', () => {
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
 
       const { unmount } = renderHook(() => useBotProtection());
 
       unmount();
 
-      expect(clearIntervalSpy).toHaveBeenCalled();
+      expect(clearTimeoutSpy).toHaveBeenCalled();
 
-      clearIntervalSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
     });
 
     it('should clean up timeout on unmount', () => {

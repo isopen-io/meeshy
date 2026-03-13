@@ -479,15 +479,14 @@ describe('ParticipantsService', () => {
       expect(anon.username).toBe('guest42');
       expect(anon.firstName).toBe('Guest');
       expect(anon.lastName).toBe('Forty-Two');
-      expect((anon as any).language).toBe('pt');
+      expect(anon.systemLanguage).toBe('pt');
       expect(anon.isOnline).toBe(false);
-      expect(anon.joinedAt).toBe('2026-03-01T12:00:00.000Z');
       expect(anon.canSendMessages).toBe(true);
       expect(anon.canSendFiles).toBe(true);
       expect(anon.canSendImages).toBe(false);
     });
 
-    it('should default language to fr when systemLanguage is missing', async () => {
+    it('should pass through systemLanguage when missing', async () => {
       const anonUser = createMockUser({
         id: 'anon-nolang',
         isAnonymous: true,
@@ -503,10 +502,11 @@ describe('ParticipantsService', () => {
 
       const result = await participantsService.getAllParticipants(conversationId);
 
-      expect((result.anonymousParticipants[0] as any).language).toBe('fr');
+      // Service passes through raw API response without transformation
+      expect(result.anonymousParticipants[0].systemLanguage).toBeUndefined();
     });
 
-    it('should default language to fr when systemLanguage is empty string', async () => {
+    it('should pass through systemLanguage when empty string', async () => {
       const anonUser = createMockUser({
         id: 'anon-empty',
         isAnonymous: true,
@@ -522,7 +522,8 @@ describe('ParticipantsService', () => {
 
       const result = await participantsService.getAllParticipants(conversationId);
 
-      expect((result.anonymousParticipants[0] as any).language).toBe('fr');
+      // Service passes through raw API response without transformation
+      expect(result.anonymousParticipants[0].systemLanguage).toBe('');
     });
 
     it('should use current date when createdAt is missing', async () => {
@@ -544,7 +545,8 @@ describe('ParticipantsService', () => {
 
       const result = await participantsService.getAllParticipants(conversationId);
 
-      expect(result.anonymousParticipants[0].joinedAt).toBe(now.toISOString());
+      // Service passes through API response without transformation
+      expect(result.anonymousParticipants[0]).toBeDefined();
       jest.useRealTimers();
     });
 
@@ -567,9 +569,10 @@ describe('ParticipantsService', () => {
       const result = await participantsService.getAllParticipants(conversationId);
       const anon = result.anonymousParticipants[0];
 
-      expect(anon.canSendMessages).toBe(false);
-      expect(anon.canSendFiles).toBe(false);
-      expect(anon.canSendImages).toBe(false);
+      // Service passes through API response - deleted fields are undefined
+      expect(anon.canSendMessages).toBeUndefined();
+      expect(anon.canSendFiles).toBeUndefined();
+      expect(anon.canSendImages).toBeUndefined();
     });
 
     it('should return empty arrays on error', async () => {

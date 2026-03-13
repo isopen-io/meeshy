@@ -485,7 +485,25 @@ export function registerCoreRoutes(
           ...conversation,
           participants: membersWithUser,
           title: displayTitle,
-          lastMessage: conversation.messages[0] || null,
+          lastMessage: (() => {
+            const msg = conversation.messages[0];
+            if (!msg) return null;
+            const sender = msg.sender as any;
+            return {
+              ...msg,
+              sender: sender ? {
+                ...sender,
+                username: sender.user?.username ?? sender.username ?? null,
+                firstName: sender.user?.firstName ?? null,
+                lastName: sender.user?.lastName ?? null,
+                displayName: sender.displayName ?? sender.user?.displayName ?? null,
+                avatar: sender.avatar ?? sender.user?.avatar ?? null,
+                avatarUrl: sender.user?.avatarUrl ?? sender.avatarUrl ?? null,
+                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
+                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+              } : null
+            };
+          })(),
           unreadCount,
           currentUserRole: currentUserRoleMap.get(conversation.id) || null
         };

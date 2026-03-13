@@ -275,8 +275,7 @@ describe('useTextareaAutosize', () => {
     });
 
     it('should blur and scroll on mobile', () => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+      jest.useFakeTimers();
 
       const { result } = renderHook(() =>
         useTextareaAutosize({ isMobile: true })

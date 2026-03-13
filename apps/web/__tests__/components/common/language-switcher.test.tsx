@@ -165,7 +165,8 @@ describe('LanguageSwitcher (LanguageSelector)', () => {
     it('displays selected language name', () => {
       render(<LanguageSwitcher {...defaultProps} value="en" />);
 
-      expect(screen.getByText('English')).toBeInTheDocument();
+      const matches = screen.getAllByText('English');
+      expect(matches.length).toBeGreaterThan(0);
     });
 
     it('displays placeholder when no language selected', () => {
@@ -368,25 +369,29 @@ describe('LanguageSwitcher (LanguageSelector)', () => {
     it('displays French when selected', () => {
       render(<LanguageSwitcher {...defaultProps} value="fr" />);
 
-      expect(screen.getByText('Francais')).toBeInTheDocument();
+      const matches = screen.getAllByText('Francais');
+      expect(matches.length).toBeGreaterThan(0);
     });
 
     it('displays Spanish when selected', () => {
       render(<LanguageSwitcher {...defaultProps} value="es" />);
 
-      expect(screen.getByText('Espanol')).toBeInTheDocument();
+      const matches = screen.getAllByText('Espanol');
+      expect(matches.length).toBeGreaterThan(0);
     });
 
     it('displays German when selected', () => {
       render(<LanguageSwitcher {...defaultProps} value="de" />);
 
-      expect(screen.getByText('Deutsch')).toBeInTheDocument();
+      const matches = screen.getAllByText('Deutsch');
+      expect(matches.length).toBeGreaterThan(0);
     });
 
     it('displays Portuguese when selected', () => {
       render(<LanguageSwitcher {...defaultProps} value="pt" />);
 
-      expect(screen.getByText('Portugues')).toBeInTheDocument();
+      const matches = screen.getAllByText('Portugues');
+      expect(matches.length).toBeGreaterThan(0);
     });
   });
 });

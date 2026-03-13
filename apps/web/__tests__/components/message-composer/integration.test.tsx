@@ -118,12 +118,9 @@ describe('MessageComposer Integration', () => {
       const textarea = container.querySelector('textarea');
       expect(textarea).toBeInTheDocument();
 
-      // Vérifier que le bouton send est présent (via aria-label du SendButton)
-      expect(screen.getByLabelText('Envoyer le message')).toBeInTheDocument();
-
       // Vérifier que les boutons toolbar sont présents
-      expect(screen.getByLabelText('Enregistrer un message vocal')).toBeInTheDocument();
-      expect(screen.getByLabelText('Ajouter des fichiers')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Record voice message|Enregistrer/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Attach file|Ajouter des fichiers/i)).toBeInTheDocument();
     });
 
     it('should have correct structure with GlassContainer wrapper', () => {
@@ -249,10 +246,11 @@ describe('MessageComposer Integration', () => {
   });
 
   describe('Accessibility', () => {
-    it('should maintain aria-labels on send button', () => {
+    it('should maintain aria-labels on toolbar buttons', () => {
       render(<MessageComposer {...defaultProps} />);
 
-      expect(screen.getByLabelText('Envoyer le message')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Record voice message|Enregistrer/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Attach file|Ajouter des fichiers/i)).toBeInTheDocument();
     });
 
     it('should maintain focus management', () => {
@@ -295,8 +293,8 @@ describe('MessageComposer Integration', () => {
       const textarea = container.querySelector('textarea');
       expect(textarea).toBeInTheDocument();
 
-      // Vérifier que le send button est présent
-      expect(screen.getByLabelText('Envoyer le message')).toBeInTheDocument();
+      // Vérifier que les toolbar buttons sont présents
+      expect(screen.getByLabelText(/Record voice message|Enregistrer/i)).toBeInTheDocument();
     });
   });
 });

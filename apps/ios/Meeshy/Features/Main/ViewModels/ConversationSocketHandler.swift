@@ -177,7 +177,7 @@ final class ConversationSocketHandler {
                         delegate.newMessageAppended += 1
 
                         if let sender = apiMsg.sender {
-                            let senderName = sender.displayName ?? sender.username
+                            let senderName = sender.displayName ?? sender.username ?? sender.id
                             delegate.typingUsernames.removeAll { $0 == senderName }
                             self.clearTypingSafetyTimer(for: senderName)
                         }

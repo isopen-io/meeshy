@@ -60,14 +60,12 @@ jest.mock('@/hooks/useI18n', () => ({
 }));
 
 jest.mock('@/stores', () => ({
-  useUser: () => ({
-    user: {
-      id: 'user-1',
-      username: 'testuser',
-      displayName: 'Test User',
-      systemLanguage: 'en',
-    },
-  }),
+  useUser: jest.fn(() => ({
+    id: 'user-1',
+    username: 'testuser',
+    displayName: 'Test User',
+    systemLanguage: 'en',
+  })),
 }));
 
 // Mock sonner toast

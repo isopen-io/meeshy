@@ -121,7 +121,7 @@ jest.mock('@/components/layout/Header', () => ({
   ),
 }));
 
-jest.mock('@/components/common', () => ({
+jest.mock('@/components/common/bubble-stream-page', () => ({
   BubbleStreamPage: ({ user, conversationId, isAnonymousMode }: any) => (
     <div data-testid="bubble-stream-page" data-user-id={user?.id} data-conversation-id={conversationId} data-anonymous={isAnonymousMode}>
       BubbleStreamPage Mock
@@ -195,7 +195,7 @@ describe('LandingPage', () => {
     mockIsAuthChecking = false;
     mockAuthToken = null;
     localStorage.clear();
-    document.cookie = '';
+    document.cookie = 'meeshy_affiliate_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   });
 
   describe('Loading State', () => {

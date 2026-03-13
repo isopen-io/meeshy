@@ -24,6 +24,11 @@ const DOMPurify = {
     cleaned = cleaned.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '');
     cleaned = cleaned.replace(/on\w+\s*=\s*[^\s>]*/gi, '');
 
+    // Strip javascript: protocol from href attributes
+    if (config && config.ALLOWED_URI_REGEXP) {
+      cleaned = cleaned.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href=""');
+    }
+
     // If specific tags are allowed, only keep those
     if (config && config.ALLOWED_TAGS) {
       const allowedTags = config.ALLOWED_TAGS.join('|');

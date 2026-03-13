@@ -5,37 +5,57 @@
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRegisterForm, validateUsername } from '@/hooks/use-register-form';
-import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-
-// Mock dependencies
-jest.mock('@/hooks/use-auth');
+import { useAuthStore } from '@/stores/auth-store';
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
   }),
 }));
 jest.mock('sonner');
+jest.mock('@/lib/config', () => ({
+  buildApiUrl: (path: string) => `https://api.example.com${path}`,
+  API_ENDPOINTS: { AUTH: { REGISTER: '/auth/register' }, JOIN_LINK: '/join' },
+}));
+jest.mock('@/lib/geolocation', () => ({
+  requestBrowserGeolocation: jest.fn(),
+  getGeolocationHeaders: jest.fn(() => ({})),
+}));
+jest.mock('@meeshy/shared/utils/email-validator', () => ({
+  isValidEmail: jest.fn((email: string) => email.includes('@')),
+  getEmailValidationError: jest.fn(() => null),
+}));
 jest.mock('@/hooks/use-bot-protection', () => ({
   useBotProtection: () => ({
     honeypotProps: { type: 'hidden', name: 'website' },
     validateSubmission: () => ({ isHuman: true, botError: null }),
   }),
 }));
-jest.mock('@/stores/auth-form-store', () => ({
-  useAuthFormStore: () => ({
+jest.mock('@/stores/auth-form-store', () => {
+  const storeData = {
     identifier: '',
     setIdentifier: jest.fn(),
-  }),
-}));
+  };
+  return {
+    useAuthFormStore: (selector?: (state: typeof storeData) => unknown) =>
+      selector ? selector(storeData) : storeData,
+  };
+});
 
 global.fetch = jest.fn();
 
 describe('useRegisterForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (useAuth as jest.Mock).mockReturnValue({
-      login: jest.fn(),
+    // Reset auth store
+    useAuthStore.setState({
+      user: null,
+      isAuthenticated: false,
+      authToken: null,
+      refreshToken: null,
+      sessionToken: null,
+      sessionExpiry: null,
+      isAuthChecking: false,
     });
   });
 
@@ -97,9 +117,6 @@ describe('useRegisterForm', () => {
 
   describe('form submission', () => {
     it('should handle successful registration', async () => {
-      const mockLogin = jest.fn();
-      (useAuth as jest.Mock).mockReturnValue({ login: mockLogin });
-
       const mockResponse = {
         success: true,
         data: {
@@ -133,10 +150,9 @@ describe('useRegisterForm', () => {
       });
 
       await waitFor(() => {
-        expect(mockLogin).toHaveBeenCalledWith(
-          mockResponse.data.user,
-          mockResponse.data.token
-        );
+        const state = useAuthStore.getState();
+        expect(state.user).toEqual(mockResponse.data.user);
+        expect(state.authToken).toBe(mockResponse.data.token);
       });
     });
 

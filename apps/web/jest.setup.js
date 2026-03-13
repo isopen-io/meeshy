@@ -56,6 +56,20 @@ jest.mock('next/navigation', () => ({
   useParams: () => ({}),
 }))
 
+// Make window.location mockable for tests (jsdom 26+ makes it non-configurable)
+// Redefine on the prototype to make it writable and configurable
+const __locationProto = Object.getPrototypeOf(window);
+const __origLocationDesc = Object.getOwnPropertyDescriptor(__locationProto, 'location') ||
+  Object.getOwnPropertyDescriptor(window, 'location');
+if (__origLocationDesc) {
+  const __origLocation = window.location;
+  Object.defineProperty(__locationProto, 'location', {
+    get() { return this.__mockedLocation || __origLocation; },
+    set(val) { this.__mockedLocation = val; },
+    configurable: true,
+  });
+}
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -70,6 +84,9 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: jest.fn(),
   })),
 })
+
+// Mock scrollIntoView (not implemented in jsdom)
+Element.prototype.scrollIntoView = jest.fn();
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {

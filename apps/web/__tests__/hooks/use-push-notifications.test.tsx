@@ -73,6 +73,9 @@ describe('usePushNotifications', () => {
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: 'test-vapid-key',
     };
 
+    // Re-set isPushNotificationSupported after clearAllMocks
+    mockIsPushNotificationSupported.mockReturnValue(true);
+
     // Default mock implementations
     mockGetCurrentSubscription.mockResolvedValue(null);
     mockSubscribeToPushNotifications.mockResolvedValue(mockSubscription);

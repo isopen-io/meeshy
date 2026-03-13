@@ -15,9 +15,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useMessaging } from '@/hooks/use-messaging';
 
-// Mock timer functions
-// Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+// Tests that use timer-based features (typing cleanup) need fake timers individually
 
 // Mock toast
 const mockToastError = jest.fn();
@@ -90,7 +88,7 @@ describe('useMessaging', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSendMessage.mockResolvedValue(true);
+    mockSendMessage.mockResolvedValue({ success: true });
     mockEditMessage.mockResolvedValue(true);
     mockDeleteMessage.mockResolvedValue(true);
 
@@ -515,6 +513,7 @@ describe('useMessaging', () => {
     });
 
     it('should clean up stale typing users after 5 seconds', async () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() =>
         useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
       );
@@ -528,10 +527,12 @@ describe('useMessaging', () => {
 
         expect(result.current.typingUsers.length).toBe(1);
 
-        // Advance time by 6 seconds (cleanup runs every second, removes after 5s)
-        act(() => {
-          jest.advanceTimersByTime(6000);
-        });
+        // Advance time by 6 seconds in steps to allow chained timeouts to fire
+        for (let i = 0; i < 6; i++) {
+          act(() => {
+            jest.advanceTimersByTime(1000);
+          });
+        }
 
         expect(result.current.typingUsers.length).toBe(0);
       }

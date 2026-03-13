@@ -17,6 +17,23 @@ jest.mock('@/services/user-preferences.service', () => ({
   },
 }));
 
+// Mock conversation preferences store
+let mockPreferencesMap = new Map<string, any>();
+let mockCategories: any[] = [];
+
+jest.mock('@/stores/conversation-preferences-store', () => ({
+  useConversationPreferencesStore: () => ({
+    preferencesMap: mockPreferencesMap,
+    categories: mockCategories,
+    isLoading: false,
+    isInitialized: true,
+    initialize: jest.fn(),
+    togglePin: jest.fn(),
+    toggleMute: jest.fn(),
+    toggleArchive: jest.fn(),
+  }),
+}));
+
 jest.mock('@/stores/user-store', () => ({
   useUserStore: jest.fn(() => ({
     getUserById: jest.fn(),
@@ -220,12 +237,8 @@ describe('ConversationList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([]);
-    (userPreferencesService.getCategories as jest.Mock).mockResolvedValue([]);
-    (userPreferencesService.togglePin as jest.Mock).mockResolvedValue({});
-    (userPreferencesService.toggleMute as jest.Mock).mockResolvedValue({});
-    (userPreferencesService.toggleArchive as jest.Mock).mockResolvedValue({});
+    mockPreferencesMap = new Map();
+    mockCategories = [];
   });
 
   describe('Initial Render', () => {
@@ -370,31 +383,30 @@ describe('ConversationList', () => {
   });
 
   describe('Preferences', () => {
-    it('should load user preferences on mount', async () => {
+    it('should render with store preferences on mount', async () => {
       render(<ConversationList {...defaultProps} />);
 
       await waitFor(() => {
-        expect(userPreferencesService.getAllPreferences).toHaveBeenCalled();
+        expect(screen.getByText('Conversations')).toBeInTheDocument();
       });
     });
 
     it('should display pinned conversations first', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-3', isPinned: true, isMuted: false, isArchived: false },
+      mockPreferencesMap = new Map([
+        ['conv-3', { isPinned: true, isMuted: false, isArchived: false }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
 
       await waitFor(() => {
         const items = screen.getAllByTestId('avatar');
-        // First conversation should be the pinned one
         expect(items.length).toBeGreaterThan(0);
       });
     });
 
     it('should show pinned section header when there are pinned conversations', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', isPinned: true, isMuted: false, isArchived: false },
+      mockPreferencesMap = new Map([
+        ['conv-1', { isPinned: true, isMuted: false, isArchived: false }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -405,8 +417,8 @@ describe('ConversationList', () => {
     });
 
     it('should filter out archived conversations by default', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', isPinned: false, isMuted: false, isArchived: true },
+      mockPreferencesMap = new Map([
+        ['conv-1', { isPinned: false, isMuted: false, isArchived: true }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -457,8 +469,8 @@ describe('ConversationList', () => {
 
   describe('Tags Display', () => {
     it('should display conversation tags', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', isPinned: false, isMuted: false, isArchived: false, tags: ['Important', 'Work'] },
+      mockPreferencesMap = new Map([
+        ['conv-1', { isPinned: false, isMuted: false, isArchived: false, tags: ['Important', 'Work'] }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -470,8 +482,8 @@ describe('ConversationList', () => {
     });
 
     it('should show +N badge when more than 3 tags', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', isPinned: false, isMuted: false, isArchived: false, tags: ['Tag1', 'Tag2', 'Tag3', 'Tag4', 'Tag5'] },
+      mockPreferencesMap = new Map([
+        ['conv-1', { isPinned: false, isMuted: false, isArchived: false, tags: ['Tag1', 'Tag2', 'Tag3', 'Tag4', 'Tag5'] }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -489,6 +501,7 @@ describe('ConversationList', () => {
           {...defaultProps}
           isLoadingMore={true}
           hasMore={true}
+          onLoadMore={jest.fn()}
         />
       );
 
@@ -525,22 +538,21 @@ describe('ConversationList', () => {
   });
 
   describe('Categories', () => {
-    it('should load categories on mount', async () => {
+    it('should render with store categories', async () => {
       render(<ConversationList {...defaultProps} />);
 
       await waitFor(() => {
-        expect(userPreferencesService.getCategories).toHaveBeenCalled();
+        expect(screen.getByText('Conversations')).toBeInTheDocument();
       });
     });
 
     it('should display category sections when categories exist', async () => {
-      (userPreferencesService.getCategories as jest.Mock).mockResolvedValue([
+      mockCategories = [
         { id: 'cat-1', name: 'Work', order: 0 },
         { id: 'cat-2', name: 'Personal', order: 1 },
-      ]);
-
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', categoryId: 'cat-1', isPinned: false, isMuted: false, isArchived: false },
+      ];
+      mockPreferencesMap = new Map([
+        ['conv-1', { categoryId: 'cat-1', isPinned: false, isMuted: false, isArchived: false }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -551,12 +563,11 @@ describe('ConversationList', () => {
     });
 
     it('should show uncategorized section when needed', async () => {
-      (userPreferencesService.getCategories as jest.Mock).mockResolvedValue([
+      mockCategories = [
         { id: 'cat-1', name: 'Work', order: 0 },
-      ]);
-
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', categoryId: 'cat-1', isPinned: false, isMuted: false, isArchived: false },
+      ];
+      mockPreferencesMap = new Map([
+        ['conv-1', { categoryId: 'cat-1', isPinned: false, isMuted: false, isArchived: false }],
       ]);
 
       render(<ConversationList {...defaultProps} />);
@@ -569,8 +580,8 @@ describe('ConversationList', () => {
 
   describe('Collapsible Sections', () => {
     it('should toggle section collapse when clicking header', async () => {
-      (userPreferencesService.getAllPreferences as jest.Mock).mockResolvedValue([
-        { conversationId: 'conv-1', isPinned: true, isMuted: false, isArchived: false },
+      mockPreferencesMap = new Map([
+        ['conv-1', { isPinned: true, isMuted: false, isArchived: false }],
       ]);
 
       render(<ConversationList {...defaultProps} />);

@@ -325,8 +325,7 @@ describe('UsersService', () => {
 
   describe('isUserOnline', () => {
     beforeEach(() => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+      jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
     });
 
@@ -364,8 +363,7 @@ describe('UsersService', () => {
 
   describe('getUserStatus', () => {
     beforeEach(() => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+      jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
     });
 
@@ -438,8 +436,7 @@ describe('UsersService', () => {
 
   describe('getLastSeenFormatted', () => {
     beforeEach(() => {
-      // Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+      jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
     });
 

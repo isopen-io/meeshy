@@ -25,18 +25,63 @@ jest.mock('../../services/notification.service', () => ({
   },
 }));
 
+// Mock the notification sound utilities
+jest.mock('../../utils/notification-sound', () => ({
+  playNotificationSound: jest.fn().mockResolvedValue(undefined),
+  initializeNotificationSound: jest.fn(),
+}));
+
+// Mock user preferences store (used by addNotification)
+jest.mock('../../stores/user-preferences-store', () => ({
+  useUserPreferencesStore: {
+    getState: jest.fn(() => ({
+      notifications: {
+        soundEnabled: false,
+        dndEnabled: false,
+        dndStartTime: undefined,
+        dndEndTime: undefined,
+      },
+    })),
+  },
+}));
+
 describe('NotificationStore', () => {
-  const createMockNotification = (overrides: Partial<any> = {}): Notification => ({
-    id: `notif-${Date.now()}-${Math.random()}`,
-    type: 'new_message' as NotificationType,
-    title: 'New Message',
-    body: 'You have a new message',
-    priority: 'normal' as NotificationPriority,
-    isRead: false,
-    createdAt: new Date(),
-    userId: 'user-123',
-    ...overrides,
-  } as any);
+  const createMockNotification = (overrides: Partial<any> = {}): Notification => {
+    const {
+      isRead = false,
+      readAt = null,
+      createdAt = new Date(),
+      expiresAt,
+      state: stateOverride,
+      emailSent = false,
+      pushSent = false,
+      delivery: deliveryOverride,
+      context: contextOverride = {},
+      metadata: metadataOverride = {},
+      ...rest
+    } = overrides;
+
+    return {
+      id: `notif-${Date.now()}-${Math.random()}`,
+      type: 'new_message' as NotificationType,
+      priority: 'normal' as NotificationPriority,
+      content: 'You have a new message',
+      userId: 'user-123',
+      context: contextOverride,
+      metadata: metadataOverride,
+      state: stateOverride ?? {
+        isRead,
+        readAt,
+        createdAt,
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
+      },
+      delivery: deliveryOverride ?? {
+        emailSent,
+        pushSent,
+      },
+      ...rest,
+    } as any;
+  };
 
   const mockNotification1 = createMockNotification({ id: 'notif-1' });
   const mockNotification2 = createMockNotification({ id: 'notif-2', isRead: true } as any);
@@ -87,9 +132,9 @@ describe('NotificationStore', () => {
   });
 
   describe('addNotification', () => {
-    it('should add a notification to the beginning of the list', () => {
-      act(() => {
-        useNotificationStore.getState().addNotification(mockNotification1);
+    it('should add a notification to the beginning of the list', async () => {
+      await act(async () => {
+        await useNotificationStore.getState().addNotification(mockNotification1);
       });
 
       const state = useNotificationStore.getState();
@@ -97,10 +142,10 @@ describe('NotificationStore', () => {
       expect(state.notifications[0].id).toBe('notif-1');
     });
 
-    it('should add new notifications at the beginning', () => {
-      act(() => {
-        useNotificationStore.getState().addNotification(mockNotification1);
-        useNotificationStore.getState().addNotification(mockNotification2);
+    it('should add new notifications at the beginning', async () => {
+      await act(async () => {
+        await useNotificationStore.getState().addNotification(mockNotification1);
+        await useNotificationStore.getState().addNotification(mockNotification2);
       });
 
       const state = useNotificationStore.getState();
@@ -108,55 +153,55 @@ describe('NotificationStore', () => {
       expect(state.notifications[1].id).toBe('notif-1');
     });
 
-    it('should not add duplicate notifications', () => {
-      act(() => {
-        useNotificationStore.getState().addNotification(mockNotification1);
-        useNotificationStore.getState().addNotification(mockNotification1);
+    it('should not add duplicate notifications', async () => {
+      await act(async () => {
+        await useNotificationStore.getState().addNotification(mockNotification1);
+        await useNotificationStore.getState().addNotification(mockNotification1);
       });
 
       const state = useNotificationStore.getState();
       expect(state.notifications).toHaveLength(1);
     });
 
-    it('should increment unread count for unread notifications', () => {
-      act(() => {
-        useNotificationStore.getState().addNotification(mockNotification1);
+    it('should increment unread count for unread notifications', async () => {
+      await act(async () => {
+        await useNotificationStore.getState().addNotification(mockNotification1);
       });
 
       expect(useNotificationStore.getState().unreadCount).toBe(1);
     });
 
-    it('should not increment unread count for read notifications', () => {
-      act(() => {
-        useNotificationStore.getState().addNotification(mockNotification2);
+    it('should not increment unread count for read notifications', async () => {
+      await act(async () => {
+        await useNotificationStore.getState().addNotification(mockNotification2);
       });
 
       expect(useNotificationStore.getState().unreadCount).toBe(0);
     });
 
-    it('should ignore notifications for active conversation', () => {
+    it('should ignore notifications for active conversation', async () => {
       const notificationWithContext = createMockNotification({
         id: 'notif-context',
         context: { conversationId: 'conv-123' },
       });
 
-      act(() => {
+      await act(async () => {
         useNotificationStore.getState().setActiveConversationId('conv-123');
-        useNotificationStore.getState().addNotification(notificationWithContext);
+        await useNotificationStore.getState().addNotification(notificationWithContext);
       });
 
       expect(useNotificationStore.getState().notifications).toHaveLength(0);
     });
 
-    it('should add notifications for different conversations', () => {
+    it('should add notifications for different conversations', async () => {
       const notificationWithContext = createMockNotification({
         id: 'notif-context',
         context: { conversationId: 'conv-456' },
       });
 
-      act(() => {
+      await act(async () => {
         useNotificationStore.getState().setActiveConversationId('conv-123');
-        useNotificationStore.getState().addNotification(notificationWithContext);
+        await useNotificationStore.getState().addNotification(notificationWithContext);
       });
 
       expect(useNotificationStore.getState().notifications).toHaveLength(1);
@@ -217,8 +262,8 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect((state.notifications[0] as any).isRead).toBe(true);
-      expect((state.notifications[0] as any).readAt).toBeDefined();
+      expect(state.notifications[0].state.isRead).toBe(true);
+      expect(state.notifications[0].state.readAt).toBeDefined();
       expect(state.unreadCount).toBe(0);
     });
 
@@ -254,7 +299,7 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect((state.notifications[0] as any).isRead).toBe(false);
+      expect(state.notifications[0].state.isRead).toBe(false);
       expect(state.unreadCount).toBe(1);
     });
   });
@@ -276,7 +321,7 @@ describe('NotificationStore', () => {
       });
 
       const state = useNotificationStore.getState();
-      expect(state.notifications.every(n => (n as any).isRead)).toBe(true);
+      expect(state.notifications.every(n => n.state.isRead)).toBe(true);
       expect(state.unreadCount).toBe(0);
     });
 
@@ -548,7 +593,7 @@ describe('NotificationStore', () => {
   });
 
   describe('LRU Eviction', () => {
-    it('should evict old read notifications when max is exceeded', () => {
+    it('should evict old read notifications when max is exceeded', async () => {
       // Create notifications to exceed MAX_NOTIFICATIONS (500)
       const notifications: Notification[] = [];
       for (let i = 0; i < 501; i++) {
@@ -559,10 +604,10 @@ describe('NotificationStore', () => {
         }));
       }
 
-      act(() => {
+      await act(async () => {
         useNotificationStore.setState({ notifications: notifications.slice(0, 500) });
         // Add one more to trigger eviction
-        useNotificationStore.getState().addNotification(
+        await useNotificationStore.getState().addNotification(
           createMockNotification({ id: 'notif-new', isRead: false })
         );
       });

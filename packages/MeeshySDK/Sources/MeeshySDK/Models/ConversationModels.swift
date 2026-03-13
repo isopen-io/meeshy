@@ -4,7 +4,7 @@ import Foundation
 
 public struct APIConversationUser: Decodable, Sendable {
     public let id: String
-    public let username: String
+    public let username: String?
     public let displayName: String?
     public let firstName: String?
     public let lastName: String?
@@ -13,7 +13,7 @@ public struct APIConversationUser: Decodable, Sendable {
     public let isOnline: Bool?
     public let lastActiveAt: Date?
 
-    public var name: String { displayName ?? username }
+    public var name: String { displayName ?? username ?? id }
     public var resolvedAvatar: String? { avatar ?? avatarUrl }
 }
 
@@ -98,8 +98,14 @@ extension APIConversation {
 
         let displayName: String = {
             if convType == .direct {
-                if let user = otherUser { return user.name }
-                if let participant = otherParticipant { return participant.name }
+                if let user = otherUser {
+                    return user.displayName ?? user.username ?? user.id
+                }
+                if let participant = otherParticipant {
+                    let dn = participant.displayName.trimmingCharacters(in: .whitespaces)
+                    if !dn.isEmpty { return dn }
+                    return participant.user?.displayName ?? participant.user?.username ?? participant.id
+                }
             }
             if let t = title, !t.isEmpty { return t }
             return "Conversation"

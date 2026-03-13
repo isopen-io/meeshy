@@ -21,6 +21,29 @@ jest.mock('@/services/user-preferences.service', () => ({
   },
 }));
 
+// Mock conversation preferences store
+let mockStorePrefs: any = {
+  isPinned: false,
+  isMuted: false,
+  isArchived: false,
+  customName: undefined,
+  tags: [],
+  categoryId: null,
+};
+
+jest.mock('@/stores/conversation-preferences-store', () => ({
+  useConversationPreferencesStore: () => ({
+    preferencesMap: new Map([['conv-1', mockStorePrefs], ['conv-2', mockStorePrefs]]),
+    categories: [],
+    isLoading: false,
+    isInitialized: true,
+    initialize: jest.fn(),
+    togglePin: jest.fn(),
+    toggleMute: jest.fn(),
+    toggleArchive: jest.fn(),
+  }),
+}));
+
 jest.mock('@/services/conversations.service', () => ({
   conversationsService: {
     updateConversation: jest.fn(),
@@ -39,7 +62,10 @@ jest.mock('@/stores/call-store', () => ({
 }));
 
 jest.mock('@/stores/user-store', () => ({
-  useUserStore: jest.fn(),
+  useUserStore: jest.fn(() => ({
+    getUserById: jest.fn(() => null),
+    _lastStatusUpdate: 0,
+  })),
 }));
 
 // Mock sonner toast
@@ -296,14 +322,14 @@ describe('ConversationHeader', () => {
       _lastStatusUpdate: 0,
     });
 
-    (userPreferencesService.getPreferences as jest.Mock).mockResolvedValue({
+    mockStorePrefs = {
       isPinned: false,
       isMuted: false,
       isArchived: false,
-      customName: null,
+      customName: undefined,
       tags: [],
       categoryId: null,
-    });
+    };
   });
 
   describe('Initial Render', () => {
@@ -475,40 +501,32 @@ describe('ConversationHeader', () => {
   });
 
   describe('Preferences', () => {
-    it('should load user preferences on mount', async () => {
+    it('should render with default preferences on mount', async () => {
       render(<ConversationHeader {...defaultProps} />);
 
       await waitFor(() => {
-        expect(userPreferencesService.getPreferences).toHaveBeenCalledWith('conv-1');
+        expect(screen.getByText('Test Conversation')).toBeInTheDocument();
       });
     });
 
     it('should display custom name when set', async () => {
-      (userPreferencesService.getPreferences as jest.Mock).mockResolvedValue({
-        isPinned: false,
-        isMuted: false,
-        isArchived: false,
+      mockStorePrefs = {
+        ...mockStorePrefs,
         customName: 'My Custom Name',
-        tags: [],
-        categoryId: null,
-      });
+      };
 
       render(<ConversationHeader {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('My Custom Name')).toBeInTheDocument();
+        expect(screen.getByText(/My Custom Name/)).toBeInTheDocument();
       });
     });
 
     it('should display tags when present', async () => {
-      (userPreferencesService.getPreferences as jest.Mock).mockResolvedValue({
-        isPinned: false,
-        isMuted: false,
-        isArchived: false,
-        customName: null,
+      mockStorePrefs = {
+        ...mockStorePrefs,
         tags: ['Important', 'Work'],
-        categoryId: null,
-      });
+      };
 
       render(<ConversationHeader {...defaultProps} />);
 
@@ -519,8 +537,6 @@ describe('ConversationHeader', () => {
     });
 
     it('should toggle pin state when pin button is clicked', async () => {
-      (userPreferencesService.togglePin as jest.Mock).mockResolvedValue({});
-
       render(<ConversationHeader {...defaultProps} />);
 
       // The pin action is typically in a dropdown menu
@@ -535,8 +551,6 @@ describe('ConversationHeader', () => {
     });
 
     it('should toggle mute state when mute button is clicked', async () => {
-      (userPreferencesService.toggleMute as jest.Mock).mockResolvedValue({});
-
       render(<ConversationHeader {...defaultProps} />);
 
       // The mute action is typically in a dropdown menu
@@ -550,8 +564,6 @@ describe('ConversationHeader', () => {
     });
 
     it('should toggle archive state when archive button is clicked', async () => {
-      (userPreferencesService.toggleArchive as jest.Mock).mockResolvedValue({});
-
       render(<ConversationHeader {...defaultProps} />);
 
       // The archive action is typically in a dropdown menu

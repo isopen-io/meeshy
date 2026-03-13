@@ -137,7 +137,7 @@ describe('AttachmentDetails', () => {
     it('displays codec', () => {
       render(<AttachmentDetails attachment={videoAttachment} />);
 
-      expect(screen.getByText('H264')).toBeInTheDocument();
+      expect(screen.getByText('h264')).toBeInTheDocument();
     });
   });
 
@@ -198,6 +198,7 @@ describe('AttachmentDetails', () => {
     it('displays singular page for single page', () => {
       const singlePage = createMockAttachment({
         mimeType: 'application/pdf',
+        originalName: 'document.pdf',
         pageCount: 1,
       });
 
@@ -436,7 +437,7 @@ describe('AttachmentDetailsSummary', () => {
       const attachment = createMockAttachment({ mimeType: 'video/mp4' });
       render(<AttachmentDetailsSummary attachment={attachment} />);
 
-      expect(screen.getByText('Video')).toBeInTheDocument();
+      expect(screen.getByText('Vidéo')).toBeInTheDocument();
     });
 
     it('displays Image label for image files', () => {
@@ -447,7 +448,7 @@ describe('AttachmentDetailsSummary', () => {
     });
 
     it('displays Document label for PDF files', () => {
-      const attachment = createMockAttachment({ mimeType: 'application/pdf' });
+      const attachment = createMockAttachment({ mimeType: 'application/pdf', originalName: 'document.pdf' });
       render(<AttachmentDetailsSummary attachment={attachment} />);
 
       expect(screen.getByText('Document')).toBeInTheDocument();
@@ -470,11 +471,11 @@ describe('AttachmentDetailsSummary', () => {
       expect(screen.getByText('Texte')).toBeInTheDocument();
     });
 
-    it('displays Fichier label for unknown types', () => {
-      const attachment = createMockAttachment({ mimeType: 'application/octet-stream' });
+    it('displays Document label for octet-stream types', () => {
+      const attachment = createMockAttachment({ mimeType: 'application/octet-stream', originalName: 'data.bin' });
       render(<AttachmentDetailsSummary attachment={attachment} />);
 
-      expect(screen.getByText('Fichier')).toBeInTheDocument();
+      expect(screen.getByText('Document')).toBeInTheDocument();
     });
   });
 
@@ -504,7 +505,7 @@ describe('AttachmentDetailsSummary', () => {
     });
 
     it('uses orange for document', () => {
-      const attachment = createMockAttachment({ mimeType: 'application/pdf' });
+      const attachment = createMockAttachment({ mimeType: 'application/pdf', originalName: 'document.pdf' });
       const { container } = render(<AttachmentDetailsSummary attachment={attachment} />);
 
       const iconContainer = container.querySelector('.text-orange-500');

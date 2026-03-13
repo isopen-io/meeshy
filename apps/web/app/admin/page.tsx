@@ -142,10 +142,6 @@ const AdminDashboard: React.FC = () => {
     loadUserAndData();
   }, [router]);
 
-  if (!user) {
-    return null;
-  }
-
   if (loading) {
     return (
       <AdminLayout currentPage="/admin">
@@ -155,6 +151,10 @@ const AdminDashboard: React.FC = () => {
         </div>
       </AdminLayout>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   const stats = dashboardData?.statistics;

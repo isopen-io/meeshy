@@ -10,16 +10,16 @@ describe('useAnimationConfig', () => {
 
     const { result } = renderHook(() => useAnimationConfig());
 
-    expect(result.current.staggerDelay).toBe(0.05);
-    expect(result.current.duration).toBe(0.4);
+    expect(result.current.staggerDelay).toBe(0.08);
+    expect(result.current.duration).toBe(0.6);
     expect(result.current.enableBlur).toBe(true);
     expect(result.current.enableShimmer).toBe(true);
     expect(result.current.enableRotation).toBe(true);
     expect(result.current.blurAmount).toBe(20);
     expect(result.current.spring).toEqual({
       type: 'spring',
-      stiffness: 400,
-      damping: 25,
+      stiffness: 260,
+      damping: 20,
     });
   });
 
@@ -63,8 +63,8 @@ describe('useAnimationConfig', () => {
     const { result } = renderHook(() => useAnimationConfig());
 
     expect(result.current.spring.type).toBe('spring');
-    expect(result.current.spring.stiffness).toBe(400);
-    expect(result.current.spring.damping).toBe(25);
+    expect(result.current.spring.stiffness).toBe(260);
+    expect(result.current.spring.damping).toBe(20);
   });
 
   it('should use tween type for medium and low performance', () => {

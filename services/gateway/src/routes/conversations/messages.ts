@@ -737,7 +737,17 @@ export function registerMessagesRoutes(
           validatedMentions: message.validatedMentions,
 
           // Relations obligatoires
-          sender: message.sender,
+          sender: message.sender ? {
+            ...message.sender,
+            username: message.sender.user?.username ?? message.sender.username ?? null,
+            firstName: message.sender.user?.firstName ?? null,
+            lastName: message.sender.user?.lastName ?? null,
+            displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
+            avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
+            avatarUrl: message.sender.user?.avatarUrl ?? message.sender.avatarUrl ?? null,
+            isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
+            lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+          } : null,
           attachments: cleanAttachmentsForApi(message.attachments),
           _count: message._count
         };
@@ -821,7 +831,12 @@ export function registerMessagesRoutes(
                 content: original.content,
                 messageType: original.messageType,
                 createdAt: original.createdAt,
-                sender: original.sender,
+                sender: original.sender ? {
+                  ...original.sender,
+                  username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
+                  displayName: (original.sender as any).displayName ?? (original.sender as any).user?.displayName ?? null,
+                  avatar: (original.sender as any).avatar ?? (original.sender as any).user?.avatar ?? null,
+                } : null,
                 attachments: original.attachments
               };
             }

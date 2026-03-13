@@ -36,9 +36,19 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
-// Mock debounce to execute immediately
+// Mock debounce: wraps fn to execute after a microtask (allows useEffect refs to be set first)
 jest.mock('@/utils/debounce', () => ({
-  debounce: (fn: Function) => fn,
+  debounce: (fn: Function) => {
+    const wrapper = (...args: unknown[]) => {
+      return new Promise<void>(resolve => {
+        setTimeout(async () => {
+          await fn(...args);
+          resolve();
+        }, 0);
+      });
+    };
+    return wrapper;
+  },
 }));
 
 describe('useConversationMessages', () => {
@@ -138,10 +148,9 @@ describe('useConversationMessages', () => {
       );
 
       await waitFor(() => {
-        expect(result.current.isLoading).toBe(false);
+        expect(result.current.messages.length).toBe(3);
       });
 
-      expect(result.current.messages.length).toBe(3);
       expect(mockApiGet).toHaveBeenCalled();
     });
 
@@ -573,9 +582,14 @@ describe('useConversationMessages', () => {
         abort = abortSpy;
       } as any;
 
-      const { unmount } = renderHook(() =>
+      const { result, unmount } = renderHook(() =>
         useConversationMessages(mockConversationId, mockUser as any, { enabled: true })
       );
+
+      // Wait for the initial load to start (sets abortControllerRef)
+      await waitFor(() => {
+        expect(mockApiGet).toHaveBeenCalled();
+      });
 
       unmount();
 

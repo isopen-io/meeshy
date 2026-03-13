@@ -63,17 +63,26 @@ jest.mock('@/lib/react-query/query-keys', () => ({
 const mockNotification = {
   id: 'notif-1',
   type: 'message',
-  title: 'New Message',
   content: 'You have a new message',
-  isRead: false,
-  createdAt: new Date('2024-01-01'),
+  priority: 'normal',
   userId: 'user-1',
+  context: {},
+  metadata: {},
+  state: {
+    isRead: false,
+    readAt: null,
+    createdAt: new Date('2024-01-01'),
+  },
+  delivery: {
+    emailSent: false,
+    pushSent: false,
+  },
 };
 
 const mockNotifications = [
   mockNotification,
-  { ...mockNotification, id: 'notif-2', title: 'Another Notification', isRead: true },
-  { ...mockNotification, id: 'notif-3', title: 'Third Notification' },
+  { ...mockNotification, id: 'notif-2', state: { ...mockNotification.state, isRead: true, readAt: new Date('2024-01-02') } },
+  { ...mockNotification, id: 'notif-3' },
 ];
 
 const mockPaginatedResponse = {
@@ -367,7 +376,7 @@ describe('useNotificationCountsQuery', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual(mockCounts);
+    expect(result.current.data).toEqual({ counts: mockCounts });
   });
 });
 

@@ -102,7 +102,7 @@ extension APIMessage {
 
         let uiForwardedFrom: ForwardReference? = {
             guard let fwd = forwardedFrom, let fwdSender = fwd.sender else { return nil }
-            let senderName = fwdSender.displayName ?? fwdSender.username
+            let senderName = fwdSender.displayName ?? fwdSender.username ?? fwdSender.id
             let previewText = (fwd.content ?? "").isEmpty ? "[Media]" : (fwd.content ?? "")
             let firstAtt = fwd.attachments?.first
             let attType: String? = firstAtt.flatMap { att in

@@ -365,19 +365,7 @@ describe('ConversationView', () => {
       expect(onSendMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should call onOpenDetails when details button is clicked', () => {
-      const onOpenDetails = jest.fn();
-      render(
-        <ConversationView
-          {...defaultProps}
-          onOpenDetails={onOpenDetails}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('details-button'));
-
-      expect(onOpenDetails).toHaveBeenCalledTimes(1);
-    });
+    // onOpenDetails prop was removed from ConversationView
 
     it('should call onLanguageChange when language is changed', () => {
       const onLanguageChange = jest.fn();

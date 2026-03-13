@@ -323,7 +323,7 @@ describe('PasswordStrengthMeter', () => {
       const { container } = render(<PasswordStrengthMeter password="password" />);
 
       const progressBar = container.querySelector('.h-2 > div');
-      expect(progressBar).toHaveClass('transition-all');
+      expect(progressBar).toHaveClass('transition-[width]');
       expect(progressBar).toHaveClass('duration-300');
     });
   });
@@ -338,7 +338,7 @@ describe('PasswordStrengthMeter', () => {
 
       const segments = container.querySelectorAll('.grid > div');
       segments.forEach((segment) => {
-        expect(segment).toHaveClass('transition-all');
+        expect(segment).toHaveClass('transition-colors');
         expect(segment).toHaveClass('duration-300');
       });
     });

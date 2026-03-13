@@ -73,12 +73,12 @@ jest.mock('@/stores/auth-form-store', () => ({
 }));
 
 // Mock password reset service
+const mockRequestReset = jest.fn();
 jest.mock('@/services/password-reset.service', () => ({
   passwordResetService: {
-    requestReset: jest.fn(),
+    requestReset: (...args: any[]) => mockRequestReset(...args),
   },
 }));
-const mockRequestReset = jest.fn();
 
 // Mock useBotProtection hook
 const mockValidateSubmission = jest.fn().mockReturnValue({ isHuman: true, botError: null });
@@ -186,11 +186,11 @@ describe('ForgotPasswordForm', () => {
 
   describe('Email Validation', () => {
     it('shows error when email is empty', async () => {
-      const user = userEvent.setup();
-      render(<ForgotPasswordForm />);
+      const { container } = render(<ForgotPasswordForm />);
 
-      const submitButton = screen.getByRole('button', { name: /Send Reset Link/i });
-      await user.click(submitButton);
+      // Submit button is disabled when email is empty, so use fireEvent.submit
+      const form = container.querySelector('form')!;
+      fireEvent.submit(form);
 
       await waitFor(() => {
         expect(screen.getByText('Email is required')).toBeInTheDocument();
@@ -199,13 +199,14 @@ describe('ForgotPasswordForm', () => {
 
     it('shows error for invalid email format', async () => {
       const user = userEvent.setup();
-      render(<ForgotPasswordForm />);
+      const { container } = render(<ForgotPasswordForm />);
 
       const emailInput = screen.getByPlaceholderText('your.email@example.com');
       await user.type(emailInput, 'invalid-email');
 
-      const submitButton = screen.getByRole('button', { name: /Send Reset Link/i });
-      await user.click(submitButton);
+      // Use fireEvent.submit to bypass HTML5 email type validation
+      const form = container.querySelector('form')!;
+      fireEvent.submit(form);
 
       await waitFor(() => {
         expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
@@ -214,13 +215,14 @@ describe('ForgotPasswordForm', () => {
 
     it('shows error for email without domain', async () => {
       const user = userEvent.setup();
-      render(<ForgotPasswordForm />);
+      const { container } = render(<ForgotPasswordForm />);
 
       const emailInput = screen.getByPlaceholderText('your.email@example.com');
       await user.type(emailInput, 'test@');
 
-      const submitButton = screen.getByRole('button', { name: /Send Reset Link/i });
-      await user.click(submitButton);
+      // Use fireEvent.submit to bypass HTML5 email type validation
+      const form = container.querySelector('form')!;
+      fireEvent.submit(form);
 
       await waitFor(() => {
         expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();

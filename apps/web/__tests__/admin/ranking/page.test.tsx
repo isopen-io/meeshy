@@ -312,7 +312,8 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nombre de résultats')).toBeInTheDocument();
+        const matches = screen.getAllByText('Nombre de résultats');
+        expect(matches.length).toBeGreaterThan(0);
       });
     });
   });
@@ -351,9 +352,13 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Alice')).toBeInTheDocument();
-        expect(screen.getByText('Bob')).toBeInTheDocument();
-        expect(screen.getByText('Charlie')).toBeInTheDocument();
+        // Names appear in both ranking list and podium section
+        const alices = screen.getAllByText('Alice');
+        expect(alices.length).toBeGreaterThan(0);
+        const bobs = screen.getAllByText('Bob');
+        expect(bobs.length).toBeGreaterThan(0);
+        const charlies = screen.getAllByText('Charlie');
+        expect(charlies.length).toBeGreaterThan(0);
       });
     });
 
@@ -371,9 +376,13 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('200')).toBeInTheDocument();
-        expect(screen.getByText('150')).toBeInTheDocument();
-        expect(screen.getByText('100')).toBeInTheDocument();
+        // Count values may appear in both ranking list and podium/chart
+        const twoHundreds = screen.getAllByText('200');
+        expect(twoHundreds.length).toBeGreaterThan(0);
+        const oneHundredFifties = screen.getAllByText('150');
+        expect(oneHundredFifties.length).toBeGreaterThan(0);
+        const oneHundreds = screen.getAllByText('100');
+        expect(oneHundreds.length).toBeGreaterThan(0);
       });
     });
 
@@ -475,7 +484,9 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Gold User')).toBeInTheDocument();
+        // Name appears in both podium and ranking list
+        const matches = screen.getAllByText('Gold User');
+        expect(matches.length).toBeGreaterThan(0);
       });
     });
 
@@ -483,7 +494,9 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Silver User')).toBeInTheDocument();
+        // Name appears in both podium and ranking list
+        const matches = screen.getAllByText('Silver User');
+        expect(matches.length).toBeGreaterThan(0);
       });
     });
 
@@ -645,7 +658,8 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nombre de résultats')).toBeInTheDocument();
+        const matches = screen.getAllByText('Nombre de résultats');
+        expect(matches.length).toBeGreaterThan(0);
       });
     });
   });

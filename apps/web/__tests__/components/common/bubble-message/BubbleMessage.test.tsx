@@ -334,7 +334,7 @@ describe('BubbleMessage', () => {
       fireEvent.click(screen.getByTestId('save-edit'));
 
       await waitFor(() => {
-        expect(onEditMessage).toHaveBeenCalledWith('msg-123', 'edited content');
+        expect(onEditMessage).toHaveBeenCalledWith('msg-123', 'edited content', undefined);
       });
     });
 

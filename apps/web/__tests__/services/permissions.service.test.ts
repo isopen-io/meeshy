@@ -164,8 +164,8 @@ describe('PermissionsService', () => {
   describe('hasRoleOrHigher', () => {
     it('should return true when user has higher role', () => {
       const admin = createMockUser({ role: 'ADMIN' as UserRole });
-      // Note: ROLE_HIERARCHY uses 'MODO' not 'MODERATOR'
-      expect(PermissionsService.hasRoleOrHigher(admin, 'MODO' as UserRole)).toBe(true);
+      // Note: ROLE_HIERARCHY uses 'MODERATOR' not 'MODERATOR'
+      expect(PermissionsService.hasRoleOrHigher(admin, 'MODERATOR' as UserRole)).toBe(true);
       expect(PermissionsService.hasRoleOrHigher(admin, 'USER' as UserRole)).toBe(true);
     });
 
@@ -177,7 +177,7 @@ describe('PermissionsService', () => {
     it('should return false when user has lower role', () => {
       const user = createMockUser({ role: 'USER' as UserRole });
       expect(PermissionsService.hasRoleOrHigher(user, 'ADMIN' as UserRole)).toBe(false);
-      expect(PermissionsService.hasRoleOrHigher(user, 'MODO' as UserRole)).toBe(false);
+      expect(PermissionsService.hasRoleOrHigher(user, 'MODERATOR' as UserRole)).toBe(false);
     });
   });
 
@@ -267,8 +267,8 @@ describe('PermissionsService', () => {
   describe('canAssignRole', () => {
     it('should return true when assigning lower role', () => {
       const admin = createMockUser({ role: 'ADMIN' as UserRole });
-      // Note: ROLE_HIERARCHY uses 'MODO' not 'MODERATOR'
-      expect(PermissionsService.canAssignRole(admin, 'MODO' as UserRole)).toBe(true);
+      // Note: ROLE_HIERARCHY uses 'MODERATOR' not 'MODERATOR'
+      expect(PermissionsService.canAssignRole(admin, 'MODERATOR' as UserRole)).toBe(true);
       expect(PermissionsService.canAssignRole(admin, 'USER' as UserRole)).toBe(true);
     });
 
@@ -322,7 +322,7 @@ describe('PermissionsService', () => {
     it('should return display name for known roles', () => {
       expect(PermissionsService.getRoleDisplayName('BIGBOSS')).toBe('Super Administrateur');
       expect(PermissionsService.getRoleDisplayName('ADMIN')).toBe('Administrateur');
-      expect(PermissionsService.getRoleDisplayName('MODO')).toBe('Modérateur');
+      expect(PermissionsService.getRoleDisplayName('MODERATOR')).toBe('Modérateur');
       expect(PermissionsService.getRoleDisplayName('USER')).toBe('Utilisateur');
     });
 
@@ -339,7 +339,7 @@ describe('PermissionsService', () => {
     it('should return color class for roles', () => {
       expect(PermissionsService.getRoleColor('BIGBOSS' as UserRole)).toContain('bg-purple');
       expect(PermissionsService.getRoleColor('ADMIN' as UserRole)).toContain('bg-red');
-      expect(PermissionsService.getRoleColor('MODO' as UserRole)).toContain('bg-orange');
+      expect(PermissionsService.getRoleColor('MODERATOR' as UserRole)).toContain('bg-orange');
       expect(PermissionsService.getRoleColor('USER' as UserRole)).toContain('bg-gray');
     });
   });
@@ -348,7 +348,7 @@ describe('PermissionsService', () => {
     it('should return emoji icon for roles', () => {
       expect(PermissionsService.getRoleIcon('BIGBOSS' as UserRole)).toBeTruthy();
       expect(PermissionsService.getRoleIcon('ADMIN' as UserRole)).toBeTruthy();
-      expect(PermissionsService.getRoleIcon('MODO' as UserRole)).toBeTruthy();
+      expect(PermissionsService.getRoleIcon('MODERATOR' as UserRole)).toBeTruthy();
       expect(PermissionsService.getRoleIcon('USER' as UserRole)).toBeTruthy();
     });
   });
@@ -396,8 +396,8 @@ describe('PermissionsService', () => {
     });
 
     it('should check delete_conversation action', () => {
-      // Note: ROLE_HIERARCHY uses 'MODO' not 'MODERATOR'
-      const moderator = createMockUser({ role: 'MODO' as UserRole });
+      // Note: ROLE_HIERARCHY uses 'MODERATOR' not 'MODERATOR'
+      const moderator = createMockUser({ role: 'MODERATOR' as UserRole });
       const user = createMockUser({ role: 'USER' as UserRole });
 
       expect(PermissionsService.canPerformAction(moderator, 'delete_conversation')).toBe(true);

@@ -55,17 +55,17 @@ public struct AnimatedLogoView: View {
             MeeshyDashesShape(dashIndex: 0)
                 .trim(from: 0, to: showDash1 ? 1 : 0)
                 .stroke(color.opacity(breathe ? 1.0 : 0.7), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .animation(.easeOut(duration: 0.4), value: showDash1)
+                .animation(.easeOut(duration: 0.25), value: showDash1)
 
             MeeshyDashesShape(dashIndex: 1)
                 .trim(from: 0, to: showDash2 ? 1 : 0)
                 .stroke(color.opacity(breathe ? 0.85 : 1.0), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .animation(.easeOut(duration: 0.4).delay(0.2), value: showDash2)
+                .animation(.easeOut(duration: 0.25).delay(0.1), value: showDash2)
 
             MeeshyDashesShape(dashIndex: 2)
                 .trim(from: 0, to: showDash3 ? 1 : 0)
                 .stroke(color.opacity(breathe ? 1.0 : 0.75), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .animation(.easeOut(duration: 0.4).delay(0.4), value: showDash3)
+                .animation(.easeOut(duration: 0.25).delay(0.2), value: showDash3)
         }
         .aspectRatio(1, contentMode: .fit)
         .scaleEffect(breathe ? 1.05 : 1.0)

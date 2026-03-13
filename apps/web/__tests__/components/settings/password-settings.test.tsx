@@ -205,28 +205,24 @@ describe('PasswordSettings', () => {
   });
 
   describe('Validation', () => {
-    it('affiche une erreur si le mot de passe actuel est vide', async () => {
-      const { toast } = require('sonner');
-
+    it('desactive le bouton si le mot de passe actuel est vide', async () => {
       render(<PasswordSettings />);
 
-      fireEvent.click(screen.getByText('Mettre a jour'));
-
-      expect(toast.error).toHaveBeenCalledWith('Le mot de passe actuel est requis');
+      // Button is disabled when fields are empty
+      const submitButton = screen.getByText('Mettre a jour');
+      expect(submitButton).toBeDisabled();
     });
 
-    it('affiche une erreur si le nouveau mot de passe est vide', async () => {
-      const { toast } = require('sonner');
-
+    it('desactive le bouton si le nouveau mot de passe est vide', async () => {
       render(<PasswordSettings />);
 
       fireEvent.change(screen.getByLabelText('Mot de passe actuel'), {
         target: { value: 'oldPassword' },
       });
 
-      fireEvent.click(screen.getByText('Mettre a jour'));
-
-      expect(toast.error).toHaveBeenCalledWith('Le nouveau mot de passe est requis');
+      // Button still disabled without new + confirm
+      const submitButton = screen.getByText('Mettre a jour');
+      expect(submitButton).toBeDisabled();
     });
 
     it('affiche une erreur si les mots de passe ne correspondent pas', async () => {

@@ -15,6 +15,7 @@ jest.mock('../../services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: jest.fn(),
     getAnonymousSession: jest.fn(),
+    getSessionToken: jest.fn(),
   },
 }));
 
@@ -24,6 +25,8 @@ describe('token-utils', () => {
   beforeEach(() => {
     authManager.getAuthToken.mockReset();
     authManager.getAnonymousSession.mockReset();
+    authManager.getSessionToken.mockReset();
+    authManager.getSessionToken.mockReturnValue(null);
   });
 
   describe('getAuthToken', () => {

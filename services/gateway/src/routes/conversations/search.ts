@@ -110,7 +110,28 @@ export function registerSearchRoutes(
             },
             take: 10,
           },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      displayName: true,
+                      avatar: true,
+                      isOnline: true,
+                      lastActiveAt: true,
+                    },
+                  },
+                },
+              },
+              attachments: { take: 1 },
+              _count: { select: { attachments: true } },
+            },
+          },
         },
         orderBy: { lastMessageAt: 'desc' },
         take: 50,
@@ -149,7 +170,25 @@ export function registerSearchRoutes(
         return {
           ...conversation,
           title: displayTitle,
-          lastMessage: conversation.messages[0] || null,
+          lastMessage: (() => {
+            const msg = conversation.messages[0];
+            if (!msg) return null;
+            const sender = msg.sender as any;
+            return {
+              ...msg,
+              sender: sender ? {
+                ...sender,
+                username: sender.user?.username ?? sender.username ?? null,
+                firstName: sender.user?.firstName ?? null,
+                lastName: sender.user?.lastName ?? null,
+                displayName: sender.displayName ?? sender.user?.displayName ?? null,
+                avatar: sender.avatar ?? sender.user?.avatar ?? null,
+                avatarUrl: sender.user?.avatarUrl ?? sender.avatarUrl ?? null,
+                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
+                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+              } : null
+            };
+          })(),
           unreadCount
         };
       });

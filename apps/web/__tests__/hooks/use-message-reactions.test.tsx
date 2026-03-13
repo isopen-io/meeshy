@@ -15,9 +15,8 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useMessageReactions } from '@/hooks/use-message-reactions';
 
-// Mock timers
-// Use real timers for async operations (promises, setTimeout, etc.)
-    jest.useRealTimers();
+// Use fake timers to prevent initial sync effects from firing
+jest.useFakeTimers();
 
 // Mock toast
 const mockToastError = jest.fn();
@@ -100,7 +99,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -124,7 +123,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -136,7 +135,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -148,7 +147,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -168,7 +167,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -189,7 +188,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -216,7 +215,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -250,14 +249,16 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
       let success: boolean = true;
-      await expect(act(async () => {
+      await act(async () => {
         success = await result.current.addReaction('thumbsup');
-      })).rejects.toThrow();
+      });
+
+      expect(success).toBe(false);
     });
 
     it('should return false when disabled', async () => {
@@ -265,7 +266,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: '',
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -290,7 +291,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -317,7 +318,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -349,7 +350,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -371,7 +372,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -403,7 +404,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -428,7 +429,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -447,7 +448,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -481,7 +482,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -557,7 +558,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -582,7 +583,7 @@ describe('useMessageReactions', () => {
         useMessageReactions({
           messageId: mockMessageId,
           currentUserId: mockCurrentUserId,
-          enabled: false,
+          enabled: true,
         })
       );
 
@@ -609,7 +610,7 @@ describe('useMessageReactions', () => {
           messageId: mockMessageId,
           currentUserId: 'anon-123',
           isAnonymous: true,
-          enabled: false,
+          enabled: true,
         })
       );
 
