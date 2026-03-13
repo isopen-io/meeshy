@@ -20,7 +20,7 @@ final class StatusServiceTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeAPIPost(id: String = "post1", content: String = "Hello") -> APIPost {
-        let author = APIAuthor(id: "a1", username: "testuser", displayName: "Test", avatar: nil, avatarUrl: nil)
+        let author = APIAuthor(id: "a1", username: "testuser", displayName: "Test", avatar: nil)
         return APIPost(
             id: id, type: "STATUS", visibility: "PUBLIC", content: content,
             originalLanguage: "fr", createdAt: Date(), updatedAt: nil, expiresAt: nil,

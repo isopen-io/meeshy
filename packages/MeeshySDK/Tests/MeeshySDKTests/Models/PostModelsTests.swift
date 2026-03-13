@@ -26,8 +26,7 @@ final class PostModelsTests: XCTestCase {
             "id": "author1",
             "username": "alice",
             "displayName": "Alice Wonderland",
-            "avatar": "https://example.com/alice.jpg",
-            "avatarUrl": "https://cdn.example.com/alice.jpg"
+            "avatar": "https://example.com/alice.jpg"
         }
         """.data(using: .utf8)!
         let author = try JSONDecoder().decode(APIAuthor.self, from: json)
@@ -35,7 +34,6 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(author.username, "alice")
         XCTAssertEqual(author.displayName, "Alice Wonderland")
         XCTAssertEqual(author.avatar, "https://example.com/alice.jpg")
-        XCTAssertEqual(author.avatarUrl, "https://cdn.example.com/alice.jpg")
     }
 
     func testAPIAuthorNameComputedProperty() throws {

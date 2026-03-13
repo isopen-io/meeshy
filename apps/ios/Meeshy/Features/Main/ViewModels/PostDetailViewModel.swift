@@ -45,7 +45,7 @@ class PostDetailViewModel: ObservableObject {
                 }
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorAvatarURL: c.author.avatar ?? c.author.avatarUrl,
+                    authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     originalLanguage: c.originalLanguage, translatedContent: translatedContent
@@ -90,7 +90,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await PostService.shared.addComment(postId: post.id, content: content)
             let comment = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                authorAvatarURL: apiComment.author.avatar ?? apiComment.author.avatarUrl,
+                authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0
             )
@@ -110,7 +110,7 @@ class PostDetailViewModel: ObservableObject {
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
-                    authorAvatarURL: data.comment.author.avatar ?? data.comment.author.avatarUrl,
+                    authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0
                 )

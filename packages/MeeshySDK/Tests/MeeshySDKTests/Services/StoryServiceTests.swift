@@ -24,7 +24,7 @@ final class StoryServiceTests: XCTestCase {
         APIPost(
             id: id, type: "STORY", visibility: "PUBLIC", content: "My story",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
-            author: APIAuthor(id: "author1", username: "bob", displayName: "Bob", avatar: nil, avatarUrl: nil),
+            author: APIAuthor(id: "author1", username: "bob", displayName: "Bob", avatar: nil),
             likeCount: 5, commentCount: 0, repostCount: 0, viewCount: 10,
             bookmarkCount: 0, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil, isQuote: nil,
@@ -37,7 +37,7 @@ final class StoryServiceTests: XCTestCase {
         APIPostComment(
             id: id, content: "Nice!", originalLanguage: "en",
             translations: nil, likeCount: 0, replyCount: 0, createdAt: Date(),
-            author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil, avatarUrl: nil)
+            author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil)
         )
     }
 
