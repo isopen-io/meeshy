@@ -485,6 +485,11 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
+        .onChange(of: textAnalyzer.isLanguageLocked) { _, locked in
+            guard locked, let detected = textAnalyzer.language else { return }
+            currentLanguage = detected.code
+            onLanguageChange?(detected.code)
+        }
         .onChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
@@ -520,7 +525,9 @@ struct UniversalComposerBar: View {
                 onSelect: { lang in
                     let detected = DetectedLanguage.find(code: lang.id) ??
                         DetectedLanguage(id: lang.id, code: lang.id, flag: lang.flag, name: lang.name)
-                    textAnalyzer.setLanguageOverride(detected)
+                    textAnalyzer.lockToLanguage(detected)
+                    currentLanguage = detected.code
+                    onLanguageChange?(detected.code)
                 },
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
@@ -591,6 +598,9 @@ struct UniversalComposerBar: View {
                 Button {
                     currentLanguage = lang.code
                     onLanguageChange?(lang.code)
+                    if let detected = DetectedLanguage.find(code: lang.code) {
+                        textAnalyzer.lockToLanguage(detected)
+                    }
                 } label: {
                     HStack {
                         Text("\(lang.flag) \(lang.name)")

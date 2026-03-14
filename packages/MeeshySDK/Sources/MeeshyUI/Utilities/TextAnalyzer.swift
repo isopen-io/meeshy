@@ -67,6 +67,8 @@ public struct DetectedLanguage: Identifiable, Sendable {
 public class TextAnalyzer: ObservableObject, @unchecked Sendable {
     @Published public var sentiment: SentimentLevel = .neutral
     @Published public var language: DetectedLanguage? = nil
+    @Published public var languageConfidence: Double = 0
+    @Published public var isLanguageLocked = false
     @Published public var languageOverride: DetectedLanguage? = nil
     @Published public var showLanguagePicker = false
 
@@ -84,7 +86,9 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         debounceTimer?.invalidate()
 
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            sentiment = .neutral; language = nil; return
+            sentiment = .neutral
+            if !isLanguageLocked { language = nil; languageConfidence = 0 }
+            return
         }
 
         debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
@@ -94,11 +98,18 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
 
     public func setLanguageOverride(_ lang: DetectedLanguage?) {
         languageOverride = lang; showLanguagePicker = false
+        if lang != nil { isLanguageLocked = true }
+    }
+
+    public func lockToLanguage(_ lang: DetectedLanguage) {
+        language = lang; languageOverride = lang
+        languageConfidence = 1.0; isLanguageLocked = true
     }
 
     public func reset() {
         debounceTimer?.invalidate()
-        sentiment = .neutral; language = nil; languageOverride = nil
+        sentiment = .neutral; language = nil; languageConfidence = 0
+        isLanguageLocked = false; languageOverride = nil
     }
 
     private func performAnalysis(text: String) {
@@ -107,11 +118,21 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         let score = computeSentiment(text: cleaned)
         DispatchQueue.main.async { self.sentiment = SentimentLevel.from(score: score) }
 
+        guard !isLanguageLocked else { return }
+
         recognizer.reset()
         recognizer.processString(cleaned)
         if let dominant = recognizer.dominantLanguage {
             let langCode = dominant.rawValue
-            DispatchQueue.main.async { self.language = DetectedLanguage.find(code: langCode) }
+            let hypotheses = recognizer.languageHypotheses(withMaximum: 1)
+            let confidence = hypotheses[dominant] ?? 0
+            DispatchQueue.main.async {
+                self.language = DetectedLanguage.find(code: langCode)
+                self.languageConfidence = confidence
+                if confidence > 0.8 {
+                    self.isLanguageLocked = true
+                }
+            }
         }
     }
 
