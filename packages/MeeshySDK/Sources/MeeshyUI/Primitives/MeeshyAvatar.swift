@@ -261,7 +261,7 @@ public struct AvatarContextMenuItem: Identifiable {
 
 public struct MeeshyAvatar: View {
     public let name: String
-    public let mode: AvatarMode
+    public let context: AvatarContext
     public var accentColor: String = ""
     public var secondaryColor: String? = nil
     public var avatarURL: String? = nil
@@ -274,46 +274,72 @@ public struct MeeshyAvatar: View {
     public var onMoodTap: ((CGPoint) -> Void)? = nil
     public var onOnlineTap: (() -> Void)? = nil
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
-    /// Contrôle si le badge mood et le dot de présence animent un pulse.
-    /// Mettre à `false` dans les listes pour éviter N animations simultanées.
     public var enablePulse: Bool = true
     public var kind: AvatarKind = .user
 
-    // Legacy init (AvatarSize)
-    public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
-                avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline,
-                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool = true,
-                isDark: Bool = ThemeManager.shared.mode.isDark) {
-        self.name = name
-        switch size {
-        case .small: self.mode = .messageBubble
-        case .medium: self.mode = .conversationHeader
-        case .large: self.mode = .conversationList
-        case .xlarge: self.mode = .storyTray
-        case .custom(let v): self.mode = .custom(v)
-        }
-        self.accentColor = accentColor; self.secondaryColor = secondaryColor
-        self.avatarURL = avatarURL; self.storyState = storyState; self.moodEmoji = moodEmoji
-        self.onMoodTap = onMoodTap; self.presenceState = presenceState; self.onOnlineTap = onOnlineTap
-        self.enablePulse = enablePulse; self.isDark = isDark
-    }
-
-    // Primary init (AvatarMode)
-    public init(name: String, mode: AvatarMode, kind: AvatarKind = .user, accentColor: String = "",
+    // Primary init (AvatarContext)
+    public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState = .offline, enablePulse: Bool = true,
+                presenceState: PresenceState = .offline, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
                 onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
-        self.name = name; self.mode = mode; self.kind = kind; self.accentColor = accentColor
+        self.name = name; self.context = context; self.kind = kind; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
-        self.enablePulse = enablePulse; self.isDark = isDark
+        self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
+    }
+
+    // Legacy init (AvatarMode) — maps to AvatarContext
+    @available(*, deprecated, message: "Use init(name:context:) instead")
+    public init(name: String, mode: AvatarMode, kind: AvatarKind = .user, accentColor: String = "",
+                secondaryColor: String? = nil, avatarURL: String? = nil,
+                storyState: StoryRingState = .none, moodEmoji: String? = nil,
+                presenceState: PresenceState = .offline, enablePulse: Bool? = nil,
+                isDark: Bool = ThemeManager.shared.mode.isDark,
+                onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
+                onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
+                onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
+        self.name = name
+        switch mode {
+        case .conversationList: self.context = .conversationList
+        case .storyTray: self.context = .storyTray
+        case .conversationHeader: self.context = .conversationHeaderCollapsed
+        case .messageBubble: self.context = .messageBubble
+        case .callNotification(let v): self.context = .custom(v)
+        case .custom(let v): self.context = .custom(v)
+        }
+        self.kind = kind; self.accentColor = accentColor
+        self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
+        self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
+        self.enablePulse = enablePulse ?? self.context.defaultPulse; self.isDark = isDark
+        self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
+        self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
+    }
+
+    // Legacy init (AvatarSize) — maps to AvatarContext
+    @available(*, deprecated, message: "Use init(name:context:) instead")
+    public init(name: String, size: AvatarSize, accentColor: String = "", secondaryColor: String? = nil,
+                avatarURL: String? = nil, storyState: StoryRingState = .none, moodEmoji: String? = nil,
+                onMoodTap: ((CGPoint) -> Void)? = nil, presenceState: PresenceState = .offline,
+                onOnlineTap: (() -> Void)? = nil, enablePulse: Bool? = nil,
+                isDark: Bool = ThemeManager.shared.mode.isDark) {
+        self.name = name
+        switch size {
+        case .small: self.context = .messageBubble
+        case .medium: self.context = .conversationHeaderCollapsed
+        case .large: self.context = .conversationList
+        case .xlarge: self.context = .storyTray
+        case .custom(let v): self.context = .custom(v)
+        }
+        self.accentColor = accentColor; self.secondaryColor = secondaryColor
+        self.avatarURL = avatarURL; self.storyState = storyState; self.moodEmoji = moodEmoji
+        self.onMoodTap = onMoodTap; self.presenceState = presenceState; self.onOnlineTap = onOnlineTap
+        self.enablePulse = enablePulse ?? self.context.defaultPulse; self.isDark = isDark
     }
 
     @State private var ringRotation: Double = 0
@@ -336,21 +362,21 @@ public struct MeeshyAvatar: View {
 
     private var effectiveStoryState: StoryRingState {
         guard kind == .user else { return .none }
-        return mode.showsStoryRing ? storyState : .none
+        return context.showsStoryRing ? storyState : .none
     }
 
     private var effectiveMoodEmoji: String? {
         guard kind == .user else { return nil }
-        return mode.showsMoodBadge ? moodEmoji : nil
+        return context.showsMoodBadge ? moodEmoji : nil
     }
 
     private var effectivePresence: PresenceState {
         guard kind == .user else { return .offline }
-        return mode.showsOnlineDot ? presenceState : .offline
+        return context.showsOnlineDot ? presenceState : .offline
     }
 
     private var hasTapHandler: Bool {
-        mode.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
+        context.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
     }
 
     private var effectiveContextMenuItems: [AvatarContextMenuItem] {
@@ -372,13 +398,13 @@ public struct MeeshyAvatar: View {
     }
 
     private var hasContextMenu: Bool {
-        mode.isTappable && !effectiveContextMenuItems.isEmpty
+        context.isTappable && !effectiveContextMenuItems.isEmpty
     }
 
     private func handleTap() {
         HapticFeedback.light()
-        if let onTap { onTap(); return }
         if storyState == .unread, let onViewStory { onViewStory(); return }
+        if let onTap { onTap(); return }
         if let onViewProfile { onViewProfile(); return }
     }
 
@@ -392,10 +418,10 @@ public struct MeeshyAvatar: View {
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
                 moodBadge(emoji: emoji)
-                    .offset(badgeOffset(badgeHalfSize: mode.badgeSize / 2))
+                    .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
             } else if effectivePresence != .offline {
                 onlineDot
-                    .offset(badgeOffset(badgeHalfSize: mode.onlineDotSize / 2))
+                    .offset(badgeOffset(badgeHalfSize: context.onlineDotSize / 2))
             }
         }
         .scaleEffect(tapScale)
@@ -440,8 +466,8 @@ public struct MeeshyAvatar: View {
     @ViewBuilder
     private var avatarBody: some View {
         if let url = avatarURL, !url.isEmpty {
-            CachedAvatarImage(urlString: url, name: name, size: mode.size, accentColor: resolvedAccent)
-                .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: mode.shadowRadius, y: mode.shadowY)
+            CachedAvatarImage(urlString: url, name: name, size: context.size, accentColor: resolvedAccent)
+                .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         } else {
             ZStack {
                 Circle()
@@ -449,12 +475,12 @@ public struct MeeshyAvatar: View {
                         colors: [Color(hex: resolvedAccent), secondaryGradientColor],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     ))
-                    .frame(width: mode.size, height: mode.size)
+                    .frame(width: context.size, height: context.size)
                 Text(initials)
-                    .font(.system(size: mode.initialFont, weight: .bold, design: .rounded))
+                    .font(.system(size: context.initialFont, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
-            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: mode.shadowRadius, y: mode.shadowY)
+            .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         }
     }
 
@@ -476,13 +502,13 @@ public struct MeeshyAvatar: View {
                         startAngle: .degrees(ringRotation),
                         endAngle: .degrees(ringRotation + 360)
                     ),
-                    lineWidth: mode.ringWidth
+                    lineWidth: context.ringWidth
                 )
-                .frame(width: mode.ringSize, height: mode.ringSize)
+                .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
-                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: mode.ringWidth)
-                .frame(width: mode.ringSize, height: mode.ringSize)
+                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: context.ringWidth)
+                .frame(width: context.ringSize, height: context.ringSize)
         case .none:
             EmptyView()
         }
@@ -492,8 +518,8 @@ public struct MeeshyAvatar: View {
     /// en tenant compte du fait que le glow story-unread agrandit le ZStack à (size+20).
     private func badgeOffset(badgeHalfSize: CGFloat) -> CGSize {
         guard effectiveStoryState != .none else { return .zero }
-        let avatarR = mode.size / 2
-        let zstackSize = mode.ringSize
+        let avatarR = context.size / 2
+        let zstackSize = context.ringSize
         let zstackCenter = zstackSize / 2
         let target = zstackCenter + avatarR * cos(.pi / 4)
         let current = zstackSize - badgeHalfSize
@@ -504,7 +530,7 @@ public struct MeeshyAvatar: View {
     private func moodBadge(emoji: String) -> some View {
         GeometryReader { geo in
             Text(emoji)
-                .font(.system(size: mode.badgeSize * 0.65))
+                .font(.system(size: context.badgeSize * 0.65))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(moodScale)
                 .contentShape(Circle())
@@ -523,7 +549,7 @@ public struct MeeshyAvatar: View {
                     }
                 }
         }
-        .frame(width: mode.badgeSize, height: mode.badgeSize)
+        .frame(width: context.badgeSize, height: context.badgeSize)
         .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 
@@ -539,7 +565,7 @@ public struct MeeshyAvatar: View {
     private var onlineDot: some View {
         let dot = Circle()
             .fill(dotColor)
-            .frame(width: mode.onlineDotSize, height: mode.onlineDotSize)
+            .frame(width: context.onlineDotSize, height: context.onlineDotSize)
             .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
             .onTapGesture {
                 HapticFeedback.light()

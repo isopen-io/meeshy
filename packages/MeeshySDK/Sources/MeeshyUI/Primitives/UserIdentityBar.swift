@@ -57,7 +57,7 @@ public struct ActionMenuItem: Identifiable {
 public struct AvatarConfig {
     public let url: String?
     public let accentColor: String
-    public let mode: AvatarMode
+    public let context: AvatarContext
     public let moodEmoji: String?
     public let presenceState: PresenceState
     public let onTap: (() -> Void)?
@@ -66,7 +66,7 @@ public struct AvatarConfig {
     public init(
         url: String? = nil,
         accentColor: String,
-        mode: AvatarMode = .messageBubble,
+        context: AvatarContext = .messageBubble,
         moodEmoji: String? = nil,
         presenceState: PresenceState = .offline,
         onTap: (() -> Void)? = nil,
@@ -74,7 +74,7 @@ public struct AvatarConfig {
     ) {
         self.url = url
         self.accentColor = accentColor
-        self.mode = mode
+        self.context = context
         self.moodEmoji = moodEmoji
         self.presenceState = presenceState
         self.onTap = onTap
@@ -119,7 +119,7 @@ public struct UserIdentityBar: View {
             if let avatar {
                 MeeshyAvatar(
                     name: name ?? "",
-                    mode: avatar.mode,
+                    context: avatar.context,
                     accentColor: avatar.accentColor,
                     avatarURL: avatar.url,
                     moodEmoji: avatar.moodEmoji,
@@ -407,7 +407,7 @@ extension UserIdentityBar {
         let avatarConfig = AvatarConfig(
             url: avatarURL,
             accentColor: accentColor,
-            mode: .messageBubble,
+            context: .messageBubble,
             moodEmoji: moodEmoji,
             presenceState: presenceState,
             contextMenuItems: contextMenuItems
@@ -466,7 +466,7 @@ extension UserIdentityBar {
         let avatarConfig = AvatarConfig(
             url: avatarURL,
             accentColor: accentColor,
-            mode: .messageBubble,
+            context: .postComment,
             presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
@@ -522,7 +522,7 @@ extension UserIdentityBar {
         let avatarConfig = AvatarConfig(
             url: avatarURL,
             accentColor: accentColor,
-            mode: .conversationList,
+            context: .userListItem,
             presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
